@@ -29,9 +29,96 @@ In this document, we'll create actual working web applications combining what we
 
 ## Table of Contents
 
+Before the projects, read [**Theory & Principles**](#theory--principles) — three architectural patterns thread the projects: a single source of truth that the DOM is rendered from (Todo), an asynchronous data-fetching pipeline with loading/error/empty UI states (Weather), and observer-driven progressive loading with focus management (Gallery).
+
 1. [Project 1: Todo App](#project-1-todo-app)
 2. [Project 2: Weather App](#project-2-weather-app)
 3. [Project 3: Image Gallery](#project-3-image-gallery)
+
+---
+
+## Theory & Principles
+
+The previous lessons each focused on one piece of the platform — DOM, events, async, storage. Practical applications are the *integration* of those pieces into a working whole, and that integration is governed by a small number of repeating architectural patterns. This section names the patterns so the projects below stop looking like ad-hoc scripts and start looking like the same shape, applied to different data.
+
+### A. State as the Single Source of Truth
+
+Even a tiny app has *state*: the list of todos, the current weather data, the index of the open image. The naive approach is to read state from the DOM (`querySelectorAll('li')` to get todos) and write to it imperatively. That works for a 30-line demo and falls apart by the time you add filtering, persistence, or undo, because the DOM is now both the *display* and the *truth* — and they drift apart.
+
+The professional pattern is **state-first**:
+
+```
+state (in memory) → render(state) → DOM
+                ↑                     │
+                └── event handlers ───┘
+```
+
+1. Hold state in plain JavaScript values (`let todos = []`, `let weather = null`).
+2. Write a single `render(state)` function that wipes the relevant DOM and rebuilds it from state.
+3. Event handlers update *state* and call `render()`. They never touch the DOM directly.
+
+This is what every framework (React, Svelte, Vue) automates. Doing it by hand once teaches you what the framework is buying you. The cost is one extra layer; the payoff is that the screen is always a function of state, which means bugs reduce to "state was wrong" — observable in one variable instead of scattered across the DOM.
+
+### B. Persistence: When State Has to Outlive the Page
+
+A tab refresh wipes JavaScript memory. If you want todos to survive, you need a **persistence boundary** — a step that serializes state out and reads it back. The platform offers three built-in stores with different cost/capability profiles:
+
+- **`localStorage`** — synchronous, string-only, ~5–10MB, persists until cleared. Ideal for small UI state and small lists. Synchronous means it blocks the main thread; do not put hot loops here.
+- **`sessionStorage`** — same API, scoped to the tab and cleared when the tab closes.
+- **`IndexedDB`** — asynchronous, structured (objects, blobs), large quotas. Use when you outgrow `localStorage`.
+
+The shape that survives is whatever passes through `JSON.stringify` cleanly. Functions, `Map`/`Set`, `Date` objects, and circular references do not — `JSON.parse(JSON.stringify(...))` silently drops or rewrites them. This is why Todo apps store IDs and strings, not class instances.
+
+### C. The Async UI Lifecycle: Loading, Error, Empty, Success
+
+Every fetch-driven view has at least *four* visual states the eye must distinguish:
+
+1. **Loading** — request in flight; show a skeleton or spinner.
+2. **Error** — request failed (network, HTTP, parse, abort); show a message with a retry option.
+3. **Empty** — request succeeded but returned no data; show a clear "no results" message rather than a blank screen.
+4. **Success** — render the data.
+
+Most "the page is broken" bug reports trace to a missing case: a spinner that never resolves (no error UI), a 404 silently rendered as success, or an empty result indistinguishable from a still-loading request.
+
+The shape of a request handler that respects all four:
+
+```js
+async function load(query, signal) {
+  ui.setState('loading');
+  try {
+    const res = await fetch(`/api?q=${query}`, { signal });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    ui.setState(data.length === 0 ? 'empty' : 'success', data);
+  } catch (err) {
+    if (err.name === 'AbortError') return; // user navigated away
+    ui.setState('error', err.message);
+  }
+}
+```
+
+Plus the `signal` from `AbortController` so a fast-typing user does not see results from a stale request. This is the single most underused pattern in tutorials and the single most needed in production.
+
+### D. Observers Instead of Polling: IntersectionObserver and Friends
+
+Old code that watched for "is this element visible" or "did the user scroll near the bottom" did so by attaching a `scroll` listener and reading `getBoundingClientRect()` on every scroll event. That is two performance disasters at once: a high-frequency event handler, and a forced layout per call (lesson 07 §A).
+
+Modern web platform APIs replace polling with **observers** — the browser does the work in the compositor thread and calls you back only when something changed:
+
+- **`IntersectionObserver`** — notified when an element enters or leaves the viewport (or another root). Powers infinite scroll (observe the last item; load more when it appears) and lazy loading (observe images; set `src` when they are about to be visible).
+- **`MutationObserver`** — notified when descendants are added, removed, or modified.
+- **`ResizeObserver`** — notified when an element's box size changes; this is what container queries use under the hood.
+- **`PerformanceObserver`** — notified when performance entries (LCP, INP, long tasks) are recorded.
+
+The general rule: if you are about to add a `setInterval` or a high-frequency event listener to "check whether something changed," there is probably an observer that will notify you instead, more efficiently and with less code.
+
+### From Theory to the Reference Below
+
+- **Project 1: Todo App** is §A and §B in their simplest form — a single in-memory array, a render function, and `localStorage` as the persistence boundary.
+- **Project 2: Weather App** is §C in production: the loading/error/empty/success cycle around a `fetch`, plus form input handling from lesson 02.
+- **Project 3: Image Gallery** is §D: `IntersectionObserver` for infinite scroll plus a lightbox with focus management (the accessibility pattern from lesson 11).
+
+Read the projects with these patterns named: every section below is one of them, applied to a different domain.
 
 ---
 

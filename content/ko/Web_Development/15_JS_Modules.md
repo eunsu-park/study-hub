@@ -18,6 +18,94 @@
 
 웹 애플리케이션이 수백 줄을 넘어 성장함에 따라 단일 파일로 코드를 관리하는 것은 감당하기 어려워집니다. 모듈은 코드를 명시적인 의존성을 가진 집중적이고 재사용 가능한 단위로 분리하게 해줍니다 -- 전역 스코프 오염을 제거하고 대규모 코드베이스를 탐색 가능하게 만듭니다. ES 모듈은 이제 브라우저와 Node.js 모두에서 표준이며, 이를 이해하는 것은 모든 현대적인 프레임워크나 빌드 도구를 다루는 데 필수적입니다.
 
+참조에 들어가기 전에, [**이론과 원리**](#이론과-원리) 섹션을 먼저 읽어보세요. ES 모듈은 *정적으로 분석 가능한* `import`/`export` 그래프이며 *살아 있는 참조(live reference)* 로 바인딩되고, CommonJS는 값을 복사하는 *런타임* `require`/`module.exports` 시스템이며, 동적 `import()`는 두 세계 사이의 봉합선이자 코드 스플리팅의 토대입니다.
+
+---
+
+## 이론과 원리
+
+JavaScript의 모듈 이야기는 두 이야기가 하나로 말려 있습니다. **CommonJS(CJS)** — 원조 Node.js 시스템, 런타임에 평가됨, `require()`와 `module.exports` 사용. 그리고 **ECMAScript Modules(ESM)** — 브라우저와 모던 Node에서 사용되는 표준화된 언어 수준 시스템, 정적으로 분석 가능, `import`와 `export` 사용. 표면적으로는 비슷해 보이지만, 모든 실용적 결정의 모양을 잡는 세 가지 면에서 다릅니다 — 모듈이 언제 실행되는지, 바인딩이 어떻게 작동하는지, 도구가 그것에 대해 무엇을 증명할 수 있는지. 이 셋이 명확해지면, "왜 내 import가 작동하지 않지"가 디버깅 미스터리가 아니게 됩니다.
+
+### A. 정적 vs. 동적 모듈 그래프
+
+CJS는 **동적** 입니다 — `require('./util')`은 런타임에 평가되는 함수 호출이며, 그 순간 `module.exports`인 객체를 반환합니다. `if` 안에 들어갈 수 있고, 계산된 문자열을 받을 수 있고, 결과를 변형할 수 있습니다. 도구는 일반적으로 CJS 파일을 실행하지 않고는 무엇을 import하는지 알 수 없습니다.
+
+ESM은 **정적** 입니다 — 최상위 `import`와 `export` 문은 파싱 시점에 해소 가능해야 합니다. 경로는 리터럴 문자열입니다. 이름은 어떤 코드도 실행되기 전에 알려집니다. 브라우저와 번들러는 이 문장만을 걸어 완전한 *모듈 그래프(module graph)* 를 만듭니다 — 실행 불필요. 이것이 트리 셰이킹(레슨 13 §C)을 가능하게 합니다 — 사용되지 않는 export는 분석기가 아무도 그것을 참조하지 않음을 증명할 수 있기에 안전하게 삭제될 수 있습니다.
+
+정적 제약은 실용적 결과가 있습니다.
+
+```js
+// CJS에서는 합법, ESM에서는 불법:
+if (env === 'dev') {
+  const debug = require('./debug');     // CJS: dev에서만 실행
+}
+
+// ESM 등가 — 최상위에 있어야 함:
+import debug from './debug.js';          // 항상 로드됨
+
+// ESM에서 조건부 로딩을 하려면 동적 import() 사용:
+if (env === 'dev') {
+  const { default: debug } = await import('./debug.js');
+}
+```
+
+동적 `import('./x.js')`는 비상구입니다 — 모듈의 Promise를 반환하는 함수 호출. 정적 그래프 바깥으로 나가며, 이는 정확히 번들러가 요구 시 로드되는 별도 청크를 만들기 위해 사용하는 것입니다(코드 스플리팅).
+
+### B. 살아 있는 바인딩 vs. 값 복사
+
+CJS는 값을 export합니다 — `module.exports = { count: 0 }`은 한 번 export 객체를 설정합니다. export하는 모듈이 나중에 `count`를 변형해도, 이미 `const { count } = require('./mod')`로 구조 분해한 importer는 *옛* 값을 봅니다 — `0`의 *복사본* 을 가지고 있기 때문입니다.
+
+ESM은 **살아 있는 바인딩(live binding)** 을 export합니다 — `import { count } from './mod.js'`는 소스 모듈의 변수에 대한 *읽기 전용 참조* 입니다. 소스가 `count`를 갱신하면 모든 importer가 자동으로 새 값을 봅니다. importer에서 그것을 재할당할 수는 없지만(읽기 전용 바인딩을 통한 쓰기가 됨) 갱신은 봅니다.
+
+```js
+// counter.js (ESM)
+export let count = 0;
+export function increment() { count++; }
+
+// main.js
+import { count, increment } from './counter.js';
+console.log(count); // 0
+increment();
+console.log(count); // 1  -- 살아 있는 바인딩, 복사본이 아님
+```
+
+이것이 CJS에서 자주 깨졌던 순환 import를 ESM에서 작동시키는 것입니다 — 양쪽이 평가를 마친 *후에* 각자 바인딩에 접근하기만 하면, 바인딩이 옳은 값을 가집니다. CJS는 양쪽에 서로의 부분 평가 스냅샷을 주었을 것입니다.
+
+### C. 모듈 지정자(specifier)와 리졸브
+
+`import x from '<specifier>'`의 문자열은 고정된 알고리즘으로 해소됩니다.
+
+- **상대 지정자(relative specifier)** (`./util.js`, `../shared/x.js`) — 임포트하는 파일의 URL에 대해 해소.
+- **절대 지정자(absolute specifier)** (`/src/x.js`) — 문서의 출처(브라우저)나 프로젝트 루트(번들러)에 대해 해소.
+- **베어 지정자(bare specifier)** (`react`, `lodash/fp`) — 브라우저에서 직접 지원되지 *않습니다* (`Failed to resolve module specifier "react"`를 받습니다). Node에서는 패키지 관리자의 `node_modules` 알고리즘과 번들러가 해소하고, 브라우저에서는 **import map** 이 런타임에 베어 지정자를 URL로 매핑하는 방법을 가르칠 수 있습니다.
+
+브라우저의 ESM은 또한 명시적 파일 확장자(`./util.js`이지 `./util`이 아님)를 요구하며, `<script type="module">`로 로드됩니다(기본이 `defer`이고, strict mode로 실행되며, 자체 스코프를 제공). `type="module"`이 없는 `<script>`는 클래식 스크립트입니다 — 공유된 전역 스코프, 동기, `import` 없음.
+
+Node.js는 `.js` 파일이 CJS인지 ESM인지를 가장 가까운 `package.json`의 `"type"` 필드(`"module"` → ESM, `"commonjs"` 또는 부재 → CJS)로, 또는 명시적 확장자(`.mjs` → 항상 ESM, `.cjs` → 항상 CJS)로 결정합니다. 이를 어긋나게 하면 "ERR_REQUIRE_ESM"과 "Cannot use import statement outside a module" 오류의 원천입니다.
+
+### D. 모듈에서 살아남는 패턴
+
+모듈이 캡슐화를 주면, 이전에는 영리한 트릭이 필요했던 여러 JavaScript 패턴이 사소해집니다.
+
+- **싱글톤(Singleton)** — 모듈은 *그 자체로* 싱글톤입니다. 첫 `import`이 파일을 한 번 평가하고 네임스페이스를 캐시하며, 이후 모든 import가 같은 객체를 받습니다. `getInstance()` 팩토리가 필요 없습니다.
+- **팩토리(Factory)** — 모듈이 호출당 신선한 객체를 반환하는 함수를 export — `export function createCounter() { let n = 0; return { inc: () => ++n }; }`.
+- **플러그인 / 전략(Plugin / strategy)** — 모듈이 판별된 맵을 export — `export const handlers = { json: parseJson, xml: parseXml };`. 번들러가 사용되지 않은 항목을 트리 셰이킹.
+- **배럴 파일(Barrel file)** — `index.js`가 여러 형제를 다시 export — `export * from './a.js'; export { default as B } from './b.js';`. 내부 레이아웃을 노출하지 않고 `import { A, B } from '@/lib'`이 작동하게 합니다. 주의 — 배럴은 부수 효과가 있는 모듈을 다시 export하면 트리 셰이킹을 망칠 수 있습니다.
+
+살아남지 *못하는* 모양은 IIFE(`(function(){ ... })()`)입니다 — 모듈은 감싸기 없이 기본으로 사적 스코프를 줍니다.
+
+### 이론에서 아래 참조로
+
+- **모듈의 필요성**(섹션 1)은 애플리케이션 측의 §A 논증입니다 — 분할이 왜 중요한가.
+- **ES 모듈(ESM) 기초**(섹션 2)는 §A와 §B를 구체화합니다 — `export`, `import`, named/default/namespace, 살아 있는 바인딩.
+- **동적 Import**(섹션 3)는 §A의 비상구입니다 — Promise 반환 런타임 로딩과 코드 스플리팅 경계.
+- **CommonJS vs ES Modules**(섹션 4)는 §A와 §B를 나란히, 그리고 §C의 리졸브 차이를 다룹니다.
+- **모듈 패턴**(이후 섹션)은 §D입니다 — 싱글톤, 팩토리, 플러그인, 배럴 — ESM 위에 구현.
+
+레슨의 나머지를, 모든 `import` 줄이 어떤 코드도 실행되기 전에 번들러가 읽을 수 있는 정적 그래프의 노드라는 점을 알고 읽으세요.
+
+---
+
 ## 1. 모듈의 필요성
 
 ### 1.1 모듈이란?

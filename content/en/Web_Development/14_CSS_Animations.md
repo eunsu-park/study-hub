@@ -18,6 +18,94 @@ After completing this lesson, you will be able to:
 
 Static pages feel lifeless. Thoughtful animations guide user attention, communicate state changes, and make interfaces feel responsive and polished. However, poorly implemented animations can degrade performance and exclude users with motion sensitivities. This lesson teaches you to create performant, accessible animations using only CSS -- no JavaScript libraries required.
 
+Before the reference, read [**Theory & Principles**](#theory--principles) — animations interpolate property values over time using *easing functions*, and the runtime cost depends on which property you animate (only `transform` and `opacity` skip layout/paint and run on the compositor).
+
+---
+
+## Theory & Principles
+
+CSS animation looks like "set duration, set start, set end" — but every "why is this janky" question traces back to the same small cluster of facts: animations are *value interpolations* governed by an easing function, and the cost of producing each frame depends on *which* property is being interpolated. The rendering pipeline you met in lesson 07 (style → layout → paint → composite) decides whether your 60fps is free or impossible.
+
+### A. The Animation Pipeline: Time, Easing, Interpolation
+
+A CSS animation has three ingredients:
+
+1. **A duration** — how long, in seconds.
+2. **An easing function (`timing-function`)** — a mapping `t ∈ [0,1] → progress ∈ [0,1]` that determines *how* the value moves: `linear`, `ease`, `ease-in`, `ease-in-out`, or a custom `cubic-bezier(p1x, p1y, p2x, p2y)`.
+3. **A property to interpolate.** For each animatable property, CSS defines an interpolation: numbers blend numerically, colors blend per channel, transforms blend matrix-by-matrix, lists blend element-wise.
+
+For each rendered frame, the browser computes the elapsed time, runs it through the easing curve to get progress, interpolates each animated property, and re-renders. `transition` triggers this for state changes (a property's old value to its new value when something on the element changes); `@keyframes` declares a named, multi-step animation that the `animation-*` properties play.
+
+Two consequences:
+
+1. **Not every property is animatable.** Discrete properties like `display: none` jump rather than interpolate; CSS uses an "animation type" attribute per property to know what counts. Recent CSS adds `transition-behavior: allow-discrete` and `@starting-style` so even discrete jumps can fade.
+2. **Easing is design.** `linear` looks robotic; `ease-out` (decelerates at the end) feels natural for "things arriving"; `ease-in` (accelerates) feels right for "things leaving"; `cubic-bezier(0.34, 1.56, 0.64, 1)` overshoots like a spring. The same property change with a different curve communicates a different intent.
+
+### B. The Render Pipeline Cost Hierarchy
+
+Lesson 07 §A introduced the pipeline; here is what it costs *per animated property*:
+
+- **Animating `transform` or `opacity`.** Skips layout, skips paint, runs entirely on the **compositor thread** with the GPU. Cheap enough for 60fps on tens of elements.
+- **Animating `color`, `background-color`, `box-shadow`.** Skips layout but requires repaint. The painter walks the affected pixels every frame.
+- **Animating `width`, `height`, `top`, `left`, `padding`, `margin`.** Triggers layout *every frame*. The whole subtree's geometry recomputes, then paint, then composite. This is the source of 95% of "my animation is janky" reports.
+
+The "use transform and opacity" advice everyone repeats follows directly from this. Want to move something? `transform: translateX(...)`, not `left: ...`. Want to scale? `transform: scale(...)`, not `width: ...`. Want to fade? `opacity`, not `display`. The visual outcome is identical; the cost is not.
+
+`will-change: transform` hints to the browser to promote the element to its own compositor layer *before* the animation starts (so there is no first-frame stutter). Use it sparingly; promoting too many layers blows out GPU memory.
+
+### C. `transition` vs. `@keyframes` vs. `animation`
+
+CSS offers two animation systems:
+
+- **Transitions** — declarative, react to state changes. "When `background-color` changes, interpolate over 200ms with `ease-out`." You write `transition: background-color 200ms ease-out;` and any future change to that property animates. No control over multi-step paths.
+- **Keyframe animations** — a named sequence of explicit waypoints (`0%, 50%, 100%`), played by `animation: bounce 1s ease-in-out infinite;`. Supports multi-step shapes, looping, alternating direction, fill modes (whether the start/end style sticks before/after running).
+
+Transitions are right for "moving between two states triggered by a class toggle or `:hover`." Keyframes are right for "loop this attention-grabbing pulse" or "play this complex multi-step entrance." The two compose: a keyframe animation can use easing per step, transitions can layer multiple properties with different durations.
+
+The Web Animations API (WAAPI) — `element.animate({...}, {...})` — is the JavaScript equivalent that returns an `Animation` object you can pause, reverse, scrub, and chain. It hits the same compositor pipeline.
+
+### D. Scroll-Driven Animations and `prefers-reduced-motion`
+
+Two recent additions matter for modern UIs:
+
+**Scroll-driven animations** tie an animation's `progress` to the document's (or a scroller's) scroll position rather than to wall-clock time. The CSS shape:
+
+```css
+@keyframes appear { from { opacity: 0 } to { opacity: 1 } }
+
+.fade-in {
+  animation: appear linear;
+  animation-timeline: view();      /* tied to viewport intersection */
+  animation-range: entry 0% cover 30%;
+}
+```
+
+The browser runs this on the compositor without a JavaScript scroll handler — no layout thrashing, no main-thread work. For browsers without support, the same effect is achievable by combining `IntersectionObserver` (lesson 07/09) with a class toggle.
+
+**`prefers-reduced-motion`** is a user preference exposed through media queries. Vestibular disorders, migraine sensitivities, and attention disorders make swooping motion physically painful for some users. The rule is to *opt motion in*, not out:
+
+```css
+@media (prefers-reduced-motion: no-preference) {
+  .card { transition: transform 200ms ease; }
+  .card:hover { transform: translateY(-4px); }
+}
+```
+
+This way, a user who hasn't expressed a preference gets the effect; a user who *has* asked for reduced motion sees the static layout. WCAG 2.1 Success Criterion 2.3.3 makes this part of the accessibility contract from lesson 11.
+
+### From Theory to the Reference Below
+
+- **CSS Transition** (section 1) is §C's first system — declarative state-change interpolation.
+- **CSS Transform** (section 2) is the property family from §B that the compositor accelerates — `translate`, `scale`, `rotate`, `skew`, plus 3D forms with `perspective`.
+- **CSS Animation (`@keyframes`)** (section 3) is §C's second system — named multi-step sequences played by `animation-*`.
+- **Scroll-Based Animations** (section 4) is §D's first half — `IntersectionObserver` plus the new scroll-driven animation primitives.
+- **Performance** sections cover §B's cost hierarchy and `will-change` hints.
+- **Accessibility** sections cover §D's `prefers-reduced-motion`.
+
+Read the rest of the lesson knowing that every animation is a `(value, easing, time)` tuple whose runtime cost is determined by which property you chose.
+
+---
+
 ## 1. CSS Transition
 
 ### 1.1 Basic Concepts

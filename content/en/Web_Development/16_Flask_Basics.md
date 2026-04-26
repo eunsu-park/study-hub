@@ -19,6 +19,103 @@ After completing this lesson, you will be able to:
 
 So far in this course, all interactivity has lived in the browser. Flask lets you move logic to the server -- handling authentication, persisting data in databases, and serving dynamic pages. As a micro-framework, Flask gives you just enough structure to be productive while leaving architectural decisions in your hands, making it an ideal first backend framework for web developers.
 
+Before the reference, read [**Theory & Principles**](#theory--principles) — Flask is a *WSGI* application that maps each HTTP request to a route handler via URL routing, builds a response (HTML or JSON), and runs every request inside a *request context* with stateless HTTP and explicit session storage.
+
+---
+
+## Theory & Principles
+
+Flask is small enough to fit on a postcard but the design choices it embodies are universal across server-side web frameworks. Three structural ideas underlie everything you will write: the framework is a **WSGI application** the production server calls; every request is mapped through a **URL router** to a handler that returns a **response**; and HTTP itself is *stateless*, so any "state across requests" — sessions, login, cart contents — must be made explicit somewhere. Naming these three before reading the syntax tour makes the rest of Flask (templates, blueprints, ORMs) feel like sensible additions rather than miscellaneous features.
+
+### A. WSGI: The Function Signature That Runs Your App
+
+A Flask app is, fundamentally, a Python object that implements the **WSGI** protocol — Web Server Gateway Interface, [PEP 3333](https://peps.python.org/pep-3333/). The contract is one function:
+
+```python
+def app(environ, start_response):
+    # environ: a dict describing the HTTP request
+    # start_response: a callable that sets status + headers
+    start_response('200 OK', [('Content-Type', 'text/plain')])
+    return [b'Hello, World!']
+```
+
+Every WSGI server (Gunicorn, uWSGI, Waitress) calls this function once per request. Flask's `app` object exposes this exact signature; the `@app.route(...)` decorators, the request context, the templating — all are built on top.
+
+The implication is operational, not just academic:
+
+1. **`flask run` is for development only.** It uses Werkzeug's single-threaded debug server. In production you front Flask with a real WSGI server (Gunicorn) behind a reverse proxy (Nginx). The dev server reloads on file change and shows a debugger; the production server handles concurrency, signals, graceful restarts, TLS termination delegated to the proxy.
+2. **Async is a separate world.** WSGI is synchronous; an async route handler runs in a thread pool. For genuinely async I/O at scale, the modern choice is the **ASGI** equivalent (Starlette, FastAPI, Quart) which speaks an async-capable protocol. Flask 2+ supports `async def` routes but executes them through a thread, not a true event loop.
+
+### B. URL Routing: From Path to Function
+
+Each `@app.route('/users/<int:id>')` adds an entry to the router's table. When a request arrives, Flask:
+
+1. **Matches** the request path against route patterns. Werkzeug's router uses a trie/regex hybrid that respects HTTP methods (`methods=['POST']`) and accepts converters (`<int:id>`, `<uuid:token>`, `<path:subpath>`).
+2. **Extracts** path parameters into kwargs.
+3. **Dispatches** to the view function with those kwargs.
+4. **Wraps** the return value into a `Response`. A string becomes `text/html`; a `dict` or `list` becomes JSON; a tuple `(body, status)` or `(body, status, headers)` lets you customize.
+
+Two patterns this enables:
+
+- **URL building** with `url_for('view_function_name', id=42)` — generates a URL from the route table. *Never hardcode* paths in templates; future renames break links and `url_for` survives them.
+- **Blueprints** — sub-routers (`bp = Blueprint('users', __name__, url_prefix='/users')`) that you register on the app. The same pattern that lets a small app stay flat lets a large app split cleanly across files without circular imports.
+
+Routing in Flask is *strict* by default: trailing slash matters (`/users` vs `/users/`). The convention is to define routes with trailing slash; requests without it get a 308 redirect. Inconsistent trailing slashes are a top source of mysterious test failures.
+
+### C. The Request/Response Cycle and Contexts
+
+Each request enters a Flask app through a fixed lifecycle:
+
+```
+WSGI server → Flask.__call__(environ, start_response)
+   → push request context (request, session)
+     → push app context (current_app, g)
+       → before_request hooks
+         → URL routing → view function → return value
+       → after_request hooks (with the response object)
+     → pop contexts
+   → start_response(...) and yield body
+```
+
+Two **context objects** carry per-request state:
+
+- **`request`** — the parsed HTTP request: `request.method`, `request.args` (query string), `request.form` (form body), `request.json`, `request.cookies`, `request.headers`, `request.files`.
+- **`session`** — a dict-like object stored in a *signed cookie* by default. Anything you put in `session` survives across requests for that user, but lives in their browser. Server-side session backing (Flask-Session) is necessary if you store more than a few KB or want server-side invalidation.
+
+A third object, **`g`**, is per-request scratch space — useful for "cache the current user object so multiple template helpers can use it." It does *not* survive across requests.
+
+The request context is where Flask's "global-looking" `request` works without actually being global: it is a thread-local proxy that resolves to the current request inside its `with` block. Outside a request (background scripts, tests), accessing `request` raises an error unless you push a test request context.
+
+### D. Templates, ORMs, and Where to Put Logic
+
+Two pieces of architecture every Flask app eventually faces:
+
+**Templates** — Jinja2 is Flask's default templating engine. The mental model is: handler builds a Python data structure, template renders it to HTML. Two rules:
+
+1. **Templates do *display*, not *logic*.** A `{% for user in users %}` is fine; a complex filter or a database query inside the template is not. Move it to the handler.
+2. **Auto-escaping is on by default for `.html` files.** `{{ user.name }}` is safe even if the name contains `<script>`. Disabling it (`{{ html_string | safe }}`) is opting back into XSS risk; only do it for content you sanitized.
+
+Template inheritance (`{% extends "base.html" %}` + `{% block content %}`) is the equivalent of CSS's cascade — define the layout once, fill in the variable parts per page.
+
+**ORMs** — Flask itself does not include a database; it pairs with **SQLAlchemy** (via `Flask-SQLAlchemy`). The ORM gives you Python classes that map to tables (`class User(db.Model): ...`), and a session that batches changes (`db.session.add(user); db.session.commit()`). Two cautions: ORMs hide N+1 query problems (fetching 100 users and accessing `.posts` on each = 101 queries unless you `joinedload`), and migrations need a tool (Alembic / Flask-Migrate) — modifying `db.Model` does not change the schema in the database.
+
+**Where to put business logic.** Beginners write everything in route handlers. The path that scales is to push business logic into a separate `services/` or `domain/` layer that handlers call into; handlers stay thin (parse input, call service, return response). The handler is the HTTP adapter, not the application.
+
+### From Theory to the Reference Below
+
+- **Introduction to Flask** (section 1) is §A — what WSGI is, why Flask is a "micro" framework.
+- **Routing** (section 2) is §B — `@app.route`, methods, converters, `url_for`.
+- **Templates (Jinja2)** (section 3) is §D's first half — inheritance, blocks, filters, auto-escaping.
+- **Form Handling** (section 4) connects HTTP forms (lesson 02) to `request.form` and Flask-WTF for validation.
+- **Database** (later) is §D's ORM half — Flask-SQLAlchemy, models, queries, migrations.
+- **Blueprints** is §B's scaling tool — split the router across modules with the application factory pattern.
+- **REST API** is the §C cycle without templates — `jsonify`, status codes, JWT in headers.
+- **Deployment** is §A made operational — Gunicorn, Docker, Nginx.
+
+Read the rest of the lesson knowing that every feature is a layer over the WSGI request → router → handler → response loop.
+
+---
+
 ## 1. Introduction to Flask
 
 ### 1.1 What is Flask?

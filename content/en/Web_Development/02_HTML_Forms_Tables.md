@@ -19,12 +19,82 @@ After completing this lesson, you will be able to:
 Forms and tables are two of the most interaction-heavy HTML structures. Forms turn a static page into a two-way conversation -- they let users send data back to the server, whether it is a login credential, a search query, or a multi-step registration. Tables, meanwhile, remain the correct tool for displaying genuinely tabular data such as schedules, financial reports, and comparison matrices.
 
 ## Table of Contents
+
+Before the reference, read [**Theory & Principles**](#theory--principles) — forms are the browser's built-in transport for user input (a serialization protocol with HTTP semantics baked in), and validation, accessibility, and tables each have their own data model that the markup encodes.
+
 1. [Forms](#forms)
 2. [Input Elements](#input-elements)
 3. [Form Validation](#form-validation)
 4. [Tables](#tables)
 5. [Accessible Forms](#accessible-forms)
 6. [Exercises](#exercises)
+
+---
+
+## Theory & Principles
+
+A `<form>` is not a container for inputs — it is a small protocol. The browser provides a built-in pipeline that **collects** user input from descendant form-associated elements, **validates** it according to declarative rules, **serializes** it into a body, and **submits** it as an HTTP request. Every modern framework — React forms, HTMX, server actions in Next.js — sits on top of (or deliberately replaces) this pipeline. Understanding it is the difference between writing JavaScript that fights the browser and writing JavaScript that delegates to it.
+
+### A. The Form Submission Pipeline
+
+When a `submit` event fires (Enter in a single-line input, click on a `type="submit"` button, or `form.requestSubmit()`), the browser runs a fixed sequence:
+
+1. **Constraint validation** runs across all *form-associated* descendants — `<input>`, `<select>`, `<textarea>`, `<button>`, and custom elements that opt in. Each element's `validity` state is computed from its attributes (`required`, `min`, `max`, `pattern`, `type`, `minlength`, `maxlength`, `step`).
+2. **If anything is invalid,** the browser fires a non-bubbling `invalid` event on each invalid element and aborts. The default UI surfaces an error bubble on the first invalid element. Calling `event.preventDefault()` on `invalid` suppresses the bubble; calling `form.checkValidity()` runs the same algorithm without firing `submit`.
+3. **If everything is valid,** the browser builds an **entry list** by walking the form tree in order and asking each successful control for its name/value pair. Disabled controls, unchecked checkboxes, and unselected radios contribute nothing.
+4. **The entry list is encoded** according to the form's `enctype`:
+   - `application/x-www-form-urlencoded` (default) → `name=value&name=value` in the URL or body.
+   - `multipart/form-data` → MIME multipart, required for file uploads.
+   - `text/plain` → debugging only.
+5. **The request is sent** with the form's `method` (GET puts the body in the query string; POST puts it in the request body) to the form's `action` URL, replacing the current document with the response.
+
+That last step is the one new developers most often forget exists: a plain `<form>` submission causes a full-page navigation. To stay on the page, you must call `event.preventDefault()` in a `submit` handler and send the request yourself with `fetch`.
+
+### B. The Constraint Validation API
+
+HTML5 specifies a typed validation model that runs entirely in the browser, before any JavaScript. Each form-associated element exposes:
+
+- `element.validity` — a `ValidityState` object with boolean flags: `valueMissing`, `typeMismatch`, `patternMismatch`, `tooShort`, `tooLong`, `rangeUnderflow`, `rangeOverflow`, `stepMismatch`, `badInput`, `customError`, `valid`.
+- `element.validationMessage` — the localized message the browser would show.
+- `element.checkValidity()` / `form.checkValidity()` — runs the algorithm and fires `invalid` on failures.
+- `element.setCustomValidity(message)` — sets the `customError` flag with your own message, marking the element invalid until you call `setCustomValidity('')`.
+
+Two consequences:
+
+1. **`required` and `pattern` are the same kind of thing as JavaScript validation.** They are not "fallback" validation — they participate in the same pipeline that your `customError` plugs into. There is no second, hidden validator.
+2. **`type="email"`, `type="number"`, `type="url"` are validators, not just keyboards.** They participate in `typeMismatch`. A `type="number"` input refuses to give you a `value` until the user types something parseable; the value attribute is the *string they typed*, the `valueAsNumber` property is the *parsed number*.
+
+The `:invalid`, `:valid`, `:required`, `:optional`, and `:user-invalid` pseudo-classes hook the same state into CSS, so styling can react to validation without any JavaScript at all.
+
+### C. The Accessibility Contract: Labels, Names, and Groups
+
+Every form control has an **accessible name** that assistive technology announces. The browser computes it by walking a fixed list of sources:
+
+1. `aria-labelledby` (an ID reference list).
+2. `aria-label` (a literal string).
+3. The `<label>` element associated by `for`/`id` or by ancestry.
+4. The control's `placeholder` (last-resort, and announced as such).
+5. The `title` attribute.
+
+`<label>` does two distinct things at once: it provides the accessible name *and* it widens the click/tap target — clicking the label focuses (and for checkboxes/radios, toggles) the associated control. This is why a missing `<label>` is both an accessibility bug and a usability bug; placeholder-only "labels" disappear the moment the user starts typing and cannot be recovered without clearing the field.
+
+Grouping has its own contract. `<fieldset>` with `<legend>` produces a single accessible name for a *set* of related controls (a group of radios, a multi-part address). Without it, a screen reader announces seven inputs in a row with no idea they belong together.
+
+### D. Tables Are a Data Model, Not a Layout Tool
+
+A `<table>` declares two-dimensional tabular data. Its accessibility relies on the *semantic relationship* between header cells and data cells — built up from `<thead>`, `<tbody>`, `<tfoot>`, `<th>`, `<td>`, and `scope`/`headers` attributes. A screen reader navigating cell-by-cell announces the relevant header(s) for each cell so the user knows what the number means.
+
+`<th scope="col">` says "I am a column header." `<th scope="row">` says "I am a row header." `<th headers="...">` lets a data cell point at the header IDs that apply to it for irregular tables. None of this is decoration; it is the entire reason `<table>` exists as a separate element instead of being a `<div>` grid. The corollary is the rule from the early 2000s: *do not use tables for layout*. Layout grids use CSS Grid; tables are reserved for data with row/column meaning.
+
+### From Theory to the Reference Below
+
+- **Forms** (section 1) covers `method`, `action`, and the `<form>` element — the entry point of the pipeline in §A.
+- **Input Elements** (section 2) is a tour of the controls whose `name` and `value` populate the entry list.
+- **Form Validation** (section 3) is §B: the declarative attributes and the JavaScript hooks into the same algorithm.
+- **Tables** (section 4) implements §D — semantic structure for tabular data, never for layout.
+- **Accessible Forms** (section 5) makes §C concrete: `<label>`, `<fieldset>`/`<legend>`, and ARIA only where native elements are not enough.
+
+Read this lesson with the pipeline in mind: every attribute you add is configuring a stage of it.
 
 ---
 

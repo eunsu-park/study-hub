@@ -21,6 +21,9 @@ JavaScript's flexibility is both its greatest strength and its biggest liability
 > **Analogy:** TypeScript is JavaScript with guardrails. You can still drive at full speed, but the guardrails keep you from going off the cliff. The type system catches mistakes at compile time that would otherwise crash at runtime, turning "Uncaught TypeError" into a red squiggly line in your editor.
 
 ## Table of Contents
+
+Before the reference, read [**Theory & Principles**](#theory--principles) — TypeScript adds a *structural* type system on top of JavaScript that erases at runtime, with type narrowing as the everyday safety mechanism, generics as parameterized types, and `tsc` as a build-time-only compiler that does not change runtime behavior.
+
 1. [Introduction to TypeScript](#1-introduction-to-typescript)
 2. [Basic Types](#2-basic-types)
 3. [Interfaces and Types](#3-interfaces-and-types)
@@ -28,6 +31,113 @@ JavaScript's flexibility is both its greatest strength and its biggest liability
 5. [Generics](#5-generics)
 6. [Utility Types](#6-utility-types)
 7. [Practice Problems](#7-practice-problems)
+
+---
+
+## Theory & Principles
+
+TypeScript looks like JavaScript with annotations, but the design underneath is consequential. Three properties shape almost every TypeScript decision: types are **structural** (compatibility by *shape*, not by *name*), types are **erased** at compile time (zero runtime cost, zero runtime guarantees), and the compiler runs a sophisticated **flow analysis** that narrows types as your code progresses. Naming those three before reading the syntax tour makes everything else feel like an obvious consequence rather than a vocabulary list.
+
+### A. Structural Typing: Compatible by Shape
+
+In a *nominal* type system (Java, C#), two types with identical members are still incompatible if they have different names — `class Dog { name: string }` and `class Cat { name: string }` cannot substitute for each other. TypeScript is *structural*: a value is assignable to a type if it has the right shape, regardless of where it came from.
+
+```ts
+interface Named { name: string }
+
+function greet(n: Named) { console.log(n.name); }
+
+class Dog { constructor(public name: string) {} }
+greet(new Dog("Rex"));      // OK
+greet({ name: "Anonymous" }); // OK — plain object with the shape
+```
+
+Two consequences worth memorizing:
+
+1. **Object literals get *excess property checks*.** Passing `{ name: "x", color: "red" }` directly to `greet` errors on the unrecognized `color` field, even though the value is structurally a `Named`. Stash it in a variable first and the error disappears, because the variable's inferred type already includes `color`. This is a deliberate design choice to catch typos at literal sites.
+2. **`unknown` and `any` are different.** `any` opts out of type checking entirely — it accepts anything and is assignable to anything. `unknown` accepts anything but is assignable to *nothing* without first narrowing it. Use `unknown` for boundary inputs (JSON, DOM events) and `any` only as a deliberate escape hatch.
+
+### B. Type Erasure: Compile-Time Only
+
+TypeScript types do not exist at runtime. The compiler reads `.ts`, checks types, and emits `.js` with all type annotations stripped. There is *no* `instanceof` test for an interface, no reflection of generic parameters, no runtime branding. This has three immediate implications:
+
+1. **You cannot type-check incoming data with a type alone.** `data as User` does not validate the shape; it tells the compiler "trust me." For real validation at boundaries (JSON from a fetch, query string parsing, DOM input), pair TypeScript with a runtime validator (Zod, Valibot, ArkType) that returns a typed value *and* checks it.
+2. **Type errors are warnings the compiler refuses to compile.** If you ignore them with `// @ts-ignore`, the JavaScript still runs — you have just lost the safety net. CI configurations therefore set `strict: true` and treat type errors as build failures.
+3. **Some constructs survive erasure.** `enum`, `class`, `namespace`, and parameter properties (`constructor(public x: number)`) emit JavaScript output. Pure types (`interface`, `type`, generic parameters) emit nothing. Prefer the second category for portability.
+
+### C. Type Narrowing: Flow-Sensitive Analysis
+
+The single feature that makes TypeScript pleasant is **narrowing** — the compiler tracks how each control-flow branch refines a variable's type:
+
+```ts
+function format(x: string | number) {
+  if (typeof x === "string") {
+    return x.toUpperCase(); // x is narrowed to string here
+  }
+  return x.toFixed(2);      // x is narrowed to number here
+}
+```
+
+The narrowing operators the compiler understands include:
+
+- **`typeof x === "..."`** — for primitives.
+- **`x instanceof Class`** — for classes (which have a runtime presence).
+- **`"key" in obj`** — for distinguishing union members by structure.
+- **Equality** to a literal (`x === "loading"`).
+- **Custom type guards** — functions whose return type is `x is T`. The compiler trusts them inside the branch where they returned `true`.
+- **`!` non-null assertion** — `x!` tells the compiler "I know this is not null/undefined." Use sparingly; prefer narrowing.
+
+The most useful pattern this enables is the **discriminated union**: a union of object types that share a literal field, used as the discriminator:
+
+```ts
+type State =
+  | { status: "loading" }
+  | { status: "error"; message: string }
+  | { status: "success"; data: User };
+
+function render(s: State) {
+  switch (s.status) {
+    case "loading": ...
+    case "error":  s.message  // narrowed: error variant has message
+    case "success": s.data    // narrowed: success variant has data
+  }
+}
+```
+
+This is exactly the §C pattern from the previous lesson, encoded into the type system. Adding a new state forces every `switch` to handle it (with `never` exhaustiveness checking).
+
+### D. Generics: Parameterized Types
+
+A function or type with a **generic parameter** lets the *caller* fill in a type, and the compiler propagates it through the body. The canonical example:
+
+```ts
+function first<T>(arr: T[]): T | undefined {
+  return arr[0];
+}
+
+const n = first([1, 2, 3]);          // T inferred as number → n: number | undefined
+const s = first(["a", "b"]);         // T inferred as string → s: string | undefined
+```
+
+Generics avoid two failure modes: returning `any` (and losing all downstream type info) and writing N copies of the same function for N types.
+
+Two refinement mechanisms come up repeatedly:
+
+- **Constraints with `extends`.** `<T extends { id: number }>` says "T can be any type, as long as it has an `id: number` field." Inside the function, `obj.id` is now safe to read.
+- **`keyof T`.** The type "the union of T's property names." Combined with indexed access (`T[K]`), this expresses "give me the type of property K of T," which is how `Pick`, `Omit`, and `Record` are built.
+
+Utility types ship as recipes over these primitives. `Partial<T>` makes every property optional, `Required<T>` makes every property required, `Pick<T, K>` keeps only the named properties, `Omit<T, K>` drops them, `Record<K, V>` builds an object type with keys K and values V, `ReturnType<F>` extracts the return type of a function, `Awaited<P>` unwraps the resolved type of a Promise. Once you can read the definitions in `lib.es5.d.ts`, you can write your own.
+
+### From Theory to the Reference Below
+
+- **Introduction to TypeScript** (section 1) covers §B's compile-time-only model and the `tsc` workflow.
+- **Basic Types** (section 2) introduces `string`, `number`, `boolean`, `unknown`, `any`, `never`, plus arrays and tuples — all governed by §A's structural rules.
+- **Interfaces and Types** (section 3) is §A in syntax: declaring shapes, choosing between `interface` (extensible) and `type` (composable).
+- **Function Types** (section 4) covers parameter types, return types, overloads — and the contravariant parameter rule.
+- **Generics** (section 5) is §D: parameters, constraints, `keyof`, `extends`.
+- **Utility Types** (section 6) is the standard library on top of §D: `Partial`, `Pick`, `Omit`, `Record`, `Awaited`, `ReturnType`.
+
+Read the rest of the lesson knowing that every annotation is a constraint the compiler will check before it erases — and that narrowing is the daily mechanism turning loose union types into specific ones.
 
 ---
 

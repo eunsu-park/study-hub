@@ -20,6 +20,8 @@
 
 ## 목차
 
+참조에 들어가기 전에, [**이론과 원리**](#이론과-원리) 섹션을 먼저 읽어보세요. JavaScript는 단일 스레드이며 두 큐(매크로태스크와 마이크로태스크)를 가진 이벤트 루프를 통해 일을 합니다. Promise는 마이크로태스크 큐에 살고 — 그것이 `await`이 동기처럼 느껴지는 이유이며 — `fetch`와 `AbortController`는 플랫폼이 그 루프 안으로 취소(cancellation)를 노출시키는 방법입니다.
+
 1. [동기 vs 비동기](#동기-vs-비동기)
 2. [콜백](#콜백)
 3. [Promise](#promise)
@@ -27,6 +29,101 @@
 5. [Fetch API](#fetch-api)
 6. [에러 처리](#에러-처리)
 7. [실전 패턴](#실전-패턴)
+
+---
+
+## 이론과 원리
+
+JavaScript는 *단일 스레드* 위에서 실행됩니다. 호출 스택이 하나, 코드가 실행되고 있는 자리가 하나, 그리고 어떤 순간이든 정확히 한 함수가 맨 위에 있습니다. 그런데도 일반적인 페이지는 수십 번의 네트워크 호출을 하고, 애니메이션을 실행하고, 클릭에 반응하면서 멈추지 않습니다. 이를 작동시키는 트릭이 **이벤트 루프(event loop)** 입니다 — 두 큐(마이크로태스크와 매크로태스크)를 통해 외부에서 발동된 일을 여러분의 동기 코드와 끼워 넣는 스케줄러입니다. Promise와 `async`/`await`는 마법이 아니라, 그 큐 위의 문법입니다. 이 그림이 명확해지면, 모든 비동기 버그가 "다음 일이 어느 큐에 떨어졌는가?"의 문제로 환원됩니다.
+
+### A. 이벤트 루프, 스택, 두 큐
+
+런타임은 여러분의 코드에 세 자료 구조를 노출합니다.
+
+- **호출 스택(call stack)** — 동기 프레임. 모든 함수 호출이 프레임을 푸시하고, 모든 반환이 하나를 팝합니다. 최상위 스크립트 사이에 스택은 비어 있습니다.
+- **매크로태스크 큐(macrotask queue)** (즉 *task queue*) — `setTimeout`, `setInterval`, I/O 콜백, message 이벤트, `MessageChannel`, 다음 애니메이션 프레임.
+- **마이크로태스크 큐(microtask queue)** — Promise 반응(`.then`, `.catch`, `.finally`), `queueMicrotask`, `MutationObserver` 콜백.
+
+루프는 영원히 같은 알고리즘을 실행합니다.
+
+1. **호출 스택이 비어 있다면,** *하나의* 매크로태스크를 큐에서 꺼내 완료될 때까지 실행합니다(그 프레임들이 스택을 푸시·팝합니다).
+2. **그다음 마이크로태스크 큐를 완전히 비웁니다** — 각 마이크로태스크는 추가 마이크로태스크를 enqueue할 수 있고, 그 모두가 어떤 렌더링이나 다음 매크로태스크 전에 실행됩니다.
+3. **브라우저가 필요하면 렌더할 수 있습니다**(스타일 → 레이아웃 → 페인트 → 합성), 그다음 1단계로 돌아갑니다.
+
+이 루프 안에 숨은 두 결과:
+
+1. **마이크로태스크는 항상 다음 매크로태스크 전에 실행됩니다.** 현재 태스크 동안 스케줄된 `Promise.resolve().then(f)`는 같은 순간 스케줄된 `setTimeout(g, 0)` *전에* 실행됩니다. 그래서 "현재 동기 작업 뒤, 그러나 다른 어떤 것보다 전에 실행"에 옳은 도구는 `Promise.resolve().then(...)`입니다 — `setTimeout(..., 0)`은 사람들이 기대하는 것보다 더 멀리 미룹니다.
+2. **긴 동기 태스크는 *모든 것* 을 굶깁니다.** 레이아웃, 페인트, 애니메이션, 보류 중인 `await`까지 모두 막힙니다. 60fps를 위한 16ms/프레임 예산은 "애니메이션에 16ms"가 아니라, 여러분의 핸들러·마이크로태스크·브라우저의 렌더 작업을 모두 포함한 총 16ms입니다.
+
+### B. Promise: 세 상태, 반응당 한 마이크로태스크
+
+Promise는 단일 값·단발성 컨테이너이며, 세 상태를 가집니다 — **pending**, **fulfilled**(값과 함께), 또는 **rejected**(이유와 함께). 일단 pending에서 전이되면 다시 전이될 수 없습니다. `then(onFulfilled, onRejected)`이 반응을 등록하고, 등록된 각 반응은 상태가 settle될 때 *마이크로태스크* 로 enqueue됩니다.
+
+여기서 세 규칙이 나오며, 거의 모든 Promise 질문을 설명합니다.
+
+1. **`then`은 항상 *새로운* Promise를 반환합니다.** 그것이 체인을 작동시킵니다. 새 Promise는 핸들러의 반환값으로 resolve되고, 핸들러가 Promise를 반환하면 체인이 그것을 "흡수"합니다(thenable이 thenable을 반환해도 Promise-of-Promise가 만들어지지 않습니다).
+2. **에러는 체인을 따라 다음 `catch`로 전파됩니다.** `.catch`는 그저 `.then(undefined, handler)`입니다. 다운스트림 핸들러 없이 마이크로태스크가 실행될 때까지 *처리되지 않은* rejection은 `unhandledrejection` 이벤트를 발동시킵니다.
+3. **`new Promise(executor)`는 executor를 *동기적으로* 실행합니다.** executor 본문은 생성자 호출의 일부로 실행되며, `.then`으로 등록된 반응만이 비동기입니다.
+
+정적 결합자(combinator)는 Promise 결과들에 대한 집합 연산에 대응합니다.
+
+- **`Promise.all([...])`** — *모두* fulfill되면 배열로 fulfill되고, *첫 번째* rejection에서 reject. "이것들 모두가 필요하다"에 사용.
+- **`Promise.allSettled([...])`** — 결코 reject하지 않습니다. 모두가 settle되면 `{status, value|reason}` 배열로 resolve. "실패까지 포함해 각 결과를 원한다"에 사용.
+- **`Promise.race([...])`** — 첫 번째로 settle된 것(fulfilled든 rejected든)으로 settle. 타임아웃에 사용.
+- **`Promise.any([...])`** — 첫 번째로 fulfill된 것으로 fulfill. *모두* reject되어야만 reject(`AggregateError`로). "이 미러들 중 아무거나 좋다"에 사용.
+
+### C. `async`/`await`는 `.then` 위의 설탕이다
+
+`async` 함수는 *항상* Promise를 반환하는 함수입니다. `return value`는 `Promise.resolve(value)`가 되고, `throw err`는 `Promise.reject(err)`가 됩니다. `await expr`는 순서대로 세 가지를 합니다.
+
+1. `expr`을 Promise로 평가합니다(Promise가 아닌 값은 `Promise.resolve`로 감쌈).
+2. 함수를 일시 중지(suspend)하고, 그 프레임을 호출 스택에서 팝합니다.
+3. 함수의 나머지를 그 Promise 위의 마이크로태스크 반응으로 스케줄합니다.
+
+이는 *정확히* `.then(...)`이며, 선형적인 제어 흐름이 동기 코드처럼 읽히도록 쓰여 있습니다. `try`/`catch`가 작동하는 이유는, 일시 중지된 함수가 재개될 때 rejection이 던져진 에러가 되기 때문입니다.
+
+가장 흔한 단일 버그는 순차 vs. 병렬의 오용입니다.
+
+```js
+// 순차 — 총 시간 = a + b + c
+const x = await fetchA();
+const y = await fetchB();
+const z = await fetchC();
+
+// 병렬 — 총 시간 = max(a, b, c)
+const [x, y, z] = await Promise.all([fetchA(), fetchB(), fetchC()]);
+```
+
+`await`는 코드를 선형으로 만들지만, 선형성이 항상 원하는 것은 아닙니다. Promise를 *먼저* 시작한 뒤 `Promise.all`에서 `await`하세요.
+
+### D. `fetch`, `AbortController`, 그리고 취소
+
+`fetch(url, options)`는 `Response`의 Promise를 반환합니다. 신규 사용자가 발에 거는 두 미묘함:
+
+1. **`fetch`는 HTTP 오류에서 reject하지 않습니다.** 404나 500도 여전히 Promise를 fulfill합니다 — 요청은 *성공* 했고, 서버가 그저 비-2xx를 반환했을 뿐입니다. HTTP 오류에서 예외를 원하는 코드는 `response.ok`(또는 `response.status`)를 확인하고 명시적으로 throw해야 합니다. 네트워크 실패, CORS 거부, 그리고 abort만이 Promise가 reject되도록 합니다.
+2. **본문(body)은 한 번만 소비되는 스트림입니다.** `response.json()`, `response.text()`, `response.arrayBuffer()` 각각이 본문을 읽고 잠급니다 — 같은 응답에서 둘을 호출하면 throw됩니다.
+
+취소는 **`AbortController`** 를 통해 연결됩니다.
+
+```js
+const controller = new AbortController();
+const promise = fetch(url, { signal: controller.signal });
+controller.abort(); // promise는 DOMException 'AbortError'로 reject됨
+```
+
+같은 `signal`은 스트림 API, addEventListener(`{ signal }`로 abort 시 리스너 제거), 그리고 2020년 이래 추가된 대부분의 플랫폼 Promise API와 작동합니다. `AbortSignal.timeout(ms)`은 자동으로 발동되는 시그널을 반환합니다 — 어떤 Promise에든 데드라인을 주는 가장 깔끔한 방법.
+
+### 이론에서 아래 참조로
+
+- **동기 vs 비동기**(섹션 1)는 §A가 형식화하는 동시성 모델을 소개합니다.
+- **콜백**(섹션 2)은 원조 API 스타일입니다 — 작동하지만 §B의 체인을 표현할 방법이 없어 합성이 어렵습니다.
+- **Promise**(섹션 3)는 §B입니다 — 상태, then 체인, catch, 정적 결합자.
+- **async/await**(섹션 4)는 §C입니다 — 에러를 위한 `try`/`catch`와 함께 §B 위의 설탕.
+- **Fetch API**(섹션 5)는 §D의 전반부입니다 — 요청/응답, 본문 스트림, `response.ok`.
+- **에러 처리**(섹션 6)는 §B의 rejection 전파와 `unhandledrejection`을 다룹니다.
+- **실전 패턴**(섹션 7)은 모든 것을 묶습니다 — 백오프(backoff)가 있는 재시도, `AbortController` 취소, 디바운스/쓰로틀(§A의 매크로태스크 큐를 사용).
+
+레슨의 나머지를, 모든 비동기 프리미티브가 일을 큐에 스케줄하거나 큐의 반응을 더 좋은 문법으로 감싸는 행위 중 하나임을 알고 읽으세요.
 
 ---
 

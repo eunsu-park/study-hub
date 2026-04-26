@@ -18,6 +18,94 @@ After completing this lesson, you will be able to:
 
 As web applications grow beyond a few hundred lines, managing code in a single file becomes untenable. Modules let you split code into focused, reusable units with explicit dependencies -- eliminating global scope pollution and making large codebases navigable. ES Modules are now the standard across both browsers and Node.js, and understanding them is essential for working with any modern framework or build tool.
 
+Before the reference, read [**Theory & Principles**](#theory--principles) — ES Modules are *statically analyzable* `import`/`export` graphs that bind by *live reference*; CommonJS is a *runtime* `require`/`module.exports` system that copies values; and dynamic `import()` is the seam between the two worlds and the basis for code splitting.
+
+---
+
+## Theory & Principles
+
+JavaScript's module story is two stories rolled into one. There is **CommonJS (CJS)** — the original Node.js system, runtime-evaluated, with `require()` and `module.exports`. And there is **ECMAScript Modules (ESM)** — the standardized language-level system used in browsers and modern Node, statically analyzable, with `import` and `export`. They look superficially similar; they differ in three ways that shape every practical decision: when modules execute, how bindings work, and what tooling can prove about them. Once those three are clear, "why does my import not work" stops being a debugging mystery.
+
+### A. Static vs. Dynamic Module Graphs
+
+CJS is **dynamic**: a `require('./util')` is a function call evaluated at runtime, returning whatever object `module.exports` happens to be at that moment. It can sit inside an `if`, take a computed string, mutate the result. Tools cannot in general know what a CJS file imports without running it.
+
+ESM is **static**: top-level `import` and `export` statements must be resolvable at parse time. The path is a literal string. The names are known before any code runs. The browser and bundler build a complete *module graph* by walking these statements alone — no execution required. This is what enables tree shaking (lesson 13 §C): unused exports can be safely deleted because the analyzer can prove no one references them.
+
+The static restriction has practical consequences:
+
+```js
+// LEGAL in CJS, ILLEGAL in ESM:
+if (env === 'dev') {
+  const debug = require('./debug');     // CJS: runs only in dev
+}
+
+// ESM equivalent — must be at top-level:
+import debug from './debug.js';          // always loaded
+
+// To get conditional loading in ESM, use dynamic import():
+if (env === 'dev') {
+  const { default: debug } = await import('./debug.js');
+}
+```
+
+Dynamic `import('./x.js')` is the escape hatch — a function call returning a Promise of the module. It steps outside the static graph, which is exactly what a bundler uses to create a separate chunk loaded on demand (code splitting).
+
+### B. Live Bindings vs. Value Copies
+
+CJS exports values: `module.exports = { count: 0 }` sets the export object once. If the exporting module later mutates `count`, importers who already destructured `const { count } = require('./mod')` see the *old* value, because they have a *copy* of `0`.
+
+ESM exports **live bindings**: an `import { count } from './mod.js'` is a *read-only reference* to the variable in the source module. If the source updates `count`, every importer sees the new value automatically. You still cannot reassign it in the importer — that would be writing through a read-only binding — but you see updates.
+
+```js
+// counter.js (ESM)
+export let count = 0;
+export function increment() { count++; }
+
+// main.js
+import { count, increment } from './counter.js';
+console.log(count); // 0
+increment();
+console.log(count); // 1  -- live binding, not a copy
+```
+
+This is what makes circular imports work in ESM where they often broke in CJS: as long as each side accesses the binding *after* both have finished evaluating, the binding has the right value. CJS would have given each side a partial-evaluation snapshot of the other.
+
+### C. Module Specifiers and Resolution
+
+The string in `import x from '<specifier>'` is resolved by a fixed algorithm:
+
+- **Relative specifier** (`./util.js`, `../shared/x.js`) — resolved against the importing file's URL.
+- **Absolute specifier** (`/src/x.js`) — resolved against the document's origin (browser) or the project root (bundlers).
+- **Bare specifier** (`react`, `lodash/fp`) — *not* directly supported in browsers (you get `Failed to resolve module specifier "react"`). Resolved by the package manager's `node_modules` algorithm in Node and by bundlers; in browsers, an **import map** can teach the runtime how to map bare specifiers to URLs.
+
+ESM in browsers also requires explicit file extensions (`./util.js`, not `./util`) and is loaded with `<script type="module">` (which is `defer` by default, runs in strict mode, and provides its own scope). A `<script>` without `type="module"` is a classic script: shared global scope, synchronous, no `import`.
+
+Node.js decides whether a `.js` file is CJS or ESM via the nearest `package.json`'s `"type"` field (`"module"` → ESM, `"commonjs"` or absent → CJS), or via explicit extensions (`.mjs` → always ESM, `.cjs` → always CJS). Mismatching this is the source of "ERR_REQUIRE_ESM" and "Cannot use import statement outside a module" errors.
+
+### D. The Patterns That Survive Modules
+
+Once modules give you encapsulation, several JavaScript patterns become trivial that needed clever tricks before:
+
+- **Singleton** — a module is *its own* singleton. The first `import` evaluates the file once and caches the namespace; every subsequent import gets the same object. There is no need for a `getInstance()` factory.
+- **Factory** — a module exports a function that returns a fresh object per call: `export function createCounter() { let n = 0; return { inc: () => ++n }; }`.
+- **Plugin / strategy** — a module exports a discriminated map: `export const handlers = { json: parseJson, xml: parseXml };`. Bundlers tree-shake the unused entries.
+- **Barrel file** — `index.js` re-exports several siblings: `export * from './a.js'; export { default as B } from './b.js';`. Lets `import { A, B } from '@/lib'` work without exposing internal layout. Watch out: barrels can defeat tree shaking if they re-export side-effecting modules.
+
+The shape that does *not* survive is the IIFE (`(function(){ ... })()`) — modules give you private scope by default, no wrapping required.
+
+### From Theory to the Reference Below
+
+- **The Need for Modules** (section 1) is §A's argument from the application side — why splitting matters.
+- **ES Modules (ESM) Basics** (section 2) is §A and §B made concrete: `export`, `import`, named/default/namespace, live bindings.
+- **Dynamic Import** (section 3) is §A's escape hatch — Promise-returning runtime loading and the code-splitting boundary.
+- **CommonJS vs ES Modules** (section 4) is §A and §B side-by-side, plus §C's resolution differences.
+- **Module Patterns** (later sections) is §D — singleton, factory, plugin, barrel — implemented over ESM.
+
+Read the rest of the lesson knowing that every `import` line is a node in a static graph the bundler can read before any of your code runs.
+
+---
+
 ## 1. The Need for Modules
 
 ### 1.1 What Are Modules?

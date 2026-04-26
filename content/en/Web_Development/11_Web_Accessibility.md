@@ -19,6 +19,9 @@ After completing this lesson, you will be able to:
 Over one billion people worldwide live with some form of disability, and many more experience temporary or situational impairments. Building accessible websites is not just a legal obligation -- it is a professional responsibility and a competitive advantage. Accessible design improves the experience for all users, strengthens SEO, and ensures your work reaches the widest possible audience.
 
 ## Table of Contents
+
+Before the reference, read [**Theory & Principles**](#theory--principles) — accessibility is the contract between your DOM and the *accessibility tree* assistive tech consumes; WCAG names the four properties that contract must satisfy (POUR), and ARIA, focus management, and keyboard support are the three mechanisms by which a custom component upholds it when no native element fits.
+
 1. [Accessibility Overview](#1-accessibility-overview)
 2. [WCAG Guidelines](#2-wcag-guidelines)
 3. [Semantic HTML](#3-semantic-html)
@@ -26,6 +29,86 @@ Over one billion people worldwide live with some form of disability, and many mo
 5. [Keyboard Accessibility](#5-keyboard-accessibility)
 6. [Testing and Tools](#6-testing-and-tools)
 7. [Practice Problems](#7-practice-problems)
+
+---
+
+## Theory & Principles
+
+Accessibility looks at first like a long checklist (alt text, color contrast, ARIA, keyboard, ...). It is more useful to read it as a *contract*: your visual interface must also be exposed via a parallel **accessibility tree** that assistive technology — screen readers, switch devices, voice control, refreshable braille — can read. Every accessibility rule is a requirement on that exposure. WCAG names the requirements; semantic HTML, ARIA, focus order, and contrast are the levers you have to satisfy them.
+
+### A. The Accessibility Tree and the Platform AT API
+
+When the browser builds the DOM, it builds a parallel **accessibility tree** in which each accessible node has:
+
+- A **role** — what kind of thing it is (`button`, `link`, `heading`, `region`, `dialog`, `alert`).
+- A **name** — what to announce ("Save," computed from `<label>`, `aria-label`, text content, etc.).
+- A **value** — for input controls (`"42"`, `"john@example.com"`).
+- A set of **states** — `pressed`, `expanded`, `selected`, `disabled`, `busy`.
+- **Properties and relations** — `aria-controls`, `aria-describedby`, parent/child membership.
+
+This tree is exposed through the operating system's accessibility API (UIAutomation on Windows, NSAccessibility on macOS, AT-SPI on Linux, AccessibilityNodeInfo on Android, UIAccessibility on iOS). Every screen reader is just an AT API client that walks that tree, narrates it, and routes user input back to focused nodes. Native HTML elements get their role/name/state for free; `<div>`s do not.
+
+Two consequences:
+
+1. **You cannot test "is it accessible" by looking at the screen.** Two visually identical components can have completely different accessibility trees, and screen-reader behavior depends entirely on the latter. Open the accessibility panel in DevTools to see what assistive tech actually receives.
+2. **The smallest fix is usually the right element.** `<button>` is announced as "Save, button," is reachable by Tab, fires on Enter/Space, and has a focus ring — all because its role is wired into the platform. A `<div role="button" tabindex="0" onclick=... onkeydown=...>` reproduces the same behavior only if you remember every line.
+
+### B. WCAG: The Four Properties (POUR)
+
+The Web Content Accessibility Guidelines (WCAG 2.1, 2.2) organize requirements under four principles:
+
+- **Perceivable** — Information is exposed to senses the user has. Text alternatives for images (`alt`), captions for video, sufficient color contrast (≥ 4.5:1 for body text), text that resizes to 200% without loss.
+- **Operable** — All functionality works without the input device the design assumed. Every action reachable by mouse must be reachable by keyboard; users can pause/stop motion; users have enough time.
+- **Understandable** — Content reads predictably. Labels match purpose, errors say *what* and *how to fix*, navigation is consistent across pages.
+- **Robust** — Content survives across user agents and assistive tech. Standards-compliant HTML, valid ARIA, programmatic name/role/value for every UI control.
+
+WCAG also defines three conformance levels: **A** (minimum), **AA** (the practical industry target — the level public-sector laws like ADA, EN 301 549, and the European Accessibility Act effectively require), and **AAA** (highest, often impractical for entire sites). A site at "AA" is the working baseline.
+
+### C. ARIA: Bridging the Gap When Native HTML Falls Short
+
+Native elements should carry as much meaning as possible; ARIA exists for the cases where they cannot. Five rules govern its use:
+
+1. **No ARIA is better than bad ARIA.** Wrong roles or stale states actively mislead AT.
+2. **Do not change native semantics.** `<button role="link">` confuses both groups.
+3. **All interactive ARIA controls must be keyboard-accessible.** A `role="button"` requires `tabindex` and `keydown` handling.
+4. **Do not give a focusable element `role="presentation"` or `aria-hidden="true"`.** That hides it from AT while keeping it reachable.
+5. **All form controls must have an accessible name.** Either `<label for>`, wrapping `<label>`, `aria-label`, or `aria-labelledby`.
+
+ARIA divides into three vocabularies:
+
+- **Roles** — `role="dialog"`, `role="tablist"`, `role="alert"`, `role="navigation"` — define *what the thing is*.
+- **States** — `aria-expanded`, `aria-pressed`, `aria-selected`, `aria-checked`, `aria-disabled`, `aria-busy` — defining *changing facts*.
+- **Properties** — `aria-label`, `aria-labelledby`, `aria-describedby`, `aria-controls`, `aria-live` — defining *static relationships and labels*.
+
+`aria-live="polite"` and `aria-live="assertive"` deserve special mention: they make a region announce changes without stealing focus. `polite` waits for the user's current speech to finish; `assertive` interrupts. A toast notification region typically uses `polite`; a critical error uses `assertive` (or, better, `role="alert"` which has built-in assertive-live semantics).
+
+### D. Focus, Tab Order, and the Three Modes of Reading
+
+Three navigation modes coexist on every page:
+
+1. **Sighted mouse user** — points at things; visual cues are sufficient.
+2. **Keyboard user** — navigates by Tab (forward), Shift+Tab (backward), Enter/Space (activate), arrow keys (within composite widgets like menus, listboxes, sliders), Escape (dismiss).
+3. **Screen-reader user** — reads sequentially or jumps by landmark/heading/link/form, in addition to using the keyboard for activation.
+
+Focus is the *intersection* of those modes — the focused element is the one that receives keyboard input *and* the one a screen reader is centered on. Focus management is therefore the single most-bugged accessibility area:
+
+- **Tab order is DOM order.** Reordering visually with CSS (`order`, `flex-direction: row-reverse`, `position: absolute`) creates a mismatch between the visual reading order and the keyboard reading order. Fix the DOM, not the tab order with `tabindex`.
+- **`tabindex="0"`** adds an element to natural tab order. **`tabindex="-1"`** makes an element programmatically focusable (`element.focus()`) but skipped by Tab. **`tabindex` > 0** is almost always wrong — it overrides the DOM and creates an unmaintainable order.
+- **Modal dialogs need a focus trap.** Tabbing out of an open `<dialog>` should cycle within the dialog, not into the background page. The native `<dialog>` element handles this for free; a `role="dialog"` `<div>` requires manual implementation.
+- **After dismissal, focus returns where it came from.** If a button opens a dialog, closing the dialog should focus the button again — not jump to `<body>`.
+
+A visible **focus indicator** is part of the contract. Removing the default outline (`*:focus { outline: none }`) without replacing it is one of the most common accessibility regressions; the modern fix is `:focus-visible` to show the outline only for keyboard activations, not mouse clicks.
+
+### From Theory to the Reference Below
+
+- **Accessibility Overview** (section 1) introduces §A — the why of the parallel tree.
+- **WCAG Guidelines** (section 2) is §B: POUR, the four principles, with conformance levels.
+- **Semantic HTML** (section 3) is the cheapest path to a correct accessibility tree from §A.
+- **ARIA Attributes** (section 4) is §C: the three vocabularies, the five rules, live regions.
+- **Keyboard Accessibility** (section 5) is §D: tab order, focus management, dialog traps, `:focus-visible`.
+- **Testing and Tools** (section 6) covers axe, Lighthouse, manual screen-reader passes — automated tools catch ~30% of issues, the rest needs human review.
+
+Read the rest of the lesson with the contract in mind: every checklist item in WCAG is a requirement on the tree from §A.
 
 ---
 

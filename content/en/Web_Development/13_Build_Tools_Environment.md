@@ -20,6 +20,9 @@ After completing this lesson, you will be able to:
 Modern web development involves far more than writing HTML, CSS, and JavaScript files. Package managers resolve dependency trees, build tools bundle and optimize your code, and linters catch errors before they reach production. Mastering these tools transforms a loose collection of files into a professional, reproducible development workflow that scales from a solo project to a large team.
 
 ## Table of Contents
+
+Before the reference, read [**Theory & Principles**](#theory--principles) — a build pipeline is a *dependency graph traversal* (parse → resolve → transform → bundle) where dev-mode tools optimize for fast feedback (ESM + HMR) and prod-mode tools optimize for small output (tree shaking, code splitting, minification).
+
 1. [Package Managers](#1-package-managers)
 2. [Vite](#2-vite)
 3. [Turbopack](#3-turbopack)
@@ -27,6 +30,67 @@ Modern web development involves far more than writing HTML, CSS, and JavaScript 
 5. [Environment Variables](#5-environment-variables)
 6. [Code Quality Tools](#6-code-quality-tools)
 7. [Practice Problems](#7-practice-problems)
+
+---
+
+## Theory & Principles
+
+A modern web project has hundreds of source files, thousands of `node_modules` files, multiple languages (TS, JSX, CSS, asset URLs), and target browsers that support different features. Build tooling exists to mechanically reduce that complex input into something the browser can run *fast*. Every tool — Vite, webpack, esbuild, Rollup, Turbopack, SWC, Babel — is a different point in the same design space, with the same four-stage pipeline underneath. Naming the pipeline lets you read any tool's docs without learning a fresh vocabulary each time.
+
+### A. The Build Pipeline: Parse → Resolve → Transform → Output
+
+Every bundler walks roughly the same stages:
+
+1. **Entry & parse.** Start from one or more entry files (`src/main.ts`). Parse each into an AST (abstract syntax tree). The parser must recognize the source language: TypeScript, JSX, CSS, asset imports.
+2. **Resolve.** For every `import`/`require` in the file, find the actual path on disk. This honors `node_modules` lookup, `package.json` `exports`/`main`/`module`/`browser` fields, TypeScript path aliases (`@/components/...`), and asset URL plugins. The output is a directed **module graph**.
+3. **Transform.** Apply per-file transformations: TS → JS, JSX → `createElement` calls, CSS modules → scoped class names, modern JS → older JS via Babel/SWC. Each loader/plugin is a node visitor that rewrites the AST.
+4. **Output.** Decide which modules go in which output files (the **chunk graph**), serialize each chunk, and write to disk. Production builds add minification, tree shaking, and content hashing.
+
+The fundamental cost driver is *how much* the tool re-runs on a single source change. webpack 4 re-walked most of stages 1–4. Vite skips most of 1–4 in dev mode (see §B). Turbopack and webpack 5 add persistent caches so unchanged files reuse prior work.
+
+### B. Dev-Mode Optimization: ESM + HMR
+
+For development, the right tradeoff is fast incremental feedback, not small output. The modern approach (Vite, esbuild dev server, Turbopack, Bun) leverages two browser features:
+
+- **Native ES modules.** Modern browsers can `import` directly. The dev server does not need to bundle — it serves each source file as its own ESM, transforms on demand (HMR-aware), and lets the browser do the dependency traversal.
+- **Hot Module Replacement (HMR).** When a file changes, the dev server pushes only that module to the browser, which swaps it in without a full reload, preserving component state. The HMR API is wired through `import.meta.hot` (Vite/Turbopack) or `module.hot` (webpack).
+
+The payoff is dramatic: a webpack-bundled dev server might cold-start in 30 seconds and reload a single file in 2 seconds; Vite cold-starts in under 500ms and HMR is sub-50ms. The cost is that browsers ship hundreds of small requests in dev — fine for `localhost`, unacceptable for production.
+
+This is why production *does* still bundle (§C). "Bundleless dev, bundled prod" is the modern default.
+
+### C. Prod-Mode Optimization: Tree Shake, Split, Minify, Hash
+
+For production, the tradeoffs invert: every byte and every request matters because the cost is paid by every user. The classic optimizations:
+
+- **Tree shaking** — remove imports that the rest of the graph never uses. Requires *static* `import`/`export` (which is why ESM-by-default matters), and `sideEffects: false` in `package.json` for libraries that have no top-level effects.
+- **Code splitting** — split the bundle into chunks loaded on demand: per-route chunks (loaded when the user navigates), dynamic `import('./HeavyComponent')` chunks (loaded when needed), and a vendor chunk for libraries that change rarely.
+- **Minification** — shorten variable names, strip whitespace, fold constants. Tools: terser (JS), swc minifier, lightningcss (CSS), html-minifier.
+- **Content hashing** — name the output file `app.7d3f.js` where the hash is derived from contents. Combined with HTTP caching (`Cache-Control: max-age=31536000, immutable`), this gives "cache forever, automatic invalidation on any change" for free.
+- **Asset optimization** — image format conversion (AVIF/WebP fallbacks via `<picture>`), inline-vs-emit thresholds (small assets → data URLs in CSS, larger → separate file).
+
+The output should also separate **critical** from **non-critical** code: above-the-fold CSS inlined into HTML, fonts preloaded, the rest deferred. This is the bridge from build tooling into Core Web Vitals (lesson 18).
+
+### D. Package Managers and the Module Resolution Algorithm
+
+Before any of this runs, the **package manager** (npm, pnpm, yarn) installs the dependency tree. Three responsibilities:
+
+1. **Resolution.** Read `package.json`, walk the dependency tree, pick a version of each package that satisfies all version ranges (semver: `^1.2.3` allows `>=1.2.3 <2.0.0`). The result is locked in `package-lock.json` / `pnpm-lock.yaml` / `yarn.lock` so the next install on a different machine produces an identical tree.
+2. **Storage layout.** npm/yarn flatten compatible versions into a single `node_modules`; pnpm uses a content-addressed store with symlinks (smaller disk, no phantom dependencies). The choice affects install speed by 2–5×.
+3. **Phantom dependency prevention.** A "phantom" is a package you import but never declared in `package.json`; it works because some other dep happened to install it. pnpm prevents phantoms by construction; npm/yarn do not, which leads to "works on my machine" surprises when the indirect dep updates.
+
+The `package.json` field that matters most for builds is **`"exports"`**: a map describing which files a package exposes, conditionally per environment (`node` vs. `browser`, `import` vs. `require`, `production` vs. `development`). Modern bundlers honor it; misconfigured `exports` is a common source of "module not found" errors that look like build-tool bugs but are package-author bugs.
+
+### From Theory to the Reference Below
+
+- **Package Managers** (section 1) is §D — npm, yarn, pnpm, semver, lockfiles.
+- **Vite** (section 2) is the §B dev model plus a Rollup-based §C production build.
+- **Turbopack** (section 3) is §A's pipeline reimplemented with persistent caches and Rust-speed transforms.
+- **webpack Basics** (section 4) is §A made fully explicit — entry, output, loaders (transforms), plugins (everything else).
+- **Environment Variables** (section 5) covers `import.meta.env` / `process.env` injection at build time, used by §C optimizations.
+- **Code Quality Tools** (section 6) covers ESLint, Prettier, Husky — outside the build pipeline but inside the developer workflow.
+
+Read the rest of the lesson knowing that every tool is a different choice along the same axes: how much to bundle in dev, how aggressively to optimize in prod, and how to keep the dependency graph reproducible.
 
 ---
 
