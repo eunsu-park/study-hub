@@ -15,6 +15,132 @@ After completing this lesson, you will be able to:
 
 ---
 
+## Theory & Principles
+
+The advanced Airflow surface — XCom, sensors, dynamic mapping, TaskGroups — is what separates "Airflow as cron" from "Airflow as a real orchestration engine." Each feature exists to address a real-world failure mode: data passing between tasks, waiting for external state, expressing parallelism that depends on runtime data, and managing visual complexity in large DAGs.
+
+- **(A) XCom: small messages between tasks** — what it is, what it is not, and the size discipline that prevents metadata-DB blowup.
+- **(B) Sensors: waiting as a first-class concept** — poke vs reschedule mode, and why long-running waits are operationally dangerous.
+- **(C) Dynamic task mapping** — runtime-determined parallelism, the alternative to dynamic DAG generation.
+- **(D) TaskGroup vs SubDAG** — managing visual complexity without paying the SubDAG operational tax.
+
+### A. XCom: Small Messages Between Tasks
+
+XCom (cross-communication) is Airflow's mechanism for one task to pass a value to another. Conceptually a key-value store keyed by `(dag_id, run_id, task_id, key)`. Stored in the metadata DB by default.
+
+#### A.1 The size constraint
+
+The default backend is the metadata Postgres/MySQL — same DB the scheduler hits constantly. XCom values larger than ~few KB poison this DB:
+
+- Schedulers slow down because every task list query scans inflated XCom rows.
+- Backups balloon.
+- DB connections saturate.
+
+**The discipline:** XCom is for *pointers*, not *payloads*. Pass `s3://bucket/output_2024_03_15.parquet`, never the parquet bytes. Small dicts of metadata, IDs, status flags — fine. Anything that could be more than a few KB — write to S3/GCS, pass the path.
+
+For workflows that need to pass larger objects, use a **custom XCom backend**: subclass `BaseXCom`, serialize to S3/GCS in `serialize_value`, store only the path in the DB, deserialize on read. The pattern preserves the API while moving payload off the metadata DB.
+
+#### A.2 Pull semantics and idempotency
+
+When task B pulls task A's XCom, it pulls the value from the *same DAG run*. This means:
+
+- Task B is implicitly dependent on task A within the same logical date.
+- Reruns of task B see the same XCom value (assuming task A is idempotent).
+- A backfill of date D pulls XCom values from date D's task A run, not from production's most recent.
+
+This is what makes XCom safe under retry and backfill — it is scoped to the run, not global state.
+
+### B. Sensors: Waiting as First-Class
+
+Many pipelines wait for an external event: "wait for a file to appear in S3", "wait for an upstream API to return COMPLETE". Sensors are operators whose execution semantics is "poll until a condition is true."
+
+#### B.1 The poke vs reschedule distinction
+
+Sensors have two modes:
+
+- **`poke` mode** (default): the worker holds a slot, sleeps for `poke_interval` seconds, retries the check, until success or `timeout`. **Holds a worker slot the entire time.** A sensor waiting 6 hours for a file blocks one worker slot for 6 hours.
+- **`reschedule` mode**: between checks, the task is *rescheduled* — the worker slot is released, the task goes back to `up_for_reschedule`, and the scheduler re-queues it after `poke_interval`. **Releases the slot between checks.**
+
+For long waits, always use `reschedule` mode. The penalty: more scheduler load (one re-queue per interval), but no worker starvation.
+
+In modern Airflow (2.2+), **deferrable operators / triggers** offer a third mode: the task delegates polling to an asyncio-based `Triggerer` process that can hold thousands of waits with one process. This is the right choice for high-concurrency wait workloads.
+
+#### B.2 Sensor antipatterns
+
+- **Long poke-mode sensors.** Workers held hostage; production halts when the sensor fleet exhausts the worker pool.
+- **Sensors that never time out.** A bug upstream means the sensor waits forever, queue fills with up_for_reschedule tasks. *Always set `timeout`.*
+- **Polling instead of subscribing.** If the upstream system has a webhook or pub/sub, prefer that — sensors are a fallback, not a default.
+
+### C. Dynamic Task Mapping
+
+Sometimes the number of parallel tasks is only known at runtime: "process all files that arrived today." Two ways Airflow has handled this:
+
+#### C.1 Old: dynamic DAG generation
+
+Generate one DAG per file pattern at parse time. `for filename in glob("/data/*.csv"): create_dag(filename)`. Problems:
+
+- DAG file is parsed every few seconds — listing files runs every parse.
+- DAGs come and go as files appear/disappear; the UI gets cluttered.
+- Cross-DAG dependencies are awkward.
+
+#### C.2 New: dynamic task mapping (Airflow 2.3+)
+
+A single task expanded into N parallel instances at runtime:
+
+```python
+@task
+def list_files() -> list[str]:
+    return [...]
+
+@task
+def process(filename: str):
+    ...
+
+process.expand(filename=list_files())
+```
+
+At runtime, `list_files` runs first; its output (a list) determines how many `process` instances are created. Each gets one element. The expansion happens in the scheduler, after `list_files` succeeds. Visible in the UI as a single "process" node with N mapped instances.
+
+This is the right pattern for "fan out over a runtime-determined collection." Cleaner code, better UI, no parse-time work.
+
+### D. TaskGroup vs SubDAG
+
+A 50-task DAG is hard to read. Two ways to compress visually:
+
+#### D.1 SubDAG (deprecated)
+
+A task whose body is itself a DAG. Looks like one node, expands to a sub-graph when clicked. Problems:
+
+- Each SubDAG is an actual DAG run with its own scheduler overhead, metadata rows, etc.
+- Concurrency interactions with the parent are subtle — SubDAG slot vs parent slot can deadlock.
+- Removed in Airflow 3 in favor of TaskGroup.
+
+#### D.2 TaskGroup (current)
+
+Pure-visual grouping. The tasks inside a TaskGroup remain in the same DAG; the group is just a UI rendering hint. No extra DAG runs, no extra metadata, no concurrency surprises.
+
+```python
+with TaskGroup("ingest") as ingest:
+    extract_users = ...
+    extract_orders = ...
+    extract_products = ...
+```
+
+The UI shows "ingest" as a collapsible cluster. Click to expand. Good for grouping by phase (ingest, transform, load) or by data domain.
+
+### From Theory to the Code Below
+
+Each section that follows operationalizes one piece of this framework:
+
+- §1 (XCom) is §A — the API, the antipatterns, custom backends.
+- §2 (Dynamic DAG) is §C — both old (DAG generation) and new (task mapping) patterns.
+- §3 (Sensors) is §B — `poke` vs `reschedule` vs deferrable, with concrete sensor implementations.
+- §4 (Hooks) is the abstraction that lets operators talk to external systems (DBs, APIs, S3) — the persistence layer behind XCom and sensors.
+- §5 (TaskGroups) is §D — visual organization without operational cost.
+- §6 (Best Practices) brings together §A.1's size discipline, §B.2's sensor warnings, and §D's group-don't-subdag rule.
+
+---
+
 ## Overview
 
 This document covers advanced Airflow features including XCom for data sharing between tasks, dynamic DAG generation, Sensors, Hooks, TaskGroups, and more. Leveraging these features allows you to build more flexible and powerful pipelines.

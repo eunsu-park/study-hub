@@ -15,6 +15,141 @@ After completing this lesson, you will be able to:
 
 ---
 
+## Theory & Principles
+
+PySpark DataFrames look like pandas, but underneath they are a thin Python wrapper around a JVM-resident query plan. Two boundaries dominate performance: the Catalyst optimizer (which rewrites your DataFrame operations into an optimized physical plan) and the JVM-Python boundary (which is expensive and is the reason native DataFrame operations beat Python UDFs by 10-100x).
+
+- **(A) The DataFrame as a query plan** — what `df.filter(...).groupBy(...)` actually constructs in the JVM.
+- **(B) Catalyst optimization passes** — the rules and cost model that turn your code into an efficient plan.
+- **(C) The JVM-Python boundary and Arrow** — why Python UDFs are slow and how vectorized UDFs help.
+- **(D) Partitioning as a first-class concept** — input partitions, shuffle partitions, and how skew kills jobs.
+
+### A. The DataFrame as a Query Plan
+
+A pandas DataFrame is *data in memory*. A Spark DataFrame is *a description of how to compute data*. Concretely:
+
+```python
+df = spark.read.parquet("/data/sales")     # creates a LogicalRelation
+filtered = df.filter(col("amount") > 100)   # creates a Filter node above it
+grouped = filtered.groupBy("region").sum()  # creates an Aggregate node above it
+grouped.show()                              # NOW Catalyst plans + executes
+```
+
+At each step, no data has been read. PySpark sends a tree-construction RPC to the JVM driver, which appends a node to the LogicalPlan. The Python `df` object is essentially a handle to this server-side plan.
+
+This indirection is what makes optimization possible — Catalyst sees the entire plan before executing and can rewrite it.
+
+### B. Catalyst Optimization Passes
+
+Catalyst is the optimizer that compiles a DataFrame plan into Spark RDD execution. Four phases:
+
+#### B.1 Analysis
+
+Resolve column references against the schema. `col("amount")` becomes `AttributeReference("amount", DoubleType)`. Catches typos and type mismatches *before* execution.
+
+#### B.2 Logical optimization (rule-based)
+
+A library of rewrite rules applied repeatedly until the plan stabilizes:
+
+- **Predicate pushdown.** Push filters as close to the source as possible. `Filter(amount > 100)` above a Parquet read becomes a Parquet *read filter* — unmatched row groups are skipped at the file level.
+- **Projection pruning.** `select("user_id", "amount")` causes the Parquet read to skip the other 50 columns entirely.
+- **Constant folding.** `col("x") + 1 + 2` becomes `col("x") + 3`.
+- **Boolean simplification.** `not (a > 5)` becomes `a <= 5`.
+- **Subquery elimination.** Common subexpressions are computed once.
+
+#### B.3 Physical planning (cost-based)
+
+For each logical operator, choose a physical implementation. The most consequential decision: join algorithm.
+
+- **Broadcast hash join** — if one side is small (< `spark.sql.autoBroadcastJoinThreshold`, default 10 MB), broadcast it to every executor and hash-join locally. No shuffle.
+- **Shuffle hash join** — both sides shuffled by key, then hash-joined locally per partition.
+- **Sort merge join** — both sides shuffled and sorted, then merge-joined. Default for large joins; tolerates skew better than shuffle hash.
+
+The cost-based optimizer (CBO) uses table statistics (collected via `ANALYZE TABLE`) to pick. Without stats, Catalyst guesses based on file sizes — usually right but sometimes catastrophically wrong (e.g., thinks a join key is unique when it's not, picks broadcast for what is actually a 100 GB table).
+
+#### B.4 Code generation (Tungsten)
+
+The physical plan is compiled to JVM bytecode using whole-stage code generation: a tight `for` loop that processes rows column-by-column with no virtual function calls. This is one of the reasons SQL/DataFrame outperforms equivalent RDD code by 5-10x.
+
+Tungsten also uses *off-heap memory* with a custom binary row format, avoiding JVM garbage collection on hot paths.
+
+### C. The JVM-Python Boundary and Arrow
+
+PySpark code runs in Python; Spark itself runs in the JVM. When data has to cross the boundary, it gets expensive.
+
+#### C.1 Why Python UDFs are slow
+
+```python
+@udf(IntegerType())
+def add_one(x):
+    return x + 1
+
+df.withColumn("y", add_one(col("x")))
+```
+
+For every row:
+1. JVM serializes the row to bytes.
+2. Bytes go over a socket to a Python worker process.
+3. Python deserializes, calls `add_one`, serializes the result.
+4. Bytes return to the JVM, which deserializes.
+
+This row-by-row marshalling is 10-100x slower than the equivalent native expression `col("x") + 1`. **Always prefer native Column expressions over Python UDFs.**
+
+#### C.2 Pandas UDFs (vectorized UDFs)
+
+Apache Arrow is a columnar in-memory format that both JVM and Python can read directly without serialization.
+
+```python
+@pandas_udf(IntegerType())
+def add_one(s: pd.Series) -> pd.Series:
+    return s + 1
+```
+
+Now Spark sends a *batch* of rows as an Arrow record batch (zero-copy). Python receives a pandas Series, applies the function (using vectorized pandas/NumPy ops), returns a Series. Result is written back as Arrow.
+
+Speedup: typically 10-100x over scalar UDFs. Still slower than native Column expressions, but a reasonable choice when the logic genuinely needs Python (e.g., calling a sklearn model).
+
+#### C.3 The hierarchy
+
+For column-wise transformations, prefer in this order:
+1. Native `Column` expressions (`col("x") + 1`) — fastest, runs in JVM.
+2. Pandas UDFs — Arrow-based, fast for non-trivial logic.
+3. Scalar UDFs — slowest; avoid except for prototypes.
+
+### D. Partitioning as a First-Class Concept
+
+Partitioning shows up at three layers; confusion between them is a frequent source of bugs.
+
+#### D.1 Input partitions (file partitioning)
+
+Determined by the source: `spark.read.parquet("/data/year=2024/month=03/")`. With Hive-style partitioning, each leaf directory is one partition. `WHERE month = '03'` triggers *partition pruning* — only the matching directories are read.
+
+#### D.2 RDD partitions (in-memory partitioning)
+
+Each RDD has N partitions. Catalyst tries to keep this matched to executor cores. After a shuffle, partition count is `spark.sql.shuffle.partitions` (default 200, often too many for small jobs and too few for large ones).
+
+#### D.3 Shuffle partitions and skew
+
+When `groupBy("user_id")` shuffles, Spark hashes user_id into 200 buckets. If one user generates 50% of the data, one shuffle partition is huge while 199 are small. That one partition takes 100x longer to process. **Data skew is the most common cause of slow Spark jobs.**
+
+Mitigations:
+- **Adaptive Query Execution (AQE).** Modern Spark detects skewed partitions at runtime and splits them.
+- **Salting.** Add a random suffix to the skewed key, group, then re-aggregate.
+- **Broadcast joins.** Avoid the shuffle entirely if one side is small.
+
+### From Theory to the Code Below
+
+Each section that follows operationalizes one piece of this framework:
+
+- §1 (DataFrame Basics) is §A — constructing query plans via the Python API.
+- §2 (Schema and Type System) is §B.1 — analysis-phase resolution.
+- §3 (Transformations) is the native `Column` API from §C.3 — keep work in JVM.
+- §4 (Aggregations and Window Functions) operationalize §D.3's shuffle behavior with concrete examples.
+- §5 (Joins) is §B.3 — broadcast vs shuffle vs sort-merge.
+- §6 (UDFs) is §C — when scalar UDFs are acceptable, when to upgrade to pandas UDFs.
+
+---
+
 ## Overview
 
 Spark DataFrame is a high-level API that represents distributed data in table format. It provides SQL-like operations and is automatically optimized through the Catalyst optimizer.

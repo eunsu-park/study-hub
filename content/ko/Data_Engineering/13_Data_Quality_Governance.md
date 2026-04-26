@@ -15,6 +15,167 @@
 
 ---
 
+## 이론과 원리
+
+데이터 품질과 거버넌스는 보통 컴플라이언스 오버헤드로 취급되지만, 더 깊은 진실은 운영적입니다: 데이터에 대한 신뢰가 분석 가치의 율속(rate-limiting) 인자입니다. 신뢰받지 못하는 데이터를 생산하는 완벽하게 빌드된 파이프라인은 가치가 0입니다. 품질과 거버넌스는 신뢰를 생산하는 엔지니어링 원칙입니다.
+
+- **(A) 데이터 품질의 차원** — 정확성, 완전성, 일관성, 적시성, 고유성, 유효성
+- **(B) Expectation과 검증 파이프라인** — Great Expectations, dbt 테스트, 그리고 어디서 검증할지
+- **(C) 영향 분석의 backbone으로서의 계보(Lineage)** — 컬럼 수준 vs 테이블 수준 계보
+- **(D) 접근 제어: RBAC, ABAC, 최소 권한 원칙** — 누가 무엇을 보고 수정할 수 있는가
+- **(E) GDPR / CCPA: 삭제, 익명화, 잊힐 권리** — 프라이버시 규제가 실제로 데이터 시스템에 무엇을 요구하는가
+
+### A. 데이터 품질의 차원
+
+널리 사용되는 분류. 모든 품질 이슈는 이 차원 중 하나 이상에 매핑되며; 각각에 대해 검사가 설계됩니다.
+
+| 차원 | 질문 | 예시 검사 |
+|------|------|-----------|
+| **정확성(Accuracy)** | 데이터가 현실을 반영하는가? | 샘플-vs-소스 검증, 이상 감지 |
+| **완전성(Completeness)** | 예상되는 모든 행/컬럼이 있는가? | row_count > expected, column not_null |
+| **일관성(Consistency)** | 관련된 값들이 일치하는가? | sum(line_items) = order.total |
+| **적시성(Timeliness)** | 데이터가 충분히 신선한가? | max(updated_at)이 SLA 윈도우 내 |
+| **고유성(Uniqueness)** | 중복이 있는가? | PK에 unique 제약 |
+| **유효성(Validity)** | 데이터가 형식 / 도메인을 따르는가? | email에 regex, value in accepted_values |
+
+모든 차원은 전형적 실패 모드와 전형적 검사를 가짐. 프로덕션 데이터 품질은 이 검사를 지속적으로 실행하는 원칙입니다.
+
+### B. Expectation과 검증 파이프라인
+
+패턴: expectation을 코드로 선언하고, 매 배치에 대해 실행하고, 위반될 때 시끄럽게 실패.
+
+#### B.1 어디서 검증할 것인가
+
+검증은 세 가지 자연스러운 지점에서 발생:
+
+1. **수집 시점** — 원시 데이터가 예상 스키마와 범위를 가지는가? 이는 업스트림 계약 위반을 일찍 잡음.
+2. **각 변환 후** — silver/gold 출력이 다운스트림 expectation을 충족하는가? 이는 자신의 버그를 잡음.
+3. **프로덕션에서 지속적으로** — 프로덕션 테이블이 예상 동작에서 drift했는가? 이는 운영 이슈를 잡음(차원이 1K에서 10M 행으로 폭발하는 것은 무언가 잘못되었음을 의미).
+
+각 계층은 다른 클래스의 이슈를 잡음. 한 계층에서만 검증하면 사각지대를 남김.
+
+#### B.2 Great Expectations: 선언적 expectation
+
+```python
+expect_column_values_to_be_unique("customer_id")
+expect_column_values_to_not_be_null("email")
+expect_column_values_to_match_regex("email", r"^[\w.+-]+@\w+\.\w+$")
+expect_column_values_to_be_between("amount", min_value=0, max_value=1_000_000)
+expect_table_row_count_to_be_between(min_value=1000, max_value=10_000_000)
+```
+
+각 expectation은 Python 함수. 런타임이 데이터를 검사하고 구조화된 보고서를 생산 — 통과/실패 횟수, 샘플 실패 행, 통계. 보고서는 데이터; 저장하고, 알림하고, 대시보드할 수 있음.
+
+#### B.3 dbt 테스트 vs Great Expectations
+
+웨어하우스 상주 데이터의 경우, dbt 테스트가 더 적은 오버헤드로 같은 expectation 패턴을 커버 — SQL로 컴파일되어 웨어하우스 내부에서 실행. Great Expectations는 비-웨어하우스 데이터(파이프라인의 Pandas DataFrame, Spark DataFrame, lake의 파일)와 더 풍부한 통계적 expectation에 빛남.
+
+많은 팀이 정착하는 패턴: 웨어하우스 모델에는 dbt 테스트, 수집 검증과 사전 웨어하우스 파이프라인에는 Great Expectations.
+
+#### B.4 데이터 계약 패턴
+
+ad-hoc 테스트 너머의 형식적 단계. Producer 팀이 그들이 emit하는 데이터에 대해 *계약*(스키마 + expectation)을 선언. Consumer 팀이 그것에 의존할 수 있음. Producer가 계약을 어기면 CI 실패; producer가 계약 위반 변경을 ship할 수 없음.
+
+계약은 품질을 "consumer가 깨짐 후에 불평"에서 "깨짐이 불가능"으로 옮김. 현대 데이터 계약 패턴은 레슨 21 참조.
+
+### C. 영향 분석의 Backbone으로서의 계보
+
+업스트림 컬럼에서 버그가 발견되었을 때, 어떤 다운스트림 대시보드와 ML 모델이 영향받는가? 계보가 없으면 답은 "수동 고고학 — grep, 사람들에게 물어보기, 모든 것을 찾았기를 바라기"입니다. 계보가 있으면 답은 자동입니다.
+
+#### C.1 테이블 수준 vs 컬럼 수준 계보
+
+- **테이블 계보:** "테이블 B는 테이블 A에서 빌드됨." "A가 깨지면 무엇을 재구축해야 하는가?"에 유용. dbt가 자동으로 캡처(`ref()` 그래프 통해).
+- **컬럼 계보:** "컬럼 B.country는 lookup 테이블 C를 통해 A.country_code에서 파생됨." "A.country_code의 형식이 변하면 어떤 다운스트림 컬럼이 깨지는가?"에 유용. 캡처하기 더 어려움; SQL 파싱 필요.
+
+현대 카탈로그 도구(DataHub, Atlas, Amundsen, Open Lineage)는 SQL/Spark 계획에서 자동으로 컬럼 수준 계보 추출.
+
+#### C.2 영향 반경(Blast Radius) 사용 사례
+
+흔한 프로덕션 시나리오: "업스트림 API가 `amount`를 cents에서 dollars로 바꿈; 다운스트림 모든 것이 이제 100배 틀림." 계보로 "무엇이 `amount`에 닿는가?"를 쿼리하면 영향받은 모든 모델, 대시보드, ML 피처 목록을 받음. 계보 없이 버그가 몇 주 동안 조용히 전파.
+
+이것이 Dagster의 software-defined asset(레슨 20)이 계보를 아키텍처 중심에 두는 이유입니다.
+
+### D. 접근 제어: RBAC, ABAC, 최소 권한
+
+누가 무엇을 읽고 수정할 수 있는가.
+
+#### D.1 RBAC (Role-Based Access Control)
+
+사용자가 역할에 할당됨; 역할이 자원에 대한 권한을 가짐.
+
+```
+역할: analyst
+  권한:
+    - SELECT on schema marts.*
+    - SELECT on schema staging.*
+    
+역할: data_engineer
+  권한:
+    - ALL on schema marts.*
+    - ALL on schema staging.*
+    - SELECT on schema raw.*
+```
+
+단순, 잘 이해됨, 모든 데이터베이스에서 지원. 한계: 역할이 열거되어야 함; 복잡한 정책이 역할 수를 폭발시킴.
+
+#### D.2 ABAC (Attribute-Based Access Control)
+
+권한이 사용자 속성, 자원 속성, 컨텍스트에 대한 정책으로 평가됨:
+
+```
+allow if user.department == resource.department
+       and user.clearance >= resource.classification
+       and time.now() in business_hours
+```
+
+더 표현적 — "사용자가 자신의 부서 데이터를 볼 수 있음"을 부서당 한 역할 없이 처리. 현대 정책 엔진(Open Policy Agent, Ranger)에서 표준. 효과적 권한이 데이터 값에 의존하므로 RBAC보다 감사하기 어려움.
+
+#### D.3 최소 권한
+
+항상 필요한 최소 권한을 부여. 안티패턴: "편의를 위해" 모든 분석가에게 쓰기 권한 부여; 모든 것에 대해 서비스 계정에 SELECT * 부여; 프로덕션 자격증명을 dev 환경에 부여. 각 단축은 미래의 사건.
+
+현대 웨어하우스(Snowflake, BigQuery)는 행 수준 보안과 컬럼 수준 마스킹 지원 — 테이블에 한 번 적용하면 모든 쿼리가 따름. 이는 모든 분석가가 옳은 WHERE 절을 작성하는 것에 의존하는 것보다 더 견고합니다.
+
+### E. GDPR / CCPA와 잊힐 권리
+
+프라이버시 규제의 가장 운영적으로 파괴적인 부분: 사용자가 삭제를 요청하면 그들의 데이터를 실제로 삭제해야 함 — 백업, 로그, 파생 테이블, ML 피처를 포함하여.
+
+#### E.1 삭제 도전
+
+사용자의 데이터는 다음에 살 수 있음:
+- 소스 데이터베이스(OLTP).
+- Bronze lake 계층(원시 이벤트).
+- Silver/gold 웨어하우스 테이블.
+- ML 피처 저장소(online + offline).
+- 로그(때로 사용자 ID 포함).
+- 백업.
+
+각각이 규제 윈도우(일반적으로 30일) 내에 삭제(또는 사용자 데이터 익명화)되어야 함.
+
+#### E.2 두 전략
+
+- **Hard delete:** 물리적으로 행 제거. 일부 규제 기관이 요구. append-only 시스템(lake bronze)과 백업에서 고통.
+- **익명화 / pseudonymization:** 사용자의 PII를 salt된 hash로 교체; 데이터가 분석을 위해 남아 있지만 더 이상 개인에게 추적될 수 없음.
+
+많은 lakehouse가 채택하는 패턴: 옛 PII를 사전적으로 익명화(90일 후 user_id를 hash; salt 매핑을 별도의 삭제 가능한 테이블에 유지). 사용자가 삭제를 요청하면 그들의 salt 항목을 드롭 — 익명화가 비가역적이 됨.
+
+#### E.3 민감 데이터 감지와 분류
+
+알지 못하는 것을 보호할 수 없음. Spark의 데이터 분류, Snowflake의 auto-classification, AWS Macie 같은 도구가 PII 컬럼을 자동으로 플래그하기 위해 테이블을 스캔. 분류는 RBAC에 피드: PII 컬럼이 집계 메트릭보다 더 엄격한 접근 정책을 가짐.
+
+### From Theory to the Practice Below
+
+이어지는 각 절은 위 프레임워크의 한 조각을 운영합니다:
+
+- §1 (데이터 품질 개념)은 §A — 차원과 검사 패턴.
+- §2 (Great Expectations)는 §B.2 — Python의 선언적 expectation.
+- §3 (dbt 테스트)는 §B.3 — 웨어하우스 내부의 SQL 기반 expectation.
+- §4 (데이터 거버넌스)는 §C와 §D — 계보, 카탈로그, 접근 제어.
+- §5 (GDPR 컴플라이언스)는 §E — 삭제, 익명화, 분류.
+- §6 (프로덕션 패턴)은 통합: 지속적 검증 + 계보 인식 알림 + 코드로 강제되는 접근 정책.
+
+---
+
 ## 개요
 
 데이터 품질은 데이터의 정확성, 완전성, 일관성을 보장하는 것이고, 데이터 거버넌스는 데이터 자산을 체계적으로 관리하는 프레임워크입니다. 신뢰할 수 있는 데이터 파이프라인을 위해 필수적입니다.

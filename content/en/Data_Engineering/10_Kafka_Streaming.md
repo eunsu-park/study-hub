@@ -15,6 +15,159 @@ After completing this lesson, you will be able to:
 
 ---
 
+## Theory & Principles
+
+Kafka is often described as "a message queue" but that framing misses what it actually is: **a distributed, replicated, persistent commit log**. Every operational property — high throughput, ordering guarantees, replay, exactly-once semantics — falls out of that one structural choice.
+
+- **(A) The log as the unifying abstraction** — append-only, immutable, ordered, with offsets as identifiers.
+- **(B) Partitions, replicas, leaders** — how the log scales horizontally and survives node failures.
+- **(C) Consumer groups and offsets** — how multiple consumers share work and where progress is tracked.
+- **(D) Delivery semantics** — at-most-once, at-least-once, exactly-once, and the producer/broker/consumer collaboration that makes EOS work.
+- **(E) Retention vs compaction** — two ways the log shrinks, with very different semantics.
+
+### A. The Log as the Unifying Abstraction
+
+A Kafka **topic** is a log: an ordered, append-only sequence of records. Each record gets an integer **offset** that is its identity within the partition.
+
+```
+offset:  0    1    2    3    4    5    6    7    8
+record: [A]  [B]  [C]  [D]  [E]  [F]  [G]  [H]  [I]  →  ← producer appends here
+                  ↑
+              consumer at offset 2
+```
+
+Properties that fall out of this:
+
+- **Producers append.** Brokers only ever write to the end of the log.
+- **Consumers read sequentially.** They track their own position (offset). Multiple consumers can read the same log at different positions.
+- **History is immutable.** A record at offset 5 stays at offset 5 forever; nothing can be inserted before it or modified.
+- **Replay is free.** Reset offset to 0, read everything again. This makes Kafka the natural backbone for event sourcing, debugging, and replay-driven recovery.
+
+This is fundamentally different from a queue (RabbitMQ, SQS) where consumers *take* messages and the broker forgets them. Kafka *retains* messages by retention policy; consumers just track where they are in the stream.
+
+### B. Partitions, Replicas, Leaders
+
+A single log is bounded by what one machine can write. Kafka shards by **partition**.
+
+#### B.1 Partitioning
+
+A topic is split into N partitions. Each partition is its own log on its own broker. Order is *per-partition*, not topic-wide. The producer chooses the partition (typically by hashing a *key* — events with the same key always land on the same partition, preserving order for that key).
+
+```
+topic "orders" with 3 partitions:
+  partition 0: [order_A, order_C, order_F, ...]   on broker 1
+  partition 1: [order_B, order_D, order_G, ...]   on broker 2
+  partition 2: [order_E, order_H, ...]            on broker 3
+```
+
+Throughput scales linearly with partition count. To process 1 M events/s, you might use 100 partitions × 10K events/s/partition.
+
+#### B.2 Replication
+
+Each partition has **N replicas** (usually 3). One replica is the **leader**; others are **followers**. Producers and consumers only talk to the leader; followers continuously fetch the leader's log to stay in sync.
+
+```
+partition 0:
+  leader     on broker 1: [A, B, C, D, E]
+  follower 1 on broker 2: [A, B, C, D, E]   (in sync)
+  follower 2 on broker 3: [A, B, C, D]      (lagging)
+```
+
+If the leader broker dies, Kafka elects a follower as the new leader. The set of replicas currently caught up is the **In-Sync Replicas (ISR)**. Production rule: `min.insync.replicas=2` ensures a write needs at least 2 ISR copies before the producer is acked, surviving any single broker loss without data loss.
+
+#### B.3 The acks contract
+
+The producer chooses how strict the durability guarantee is:
+
+- `acks=0` — fire and forget. May lose data on broker crash.
+- `acks=1` — wait for leader to write. Survives leader process crash but not data loss if leader's disk dies before followers catch up.
+- `acks=all` — wait for `min.insync.replicas` to write. Survives any minority of failures.
+
+Production default for important data: `acks=all` + `min.insync.replicas=2` + replication factor 3.
+
+### C. Consumer Groups and Offsets
+
+How does a fleet of consumers process a high-throughput topic without each consumer reading every message?
+
+#### C.1 Consumer groups
+
+A **consumer group** is a set of consumers that collectively process a topic. Kafka assigns each partition to exactly one consumer in the group; partitions are not shared. With 100 partitions and 25 consumers in the group, each consumer owns 4 partitions.
+
+```
+topic "orders" (3 partitions), consumer group "billing":
+  consumer A → partition 0
+  consumer B → partition 1
+  consumer C → partition 2
+```
+
+Add a fourth consumer to the group: it sits idle (no partition to assign). Remove consumer C: Kafka **rebalances** — partition 2 is reassigned to A or B.
+
+Add a *second* consumer group "analytics": each of *its* consumers also gets partitions of the same topic. **Different groups read independently**, each tracking its own offsets. This is how Kafka supports both "queue semantics" (one group, work shared) and "pub-sub semantics" (multiple groups, each gets all messages).
+
+#### C.2 Offset commits
+
+Each consumer periodically commits its current offset back to Kafka (stored in an internal topic `__consumer_offsets`). On consumer restart, it resumes from the last committed offset.
+
+The crucial decision: **commit before or after processing?**
+
+- **Commit before processing** → at-most-once. If you crash after commit, before processing, the message is lost.
+- **Commit after processing** → at-least-once. If you crash after processing, before commit, the message is reprocessed.
+
+Almost everyone picks at-least-once; consumer code must therefore be idempotent.
+
+### D. Delivery Semantics
+
+The famous trichotomy:
+
+#### D.1 At-most-once
+
+Producer fires; if no ack received, *don't* retry. Consumer commits before processing. Messages may be lost; never duplicated. Use only for telemetry where loss is acceptable.
+
+#### D.2 At-least-once
+
+Producer retries on no-ack. Consumer commits after processing. Messages will arrive (may arrive twice). The default for most workloads. **Consumer logic must be idempotent.**
+
+#### D.3 Exactly-once semantics (EOS)
+
+Kafka 0.11+ supports EOS through three coordinated mechanisms:
+
+1. **Idempotent producer** (`enable.idempotence=true`). Each producer is assigned an ID; each message gets a sequence number. Brokers deduplicate retries on the partition, so a "send + retry on timeout + actually it was delivered" scenario does not produce duplicates.
+2. **Transactions.** A producer can write to multiple partitions atomically: `beginTransaction(); send(...); send(...); commitTransaction()`. Either all writes are visible or none.
+3. **`isolation.level=read_committed`** consumer. Skips uncommitted (or aborted) transaction records.
+
+The combination gives EOS for **Kafka-to-Kafka** flows: read from topic A, transform, write to topic B atomically, commit A's offset in the same transaction. Stream processors like Kafka Streams (Lesson 16) and Spark Structured Streaming (Lesson 17) use this internally.
+
+EOS does *not* extend automatically to external sinks (a database, an HTTP API). For end-to-end EOS, the sink must support transactional writes coordinated with Kafka's transaction (the "two-phase commit" pattern) — or you accept at-least-once + idempotent sink writes.
+
+### E. Retention vs Compaction
+
+Logs cannot grow forever. Two cleanup strategies:
+
+#### E.1 Time-based retention
+
+Default: `retention.ms=604800000` (7 days). Records older than this are deleted, log segment by segment. Used for event streams where old data has no value.
+
+#### E.2 Log compaction
+
+`cleanup.policy=compact`. Kafka retains *only the latest record per key*. Used for "current state" topics — a `customer_profile_changes` topic compacted by `customer_id` always has the latest profile for every customer that ever existed.
+
+Compaction is what makes Kafka usable as a database-of-events: you can rebuild any view of "current state" by reading the compacted topic from offset 0. This is the foundation of CDC patterns (Lesson 18) and Kafka Streams' KTable abstraction (Lesson 16).
+
+The two policies can be combined (`compact,delete`): keep the latest record per key, but also delete records older than retention. Useful for long-lived state where truly old keys can be evicted.
+
+### From Theory to the Tool Below
+
+Each section that follows operationalizes one piece of this framework:
+
+- §1 (Kafka Architecture) is §B — brokers, partitions, replicas, leaders.
+- §2 (Producers) is §A and §B.3 — appending to the log with the right durability contract.
+- §3 (Consumers and Consumer Groups) is §C — distributing work, committing offsets.
+- §4 (Topic Configuration) is §B.2 + §E — replication factor, retention, compaction.
+- §5 (Delivery Semantics) is §D — at-most-once / at-least-once / exactly-once concretely.
+- §6 (Production Patterns) is the integration of everything above into real pipelines.
+
+---
+
 ## Overview
 
 Apache Kafka is a distributed event streaming platform used for building real-time data pipelines and streaming applications. It provides high throughput and fault tolerance.

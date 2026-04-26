@@ -15,6 +15,165 @@
 
 ---
 
+## 이론과 원리
+
+Spark SQL 최적화는 대부분 *Catalyst와 싸우지 않는* 연습입니다. Catalyst는 이미 쉬운 승리(predicate pushdown, projection pruning, 작은 테이블에 대한 broadcast 조인)에 탁월합니다. Catalyst가 어려워하는 것 — skew, 누락된 통계, 잘못 파티셔닝된 입력 — 이 정확히 경험 많은 Spark 엔지니어가 시간을 쓰는 곳입니다.
+
+- **(A) 물리적 계획 읽기** — `EXPLAIN`, 모든 Exchange의 스테이지 경계, 무엇을 봐야 하는가
+- **(B) Adaptive Query Execution (AQE)** — 정적 계획이 할 수 없는 것을 처리하는 런타임 재계획
+- **(C) 파티셔닝과 버켓팅(Bucketing)** — 조인과 집계를 저렴하게 만드는 물리적 레이아웃
+- **(D) 캐싱과 저장 레벨** — persist가 가치 있을 때, 재계산보다 비싼 때
+- **(E) 조인 전략 심층** — broadcast vs shuffle hash vs sort merge, 각각이 이기는 시점
+
+### A. 물리적 계획 읽기
+
+가장 중요한 단일 Spark 최적화 기술: `df.explain(True)`을 읽고 무엇이 적혀 있는지 이해하기. 출력은 4개 섹션:
+
+```
+== Parsed Logical Plan ==     # 코드가 표현한 것
+== Analyzed Logical Plan ==    # 컬럼 타입 해결됨
+== Optimized Logical Plan ==   # 규칙 기반 패스 후
+== Physical Plan ==            # 실제로 실행되는 것
+```
+
+물리적 계획이 당신이 튜닝하는 것입니다. 봐야 할 핵심 항목:
+
+#### A.1 Exchange = 셔플 = 스테이지 경계
+
+모든 `Exchange` 노드는 셔플입니다. 세고; 최소화하세요. 5개 Exchange가 있는 쿼리는 6개 스테이지를 가지고 데이터 크기 N에 대해 N×5번 셔플합니다.
+
+#### A.2 PushedFilters와 PartitionFilters
+
+```
+*(1) FileScan parquet [user_id, amount, region]
+       PushedFilters: [GreaterThan(amount, 100)]
+       PartitionFilters: [region = 'US']
+```
+
+`PushedFilters`는 읽기 시점 필터(Parquet가 row group을 스킵). `PartitionFilters`는 디렉토리 파티셔닝을 사용하여 디렉토리를 완전히 스킵. 필터를 작성했는데 PushedFilters에 *나타나지 않으면*, 옵티마이저가 푸시할 수 없었음 — 보통 UDF나 사소하지 않은 표현식을 포함하기 때문.
+
+#### A.3 조인 전략
+
+계획에서 `BroadcastHashJoin`, `ShuffledHashJoin`, `SortMergeJoin`을 찾으세요. broadcast를 기대했는데 셔플을 얻었다면, "작은" 쪽이 임계값보다 크거나(또는 통계가 누락되었음).
+
+### B. Adaptive Query Execution (AQE)
+
+정적 쿼리 계획은 실행 *전에* 조인 전략과 파티션 수를 선택. 때로는 다음 이유로 선택이 틀림:
+
+- 통계가 오래되었거나 누락됨.
+- 필터가 예상보다 더(또는 덜) 데이터를 줄임.
+- 한 키가 skew된 것으로 판명됨.
+
+AQE(Spark 3.2+에서 기본 활성화)는 실제 런타임 통계를 사용하여 **스테이지 경계에서** 재계획합니다. 세 가지 주요 최적화:
+
+#### B.1 셔플 파티션 병합
+
+셔플 후 AQE는 실제 파티션 크기를 봅니다. 많은 것이 작으면(< 목표 크기, 기본 64 MB), 병합 — 더 적고 더 큰 파티션 = 더 적은 태스크 오버헤드.
+
+#### B.2 조인 전략 전환
+
+나쁜 통계에 기반하여 `SortMergeJoin`으로 계획된 조인: AQE가 필터 후 한 쪽의 실제 크기를 보고 쿼리 중간에 `BroadcastHashJoin`으로 전환. 통계가 틀렸을 때 거대한 속도 향상.
+
+#### B.3 Skew 처리
+
+AQE는 중간값보다 훨씬 큰 파티션(기본 5배)을 감지하고 여러 더 작은 것으로 분할한 다음, broadcast된 또는 셔플된 작은 쪽에 대해 병렬로 조인을 실행.
+
+원칙: **AQE를 활성화하고 신뢰하세요**. AQE가 상황을 더 나쁘게 만드는 경우는 드물고 보통 다른 문제(병합이 잘못된 매우 작은 데이터, 이국적인 조인)를 시사합니다.
+
+### C. 파티셔닝과 버켓팅
+
+쿼리 간에 살아남는 두 가지 물리적 레이아웃 결정.
+
+#### C.1 파티셔닝
+
+`df.write.partitionBy("year", "month").parquet("/data/sales")`은 디렉토리 트리에 작성:
+
+```
+/data/sales/year=2024/month=01/part-001.parquet
+/data/sales/year=2024/month=01/part-002.parquet
+/data/sales/year=2024/month=02/...
+```
+
+`WHERE year = 2024 AND month = 1` 쿼리는 그 한 디렉토리만 읽음. **파티션 가지치기(Partition pruning)** 는 10 TB 스캔을 100 GB로 줄일 수 있음.
+
+파티션 컬럼 선택:
+- **높은 카디널리티는 나쁨.** 1억 사용자에 대한 `partitionBy("user_id")` → 1억 개의 작은 파일. 클러스터 킬러.
+- **낮은 카디널리티는 좋음.** 날짜 차원(연/월/일)은 일반적으로 수백 개 값. 옳은 카디널리티.
+- **필터 컬럼 우선.** 가장 자주 필터링하는 것으로 파티셔닝.
+
+#### C.2 버켓팅
+
+```python
+df.write.bucketBy(200, "user_id").saveAsTable("sales_bucketed")
+```
+
+각 파티션 내에서 행을 200개 파일로 해시 버켓팅. 이점: `sales_bucketed`를 같은 N개 버킷으로 `user_id`에 버켓팅된 다른 테이블과 조인할 때, **조인은 셔플이 필요 없습니다**. Spark가 매치되는 버킷을 같은 위치에 둘 수 있음.
+
+큰 반복 조인의 경우, 쓰기 시점에 한 번 버켓팅하면 모든 읽기 시점에 셔플을 절약합니다.
+
+### D. 캐싱과 저장 레벨
+
+`df.cache()`(또는 `.persist(level)`)은 DataFrame의 결과를 구체화하여 후속 액션이 재계산 대신 재사용하게 함.
+
+저장 레벨:
+- `MEMORY_ONLY` — heap의 JVM 객체. 가장 빠른 읽기; 메모리 압박이 evict하면 손실.
+- `MEMORY_AND_DISK`(기본) — 메모리 가득 차면 디스크로 spill.
+- `MEMORY_ONLY_SER` — 직렬화된 바이트; 더 작고, 읽기는 더 느림.
+- `DISK_ONLY` — 디스크에만; 재계산 대비 거의 가치 없음.
+
+#### D.1 캐시할 때
+
+캐시는 다음의 경우 가치 있음:
+- DataFrame이 **여러 번** 사용됨(예: 조인 전과 별도의 집계 전).
+- 재계산이 **비쌈**(긴 계보, 큰 셔플).
+- 캐시된 크기가 **클러스터 메모리에 들어감**(또는 로컬 SSD에).
+
+캐시는 다음 경우 해를 끼침:
+- DataFrame이 한 번 사용됨 — 캐시 + 읽기 = 재계산, 직렬화 비용 추가.
+- 데이터가 너무 큼 — 축출(eviction)이 churn하고, 캐시 비용과 재계산 모두 지불.
+
+#### D.2 unpersist
+
+캐시된 데이터는 `df.unpersist()` 또는 SparkSession이 죽을 때까지 메모리에 남아 있음. 장기 실행 노트북/잡에서, 끝나면 명시적으로 unpersist하세요 — 그렇지 않으면 메모리가 오래된 캐시 데이터셋으로 채워집니다.
+
+### E. 조인 전략 심층
+
+가장 결과적인 단일 Catalyst 결정. 세 전략, 세 트레이드오프:
+
+#### E.1 Broadcast Hash Join
+
+작은 쪽이 모든 익스큐터에 broadcast됨; 각 익스큐터가 hash 테이블을 만들고 로컬에서 probe. **셔플 없음.**
+
+- **선택되는 경우:** 작은 쪽 < `autoBroadcastJoinThreshold`(10 MB 기본; 많은 워크로드에서 100 MB로 올림).
+- **실패 모드:** "작은 쪽"이 5 GB로 판명되면, broadcast가 드라이버 / 익스큐터 메모리를 폭발시킴.
+- **강제:** 크기를 알면 `broadcast(small_df).join(large_df, ...)`.
+
+#### E.2 Shuffle Hash Join
+
+양쪽이 키로 셔플된 후, 파티션별 hash join. 한 쪽이 훨씬 작을 때(broadcast할 만큼 작지는 않지만) sort-merge보다 빠름.
+
+- **선택되는 경우:** 드뭄; Catalyst는 보통 안전을 위해 sort-merge 선택.
+
+#### E.3 Sort Merge Join
+
+양쪽이 셔플되고 정렬된 후, merge-join. 큰-큰 조인의 기본. 메모리 효율적(스트리밍 merge)이지만 정렬 비용 지불.
+
+- **선택되는 경우:** 큰 × 큰 조인.
+- **Skew killer:** 한 키가 행의 50%를 가지면, 그 한 merge 파티션이 100배 더 걸림. AQE skew 처리가 도움.
+
+### From Theory to the Code Below
+
+이어지는 각 절은 위 프레임워크의 한 조각을 운영합니다:
+
+- §1 (Catalyst 옵티마이저)는 §A — 계획 읽기, 어떤 최적화가 적용되는지 이해.
+- §2 (파티셔닝 전략)는 §C.1 — 언제 어떻게 파티셔닝할지.
+- §3 (캐싱)은 §D — 저장 레벨, 사용 시점, unpersist 위생.
+- §4 (조인 전략)는 §E — broadcast, shuffle hash, sort merge.
+- §5 (버켓팅)은 §C.2 — 셔플 없는 조인을 위한 쓰기 시점 레이아웃.
+- §6 (Adaptive Query Execution)은 §B — 런타임 재계획.
+
+---
+
 ## 개요
 
 Spark SQL의 성능을 최적화하기 위해서는 Catalyst 옵티마이저의 동작 원리를 이해하고, 파티셔닝, 캐싱, 조인 전략 등을 적절히 활용해야 합니다.

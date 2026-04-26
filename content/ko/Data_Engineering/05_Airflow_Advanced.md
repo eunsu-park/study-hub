@@ -15,6 +15,132 @@
 
 ---
 
+## 이론과 원리
+
+Airflow의 고급 영역 — XCom, Sensor, 동적 매핑(dynamic mapping), TaskGroup — 은 "cron으로서의 Airflow"를 "실제 오케스트레이션 엔진으로서의 Airflow"와 분리시키는 것입니다. 각 기능은 실세계의 실패 모드를 다루기 위해 존재합니다: 태스크 간 데이터 전달, 외부 상태 대기, 런타임 데이터에 의존하는 병렬성 표현, 그리고 큰 DAG의 시각적 복잡도 관리.
+
+- **(A) XCom: 태스크 간 작은 메시지** — 무엇이고 무엇이 아닌지, 메타데이터 DB 폭주를 방지하는 크기 원칙
+- **(B) Sensor: 일급(first-class) 개념으로서의 대기** — poke vs reschedule 모드, 그리고 장기 대기가 운영적으로 위험한 이유
+- **(C) 동적 태스크 매핑(Dynamic task mapping)** — 런타임에 결정되는 병렬성, 동적 DAG 생성의 대안
+- **(D) TaskGroup vs SubDAG** — SubDAG의 운영 비용을 지불하지 않고 시각적 복잡도 관리
+
+### A. XCom: 태스크 간 작은 메시지
+
+XCom(cross-communication)은 한 태스크가 다른 태스크에 값을 전달하는 Airflow 메커니즘입니다. 개념적으로 `(dag_id, run_id, task_id, key)`로 키된 키-값 저장소. 기본적으로 메타데이터 DB에 저장됩니다.
+
+#### A.1 크기 제약
+
+기본 백엔드는 메타데이터 Postgres/MySQL — 스케줄러가 끊임없이 두드리는 같은 DB. 수 KB보다 큰 XCom 값은 이 DB를 중독시킵니다:
+
+- 모든 태스크 목록 쿼리가 부풀어 오른 XCom 행을 스캔하므로 스케줄러가 느려집니다.
+- 백업이 부풀어 오릅니다.
+- DB 연결이 포화됩니다.
+
+**원칙:** XCom은 *페이로드(payload)* 가 아닌 *포인터(pointer)* 를 위한 것입니다. `s3://bucket/output_2024_03_15.parquet`을 전달하고, parquet 바이트는 절대 전달하지 마세요. 메타데이터, ID, 상태 플래그의 작은 dict — 괜찮음. 수 KB보다 클 수 있는 모든 것 — S3/GCS에 쓰고 경로를 전달하세요.
+
+더 큰 객체를 전달해야 하는 워크플로우의 경우, **커스텀 XCom 백엔드** 사용: `BaseXCom`을 서브클래스, `serialize_value`에서 S3/GCS로 직렬화, DB에는 경로만 저장, 읽을 때 역직렬화. 이 패턴은 API를 보존하면서 페이로드를 메타데이터 DB 밖으로 옮깁니다.
+
+#### A.2 Pull 의미론과 멱등성
+
+태스크 B가 태스크 A의 XCom을 pull할 때, *동일한 DAG 실행* 의 값을 pull합니다. 이는 의미합니다:
+
+- 태스크 B는 동일한 논리 날짜 내에서 태스크 A에 암묵적으로 의존.
+- 태스크 B의 재실행은 동일한 XCom 값을 봄(태스크 A가 멱등하다고 가정).
+- 날짜 D의 백필은 프로덕션의 가장 최근이 아닌 날짜 D의 태스크 A 실행에서 XCom 값을 pull.
+
+이것이 XCom을 재시도와 백필 하에서 안전하게 만드는 것입니다 — 글로벌 상태가 아닌 실행에 스코프됨.
+
+### B. Sensor: 일급으로서의 대기
+
+많은 파이프라인이 외부 이벤트를 기다립니다: "S3에 파일이 나타날 때까지 대기", "업스트림 API가 COMPLETE를 반환할 때까지 대기". Sensor는 실행 의미론이 "조건이 참이 될 때까지 폴링"인 오퍼레이터입니다.
+
+#### B.1 poke vs reschedule 구분
+
+Sensor는 두 가지 모드를 가집니다:
+
+- **`poke` 모드**(기본): 워커가 슬롯을 잡고 있고, `poke_interval` 초 동안 sleep하고, 검사를 재시도, 성공이나 `timeout`까지. **그 시간 내내 워커 슬롯을 잡고 있음.** 6시간 동안 파일을 기다리는 sensor는 6시간 동안 워커 슬롯 하나를 막음.
+- **`reschedule` 모드**: 검사 사이에 태스크가 *재스케줄됨* — 워커 슬롯이 해제되고, 태스크가 `up_for_reschedule`로 돌아가고, 스케줄러가 `poke_interval` 후 재큐잉. **검사 사이에 슬롯을 해제.**
+
+장기 대기에는 항상 `reschedule` 모드를 사용하세요. 페널티: 더 많은 스케줄러 부하(인터벌당 한 번의 재큐잉), 하지만 워커 굶주림 없음.
+
+현대 Airflow(2.2+)에서, **deferrable 오퍼레이터 / trigger** 는 세 번째 모드를 제공합니다: 태스크가 폴링을 한 프로세스로 수천 개의 대기를 잡을 수 있는 asyncio 기반 `Triggerer` 프로세스에 위임. 이는 고동시성 대기 워크로드에 옳은 선택입니다.
+
+#### B.2 Sensor 안티패턴
+
+- **장기 poke 모드 sensor.** 워커가 인질로 잡힘; sensor fleet이 워커 풀을 소진하면 프로덕션이 정지.
+- **타임아웃 없는 sensor.** 업스트림 버그가 sensor가 영원히 대기하게 만들면, 큐가 up_for_reschedule 태스크로 채워짐. *항상 `timeout`을 설정하세요.*
+- **구독 대신 폴링.** 업스트림 시스템에 webhook이나 pub/sub이 있으면 그것을 선호하세요 — sensor는 fallback이지 기본이 아님.
+
+### C. 동적 태스크 매핑
+
+병렬 태스크 수가 런타임에만 알려지는 경우가 있습니다: "오늘 도착한 모든 파일을 처리하라." Airflow가 이를 처리한 두 가지 방법:
+
+#### C.1 옛 방식: 동적 DAG 생성
+
+파싱 시점에 파일 패턴당 DAG 하나 생성. `for filename in glob("/data/*.csv"): create_dag(filename)`. 문제:
+
+- DAG 파일이 몇 초마다 파싱됨 — 파싱마다 파일 목록 실행.
+- 파일이 나타나/사라짐에 따라 DAG가 왔다 갔다; UI가 어수선해짐.
+- DAG 간 의존성이 어색.
+
+#### C.2 새 방식: 동적 태스크 매핑 (Airflow 2.3+)
+
+런타임에 N개의 병렬 인스턴스로 확장되는 단일 태스크:
+
+```python
+@task
+def list_files() -> list[str]:
+    return [...]
+
+@task
+def process(filename: str):
+    ...
+
+process.expand(filename=list_files())
+```
+
+런타임에 `list_files`가 먼저 실행; 그 출력(리스트)이 `process` 인스턴스가 몇 개 생성되는지 결정. 각각이 한 요소를 받음. 확장은 `list_files` 성공 후 스케줄러에서 발생. UI에서 N개의 매핑된 인스턴스가 있는 단일 "process" 노드로 보임.
+
+이것이 "런타임에 결정되는 컬렉션에 대한 fan out"의 옳은 패턴입니다. 더 깨끗한 코드, 더 나은 UI, 파싱 시점 작업 없음.
+
+### D. TaskGroup vs SubDAG
+
+50개 태스크 DAG는 읽기 어렵습니다. 시각적으로 압축하는 두 가지 방법:
+
+#### D.1 SubDAG (deprecated)
+
+본문이 자체 DAG인 태스크. 한 노드처럼 보이고, 클릭하면 서브 그래프로 확장. 문제:
+
+- 각 SubDAG가 자체 스케줄러 오버헤드, 메타데이터 행 등을 가진 실제 DAG 실행.
+- 부모와의 동시성 상호작용이 미묘 — SubDAG 슬롯과 부모 슬롯이 데드락 가능.
+- TaskGroup을 위해 Airflow 3에서 제거됨.
+
+#### D.2 TaskGroup (현재)
+
+순수 시각적 그룹화. TaskGroup 내부의 태스크는 같은 DAG에 남아 있음; 그룹은 단지 UI 렌더링 힌트. 추가 DAG 실행 없음, 추가 메타데이터 없음, 동시성 깜짝 놀라움 없음.
+
+```python
+with TaskGroup("ingest") as ingest:
+    extract_users = ...
+    extract_orders = ...
+    extract_products = ...
+```
+
+UI는 "ingest"를 접을 수 있는 클러스터로 보여줍니다. 클릭해서 확장. 단계별(ingest, transform, load)이나 데이터 도메인별로 그룹화하기에 좋음.
+
+### From Theory to the Code Below
+
+이어지는 각 절은 위 프레임워크의 한 조각을 운영합니다:
+
+- §1 (XCom)은 §A — API, 안티패턴, 커스텀 백엔드.
+- §2 (동적 DAG)는 §C — 옛(DAG 생성)과 새(태스크 매핑) 패턴 모두.
+- §3 (Sensor)는 §B — 구체적 sensor 구현과 함께 `poke` vs `reschedule` vs deferrable.
+- §4 (Hook)은 오퍼레이터가 외부 시스템(DB, API, S3)과 대화하게 하는 추상 — XCom과 sensor 뒤의 영속화 계층.
+- §5 (TaskGroup)은 §D — 운영 비용 없는 시각적 조직.
+- §6 (모범 사례)는 §A.1의 크기 원칙, §B.2의 sensor 경고, §D의 group-don't-subdag 규칙을 모음.
+
+---
+
 ## 개요
 
 이 문서에서는 Airflow의 고급 기능인 XCom을 통한 데이터 공유, 동적 DAG 생성, Sensor, Hook, TaskGroup 등을 다룹니다. 이러한 기능을 활용하면 더 유연하고 강력한 파이프라인을 구축할 수 있습니다.

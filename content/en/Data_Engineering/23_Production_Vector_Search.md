@@ -14,6 +14,191 @@
 
 ---
 
+## Theory & Principles
+
+Production vector search is not "build an HNSW index and call it done." Real systems must handle: queries that mix semantic and keyword signals (because pure embedding search misses exact matches), result quality that exceeds approximate-NN ceilings (via reranking), filters that aren't naturally expressible in vector space (via metadata pre/post filtering), and the operational discipline of any production data system — caching, scaling, cost control, observability.
+
+- **(A) Hybrid retrieval: dense + sparse fusion** — why pure semantic search underperforms, and how reciprocal rank fusion combines signals.
+- **(B) Reranking: precision after retrieval** — using cross-encoders to refine the top-K of a fast retriever.
+- **(C) The retrieval pipeline as multi-stage architecture** — recall-oriented retrieval, then precision-oriented reranking, then business-rule filtering.
+- **(D) Caching, scaling, and cost** — embedding cache, query cache, sharding, the cost economics of vector search.
+- **(E) Observability for retrieval systems** — what to measure when "did the right document show up?" is the question.
+
+### A. Hybrid Retrieval
+
+Pure dense (vector) search has a known weakness: it underperforms on **exact match** and **rare terms**. A query for "iPhone 15 Pro Max 256GB" relies on exact tokens; a semantic embedding might rank "Samsung Galaxy 256GB" similarly because both are "premium phones with 256GB." Conversely, pure keyword search misses synonyms and intent.
+
+#### A.1 The two retrievers
+
+- **Dense (vector) retrieval:** embed the query, find K nearest by cosine. Good at semantic similarity, paraphrases, multilingual.
+- **Sparse (keyword) retrieval:** BM25 or similar. Good at exact terms, rare words, named entities.
+
+Modern production systems run both and **fuse** the results.
+
+#### A.2 Reciprocal Rank Fusion (RRF)
+
+The standard fusion algorithm. Each retriever returns a ranked list; combine by summing reciprocal ranks:
+
+```
+RRF_score(doc) = sum_over_retrievers( 1 / (k + rank_in_retriever) )
+```
+
+(k typically 60.) A document that ranks #2 in dense (1/62 = 0.016) and #3 in sparse (1/63 = 0.016) gets RRF = 0.032. Documents in only one list get one term.
+
+RRF is parameter-light, robust, and gives consistent improvements over either retriever alone — typically 5-15 percentage points in NDCG@10.
+
+#### A.3 Other fusion approaches
+
+- **Score normalization + weighted sum:** normalize each retriever's scores to [0,1], weighted average. More tunable than RRF but requires per-domain tuning.
+- **Learned fusion (LTR):** train a model to combine signals. Better quality if training data exists; complex to maintain.
+
+For most teams: start with RRF; upgrade to LTR only if quality gap justifies the engineering cost.
+
+### B. Reranking
+
+ANN retrievers (HNSW, IVF) prioritize speed; recall@1000 might be high but precision@10 is mediocre because the embedding model is small/fast. **Reranking** uses a more expensive model on the top-K to refine ordering.
+
+#### B.1 Bi-encoder vs cross-encoder
+
+- **Bi-encoder** (used by retrievers): encodes query and document independently into vectors; similarity is cosine. Fast: O(1) per query against pre-computed doc embeddings. Quality: bounded by single-vector representation.
+- **Cross-encoder** (used by rerankers): takes (query, document) pair as joint input, runs through transformer, outputs a relevance score. Slow: must run model per (query, doc) pair. Quality: much higher because the model sees both texts together.
+
+#### B.2 The two-stage pattern
+
+```
+Query → bi-encoder retriever → top 100 candidates → cross-encoder reranker → top 10 → consumer
+```
+
+Bi-encoder gives recall (the right answer is somewhere in the top 100). Cross-encoder gives precision (the right answer is now in the top 1-3). Combined, you get both at acceptable latency — typically <100ms total because reranking 100 docs is fast for a small cross-encoder.
+
+#### B.3 Common rerankers
+
+- **Cohere Rerank** (API).
+- **Cross-encoder/ms-marco-MiniLM** (open, ~80M params, fast).
+- **bge-reranker** (open, BAAI).
+- LLM-based (use GPT/Claude as a relevance judge): highest quality, highest cost.
+
+The reranker often improves NDCG@10 by 10-20 points over retrieval alone.
+
+### C. The Retrieval Pipeline as Multi-Stage Architecture
+
+A production retrieval pipeline has 3-5 stages, each with distinct quality and latency characteristics.
+
+```
+query
+  ↓
+1. Query understanding (rewrite, expand, classify)
+  ↓
+2. Hybrid retrieval (dense + sparse, RRF fusion)         100-1000 candidates
+  ↓
+3. Metadata filtering (category, date, permissions)      filtered subset
+  ↓
+4. Reranking (cross-encoder)                             top 10-50
+  ↓
+5. Business logic (deduplication, diversification)       final top 10
+  ↓
+results
+```
+
+Each stage trades quality for latency. Stage 2 is recall-heavy; later stages narrow toward precision. Skip a stage and quality drops; add a stage and latency rises.
+
+#### C.1 Latency budget
+
+A typical RAG application target: 1 second end-to-end. Allocation:
+- Embedding query: 50ms (or less if cached).
+- Hybrid retrieval: 100ms.
+- Filter: 10ms.
+- Rerank top 100: 200ms.
+- Business logic: 20ms.
+- LLM generation: 600-700ms.
+
+Vector search itself is rarely the bottleneck; LLM inference is.
+
+#### C.2 Quality vs cost trade-offs per stage
+
+- Skip reranking → latency drops, NDCG drops 10-20 points.
+- Use cheaper embedding model → indexing cost drops, recall drops a few points.
+- More candidates from retrieval → recall up, rerank latency proportional.
+- Larger reranker → quality up, latency up.
+
+Production tuning is mostly walking these curves.
+
+### D. Caching, Scaling, and Cost
+
+#### D.1 Caches at three layers
+
+- **Query cache.** Same query → same answer. Especially valuable if queries are templated (chatbot use cases). Key on the (normalized query, filter set).
+- **Embedding cache.** Same query text → same embedding. Saves embedding API call. LRU on query strings.
+- **Reranker cache.** Same (query, doc_id) pair → same rerank score. Useful when the same documents recur for the same query.
+
+Hit rates of 30-70% are common for long-tail-mixed traffic; massive cost savings.
+
+#### D.2 Sharding for scale
+
+A single HNSW index loaded in RAM has a memory limit (~10s of GB). Beyond that, shard:
+
+- Each shard owns 1/N of the vectors.
+- Query broadcasts to all shards.
+- Each shard returns its top-K; coordinator merges to global top-K.
+
+Linear scale to billions of vectors. Adds latency from the broadcast (typically +20-50ms).
+
+#### D.3 Cost economics
+
+Vector search costs:
+- **Embedding API/inference:** dominant for large catalogs. Per-1M-tokens or per-GPU-hour.
+- **Storage + index memory:** O(N × D × bytes) for raw + O(graph edges) for HNSW. For 100M vectors at D=1536 with HNSW, ~600 GB RAM across cluster.
+- **Query compute:** linear with QPS, low per query.
+
+For most teams with <10M vectors, hosted services (Pinecone, Qdrant Cloud) are cost-competitive with self-hosting. At 100M+, self-hosting on bare metal usually wins on cost.
+
+### E. Observability for Retrieval Systems
+
+The fundamental retrieval question: "did the right answer show up?" Standard metrics fall short.
+
+#### E.1 Offline evaluation
+
+A test set of (query, relevant_document) pairs labeled by humans or LLM judges:
+
+- **Recall@K:** fraction of test queries where the relevant doc is in top-K. Measures retrieval quality.
+- **Precision@K:** fraction of top-K results that are relevant. Measures ranking quality.
+- **NDCG@K:** position-discounted relevance. The standard for graded relevance.
+- **MRR (Mean Reciprocal Rank):** 1/rank of first relevant. Good for "single right answer" tasks.
+
+Run regression tests on every embedding model change, every reranker change.
+
+#### E.2 Online observability
+
+In production, you don't have ground truth labels. Proxy signals:
+
+- **Click-through rate** on returned results (when applicable).
+- **Time spent on result** (engagement proxy).
+- **Explicit feedback** (thumbs up/down on results).
+- **LLM-judge eval** on sampled queries: ask an LLM "did the system return useful results for this query?" Reasonable signal at low cost.
+
+#### E.3 Latency and error monitoring
+
+Standard system observability:
+- P50, P95, P99 latency per stage of the pipeline.
+- Error rate (timeouts, embedding failures, OOM).
+- Cache hit rates per cache layer.
+- Cost per 1000 queries.
+
+Vector DBs provide their own dashboards (Pinecone, Weaviate); supplement with application-layer metrics.
+
+### From Theory to the Code Below
+
+Each section that follows operationalizes one piece of this framework:
+
+- §1 (Hybrid Search) is §A — RRF and weighted fusion in concrete code.
+- §2 (Filtering Strategies) is §C step 3 — pre-filter, post-filter, filterable indexes.
+- §3 (Reranking) is §B — cross-encoder integration patterns.
+- §4 (Scaling Architectures) is §D.2 — sharding, replication, hot-cold tiering.
+- §5 (Monitoring and Cost Optimization) is §D.1 + §D.3 + §E — caching, cost, evaluation.
+- §6 (Integration with Data Pipelines) is the embedding-pipeline + CDC pattern from Lesson 22 §E.1.
+
+---
+
 ## Overview
 
 Deploying vector search in production goes far beyond indexing embeddings and running queries. Production systems must handle hybrid retrieval (combining semantic and keyword search), filter results by business metadata, rerank for precision, scale to handle traffic spikes, and do all of this reliably at acceptable cost.

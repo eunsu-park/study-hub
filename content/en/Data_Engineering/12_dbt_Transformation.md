@@ -15,6 +15,200 @@ After completing this lesson, you will be able to:
 
 ---
 
+## Theory & Principles
+
+dbt's contribution is not "a tool that runs SQL" — many tools run SQL. dbt's contribution is bringing **software engineering discipline** to SQL transformations: version control, dependency-tracked builds, declarative tests, generated documentation, and an explicit lineage graph. Each of these is something the data warehouse never gave you.
+
+- **(A) The model as the unit of transformation** — SQL files compiled and orchestrated as nodes in a DAG.
+- **(B) The ref() function and the dependency graph** — how dbt knows what to build in what order.
+- **(C) Materializations: view, table, incremental, ephemeral, snapshot** — the same SQL, different physical strategies.
+- **(D) Tests as data contracts** — uniqueness, not-null, referential integrity, custom assertions.
+- **(E) Jinja and macros** — code reuse, parameterization, and the dbt compilation model.
+
+### A. The Model as the Unit of Transformation
+
+A dbt **model** is a SQL file that defines a single SELECT statement. dbt compiles the SELECT into a `CREATE TABLE`, `CREATE VIEW`, or `MERGE` (depending on materialization) and runs it against your warehouse.
+
+```sql
+-- models/marts/customer_lifetime_value.sql
+SELECT
+    customer_id,
+    SUM(amount) AS lifetime_value,
+    COUNT(*) AS order_count
+FROM {{ ref('fact_orders') }}
+WHERE status = 'completed'
+GROUP BY customer_id
+```
+
+Equivalent (compiled) SQL:
+
+```sql
+CREATE OR REPLACE TABLE prod.marts.customer_lifetime_value AS
+SELECT customer_id, SUM(amount) AS lifetime_value, ...
+FROM prod.marts.fact_orders ...
+```
+
+The point: you write *what* the table should contain; dbt handles *how* to materialize it (DDL, dependency order, environment-specific schema names).
+
+### B. The ref() Function and the Dependency Graph
+
+The `{{ ref('fact_orders') }}` is the entire architecture in one syntax. It does two things:
+
+1. **Resolves to the actual table name** at compile time, in the right schema for the environment (dev/staging/prod).
+2. **Records a dependency** in dbt's internal graph: "this model depends on `fact_orders`".
+
+dbt parses every `ref()` across your project and builds a DAG. When you run `dbt build`, dbt:
+1. Topologically sorts the DAG.
+2. Builds models in dependency order.
+3. Runs them in parallel where possible (independent leaves).
+
+This eliminates an entire category of bugs (running models in the wrong order) and an entire category of tedium (manually scheduling each model's run).
+
+#### B.1 Selectors and incremental builds
+
+`dbt build --select customer_lifetime_value+` builds `customer_lifetime_value` and everything downstream. `--select +customer_lifetime_value` builds it and everything upstream. `--select state:modified+` (with state comparison) builds only what changed and downstream — the foundation of CI/CD for analytics.
+
+### C. Materializations
+
+The same SQL can be materialized in five ways. Choosing the right materialization is the most consequential dbt decision.
+
+#### C.1 view
+
+`CREATE OR REPLACE VIEW`. No data stored; query runs against underlying tables every time. Cheap to refresh (instant), expensive to query.
+
+Use when: model is rarely queried, underlying data changes constantly, or it's a thin transformation on top of a large table.
+
+#### C.2 table
+
+`CREATE OR REPLACE TABLE AS SELECT ...`. Full rebuild every run. Storage cost proportional to result; query cost is fast (just read the table).
+
+Use when: model is queried often, data is small-to-medium, full rebuild is acceptable in your run window.
+
+#### C.3 incremental
+
+```sql
+{{ config(materialized='incremental', unique_key='order_id') }}
+SELECT * FROM {{ ref('staging_orders') }}
+{% if is_incremental() %}
+  WHERE updated_at > (SELECT MAX(updated_at) FROM {{ this }})
+{% endif %}
+```
+
+First run: builds the full table. Subsequent runs: only processes new/updated rows, MERGE-ing into the existing table. O(delta) cost instead of O(N).
+
+Use when: table is large, only a fraction changes each run. The most common materialization for fact tables.
+
+The watermark logic (`WHERE updated_at > ...`) is the contract that makes it correct. Get the watermark wrong and you silently drop rows.
+
+#### C.4 ephemeral
+
+The model is *not* materialized to the warehouse — it becomes a CTE in any model that `ref`s it.
+
+Use when: a logical transformation that's not worth its own table; reused across multiple downstream models but never queried directly.
+
+#### C.5 snapshot
+
+```sql
+{% snapshot dim_customer_history %}
+{{ config(unique_key='customer_id', strategy='timestamp', updated_at='updated_at') }}
+SELECT * FROM {{ source('crm', 'customers') }}
+{% endsnapshot %}
+```
+
+dbt automatically maintains an SCD Type 2 history table. Each run compares source rows to the latest snapshot row; changes are recorded as new rows with valid_from/valid_to.
+
+This is the SCD Type 2 pattern (Lesson 2 §D) implemented as a one-line config. Snapshots are dbt's most underused feature.
+
+### D. Tests as Data Contracts
+
+dbt tests are SQL queries that must return zero rows to pass.
+
+#### D.1 Built-in tests
+
+Defined in `schema.yml`:
+
+```yaml
+models:
+  - name: dim_customer
+    columns:
+      - name: customer_id
+        tests:
+          - unique
+          - not_null
+      - name: country_code
+        tests:
+          - accepted_values:
+              values: ['US', 'CA', 'GB', ...]
+      - name: account_manager_id
+        tests:
+          - relationships:
+              to: ref('dim_employee')
+              field: employee_id
+```
+
+Each test compiles to a SELECT that returns problematic rows. `dbt test` runs all tests; failures point you to specific bad rows.
+
+#### D.2 Custom tests
+
+Any SQL query saved in `tests/`:
+
+```sql
+-- tests/no_negative_revenue.sql
+SELECT * FROM {{ ref('fact_orders') }} WHERE amount < 0
+```
+
+Returns zero rows on success. This is how you encode business invariants — "revenue should never be negative", "every order must have a known customer", "daily metric should not drop more than 50%".
+
+#### D.3 Tests as a CI gate
+
+In a CI pipeline, `dbt build` runs models *and* their tests. A failed test blocks the deploy. This is the analogue of unit tests for analytics — broken data never reaches production dashboards.
+
+### E. Jinja and Macros
+
+dbt processes SQL files through Jinja templating before sending to the warehouse. This unlocks:
+
+#### E.1 Parameterization
+
+`{{ var('start_date') }}` reads from `dbt_project.yml` or CLI args. Same model, different parameters per environment.
+
+#### E.2 Macros (functions)
+
+```sql
+{% macro cents_to_dollars(column) %}
+  CAST({{ column }} / 100.0 AS DECIMAL(10, 2))
+{% endmacro %}
+```
+
+Now `{{ cents_to_dollars('amount') }}` in any model expands to the same SQL fragment. DRY for SQL.
+
+#### E.3 Generated SQL
+
+Loops, conditionals, lists — Jinja makes SQL programmable:
+
+```sql
+SELECT
+  {% for region in ['us', 'eu', 'apac'] %}
+    SUM(CASE WHEN region = '{{ region }}' THEN amount END) AS revenue_{{ region }}
+    {% if not loop.last %},{% endif %}
+  {% endfor %}
+FROM {{ ref('fact_orders') }}
+```
+
+The compiled SQL has the loop unrolled. Useful for repetitive aggregations or pivot-like patterns.
+
+### From Theory to the Practice Below
+
+Each section that follows operationalizes one piece of this framework:
+
+- §1 (dbt Concepts) is §A — model as transformation unit.
+- §2 (Project Setup) is the practical scaffolding (`dbt_project.yml`, profiles, schema.yml).
+- §3 (Models and Materializations) is §C — choosing view vs table vs incremental.
+- §4 (Tests and Documentation) is §D — built-in and custom tests, generated docs.
+- §5 (Jinja and Macros) is §E — programmable SQL.
+- §6 (Incremental Models and Snapshots) is §C.3 + §C.5 — the SCD Type 2 implementation.
+
+---
+
 ## Overview
 
 dbt (data build tool) is a SQL-based data transformation tool. It handles the Transform step in the ELT pattern and applies software engineering best practices (version control, testing, documentation) to data transformations.

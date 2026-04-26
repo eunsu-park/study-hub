@@ -15,6 +15,146 @@ After completing this lesson, you will be able to:
 
 ---
 
+## Theory & Principles
+
+The ETL-vs-ELT debate looks like a swap of two letters but it is actually a swap of *where the compute lives*. ETL puts transformation on a dedicated server *before* the warehouse; ELT puts transformation *inside* the warehouse. That single change is the consequence of cloud warehouses making compute cheap and elastic, and it cascades into how teams structure code, who owns transformations, and what failure modes appear.
+
+- **(A) The compute-locality question** — what changed in 2015-2018 to flip the default from ETL to ELT.
+- **(B) Schema-on-write vs schema-on-read** — when transformation enforces structure determines who pays the cost.
+- **(C) Idempotent loading patterns** — full refresh, incremental append, merge/upsert, and the implications for retry safety.
+- **(D) Data lineage and the cost-of-correction curve** — why catching errors late is exponentially expensive.
+
+### A. The Compute-Locality Question
+
+For thirty years the default was ETL. A dedicated ETL server (Informatica, DataStage, Talend) extracted from sources, transformed in its own memory and CPU, and loaded the *clean, modeled* data into a warehouse. The warehouse stored only the curated result.
+
+Why ETL won historically:
+
+- **Warehouse compute was scarce and expensive.** Teradata, Oracle Exadata charged by node-hour. Spending warehouse cycles on raw-data parsing was a waste of expensive resources.
+- **Warehouse storage was scarce.** You did not load raw data because there was nowhere to put it cheaply.
+- **Schema discipline.** Loading only the curated, modeled output kept the warehouse clean.
+
+What changed:
+
+- **Cloud warehouses decoupled storage and compute.** Snowflake, BigQuery, Redshift Spectrum charge separately for storage (cents per GB-month) and compute (per-second elastic clusters).
+- **Storage became effectively free.** S3-class storage at $0.023/GB-month means dumping every raw byte costs nothing.
+- **Compute became elastic.** Need to transform 1 TB? Spin up a 100-node cluster, pay for 30 minutes, shut down. The fixed-capacity ETL server is a relic.
+
+The new default became ELT: dump raw data into the lake/warehouse, transform in-warehouse with SQL (often via dbt — Lesson 12). This collapses the architecture: no separate ETL server, no separate transformation language, no separate operational team.
+
+#### A.1 When ETL still wins
+
+ELT is not always right. ETL still wins when:
+
+- **PII must be masked before landing.** GDPR / HIPAA may forbid raw PII landing in the warehouse. Mask in-flight (ETL); never store the raw value.
+- **Source data is huge but only a slice is needed.** Filtering at extract time avoids paying to store and transform the whole stream.
+- **The transformation requires non-SQL logic.** Image processing, complex Python ML feature engineering, anything dbt cannot express cleanly.
+- **The warehouse charges per query.** BigQuery charges per byte scanned; ELT that re-scans raw tables many times can be more expensive than ETL that pre-aggregates once.
+
+The right framing is not "ETL vs ELT" but "where does each transformation live, and why?"
+
+### B. Schema-on-Write vs Schema-on-Read
+
+A second axis aligned with ETL/ELT but conceptually independent:
+
+- **Schema-on-write (ETL default):** validate and structure data at load time. Bad rows get rejected. The warehouse table always conforms to its declared schema. Cost: rigidity — adding a new field requires schema migration.
+- **Schema-on-read (ELT/lake default):** dump raw bytes; let each consumer parse and validate at read time. Adding a new field is free (just stash the JSON). Cost: every consumer pays the parsing cost; bad rows surface late.
+
+ELT pipelines typically *combine* both: schema-on-read at the bronze layer (raw lake), schema-on-write at the silver/gold layers (modeled warehouse tables built by dbt). This is the medallion pattern (Lessons 1, 11, 19).
+
+### C. Idempotent Loading Patterns
+
+Whether you ETL or ELT, *how* you load matters. Three patterns dominate; each has different idempotency properties.
+
+#### C.1 Full refresh (truncate + insert)
+
+```sql
+TRUNCATE TABLE silver.dim_customer;
+INSERT INTO silver.dim_customer SELECT ... FROM bronze.customer;
+```
+
+Pros: trivially idempotent (rerun → same final state). Simple SQL.
+Cons: O(N) work even if 1 row changed. Locks the table during truncate. Loses history (no record of yesterday's state).
+
+Use for small dimension tables (< millions of rows) where rebuild is cheap.
+
+#### C.2 Incremental append (insert new only)
+
+```sql
+INSERT INTO silver.fact_sales
+SELECT * FROM bronze.sales WHERE event_date = '{run_date}';
+```
+
+Pros: O(delta) work. Preserves history.
+Cons: not idempotent unless partitioned by date and the partition is deleted before insert. Otherwise rerun appends duplicates.
+
+The pattern that makes it idempotent:
+
+```sql
+DELETE FROM silver.fact_sales WHERE event_date = '{run_date}';
+INSERT INTO silver.fact_sales
+SELECT * FROM bronze.sales WHERE event_date = '{run_date}';
+```
+
+Two statements in one transaction (or with table format ACID guarantees) → rerun produces identical state.
+
+#### C.3 Merge / upsert (incremental with updates)
+
+```sql
+MERGE INTO silver.dim_customer AS target
+USING (SELECT * FROM bronze.customer WHERE updated_at >= '{last_run}') AS source
+ON target.customer_id = source.customer_id
+WHEN MATCHED THEN UPDATE SET ...
+WHEN NOT MATCHED THEN INSERT ...;
+```
+
+Pros: handles inserts and updates. Idempotent (MERGE is set-based; rerun produces same final state). O(delta) work.
+Cons: requires MERGE support (modern warehouses, Delta/Iceberg). More complex SQL. Watermark logic (`last_run`) must be tracked correctly.
+
+Most modern dbt incremental models use this pattern.
+
+#### C.4 The watermark contract
+
+Incremental load needs to know "what is new since the last run". Two common watermarks:
+
+- **Event timestamp:** `WHERE event_at >= '{last_run}'`. Reliable if events are immutable and event time is set at the source.
+- **Source-side last-modified:** `WHERE updated_at >= '{last_run}'`. Requires source rows to update `updated_at` on any change; misses deletes (need CDC for that — Lesson 18).
+
+The watermark is the contract that makes incremental loading correct. Get it wrong and you silently miss data or double-load.
+
+### D. Data Lineage and the Cost-of-Correction Curve
+
+A pipeline error caught at extract is cheap to fix. The same error caught after the executive dashboard has been published is reputationally expensive. The cost-of-correction curve is exponential, and lineage is what compresses it.
+
+```
+cost
+  │           ╱─── caught in production dashboard
+  │         ╱
+  │       ╱
+  │     ╱  ─── caught in staging
+  │   ╱
+  │ ╱     ─── caught at transform
+  │       ─── caught at extract
+  └─────────────────────────────────── stage
+```
+
+Lineage tracking — knowing which source columns flow into which derived tables — lets you, when a bug is found, immediately identify all downstream tables that need rebuild. dbt's automatically-generated lineage graph (Lesson 12) and Dagster's asset graph (Lesson 20) make this first-class. Without lineage, finding the blast radius is manual archaeology.
+
+The corollary: validate as early as possible. Schema checks at extract; data quality tests (Great Expectations, dbt tests) at each transform; alerts when a fact metric moves more than 3 sigma from its weekly average. See Lesson 13.
+
+### From Theory to the Code Below
+
+Each section that follows operationalizes one piece of this framework:
+
+- §1 (ETL) is §A's "transformation lives outside the warehouse" pattern in concrete Python.
+- §2 (ELT) is §A's "transformation lives inside the warehouse" pattern in SQL.
+- §3 (Comparison) is §A.1 — when each pattern wins.
+- §4 (Real-world Scenarios) is the practical mapping of §A trade-offs to project decisions.
+- §5 (Hybrid) acknowledges that §A is not binary — many pipelines use ETL for some stages, ELT for others.
+- §6 (Best Practices) is §C (idempotent loading) + §D (lineage and validation) made concrete.
+
+---
+
 ## Overview
 
 ETL (Extract, Transform, Load) and ELT (Extract, Load, Transform) are two major patterns in data pipelines. Traditional ETL transforms then loads data, while modern ELT loads then transforms data.

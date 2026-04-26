@@ -14,6 +14,156 @@
 
 ---
 
+## 이론과 원리
+
+데이터 버전 관리와 데이터 계약은 형식화하는 데 수십 년이 걸린 두 가지 소프트웨어 엔지니어링 원칙의 데이터 엔지니어링 유사물입니다: **버전 관리**(코드를 위한 Git)와 **API 계약**(서비스 간 인터페이스 명세). 데이터 세계는 현재 따라잡고 있습니다. 더 깊은 교훈은 *신뢰* 가 데이터 플랫폼의 율속 인자이며, 신뢰는 비교할 "이전"과 검증할 "약속된 동작"을 가지는 것에서 옵니다.
+
+- **(A) 가변성 문제와 버전 관리가 해결하는 것** — 모든 데이터 레이크나 웨어하우스는 조용히 가변적; 버전 관리가 그 가변성을 검사 가능하게 만듦
+- **(B) 버전 관리 접근: snapshot, 테이블 포맷 시간 여행, lakeFS, dbt artifacts** — 세분도 vs 오버헤드 스펙트럼의 다른 지점
+- **(C) 스키마 진화: backward, forward, full 호환성** — producer와 consumer가 서로 깨뜨리지 않게 하는 규칙
+- **(D) 강제된 명세로서의 데이터 계약** — "암묵적 관습"에서 "CI 검증된 합의"로 이동
+- **(E) 의미적(Semantic) vs 구조적(Structural) 깨짐** — 어떤 스키마 검사도 잡을 수 없는 것과 그것에 대해 방어하는 방법
+
+### A. 가변성 문제
+
+Spark 잡이 `df.write.mode("overwrite").parquet("/data/sales/2024-03-15/")`를 실행하면 그 파티션의 이전 버전은 사라집니다. Git 로그도, `previous_value`도, "이것이 이전에 어떻게 보였나?"를 물어볼 방법도 없음.
+
+이는 다음 경우 실제 문제가 됨:
+- ETL 실행이 잘못된 데이터를 생산; 영향을 scope하기 위해 정확히 어떤 행이 변경되었는지 알아야 함.
+- consumer가 메트릭이 어긋나 있다고 보고; 오늘 테이블을 어제와 비교해야 함.
+- 감사관이 "날짜 X에 값이 무엇이었나?"라고 묻고 — 답이 재현 가능해야 함.
+- ML 모델이 나쁜 예측을 줌; 이전에 작동했던 정확한 데이터 버전에 재학습해야 함.
+
+데이터 버전 관리는 데이터를 불변 + 이력 기록으로 취급하여 이 모든 것을 해결합니다.
+
+### B. 버전 관리 접근
+
+다른 트레이드오프를 가진 다른 메커니즘.
+
+#### B.1 수동 snapshot
+
+`COPY TABLE production.fact_orders TO archive.fact_orders_2024_03_15`. 단순, 어떤 웨어하우스에서도 작동. 저장이 찍은 snapshot으로 확장 — 빠르게 비싸짐.
+
+#### B.2 테이블 포맷 시간 여행
+
+Delta Lake / Iceberg / Hudi(레슨 19 §E)는 트랜잭션 로그에 자동으로 버전 이력을 유지. 어떤 과거 버전이든 읽기: `SELECT * FROM fact_orders TIMESTAMP AS OF '2024-03-15'`. 저장 비용은 모든 live 데이터 파일의 합집합; VACUUM이 옛 버전 정리.
+
+이것이 대부분의 레이크하우스 시대 팀의 주력입니다.
+
+#### B.3 lakeFS / Project Nessie
+
+전체 데이터 레이크에 대한 Git 스타일 브랜치. 브랜치 생성, 그것에 실험적 ETL 실행, 검증, main으로 다시 merge — 원자적으로. 데이터 레이크 자체가 브랜치, PR, merge가 있는 Git처럼 됨.
+
+적합: 병렬 실험을 실행하는 큰 팀, 많은 테이블에 걸친 원자적 데이터 버전 관리, 형식적 데이터 리뷰 워크플로우.
+
+#### B.4 dbt artifacts와 DAG snapshot
+
+dbt는 실행당 전체 모델 그래프와 SQL 상태를 기록. `dbt docs`가 어떤 시점에서든 lineage와 SQL을 보여줌. Git과 결합하여 "이 데이터 행이 이 SQL의 이 버전에 의해 생산되었음"을 상관시킬 수 있음.
+
+#### B.5 접근 선택
+
+| 필요 | 접근 |
+|------|------|
+| 단일 테이블 내 시간 여행 | Delta/Iceberg 시간 여행 |
+| 오늘 vs 어제 테이블 비교 | 같음 |
+| 롤백을 가진 형식적 실험 | lakeFS / Nessie |
+| "어떤 SQL이 이 숫자를 생산했나?" | dbt + Git |
+| 감사 등급 재현성 | 위 모든 것의 조합 |
+
+### C. 스키마 진화
+
+데이터가 consumer를 갖게 되면 스키마는 인터페이스가 됨. 변경이 호환성을 존중해야 함.
+
+#### C.1 세 가지 호환성 모드
+
+- **Backward compatible:** 새 producer, 옛 consumer가 여전히 작동. 허용: nullable 컬럼 추가, 타입 확장(int → long). 금지: 컬럼 제거, 타입 좁힘, 이름 변경.
+- **Forward compatible:** 새 consumer, 옛 producer가 여전히 작동. 허용: 컬럼 제거(기본값 포함), 데이터가 맞으면 타입 좁힘. 금지: 필수 컬럼 추가.
+- **Full compatible:** 양방향. 엄격한 교집합 — 기본적으로 "nullable 컬럼 추가"만.
+
+Schema Registry(Avro / JSON Schema / Protobuf)는 등록 시점에 이 규칙들을 강제. 스키마 진화 테이블 포맷(Delta / Iceberg)은 테이블 수정 시점에 강제.
+
+#### C.2 왜 backward가 기본인가
+
+비대칭성: producer가 보통 먼저 배포, consumer가 나중. 새 producer는 옛 consumer를 깨뜨려서는 안 됨 — backward 호환성. 옛 consumer는 새 producer의 데이터로 계속 작동해야 함 — 같은 것.
+
+위험한 연산: 컬럼 제거나 이름 변경. 항상 deprecation 사이클을 거치세요:
+1. 옛 컬럼과 함께 새 컬럼 추가.
+2. 둘 다 채우도록 producer 업데이트.
+3. 새 것을 읽도록 consumer 업데이트.
+4. 모든 consumer가 마이그레이트할 충분한 시간 대기.
+5. 옛 컬럼 제거.
+
+이는 실제 조직에서 몇 주에서 몇 달 걸림. 비용은 실제이지만, 대안(producer가 모르는 깨진 consumer)이 더 나쁨.
+
+### D. 강제된 명세로서의 데이터 계약
+
+데이터 계약은 producer와 consumer 사이의 형식적, 머신 검사된 합의:
+
+```yaml
+# contracts/fact_orders.yaml
+table: fact_orders
+owner: revenue-team
+sla:
+  freshness: "날짜 D의 데이터는 D+1 06:00 UTC까지 가용"
+  uptime: 99.5%
+schema:
+  - name: order_id
+    type: bigint
+    constraints: [not_null, unique]
+  - name: customer_id
+    type: bigint
+    constraints: [not_null]
+  - name: amount
+    type: decimal(10,2)
+    constraints: [not_null, gte: 0]
+  - name: status
+    type: string
+    constraints: [in: [pending, completed, cancelled]]
+quality:
+  - row_count_anomaly: stddev_3
+  - null_rate_max: 0.01
+```
+
+#### D.1 계약이 강제되는 곳
+
+1. **Producer 변경에 대한 CI.** 계약을 깨는 PR(컬럼 제거, 타입 변경)이 CI 실패. Producer가 명시적 override 없이 계약 위반 변경을 ship할 수 없음.
+2. **Producer 측 런타임 검증.** 작성 전에 출력이 계약과 일치하는지 검증. 실패 → 작성하지 않음; producer에 알림.
+3. **Consumer 측 스키마 역직렬화.** Consumer가 예상 스키마를 선언; 실제 데이터가 일치하지 않으면 역직렬화가 시끄럽게 실패.
+4. **테이블에 대한 지속적 모니터링.** 시간에 걸쳐 계약을 검증하는 expectation 실행(Great Expectations, dbt 테스트) 스케줄.
+
+#### D.2 문화적 시프트
+
+기술적 메커니즘은 단순; 어려운 부분은 조직적. Producer가 consumer 영향에 대해 신경 써야 함; consumer가 그들의 의존성을 선언해야 함. 일부 팀은 계약 변경에 대해 RFC 스타일 프로세스를 채택 — 제안 → 리뷰 → 수락 → 마이그레이트 → 배포.
+
+데이터 계약은 데이터 엔지니어링을 "비공식 팀 간 혼돈"에서 "명시적 팀 간 API"로 이동시킵니다, 2010년대에 REST API가 서비스 팀을 위해 한 것처럼.
+
+### E. 의미적 vs 구조적 깨짐
+
+스키마 검증은 *구조적* 깨짐을 잡음: 컬럼 이름 변경, 타입 변경, 새 필수 컬럼. *의미적* 깨짐은 **잡을 수 없음**:
+
+- Producer가 `amount`의 의미를 cents에서 dollars로 변경(컬럼 타입 변경 없음; 값이 이제 100배 어긋남).
+- Producer가 `fact_orders`에 환불된 주문을 포함하기 시작(행 수 더 높음; 구조 변경 없음).
+- Producer가 `event_at`의 시간대를 UTC에서 로컬 시간으로 변경(타입 변경 없음; 집계가 이제 잘못됨).
+
+방어:
+- **범위와 분포 모니터링.** `avg(amount)`이 baseline에서 >X% 편차할 때 알림.
+- **재조정(Reconciliation) 테스트.** "`fact_orders`의 `amount` 합이 업스트림 OLTP `total_revenue`와 0.1% 이내로 일치해야 함." 매일 실행.
+- **계약의 의미적 버전 bump.** Major 버전(`v2`)이 "동작 변경됨; 명시적으로 마이그레이트"를 신호.
+- **소통.** 계약은 대화를 대체할 수 없음; 그것을 구조화할 수 있음.
+
+### From Theory to the Code Below
+
+이어지는 각 절은 위 프레임워크의 한 조각을 운영합니다:
+
+- §1 (왜 데이터 버전 관리)는 §A — 구체 예제의 가변성 문제.
+- §2 (버전 관리 접근)는 §B — Delta 시간 여행, lakeFS, dbt artifacts.
+- §3 (스키마 진화)는 §C — 호환성 모드와 deprecation 사이클.
+- §4 (데이터 계약)는 §D — YAML 계약, CI 강제, producer/consumer 검증.
+- §5 (의미적 검증)은 §E — 범위 모니터링, 재조정, 스키마 너머.
+- §6 (프로덕션 패턴)은 다섯 모두를 거버넌스 워크플로우로 통합.
+
+---
+
 ## 개요
 
 현대 데이터 플랫폼은 두 가지 관련된 문제를 겪고 있다. 첫째, **데이터는 기본적으로 가변적(Mutable)**이다 — Spark 잡이 파티션을 덮어쓰면, 명시적으로 보존하지 않는 한 이전 버전은 사라진다. "실행 취소" 버튼도 없고, 변경 기록도 없으며, 오늘의 출력과 어제의 출력을 비교할 방법도 없다. 둘째, **데이터 인터페이스가 암묵적(Implicit)**이다 — 업스트림 팀이 경고 없이 컬럼명, 데이터 타입, 비즈니스 로직을 변경하면 다운스트림 파이프라인이 새벽 3시에 조용히 망가진다.

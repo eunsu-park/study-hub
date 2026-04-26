@@ -15,6 +15,183 @@ After completing this lesson, you will be able to:
 
 ---
 
+## Theory & Principles
+
+Stream processing is where the simple "read events, do something" framing of streaming meets the brutal reality of distributed systems: events arrive out of order, late, sometimes never; state must be maintained without losing it on failure; the same logical computation must produce identical results whether running once or being replayed for backfill. Kafka Streams is one of the most architecturally interesting answers because it builds the stream processor *on top of* Kafka itself — using Kafka as durable state, transport, and fault-tolerance backbone.
+
+- **(A) Stream-table duality** — every stream defines a table, every table defines a stream of changes; this duality is the central conceptual move.
+- **(B) Event time vs processing time, watermarks, late events** — the time semantics that batch processors don't worry about.
+- **(C) Windowing** — tumbling, hopping, sliding, session — and what each computes.
+- **(D) State stores and the changelog topic** — how stateful operations recover after a crash.
+- **(E) ksqlDB: SQL on streams** — a higher-level abstraction over Kafka Streams primitives.
+
+### A. Stream-Table Duality
+
+The single most important idea in streaming. Two seemingly different things — *streams* (sequences of events) and *tables* (snapshots of state) — are duals.
+
+#### A.1 Stream → table
+
+A stream of events naturally aggregates into a table:
+
+```
+events stream:                        derived table (latest per key):
+(user_1, signed_up)                   user_1: signed_up
+(user_2, signed_up)                   user_2: signed_up
+(user_1, deleted_account)        →    user_1: deleted_account
+(user_3, signed_up)                   user_3: signed_up
+```
+
+Apply a fold over time → table. The Kafka Streams `KTable` is exactly this: a materialized view of "the latest event per key."
+
+#### A.2 Table → stream
+
+A table can be expressed as the stream of all updates that produced it:
+
+```
+table:                       changelog stream:
+user_1: deleted_account      (user_1, signed_up)
+user_2: signed_up      ←     (user_2, signed_up)
+user_3: signed_up            (user_1, deleted_account)
+                             (user_3, signed_up)
+```
+
+The stream encodes the table; the table is a fold of the stream.
+
+#### A.3 Why this matters
+
+Most streaming computations involve aggregations: "current count of orders per user", "running average of latency". Each is a *table* derived from a *stream* of events. By making both first-class, Kafka Streams unifies stream processing and stateful aggregation in one model.
+
+This duality is what makes Kafka usable as a database (Lesson 10 §E.2 compaction): a compacted topic is the changelog of a table; reading it from offset 0 reconstructs the table.
+
+### B. Event Time, Processing Time, Watermarks
+
+Batch processors deal with bounded data: "process all of yesterday's events." Streaming deals with unbounded data: "process events as they arrive." That distinction creates a problem batch never has — events can arrive at any time *after they happened*.
+
+#### B.1 Two times
+
+- **Event time:** when the event happened (timestamp embedded in the event by the source).
+- **Processing time:** when the stream processor saw the event.
+
+A user clicks "buy" at 10:00:00 (event time). Their phone is offline; the event sits in a queue. They reconnect at 10:05:00; the event reaches your stream processor at 10:05:01 (processing time). Same event, two timestamps differing by 5 minutes.
+
+#### B.2 Why event time is correct
+
+Computations should be on event time. "Sales per minute" must group the 10:00:00 click into the 10:00 minute bucket — even though the processor saw it at 10:05.
+
+If you used processing time, the same event aggregated into different buckets depending on network conditions. Reproducibility breaks.
+
+#### B.3 Watermarks: deciding when a window is "done"
+
+If events can arrive late, when do you finalize the "10:00 minute bucket"? You can't wait forever; you also can't close it the instant the wall clock ticks 10:01.
+
+A **watermark** is a low-water mark of event time: "we've seen events up to event time T; we don't expect to see events older than T." When the watermark passes 10:01, the 10:00 window is closed. Late events arriving after that go to a *late events handler* (drop, side output, or update the closed window if it's still in state).
+
+The trade-off: aggressive watermark (close windows quickly) = low latency, high lateness rate. Conservative watermark (wait long) = high latency, low lateness rate. Pick based on your tolerance.
+
+### C. Windowing
+
+How streams chop unbounded data into bounded chunks for aggregation.
+
+#### C.1 Tumbling windows
+
+Fixed size, non-overlapping. "5-minute windows": [10:00, 10:05), [10:05, 10:10), ... Each event belongs to exactly one window.
+
+Use for: per-period aggregations ("hourly orders", "daily users").
+
+#### C.2 Hopping windows
+
+Fixed size, overlapping. "5-minute windows hopping every 1 minute": [10:00, 10:05), [10:01, 10:06), ... Each event belongs to (window_size / hop) windows.
+
+Use for: smoothed rolling averages.
+
+#### C.3 Sliding windows
+
+A window forms around each *event*, not at fixed times. "5-minute window per user activity": when user X has activity, look at the last 5 minutes of X's events.
+
+Use for: per-entity recency analysis.
+
+#### C.4 Session windows
+
+Variable-length, defined by inactivity gaps. "Session = activity with gaps < 30 minutes between events." A user's morning session might be 10 minutes; their afternoon session 2 hours.
+
+Use for: user behavior analysis where natural session boundaries matter.
+
+### D. State Stores and the Changelog Topic
+
+Stateful operations (aggregations, joins) need state. Kafka Streams stores it in a local **state store** (RocksDB on disk). Two questions: how does it recover after a crash, and how does it scale?
+
+#### D.1 The changelog topic pattern
+
+Every state store has a corresponding **changelog topic** in Kafka: every update to the state store is *also* written to this topic.
+
+```
+user 1 sends event → state_store["user_1"] = new_value
+                  → changelog_topic.send(("user_1", new_value))
+```
+
+After a crash, the recovery process:
+1. Restart the stream task on a new instance.
+2. Replay the changelog topic from offset 0 to rebuild the local state store.
+3. Resume processing from the last committed input offset.
+
+The state is durable because its history is in Kafka — a topic that itself is replicated and persistent.
+
+#### D.2 Compaction as space optimization
+
+The changelog topic is configured with `cleanup.policy=compact` (Lesson 10 §E.2). Only the latest value per key is retained. The changelog stays bounded in size, even though the state store has been updated billions of times.
+
+#### D.3 Partition-level state
+
+State stores are *per-partition*. Stream task A handling partition 0 has its own state; task B handling partition 1 has its own state. There is no shared state across partitions — which is what allows scaling horizontally (each task is independent).
+
+For joins requiring data across keys, you must co-partition the inputs (same key, same partitioning) so the related data is local to one task.
+
+### E. ksqlDB: SQL on Streams
+
+Kafka Streams in Java/Scala is powerful but verbose. ksqlDB provides a SQL surface over the same primitives:
+
+```sql
+CREATE STREAM orders (order_id INT KEY, user_id INT, amount DOUBLE)
+  WITH (KAFKA_TOPIC='orders', VALUE_FORMAT='JSON');
+
+CREATE TABLE user_revenue AS
+  SELECT user_id, SUM(amount) AS total
+  FROM orders
+  GROUP BY user_id
+  EMIT CHANGES;
+```
+
+This compiles to Kafka Streams operations: a topology with a stateful aggregation backed by a state store + changelog topic.
+
+#### E.1 Streams vs tables in ksqlDB
+
+The duality made syntactic:
+- `CREATE STREAM` for an unbounded log of events.
+- `CREATE TABLE` for the latest value per key.
+
+Aggregations of streams produce tables; tables can be re-streamed (`SELECT * FROM table EMIT CHANGES`) producing the changelog.
+
+#### E.2 Pull queries vs push queries
+
+Two query modes:
+- **Push (`EMIT CHANGES`)**: subscribe to a continuous stream of updates. The query never finishes.
+- **Pull**: a point-in-time query against a materialized table. The query returns and finishes — like a normal database query.
+
+Pull queries are how applications use ksqlDB tables as a queryable cache. Push queries are how applications consume real-time updates.
+
+### From Theory to the Code Below
+
+Each section that follows operationalizes one piece of this framework:
+
+- §1 (Stream Processing Concepts) is §A and §B — duality and time semantics.
+- §2 (Kafka Streams Topology) is §A.3 + §D — building stateful topologies.
+- §3 (Faust: Python Kafka Streams) is the Python equivalent of §2.
+- §4 (Windowed Aggregations) is §C — tumbling / hopping / session in concrete code.
+- §5 (Stream-Stream and Stream-Table Joins) is §D.3 — co-partitioning and join semantics.
+- §6 (ksqlDB) is §E — SQL surface and pull/push query modes.
+
+---
+
 ## Overview
 
 Kafka Streams is a client library for building real-time stream processing applications on top of Apache Kafka. ksqlDB extends this with a SQL interface for stream processing. This lesson covers stream processing concepts, Faust (Python Kafka Streams), windowed aggregations, joins, and ksqlDB for interactive queries.

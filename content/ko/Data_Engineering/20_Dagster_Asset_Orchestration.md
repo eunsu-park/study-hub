@@ -14,6 +14,188 @@
 
 ---
 
+## 이론과 원리
+
+Dagster의 명성의 주장은 *데이터 자산* 을 아키텍처 중심에 두는 것이며, 태스크가 아니라는 것입니다. 이는 라벨링 변경 그 이상입니다 — 이는 lineage, 테스트, 관측성, 증분 계산이 어떻게 작동하는지를 변경합니다. 그 이유를 이해하려면, Airflow / Prefect / Luigi가 공유하는 태스크 중심 모델의 한계를 보고, 자산 중심 모델이 그것들을 어떻게 다루는지 봐야 합니다.
+
+- **(A) 태스크 vs 자산** — 각 추상이 무엇을 특권화하고, 무엇을 모호하게 하는가
+- **(B) Software-defined assets (SDAs)** — 작성 단위로서의 선언적 자산 그래프
+- **(C) Materialization 모델** — Dagster가 무엇을 계산하고 무엇을 스킵할지 결정하는 방법
+- **(D) 자산 검사(Asset checks): 자산 수준의 데이터 계약** — 일급으로서의 품질과 신선도
+- **(E) 리소스(Resources)와 IO 매니저(IO managers)** — 비즈니스 로직, 데이터 위치, 실행 환경의 깨끗한 분리
+
+### A. 태스크 vs 자산
+
+Airflow 모델:
+
+```python
+@task
+def extract(): ...
+
+@task
+def transform(raw): ...
+
+@task
+def load(clean): ...
+```
+
+DAG는 실행할 *단계* 의 그래프. 그 단계가 생산하는 데이터는 암묵적 — "고객 테이블"이나 "일일 매출 집계"의 일급 개념이 없음. 어느 태스크가 어느 테이블을 생산하는지 알고 싶으면 코드를 읽음.
+
+Dagster 모델:
+
+```python
+@asset
+def raw_customers(): return extract_customers()
+
+@asset
+def clean_customers(raw_customers): return clean(raw_customers)
+
+@asset
+def daily_revenue(clean_customers, raw_orders): return aggregate(...)
+```
+
+DAG는 *자산* 의 그래프. 각 함수는 그것이 생산하는 데이터로 명명; 의존성은 함수 인자에서 추론됨. 자산 그래프가 데이터 lineage 입니다 — 자동으로, 구성에 의해.
+
+#### A.1 무엇이 가능해지는가
+
+- **lineage가 구조적.** 그 위에 lineage 추적을 추가하지 않음; 프레임워크가 자산 중심이 됨으로써 lineage를 강제.
+- **자산 선택.** "raw_customers의 다운스트림 모든 자산 materialize" 또는 "daily_revenue와 그것을 생산한 모든 것 재구축" — 자산 그래프에 대한 자연스러운 연산.
+- **자산 materialization 메타데이터.** 각 materialization이 생산된 것(행 수, 스키마, 통계, 콘텐츠 해시)을 기록. 후속 실행이 "이 자산이 변경되지 않았음; 다운스트림 스킵"을 결정 가능.
+- **자산 버전 관리.** 자산이 버전 번호를 가질 수 있음; 업스트림 버전이 변경되면 다운스트림이 무효화됨.
+
+대가: 더 가파른 학습 곡선, 더 엄격한 구조(자산이 사전에 명명되고 그래프에 맞춰져야 함).
+
+### B. Software-Defined Assets (SDAs)
+
+Dagster의 작성 단위.
+
+#### B.1 데코레이터 + 시그니처 패턴
+
+```python
+@asset(group_name="customer", io_manager_key="parquet_io")
+def clean_customers(context, raw_customers: pd.DataFrame) -> pd.DataFrame:
+    """email이 검증되고 주소가 정규화된 고객."""
+    return clean(raw_customers)
+```
+
+한 번에 여러 가지:
+- 함수가 자산의 *materialization 로직* 을 정의.
+- 함수 이름(`clean_customers`)이 *자산 키*.
+- 함수의 매개변수가 *업스트림 의존성*(자산 `raw_customers`)을 선언.
+- 데코레이터가 운영 메타데이터(그룹, IO 매니저, 파티션 정의)를 선언.
+
+#### B.2 자산 그래프
+
+코드베이스 전체의 `@asset`-데코레이트된 함수의 컬렉션이, 그것들의 의존성으로 결합되어, 방향성 비순환 그래프를 형성. 이 그래프는 Dagster에 의해 한 번 로드되고 다음의 진실의 원천 역할:
+- Dagster UI의 자산 시각화.
+- 선택(`dagster asset materialize --select +clean_customers`).
+- 특정 자산을 타겟팅하는 스케줄과 sensor.
+
+이는 DAG가 독립적이고 DAG 간 의존성이 어색한 Airflow와 근본적으로 다름. Dagster에서 전체 데이터 플랫폼이 한 그래프.
+
+### C. Materialization 모델
+
+Dagster가 무엇을 계산할지 결정하는 방법.
+
+#### C.1 수동 materialization
+
+`dagster asset materialize --select daily_revenue`은 자산과 실행될 필요가 있는 업스트림을 실행.
+
+#### C.2 스케줄과 sensor
+
+```python
+@schedule(cron_schedule="0 6 * * *", target=AssetSelection.groups("customer"))
+def daily_customer_refresh():
+    return RunRequest()
+```
+
+매일 6am에 "customer" 그룹의 모든 자산을 실행하는 스케줄. *sensor* 는 외부 이벤트가 발화할 때(파일 나타남, Kafka 메시지 도착 등) 자산을 실행.
+
+#### C.3 파티션된 자산
+
+```python
+@asset(partitions_def=DailyPartitionsDefinition(start_date="2024-01-01"))
+def daily_revenue(context): ...
+```
+
+자산이 날짜 파티션으로 분할됨. 파티션 2024-03-15에 대한 `daily_revenue` materialize는 2024-03-16에 대한 materialize와 독립적. 재실행은 특정 파티션을 타겟팅; 백필은 범위를 materialize. 이는 logical_date를 통해 Airflow가 가지는 같은 파티셔닝 패턴이지만 더 명시적.
+
+#### C.4 Auto-materialization (선언적 스케줄링)
+
+```python
+@asset(auto_materialize_policy=AutoMaterializePolicy.eager())
+def daily_revenue(clean_customers, raw_orders): ...
+```
+
+"어떤 업스트림이든 변경되면 materialize." Dagster가 업스트림 materialization을 모니터하고 다운스트림을 자동으로 트리거. 이는 많은 수동 스케줄 와이어링을 제거.
+
+### D. 자산 검사: 자산 수준의 데이터 계약
+
+```python
+@asset_check(asset=clean_customers)
+def no_null_emails(clean_customers: pd.DataFrame):
+    bad = clean_customers["email"].isnull().sum()
+    return AssetCheckResult(passed=(bad == 0), metadata={"bad_count": bad})
+```
+
+자산 검사는 자산에 부착된 일급 품질 어설션. materialization 후 실행되며:
+- 통과/실패가 메타데이터 DB에 materialization과 함께 기록됨.
+- Dagster UI가 자산별로 실패한 검사를 두드러지게 표시.
+- 검사가 다운스트림 materialization을 차단할 수 있음(`blocking=True`).
+
+이는 dbt 테스트와 개념적으로 비슷하지만 프레임워크 수준 — SQL 모델이든 Python 코드든 Spark 잡이든 모든 자산이 부착된 검사를 가질 수 있음.
+
+### E. 리소스와 IO 매니저
+
+테스트 가능성과 유지보수성을 개선하는 두 가지 아키텍처 아이디어.
+
+#### E.1 리소스
+
+외부 시스템에 대한 재사용 가능, 구성 가능한 연결:
+
+```python
+class SnowflakeResource(ConfigurableResource):
+    account: str
+    user: str
+    password: str
+    
+    def get_connection(self): ...
+
+@asset
+def fact_orders(snowflake: SnowflakeResource): ...
+```
+
+프로덕션에서 리소스는 prod 자격증명으로 구성. 테스트에서 mock이나 in-memory 리소스로 swap. 같은 자산 코드, 다른 런타임.
+
+#### E.2 IO 매니저
+
+자산의 출력이 어떻게 *저장* 되고 다운스트림 자산이 어떻게 *읽는지*. 자산 코드가 값(DataFrame, dict 등)을 반환; IO 매니저가 어디에 둘지 결정.
+
+```python
+@asset(io_manager_key="snowflake_io")
+def daily_revenue(): return df
+
+@asset(io_manager_key="snowflake_io")
+def revenue_dashboard(daily_revenue): ...  # IO 매니저가 Snowflake에서 df 로드
+```
+
+자산은 "Snowflake 테이블 X에 쓰기"라고 말하지 않음 — 단지 데이터를 반환. IO 매니저가 영속화를 처리. 자산 코드를 변경하지 않고 환경 간 IO 매니저 swap(prod에서 Snowflake, dev에서 로컬 Parquet).
+
+이는 어떤 오케스트레이션 프레임워크에서든 가장 깨끗한 관심사 분리 중 하나입니다.
+
+### From Theory to the Code Below
+
+이어지는 각 절은 위 프레임워크의 한 조각을 운영합니다:
+
+- §1 (Dagster 개념)은 §A — asset-vs-task 시프트.
+- §2 (Software-Defined Assets)는 §B — @asset 데코레이터와 자산 그래프.
+- §3 (Materialization과 스케줄링)은 §C — 스케줄, sensor, auto-materialization.
+- §4 (파티션된 자산)은 §C.3 — 날짜와 다른 파티션 전략.
+- §5 (자산 검사)는 §D — 자산 수준의 품질 계약.
+- §6 (리소스와 IO 매니저)는 §E — 테스트 가능성을 위한 관심사 분리.
+
+---
+
 ## 개요
 
 대부분의 오케스트레이션 도구들 — Airflow, Prefect, Luigi — 은 **태스크(task)** 단위로 생각합니다: "이 Python 함수를 실행하고, 그다음 저 함수를 실행하라." Dagster는 이 사고 모델을 완전히 뒤집습니다. "어떤 단계를 실행해야 하는가?"라고 묻는 대신, Dagster는 "어떤 데이터 자산(data asset)이 존재해야 하며, 어떻게 파생되는가?"라고 묻습니다. 이 겉보기에는 작은 변화가 우리가 데이터 파이프라인을 구축하고, 테스트하고, 디버그하고, 관측하는 방식에 심대한 영향을 미칩니다.

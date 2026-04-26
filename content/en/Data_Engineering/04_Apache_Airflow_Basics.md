@@ -15,6 +15,145 @@ After completing this lesson, you will be able to:
 
 ---
 
+## Theory & Principles
+
+Airflow looks like "cron with a UI" until you internalize four ideas that shape every operational decision: the DAG as the unit of scheduling and reasoning, the *logical date* (data interval) as the unit of identity, the executor as the unit of concurrency, and the task lifecycle as the unit of failure semantics.
+
+- **(A) DAG semantics** — directed acyclic graph, why acyclicity matters, and the difference between definition time and execution time.
+- **(B) Logical date / data interval** — why "what date does this run represent" is different from "when did it actually run".
+- **(C) Executor models** — Sequential, Local, Celery, Kubernetes — and what each implies for scaling and isolation.
+- **(D) Task lifecycle and idempotency contract** — the states a task moves through and why every task must be safe to retry.
+
+### A. DAG Semantics
+
+A DAG is a directed acyclic graph: nodes are tasks, edges are dependencies. Airflow guarantees that a task does not start until all upstream tasks have finished.
+
+#### A.1 Why acyclic
+
+Cycles are forbidden because a cycle has no valid execution order — task A waits for B which waits for A. Airflow validates DAG definitions at parse time and rejects cycles. The acyclic constraint is what makes scheduling decidable; without it, "is this DAG complete?" has no answer.
+
+If you need a loop, you express it as repeated DAG runs (one per scheduled interval) or, in newer Airflow, as a *dynamic task mapping* — a task expanded into N parallel instances at runtime.
+
+#### A.2 Definition time vs execution time
+
+The DAG file is **Python code that gets parsed every few seconds** by the scheduler. That is not just a quirk — it shapes everything:
+
+- Top-level code (imports, variables, DAG construction) runs **on every parse**, in the scheduler. Slow imports = slow scheduler.
+- Task code (functions decorated with `@task` or wrapped in operators) runs **once per task instance**, on a worker.
+- *Never* put database queries or API calls in top-level DAG code. They get hammered every parse cycle.
+
+The mental model: the DAG file is a *definition* of the task graph; tasks are the actual work. Keep them separate.
+
+#### A.3 Templating and Jinja
+
+Airflow injects context (logical_date, run_id, task_instance) into operator parameters via Jinja templates: `bash_command="extract.sh {{ ds }}"`. The template is rendered at task execution time, not DAG parse time. This is how a single DAG handles 365 daily runs — each run substitutes its own date.
+
+### B. Logical Date / Data Interval
+
+The single most confusing concept for new Airflow users. A scheduled DAG run has two distinct timestamps:
+
+- **Logical date / data interval start** — the conceptual date the run *represents*. For a daily DAG scheduled at midnight UTC, the run for 2024-03-15 has `logical_date = 2024-03-15 00:00 UTC`. The run *processes data for* March 15.
+- **Wall-clock time** — when the run actually executed. The 2024-03-15 run typically starts at 2024-03-16 00:00 UTC, because Airflow runs at the *end* of the data interval (after the data has fully arrived).
+
+This shift trips up everyone. The rule: tasks should always reference the data they are processing (`{{ ds }}` = logical date as YYYY-MM-DD), not "today" or "now". Tasks must be deterministic functions of their data interval.
+
+#### B.1 Why "end of interval" scheduling
+
+If the DAG is "process yesterday's events", you cannot start at 2024-03-15 00:00 — yesterday's events are still arriving. You wait until the interval *ends* (2024-03-16 00:00) and then process the closed interval [2024-03-15 00:00, 2024-03-16 00:00).
+
+#### B.2 Backfill and catchup
+
+Two related concepts:
+
+- **Catchup:** when a paused DAG is unpaused, run all the missed scheduled intervals. Default `catchup=True`. For DAGs that should only run going forward, set `catchup=False`.
+- **Backfill:** explicitly trigger historical runs via CLI: `airflow dags backfill --start-date 2024-01-01 --end-date 2024-03-15`. Useful for replaying logic on old data.
+
+Both depend on tasks being **idempotent functions of `logical_date`**. Running the 2024-01-15 task today must produce the same final state as running it on 2024-01-16. If the task says "load yesterday" instead of "load `{{ ds }}`", backfill is corrupted.
+
+### C. Executor Models
+
+The executor decides where tasks actually run. Airflow ships with four production-grade options:
+
+#### C.1 SequentialExecutor
+
+Runs one task at a time in the same process as the scheduler. Useful only for testing — no parallelism.
+
+#### C.2 LocalExecutor
+
+Forks subprocesses on the same machine as the scheduler. Parallelism = number of cores. Good for small deployments; no distribution across machines.
+
+#### C.3 CeleryExecutor
+
+The traditional production setup. A Celery broker (Redis or RabbitMQ) queues task instances; a fleet of Celery workers pulls from the queue and executes. Workers are long-lived processes; you scale by adding workers.
+
+- **Pros:** mature, well-understood, low per-task overhead.
+- **Cons:** workers are stateful (need Python deps pre-installed); resource isolation between tasks is limited (one bad task can OOM the whole worker); scaling requires capacity planning.
+
+#### C.4 KubernetesExecutor
+
+Each task instance becomes a Kubernetes pod, scheduled by Kubernetes, killed when the task ends.
+
+- **Pros:** perfect resource isolation (each task gets its own container, memory limit, CPU limit); per-task Python deps via per-task images; auto-scaling via Kubernetes cluster autoscaler.
+- **Cons:** per-task pod startup latency (10-30 seconds) — bad for many small tasks; Kubernetes operational complexity.
+
+Hybrid: CeleryKubernetesExecutor lets you mix — small fast tasks via Celery, heavy isolated tasks via Kubernetes.
+
+#### C.5 Picking an executor
+
+| Workload | Executor |
+|----------|----------|
+| Local development | SequentialExecutor or LocalExecutor |
+| Small production (1 machine, few tasks) | LocalExecutor |
+| Medium-large production, mostly fast tasks | CeleryExecutor |
+| Heterogeneous tasks needing isolation | KubernetesExecutor |
+| Mix of fast and isolated | CeleryKubernetesExecutor |
+
+### D. Task Lifecycle and Idempotency Contract
+
+A task instance moves through states. The interesting transitions:
+
+```
+none → scheduled → queued → running → success
+                                    ↘ failed → up_for_retry → queued → running → success/failed
+                                    ↘ skipped (upstream failed/skipped, branch decided)
+```
+
+Each state transition is recorded in the metadata DB; the UI shows the current state of every task in every run.
+
+#### D.1 Retry semantics
+
+Tasks declare `retries=N` and `retry_delay`. If a task fails, Airflow schedules a retry after `retry_delay`. After N retries, the task is marked `failed` and downstream tasks are `upstream_failed`.
+
+This works only if **the task is idempotent**: running it twice produces the same final state. Concretely:
+
+- **Bad:** `INSERT INTO sales SELECT * FROM raw WHERE date='{{ ds }}'`. Retry → duplicate rows.
+- **Good:** `DELETE FROM sales WHERE date='{{ ds }}'; INSERT INTO sales SELECT ...` in one transaction. Retry → same final state.
+- **Good:** writing to a date-partitioned location. Retry overwrites the partition.
+
+The idempotency-on-`{{ ds }}` discipline is what makes Airflow's retry, backfill, and rerun work.
+
+#### D.2 Pools and concurrency
+
+Two knobs control concurrency:
+
+- **DAG-level `max_active_runs`** — how many runs of this DAG can be in-flight at once. Default 16.
+- **Pools** — named buckets with a slot limit. A task assigned to a pool consumes a slot while running. Use to throttle access to scarce resources (e.g., `database_pool` with 5 slots prevents DB overload).
+
+A task that hits a pool limit is `queued` until a slot frees. This is how you prevent runaway parallelism from killing downstream systems.
+
+### From Theory to the Code Below
+
+Each section that follows operationalizes one piece of this framework:
+
+- §1 (Airflow Architecture) is §C — the components that implement the executor model.
+- §2 (DAG Definition) is §A.1 + §A.2 — how Python code expresses the task graph.
+- §3 (Operators) is the concrete tool kit; each operator is a parameterized task that respects §D's idempotency contract.
+- §4 (XComs and Variables) is the cross-task communication mechanism that respects §A.3 templating.
+- §5 (Scheduling) is §B — cron expressions, catchup, backfill in concrete syntax.
+- §6 (Monitoring) is §D's task lifecycle made visible in the UI.
+
+---
+
 ## Overview
 
 Apache Airflow is a platform for programmatically authoring, scheduling, and monitoring workflows. It manages complex data pipelines by defining DAGs (Directed Acyclic Graphs) in Python.

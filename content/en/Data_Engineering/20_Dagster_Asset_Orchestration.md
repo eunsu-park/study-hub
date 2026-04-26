@@ -14,6 +14,188 @@
 
 ---
 
+## Theory & Principles
+
+Dagster's claim to fame is that it puts the *data asset* at the architectural center, not the task. This is more than a labeling change — it changes how lineage, testing, observability, and incremental computation work. To understand why, you need to see the limits of the task-centric model that Airflow / Prefect / Luigi share, and how an asset-centric model addresses them.
+
+- **(A) Tasks vs assets** — what each abstraction privileges, and what each obscures.
+- **(B) Software-defined assets (SDAs)** — declarative asset graph as the unit of authoring.
+- **(C) The materialization model** — how Dagster decides what to compute and what to skip.
+- **(D) Asset checks: data contracts at the asset level** — quality and freshness as first-class.
+- **(E) Resources and IO managers** — clean separation of business logic, data location, and execution environment.
+
+### A. Tasks vs Assets
+
+The Airflow model:
+
+```python
+@task
+def extract(): ...
+
+@task
+def transform(raw): ...
+
+@task
+def load(clean): ...
+```
+
+The DAG is a graph of *steps* to execute. The data those steps produce is implicit — there's no first-class concept of "the customer table" or "the daily sales aggregate." If you want to know which task produces which table, you read the code.
+
+The Dagster model:
+
+```python
+@asset
+def raw_customers(): return extract_customers()
+
+@asset
+def clean_customers(raw_customers): return clean(raw_customers)
+
+@asset
+def daily_revenue(clean_customers, raw_orders): return aggregate(...)
+```
+
+The DAG is a graph of *assets*. Each function is named for the data it produces; dependencies are inferred from function arguments. The asset graph IS the data lineage — automatically, by construction.
+
+#### A.1 What this enables
+
+- **Lineage is structural.** You don't add lineage tracking on top; the framework forces lineage by being asset-centric.
+- **Asset selection.** "Materialize all assets downstream of `raw_customers`" or "rebuild `daily_revenue` and everything that produced it" — natural operations on an asset graph.
+- **Asset materialization metadata.** Each materialization records what was produced (row counts, schema, statistics, content hash). Subsequent runs can decide "this asset hasn't changed; skip downstream."
+- **Asset versioning.** Assets can have version numbers; downstream is invalidated when upstream version changes.
+
+The price: a steeper learning curve, and more rigid structure (assets must be named and graph-fitted up front).
+
+### B. Software-Defined Assets (SDAs)
+
+The unit of authoring in Dagster.
+
+#### B.1 The decorator + signature pattern
+
+```python
+@asset(group_name="customer", io_manager_key="parquet_io")
+def clean_customers(context, raw_customers: pd.DataFrame) -> pd.DataFrame:
+    """Customers with email validated and addresses normalized."""
+    return clean(raw_customers)
+```
+
+Several things at once:
+- The function defines the asset's *materialization logic*.
+- The function name (`clean_customers`) is the *asset key*.
+- The function's parameters declare *upstream dependencies* (the asset `raw_customers`).
+- The decorator declares operational metadata (group, IO manager, partition definition).
+
+#### B.2 The asset graph
+
+The collection of `@asset`-decorated functions across your codebase, joined by their dependencies, forms a directed acyclic graph. This graph is loaded once by Dagster and serves as the source of truth for:
+- The Dagster UI's asset visualization.
+- Selection (`dagster asset materialize --select +clean_customers`).
+- Schedules and sensors targeting specific assets.
+
+This is fundamentally different from Airflow, where DAGs are independent and cross-DAG dependencies are awkward. In Dagster, the entire data platform is one graph.
+
+### C. The Materialization Model
+
+How Dagster decides what to compute.
+
+#### C.1 Manual materialization
+
+`dagster asset materialize --select daily_revenue` runs the asset and any upstream that needs to run.
+
+#### C.2 Schedules and sensors
+
+```python
+@schedule(cron_schedule="0 6 * * *", target=AssetSelection.groups("customer"))
+def daily_customer_refresh():
+    return RunRequest()
+```
+
+A schedule that runs all assets in the "customer" group every day at 6am. A *sensor* runs assets when an external event fires (file appears, Kafka message arrives, etc.).
+
+#### C.3 Partitioned assets
+
+```python
+@asset(partitions_def=DailyPartitionsDefinition(start_date="2024-01-01"))
+def daily_revenue(context): ...
+```
+
+The asset is split by date partition. Materializing `daily_revenue` for partition 2024-03-15 is independent from materializing for 2024-03-16. Reruns target specific partitions; backfills materialize a range. This is the same partitioning pattern Airflow has via logical_date, but more explicit.
+
+#### C.4 Auto-materialization (declarative scheduling)
+
+```python
+@asset(auto_materialize_policy=AutoMaterializePolicy.eager())
+def daily_revenue(clean_customers, raw_orders): ...
+```
+
+"Materialize whenever any upstream changes." Dagster monitors upstream materializations and triggers downstream automatically. This eliminates a lot of manual schedule wiring.
+
+### D. Asset Checks: Data Contracts at the Asset Level
+
+```python
+@asset_check(asset=clean_customers)
+def no_null_emails(clean_customers: pd.DataFrame):
+    bad = clean_customers["email"].isnull().sum()
+    return AssetCheckResult(passed=(bad == 0), metadata={"bad_count": bad})
+```
+
+An asset check is a first-class quality assertion attached to an asset. It runs after materialization and:
+- Pass/fail is recorded with the materialization in the metadata DB.
+- The Dagster UI surfaces failed checks prominently per asset.
+- Checks can block downstream materialization (`blocking=True`).
+
+This is conceptually similar to dbt tests but at the framework level — every asset, regardless of whether it's a SQL model or Python code or Spark job, can have checks attached.
+
+### E. Resources and IO Managers
+
+Two architectural ideas that improve testability and maintainability.
+
+#### E.1 Resources
+
+Reusable, configurable connections to external systems:
+
+```python
+class SnowflakeResource(ConfigurableResource):
+    account: str
+    user: str
+    password: str
+    
+    def get_connection(self): ...
+
+@asset
+def fact_orders(snowflake: SnowflakeResource): ...
+```
+
+In production, resources are configured with prod credentials. In tests, you swap in a mock or in-memory resource. Same asset code, different runtime.
+
+#### E.2 IO managers
+
+How an asset's output is *stored* and how downstream assets *read* it. The asset code returns a value (a DataFrame, a dict, etc.); the IO manager decides where to put it.
+
+```python
+@asset(io_manager_key="snowflake_io")
+def daily_revenue(): return df
+
+@asset(io_manager_key="snowflake_io")
+def revenue_dashboard(daily_revenue): ...  # IO manager loads df from Snowflake
+```
+
+The asset doesn't say "write to Snowflake table X" — it just returns data. The IO manager handles persistence. Swap IO managers between environments (Snowflake in prod, local Parquet in dev) without changing asset code.
+
+This is one of the cleanest separations of concerns in any orchestration framework.
+
+### From Theory to the Code Below
+
+Each section that follows operationalizes one piece of this framework:
+
+- §1 (Dagster Concepts) is §A — the asset-vs-task shift.
+- §2 (Software-Defined Assets) is §B — the @asset decorator and asset graph.
+- §3 (Materialization and Scheduling) is §C — schedules, sensors, auto-materialization.
+- §4 (Partitioned Assets) is §C.3 — date and other partition strategies.
+- §5 (Asset Checks) is §D — quality contracts at asset level.
+- §6 (Resources and IO Managers) is §E — separation of concerns for testability.
+
+---
+
 ## Overview
 
 Most orchestration tools — Airflow, Prefect, Luigi — think in terms of **tasks**: "run this Python function, then run that one." Dagster flips the mental model entirely. Instead of asking "what steps should I run?", Dagster asks "what data assets should exist, and how are they derived?" This seemingly small shift has profound consequences for how we build, test, debug, and observe data pipelines.

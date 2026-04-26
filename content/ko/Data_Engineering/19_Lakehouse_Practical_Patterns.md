@@ -15,6 +15,218 @@
 
 ---
 
+## 이론과 원리
+
+레이크하우스 테이블 포맷(레슨 11 §C)은 *능력* 입니다; 실용적 패턴은 프로덕션에서 그것을 실제로 어떻게 사용하는가입니다. ACID와 시간 여행을 제공하는 같은 테이블 포맷이, 그것의 운영 계약 — 작은 파일 vs 압축, MERGE vs append, 파티션 vs Z-order — 을 이해하느냐에 따라 빠른 쿼리 가능 웨어하우스가 될 수도, 느리고 단편화된 엉망이 될 수도 있습니다.
+
+- **(A) 프로덕션의 메달리온** — bronze/silver/gold가 Delta/Iceberg 테이블로 실제로 어떻게 보이는가
+- **(B) MERGE: 증분 처리의 주력** — insert, update, delete, SCD Type 2를 처리하는 SQL 패턴
+- **(C) 작은 파일 문제와 압축** — 모든 스트리밍 쓰기가 이 문제를 만드는 이유와 그것을 고치는 방법
+- **(D) Z-ordering과 데이터 스키핑** — 풀 스캔을 정밀한 읽기로 바꾸는 옵티마이저 힌트
+- **(E) 시간 여행과 운영 사용 사례** — 디버깅, 롤백, 감사, 시점 조인
+
+### A. 프로덕션의 메달리온
+
+개념적 메달리온(레슨 11 §D)이 구체적 테이블 레이아웃이 됨.
+
+#### A.1 Bronze: append-only, schema-on-read
+
+```
+/lakehouse/bronze/orders/
+  _delta_log/
+  ingest_date=2024-03-15/
+    part-0001.parquet
+    part-0002.parquet
+  ingest_date=2024-03-16/
+    ...
+```
+
+Ingest 날짜로 파티셔닝됨. Append-only — Spark가 새 일일 파티션만 작성. 변환 없음; 들어온 그대로의 원시 이벤트. 스키마는 느슨할 수 있음(전체 페이로드를 위한 JSON 컬럼 + 추출된 최상위 키).
+
+실패 복구: 소스에서 재구축. 비용: 낮은 컴퓨트, 높은 저장(우리는 모든 것을 유지).
+
+#### A.2 Silver: 타입됨, 검증됨, 중복 제거됨
+
+```
+/lakehouse/silver/orders/
+  _delta_log/
+  event_date=2024-03-15/
+    part-0001.parquet
+```
+
+Spark/dbt를 통해 bronze에서 빌드됨. 스키마 강제. 중복 제거. 참조 차원과 조인됨. Great Expectations / dbt 테스트로 검증됨.
+
+각 silver 테이블은 bronze 테이블에 명확한 계보를 가짐; 재구축은 결정적.
+
+#### A.3 Gold: 비즈니스 준비된 집계
+
+```
+/lakehouse/gold/daily_revenue_by_region/
+  _delta_log/
+  date=2024-03-15/
+    part-0001.parquet
+```
+
+BI / ML / 대시보드가 소비하는 사전 집계된 와이드 테이블. 종종 비정규화됨(region_id만이 아닌 region 이름). 그것을 치는 쿼리 패턴에 맞게 크기 조정됨.
+
+### B. MERGE: 증분 처리의 주력
+
+레이크하우스에서 가장 중요한 단일 DML 패턴. MERGE는 정형화된 "증분 upsert + delete"를 한 문장으로 원자적으로 처리.
+
+#### B.1 기본 upsert
+
+```sql
+MERGE INTO silver.dim_customer AS target
+USING bronze.customer_changes AS source
+ON target.customer_id = source.customer_id
+WHEN MATCHED THEN UPDATE SET *
+WHEN NOT MATCHED THEN INSERT *;
+```
+
+원자성 보장: 전체 MERGE가 성공하거나(모든 행 적용됨) 테이블이 변경되지 않음. 동시 reader는 MERGE 이전 스냅샷이나 MERGE 이후 스냅샷을 보고, 절대 절반은 보지 않음.
+
+이것이 증분 처리를 재시도 안전하고 멱등하게(레슨 1 §A.2) 만드는 것입니다.
+
+#### B.2 MERGE의 SCD Type 2
+
+SCD Type 2 이력(레슨 2 §D)을 유지하는 레이크하우스 native 방법:
+
+```sql
+MERGE INTO silver.dim_customer_history AS target
+USING (
+    SELECT
+        s.customer_id,
+        s.email,
+        s.city,
+        current_timestamp() AS valid_from
+    FROM bronze.customer_changes s
+    LEFT JOIN silver.dim_customer_history t
+        ON s.customer_id = t.customer_id AND t.is_current = true
+    WHERE t.customer_id IS NULL  -- 새 고객
+       OR t.email != s.email       -- 변경됨
+       OR t.city != s.city
+) AS source
+ON target.customer_id = source.customer_id AND target.is_current = true
+WHEN MATCHED THEN UPDATE SET valid_to = source.valid_from, is_current = false
+WHEN NOT MATCHED THEN INSERT (customer_id, email, city, valid_from, valid_to, is_current)
+                      VALUES (source.customer_id, source.email, source.city,
+                              source.valid_from, NULL, true);
+```
+
+한 MERGE에 두 패스가 암묵적: 옛 "current" 행 마감, 새 "current" 행 삽입. 원자적.
+
+#### B.3 GDPR 준수 삭제
+
+```sql
+MERGE INTO silver.dim_customer AS target
+USING (SELECT customer_id FROM gdpr_deletion_requests) AS source
+ON target.customer_id = source.customer_id
+WHEN MATCHED THEN DELETE;
+```
+
+실제 행 삭제, 트랜잭션 로그에 기록됨. 다음 `OPTIMIZE` / `VACUUM`(§C)이 기저 파일에서 행을 물리적으로 제거.
+
+### C. 작은 파일 문제와 압축
+
+Delta/Iceberg 테이블에 대한 모든 commit은 새 Parquet 파일을 작성. 스트리밍 쓰기(매 micro-batch가 파일 생성)와 빈번한 배치 쓰기는 **많은 작은 파일** 을 누적.
+
+#### C.1 작은 파일이 해를 끼치는 이유
+
+100개의 큰 파일(각 100 MB) 대신 10,000개의 작은 파일(각 1 MB)이 있는 테이블에 대한 쿼리:
+- 100 vs 10,000개 파일 열기 syscall.
+- 100 vs 10,000개 메타데이터 읽기.
+- 100 vs 10,000개 워커 태스크(Spark가 파일당 한 태스크 스케줄).
+- 파일당 오버헤드가 지배; 처리량 붕괴.
+
+작은 파일 버전의 읽기 지연은 10-100배 더 나쁠 수 있음.
+
+#### C.2 OPTIMIZE: 압축
+
+```sql
+OPTIMIZE silver.fact_orders;
+```
+
+많은 작은 파일을 읽고, 더 적은 큰 파일(일반적으로 128 MB 또는 1 GB 목표)로 다시 작성. 트랜잭션 로그가 "파일 A, B, C 제거; 파일 D 추가"를 기록. 원자적 — reader는 옛 레이아웃이나 새 레이아웃을 보고, 절대 부분적이지 않음.
+
+정기적으로 실행: 야간 배치 잡, 스트리밍 잡이 상태를 누적한 후 등.
+
+#### C.3 VACUUM: 참조되지 않은 파일 삭제
+
+압축이나 DELETE 후, 옛 파일은 디스크에 여전히 존재 — 트랜잭션 로그만 그것들이 더 이상 참조되지 않는다고 말함. 이것이 시간 여행(§E)을 가능하게 함.
+
+```sql
+VACUUM silver.fact_orders RETAIN 168 HOURS;  -- 7일 이력 유지
+```
+
+더 이상 참조되지 않고 보존 윈도우보다 오래된 파일을 물리적으로 삭제. 저장 비용 줄임; 윈도우 너머의 시간 여행 손실.
+
+프로덕션 원칙: 디버깅 필요에 기반하여 보존 튜닝. 7일이 흔한 기본값.
+
+### D. Z-Ordering과 데이터 스키핑
+
+매우 큰 테이블의 경우 파티셔닝만으로는 충분하지 않음 — 단일 파티션 내에서도 여전히 수십억 행을 스캔할 수 있음. 레이크하우스 포맷은 파일 수준 통계에 기반한 **데이터 스키핑(data skipping)** 을 추가, **Z-ordering** 을 통해 최적화됨.
+
+#### D.1 파일 수준 통계
+
+Delta/Iceberg 테이블의 각 Parquet 파일은 메타데이터에 컬럼당 min/max 통계를 가짐. `WHERE customer_id = 12345` 쿼리는 각 파일의 `customer_id`에 대한 [min, max]를 검사하고 12345가 범위 밖인 파일을 스킵. 잘 분산된 데이터로 99% 파일을 스킵할 수 있음.
+
+#### D.2 Z-ordering
+
+통계는 데이터가 *클러스터됨* — 파일이 좁은 min/max 범위를 가짐 — 일 때만 도움. 무작위 분산은 넓은 범위 제공; 모든 파일이 12345를 포함할 수 있음. Z-ordering은 다차원 클러스터링 알고리즘:
+
+```sql
+OPTIMIZE silver.fact_orders ZORDER BY (customer_id, product_id);
+```
+
+(customer_id, product_id) Z-curve에서 파일이 클러스터되도록 데이터 재구성. 어느 컬럼에 필터링하는 쿼리든 좁은 파일 수준 범위를 보고 공격적으로 스킵.
+
+이것이 높은 카디널리티 필터 컬럼에 대한 가장 영향력 있는 최적화 중 하나입니다. ETL 시점에 적용; 쿼리가 무료 속도 향상을 받음.
+
+#### D.3 Bloom 필터 (Iceberg)
+
+Iceberg 테이블은 또한 파일별 컬럼별 bloom 필터 유지 가능 — 높은 선택도 동등 필터(`WHERE id = X`)를 가진 쿼리는 파일을 열기 전에 bloom 필터 검사. point lookup에 대해 종종 min/max만보다 10배 더 빠름.
+
+### E. 시간 여행과 운영 사용 사례
+
+레이크하우스 테이블은 (VACUUM될 때까지) 버전 이력을 유지. 이것이 웨어하우스가 절대 갖지 않은 운영 패턴을 가능하게 함.
+
+#### E.1 버전 로그
+
+모든 커밋이 버전 번호를 받음. 어떤 버전에서든 테이블 읽기:
+
+```sql
+SELECT * FROM silver.dim_customer VERSION AS OF 1234;
+SELECT * FROM silver.dim_customer TIMESTAMP AS OF '2024-03-15 10:00:00';
+```
+
+#### E.2 운영 사용 사례
+
+- **디버깅:** "어제의 나쁜 ETL 실행 전에 이 테이블이 어떻게 보였나?" 이전 버전을 읽고, 비교.
+- **롤백:** "새 ETL에 버그가 있었음; 어제로 되돌림." `RESTORE TABLE silver.dim_customer TO VERSION AS OF 1233`.
+- **감사:** "2023-12-31에 고객의 email은 무엇이었나?" — 시점 쿼리, 테이블 자체가 버전이라면 SCD 필요 없음.
+- **재현성:** ML 모델이 버전 N의 데이터에 대해 학습됨; 나중에 버전 N을 읽어 정확히 같은 데이터로 재학습. 사본 스냅샷 필요 없음.
+
+#### E.3 보존 트레이드오프
+
+VACUUM은 저장을 해제하지만 보존 윈도우 너머의 시간 여행을 제거. 선택:
+- **공격적 vacuum**(24h): 낮은 저장 비용, 짧은 윈도우 디버깅만.
+- **긴 보존**(30+일): 높은 저장 비용, 더 긴 감사/디버그 윈도우, 규제 컴플라이언스가 종종 이를 요구.
+
+기본 7일이 대부분 팀에 합리적 균형.
+
+### From Theory to the Code Below
+
+이어지는 각 절은 위 프레임워크의 한 조각을 운영합니다:
+
+- §1 (실무에서의 레이크하우스 아키텍처)는 §A — 물리적으로 실현된 메달리온.
+- §2 (증분 처리를 위한 MERGE)는 §B — 주력 패턴.
+- §3 (Delta/Iceberg의 SCD Type 2)는 구체 코드의 §B.2.
+- §4 (압축과 최적화)는 §C와 §D — OPTIMIZE, Z-ordering, 데이터 스키핑.
+- §5 (시간 여행)는 §E — 버전 로그, 롤백, 시점 쿼리.
+- §6 (다중 엔진 상호 운용성)은 실용적 Spark/Trino/Flink 상호 운용 이야기.
+
+---
+
 ## 개요
 
 레이크하우스(Lakehouse) 아키텍처는 데이터 웨어하우스(Data Warehouse)의 신뢰성과 데이터 레이크(Data Lake)의 확장성을 결합합니다. 이 레슨에서는 Delta Lake와 Apache Iceberg의 프로덕션 패턴을 다룹니다: 메달리온 아키텍처(Medallion Architecture), MERGE를 활용한 증분 처리(Incremental Processing), 천천히 변하는 차원(SCD Type 2), 압축(Compaction), 시간 여행(Time Travel), 그리고 다중 엔진 상호 운용성(Multi-engine Interoperability).

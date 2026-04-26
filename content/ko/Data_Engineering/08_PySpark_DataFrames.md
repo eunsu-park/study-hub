@@ -15,6 +15,141 @@
 
 ---
 
+## 이론과 원리
+
+PySpark DataFrame은 pandas처럼 보이지만, 그 아래는 JVM 상주 쿼리 계획에 대한 얇은 Python 래퍼입니다. 두 가지 경계가 성능을 지배합니다: Catalyst 옵티마이저(DataFrame 연산을 최적화된 물리적 계획으로 다시 작성)와 JVM-Python 경계(비싸며 native DataFrame 연산이 Python UDF를 10-100배 이기는 이유).
+
+- **(A) 쿼리 계획으로서의 DataFrame** — `df.filter(...).groupBy(...)`이 JVM에서 실제로 무엇을 구성하는가
+- **(B) Catalyst 최적화 패스** — 코드를 효율적인 계획으로 바꾸는 규칙과 비용 모델
+- **(C) JVM-Python 경계와 Arrow** — Python UDF가 느린 이유와 vectorized UDF가 어떻게 도움이 되는가
+- **(D) 일급 개념으로서의 파티셔닝** — 입력 파티션, 셔플 파티션, 그리고 skew(편향)가 어떻게 잡을 죽이는가
+
+### A. 쿼리 계획으로서의 DataFrame
+
+pandas DataFrame은 *메모리에 있는 데이터* 입니다. Spark DataFrame은 *데이터를 어떻게 계산할지에 대한 기술* 입니다. 구체적으로:
+
+```python
+df = spark.read.parquet("/data/sales")     # LogicalRelation 생성
+filtered = df.filter(col("amount") > 100)   # 그 위에 Filter 노드 생성
+grouped = filtered.groupBy("region").sum()  # 그 위에 Aggregate 노드 생성
+grouped.show()                              # 이제 Catalyst가 계획 + 실행
+```
+
+각 단계에서 데이터가 읽히지 않습니다. PySpark는 트리 구성 RPC를 JVM 드라이버에 보내고, 드라이버는 LogicalPlan에 노드를 추가합니다. Python `df` 객체는 본질적으로 이 서버 측 계획에 대한 핸들입니다.
+
+이 간접화가 최적화를 가능하게 만드는 것입니다 — Catalyst는 실행 전에 전체 계획을 보고 다시 작성할 수 있습니다.
+
+### B. Catalyst 최적화 패스
+
+Catalyst는 DataFrame 계획을 Spark RDD 실행으로 컴파일하는 옵티마이저입니다. 4단계:
+
+#### B.1 분석(Analysis)
+
+스키마에 대해 컬럼 참조 해결. `col("amount")`이 `AttributeReference("amount", DoubleType)`이 됨. 실행 *전에* 오타와 타입 불일치를 잡음.
+
+#### B.2 논리적 최적화 (규칙 기반)
+
+계획이 안정될 때까지 반복적으로 적용되는 재작성 규칙 라이브러리:
+
+- **술어 푸시다운(Predicate pushdown).** 필터를 가능한 한 소스에 가깝게 푸시. Parquet 읽기 위의 `Filter(amount > 100)`이 Parquet *읽기 필터* 가 됨 — 매치되지 않는 row group은 파일 수준에서 스킵.
+- **프로젝션 가지치기(Projection pruning).** `select("user_id", "amount")`은 Parquet 읽기가 다른 50개 컬럼을 완전히 스킵하게 함.
+- **상수 폴딩(Constant folding).** `col("x") + 1 + 2`이 `col("x") + 3`이 됨.
+- **불리언 단순화.** `not (a > 5)`이 `a <= 5`가 됨.
+- **서브쿼리 제거.** 공통 부분 표현식이 한 번만 계산됨.
+
+#### B.3 물리적 계획 (비용 기반)
+
+각 논리적 오퍼레이터에 대해 물리적 구현 선택. 가장 결과적인 결정: 조인 알고리즘.
+
+- **Broadcast hash join** — 한 쪽이 작으면(< `spark.sql.autoBroadcastJoinThreshold`, 기본 10 MB), 모든 익스큐터에 브로드캐스트하고 로컬에서 hash-join. 셔플 없음.
+- **Shuffle hash join** — 양쪽 모두 키로 셔플된 후, 파티션별로 로컬에서 hash-join.
+- **Sort merge join** — 양쪽 모두 셔플 및 정렬된 후, merge-join. 큰 조인의 기본; shuffle hash보다 skew를 더 잘 견딤.
+
+비용 기반 옵티마이저(CBO)는 테이블 통계(`ANALYZE TABLE`로 수집됨)를 사용하여 선택. 통계가 없으면 Catalyst는 파일 크기에 기반하여 추측 — 보통 옳지만 가끔 재앙적으로 틀림(예: 조인 키가 고유하다고 생각하지만 아닌 경우, 실제로 100 GB 테이블인 것에 대해 broadcast 선택).
+
+#### B.4 코드 생성 (Tungsten)
+
+물리적 계획은 whole-stage 코드 생성을 사용하여 JVM 바이트코드로 컴파일됨: 가상 함수 호출 없이 컬럼별로 행을 처리하는 타이트한 `for` 루프. 이것이 SQL/DataFrame이 동등한 RDD 코드를 5-10배 능가하는 이유 중 하나.
+
+Tungsten은 또한 *off-heap 메모리* 와 커스텀 바이너리 행 포맷을 사용하여, 핫 패스에서 JVM garbage collection 회피.
+
+### C. JVM-Python 경계와 Arrow
+
+PySpark 코드는 Python에서 실행; Spark 자체는 JVM에서 실행. 데이터가 경계를 건너야 하면 비싸집니다.
+
+#### C.1 Python UDF가 느린 이유
+
+```python
+@udf(IntegerType())
+def add_one(x):
+    return x + 1
+
+df.withColumn("y", add_one(col("x")))
+```
+
+모든 행에 대해:
+1. JVM이 행을 바이트로 직렬화.
+2. 바이트가 소켓을 통해 Python 워커 프로세스로 이동.
+3. Python이 역직렬화하고, `add_one` 호출, 결과 직렬화.
+4. 바이트가 JVM으로 돌아오고, JVM이 역직렬화.
+
+이 행별 마샬링은 동등한 native 표현식 `col("x") + 1`보다 10-100배 느립니다. **Python UDF보다 항상 native Column 표현식을 선호하세요.**
+
+#### C.2 Pandas UDF (vectorized UDF)
+
+Apache Arrow는 JVM과 Python 모두 직렬화 없이 직접 읽을 수 있는 컬럼 인메모리 포맷.
+
+```python
+@pandas_udf(IntegerType())
+def add_one(s: pd.Series) -> pd.Series:
+    return s + 1
+```
+
+이제 Spark는 *행 배치* 를 Arrow record batch(zero-copy)로 보냅니다. Python은 pandas Series를 받고, 함수를 적용하고(vectorized pandas/NumPy 연산 사용), Series를 반환. 결과는 Arrow로 다시 작성.
+
+속도 향상: 일반적으로 스칼라 UDF의 10-100배. 여전히 native Column 표현식보다 느리지만, 로직이 진정 Python을 필요로 할 때(예: sklearn 모델 호출) 합리적인 선택.
+
+#### C.3 계층
+
+컬럼별 변환의 경우, 다음 순서로 선호:
+1. Native `Column` 표현식(`col("x") + 1`) — 가장 빠름, JVM에서 실행.
+2. Pandas UDF — Arrow 기반, 사소하지 않은 로직에 빠름.
+3. 스칼라 UDF — 가장 느림; 프로토타입을 제외하고 회피.
+
+### D. 일급 개념으로서의 파티셔닝
+
+파티셔닝은 세 계층에서 나타나며, 그것들 사이의 혼동이 빈번한 버그 원인입니다.
+
+#### D.1 입력 파티션 (파일 파티셔닝)
+
+소스에 의해 결정됨: `spark.read.parquet("/data/year=2024/month=03/")`. Hive 스타일 파티셔닝의 경우 각 leaf 디렉토리가 한 파티션. `WHERE month = '03'`이 *partition pruning* 을 트리거 — 매치되는 디렉토리만 읽힘.
+
+#### D.2 RDD 파티션 (인메모리 파티셔닝)
+
+각 RDD는 N개 파티션을 가짐. Catalyst는 이를 익스큐터 코어와 매치되도록 유지하려 함. 셔플 후 파티션 수는 `spark.sql.shuffle.partitions`(기본 200, 종종 작은 잡에는 너무 많고 큰 잡에는 너무 적음).
+
+#### D.3 셔플 파티션과 skew(편향)
+
+`groupBy("user_id")`이 셔플할 때, Spark는 user_id를 200개 버킷으로 해시. 한 사용자가 데이터의 50%를 생성하면, 한 셔플 파티션이 거대한 반면 199개는 작음. 그 한 파티션을 처리하는 데 100배 더 걸림. **데이터 skew는 느린 Spark 잡의 가장 흔한 원인입니다.**
+
+완화:
+- **Adaptive Query Execution (AQE).** 현대 Spark는 런타임에 skew된 파티션을 감지하고 분할.
+- **Salting.** skew된 키에 무작위 접미사를 추가하고, 그룹화한 후, 재집계.
+- **Broadcast 조인.** 한 쪽이 작으면 셔플을 완전히 회피.
+
+### From Theory to the Code Below
+
+이어지는 각 절은 위 프레임워크의 한 조각을 운영합니다:
+
+- §1 (DataFrame 기초)는 §A — Python API를 통한 쿼리 계획 구성.
+- §2 (스키마 및 타입 시스템)은 §B.1 — 분석 단계 해결.
+- §3 (변환)은 §C.3의 native `Column` API — 작업을 JVM에 유지.
+- §4 (집계와 윈도우 함수)는 구체 예제로 §D.3의 셔플 동작을 운영.
+- §5 (조인)은 §B.3 — broadcast vs shuffle vs sort-merge.
+- §6 (UDF)는 §C — 스칼라 UDF가 허용되는 경우, pandas UDF로 업그레이드해야 하는 경우.
+
+---
+
 ## 개요
 
 Spark DataFrame은 분산된 데이터를 테이블 형태로 표현하는 고수준 API입니다. SQL과 유사한 연산을 제공하며, Catalyst 옵티마이저를 통해 자동으로 최적화됩니다.

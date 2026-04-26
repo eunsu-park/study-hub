@@ -14,6 +14,156 @@
 
 ---
 
+## Theory & Principles
+
+Data versioning and data contracts are the data-engineering analogues of two software engineering disciplines that took decades to formalize: **version control** (Git for code) and **API contracts** (interface specs between services). The data world is currently catching up. The deeper lesson is that *trust* is the rate-limiting factor for data platforms, and trust comes from having a "before" to compare against and a "promised behavior" to verify against.
+
+- **(A) The mutability problem and what versioning solves** — every data lake or warehouse is silently mutable; versioning makes that mutability inspectable.
+- **(B) Versioning approaches: snapshots, table-format time travel, lakeFS, dbt artifacts** — different points on the granularity-vs-overhead spectrum.
+- **(C) Schema evolution: backward, forward, and full compatibility** — the rules that keep producers and consumers from breaking each other.
+- **(D) Data contracts as enforced specifications** — moving from "implicit conventions" to "CI-validated agreements."
+- **(E) Semantic vs structural breakage** — what no schema check can catch and how to defend against it.
+
+### A. The Mutability Problem
+
+When a Spark job runs `df.write.mode("overwrite").parquet("/data/sales/2024-03-15/")`, the previous version of that partition is gone. There is no Git log, no `previous_value`, no way to ask "what did this look like before?"
+
+This becomes a real problem when:
+- An ETL run produces wrong data; you need to know exactly which rows changed to scope the impact.
+- A consumer reports a metric is off; you need to compare today's table to yesterday's.
+- An auditor asks "what was the value on date X?" — and the answer must be reproducible.
+- An ML model gives bad predictions; you need to retrain on the exact data version that worked previously.
+
+Data versioning solves all of these by treating data as immutable + recording history.
+
+### B. Versioning Approaches
+
+Different mechanisms with different trade-offs.
+
+#### B.1 Manual snapshots
+
+`COPY TABLE production.fact_orders TO archive.fact_orders_2024_03_15`. Simple, works on any warehouse. Storage scales with snapshots taken — quickly expensive.
+
+#### B.2 Table-format time travel
+
+Delta Lake / Iceberg / Hudi (Lesson 19 §E) automatically retain version history in the transaction log. Read any past version: `SELECT * FROM fact_orders TIMESTAMP AS OF '2024-03-15'`. Storage cost is the union of all live data files; VACUUM trims old versions.
+
+This is the workhorse for most lakehouse-era teams.
+
+#### B.3 lakeFS / Project Nessie
+
+Git-style branching for entire data lakes. Create a branch, run experimental ETL on it, validate, merge back to main — atomically. The data lake itself becomes Git-like, with branches, PRs, and merges.
+
+Best for: large teams running parallel experiments, data versioning across many tables atomically, formal data review workflows.
+
+#### B.4 dbt artifacts and DAG snapshots
+
+dbt records the entire model graph and SQL state per run. `dbt docs` shows lineage and SQL at any point in time. Combined with Git, you can correlate "this row of data was produced by this version of this SQL."
+
+#### B.5 Picking an approach
+
+| Need | Approach |
+|------|----------|
+| Time-travel within a single table | Delta/Iceberg time travel |
+| Compare today vs yesterday's table | Same |
+| Formal experimentation with rollback | lakeFS / Nessie |
+| "Which SQL produced this number?" | dbt + Git |
+| Audit-grade reproducibility | Combination of all the above |
+
+### C. Schema Evolution
+
+Once data has consumers, the schema becomes an interface. Changes must respect compatibility.
+
+#### C.1 The three compatibility modes
+
+- **Backward compatible:** new producers, old consumers still work. Allowed: add nullable columns, widen types (int → long). Forbidden: remove columns, narrow types, rename.
+- **Forward compatible:** new consumers, old producers still work. Allowed: remove columns (with default), narrow types if data fits. Forbidden: add required columns.
+- **Full compatible:** both directions. The strict intersection — basically only "add nullable columns."
+
+Schema Registry (Avro / JSON Schema / Protobuf) enforces these rules at registration time. Schema-evolving table formats (Delta / Iceberg) enforce them at table-modification time.
+
+#### C.2 Why backward is the default
+
+The asymmetry: producers usually deploy first, consumers later. New producer must not break old consumers — backward compatibility. Old consumer must keep working with new producer's data — same thing.
+
+The risky operation: removing or renaming a column. Always go through a deprecation cycle:
+1. Add new column alongside old.
+2. Update producers to populate both.
+3. Update consumers to read new.
+4. Wait long enough for all consumers to migrate.
+5. Remove old column.
+
+This takes weeks to months in a real organization. The cost is real, but the alternative (a broken consumer the producer didn't know about) is worse.
+
+### D. Data Contracts as Enforced Specifications
+
+A data contract is a formal, machine-checked agreement between producer and consumer:
+
+```yaml
+# contracts/fact_orders.yaml
+table: fact_orders
+owner: revenue-team
+sla:
+  freshness: "data for date D available by D+1 06:00 UTC"
+  uptime: 99.5%
+schema:
+  - name: order_id
+    type: bigint
+    constraints: [not_null, unique]
+  - name: customer_id
+    type: bigint
+    constraints: [not_null]
+  - name: amount
+    type: decimal(10,2)
+    constraints: [not_null, gte: 0]
+  - name: status
+    type: string
+    constraints: [in: [pending, completed, cancelled]]
+quality:
+  - row_count_anomaly: stddev_3
+  - null_rate_max: 0.01
+```
+
+#### D.1 Where contracts are enforced
+
+1. **CI on producer changes.** A PR that breaks the contract (removes a column, changes a type) fails CI. The producer cannot ship a contract-breaking change without explicit override.
+2. **Producer-side runtime validation.** Before writing, validate output matches contract. Failure → don't write; alert the producer.
+3. **Consumer-side schema deserialization.** Consumers declare their expected schema; deserialization fails loudly if the actual data doesn't match.
+4. **Continuous monitoring on the table.** Schedule expectation runs (Great Expectations, dbt tests) that verify the contract over time.
+
+#### D.2 The cultural shift
+
+The technical mechanism is straightforward; the hard part is organizational. Producers must care about consumer impact; consumers must declare their dependencies. Some teams adopt RFC-style processes for contract changes — proposed → reviewed → accepted → migrated → deployed.
+
+Data contracts move data engineering from "informal cross-team chaos" to "explicit cross-team API," much as REST APIs did for service teams in the 2010s.
+
+### E. Semantic vs Structural Breakage
+
+Schema validation catches *structural* breakage: column renamed, type changed, new required column. It **cannot** catch *semantic* breakage:
+
+- Producer changes the meaning of `amount` from cents to dollars (column type unchanged; values now 100x off).
+- Producer starts including refunded orders in `fact_orders` (row count higher; structure unchanged).
+- Producer changes timezone of `event_at` from UTC to local time (type unchanged; aggregations now wrong).
+
+Defense:
+- **Range and distribution monitoring.** Alert when `avg(amount)` deviates >X% from baseline.
+- **Reconciliation tests.** "Sum of `amount` in `fact_orders` should match upstream OLTP `total_revenue` within 0.1%." Run daily.
+- **Semantic version bumps in contracts.** Major version (`v2`) signals "behavior changed; migrate explicitly."
+- **Communication.** Contracts cannot replace conversation; they can structure it.
+
+### From Theory to the Code Below
+
+Each section that follows operationalizes one piece of this framework:
+
+- §1 (Why Data Versioning) is §A — the mutability problem in concrete examples.
+- §2 (Versioning Approaches) is §B — Delta time travel, lakeFS, dbt artifacts.
+- §3 (Schema Evolution) is §C — compatibility modes and the deprecation cycle.
+- §4 (Data Contracts) is §D — YAML contracts, CI enforcement, producer/consumer validation.
+- §5 (Semantic Validation) is §E — range monitoring, reconciliation, beyond schema.
+- §6 (Production Patterns) integrates all five into governance workflows.
+
+---
+
 ## Overview
 
 Modern data platforms suffer from two related problems. First, **data is mutable by default** — when a Spark job overwrites a partition, the previous version vanishes unless you explicitly preserved it. There is no "undo" button, no blame history, no way to compare today's output with yesterday's. Second, **data interfaces are implicit** — upstream teams change column names, data types, or business logic without warning, and downstream pipelines break silently at 3 AM.

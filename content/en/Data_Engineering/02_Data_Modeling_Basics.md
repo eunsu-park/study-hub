@@ -15,6 +15,147 @@ After completing this lesson, you will be able to:
 
 ---
 
+## Theory & Principles
+
+Data modeling is one of those topics where the technique (star schema, SCD type 2) is taught long before the *why*. The why is a single architectural decision: are you optimizing for transactions (OLTP) or analytics (OLAP)? That choice determines whether you normalize or denormalize, whether you use row-store or column-store, and whether dimensional modeling even applies.
+
+- **(A) OLTP vs OLAP** — the workload duality that justifies separate models for the same business data.
+- **(B) Normalization vs denormalization** — Codd's normal forms vs Kimball's star schema, and when each wins.
+- **(C) Dimensional modeling** — facts as measurements, dimensions as context, and the geometry of star vs snowflake.
+- **(D) Slowly Changing Dimensions** — six standard ways to handle the fact that dimension attributes change over time.
+
+### A. OLTP vs OLAP: Two Workloads, Two Models
+
+The same business data — customers, orders, products — gets queried by two completely different access patterns.
+
+#### A.1 OLTP (Online Transaction Processing)
+
+The operational system. Examples: e-commerce checkout, banking transfers, ticket booking.
+
+- **Workload:** many concurrent users, each touching a few rows. "Insert one order, update two inventory rows, write one payment record."
+- **Latency:** milliseconds. Users are watching the screen.
+- **Concurrency:** hundreds to thousands of simultaneous transactions.
+- **Storage layout:** row-store (PostgreSQL, MySQL, SQL Server) — all columns of a row stored together, so reading "this one order" is a single disk seek.
+- **Schema:** highly normalized (3NF or BCNF) — minimal duplication, every fact stored once, integrity enforced by foreign keys.
+
+The normalized schema makes writes fast and consistent: inserting a new order touches one row in `orders` and increments one inventory counter. No data duplication means no risk of inconsistency.
+
+#### A.2 OLAP (Online Analytical Processing)
+
+The analytics system. Examples: "monthly revenue by product category and region", "year-over-year growth", "customer cohort retention".
+
+- **Workload:** few analysts, each running queries that touch millions to billions of rows. "Sum revenue across 3 years grouped by product."
+- **Latency:** seconds to minutes. Analysts are running ad-hoc reports.
+- **Concurrency:** dozens of simultaneous queries.
+- **Storage layout:** column-store (Snowflake, BigQuery, Redshift, ClickHouse, Parquet) — all values of a single column stored contiguously, so a query that touches 3 of 50 columns reads only 6% of the data.
+- **Schema:** denormalized (star schema) — joins are expensive at scale, so we duplicate dimension attributes into fact tables or use wide pre-joined tables.
+
+Column stores compound their advantage with compression: a column of `country_code` has only ~200 distinct values, so dictionary encoding + RLE (run-length encoding) shrinks it 50-100x. Spark/Snowflake also do *predicate pushdown*: the optimizer pushes a `WHERE country = 'US'` filter into the file format so unmatched columns are never decompressed.
+
+#### A.3 Why two models, not one
+
+Could a single normalized OLTP schema serve both workloads? In principle yes — but in practice no, for two reasons:
+
+1. **Performance.** A query like "sum revenue by product over 3 years" against a normalized OLTP schema requires joining `orders + line_items + products + categories`, scanning billions of rows in row-store layout. The same query against a denormalized columnar fact table reads 3 columns × 1 fact table — orders of magnitude faster.
+2. **Workload isolation.** OLAP queries that scan billions of rows would block OLTP transactions, taking the operational system down.
+
+The standard architecture: OLTP databases are the source of truth; an ETL/ELT pipeline (Lessons 3, 12) moves data into a separate OLAP warehouse modeled for analytics.
+
+### B. Normalization vs Denormalization
+
+Codd's normal forms (1NF through BCNF) eliminate redundancy. Each fact is stored exactly once; updates touch one row. This is correct for OLTP.
+
+For OLAP, Kimball flipped the trade-off: storage is cheap, joins are expensive, *denormalize*. Duplicate the customer's name and city into every order row; duplicate the product's category into every line-item. Query becomes a single table scan or a single join to a small dimension table.
+
+| Property | Normalized (3NF) | Denormalized (Star) |
+|----------|------------------|---------------------|
+| Storage | minimal | larger (duplication) |
+| Write cost | low (one row updated) | high (every duplicated copy must be updated) |
+| Read cost (analytical) | high (many joins) | low (one or two joins) |
+| Update anomalies | impossible (single source) | possible if updates incomplete |
+| Best for | OLTP | OLAP |
+
+The asymmetry: in OLAP, writes happen once per ETL batch (idempotent overwrite, or upsert). Reads happen thousands of times. Optimizing reads at the cost of writes is the right trade.
+
+### C. Dimensional Modeling
+
+Kimball's dimensional model is the standard for warehouse schema design.
+
+#### C.1 Facts and dimensions
+
+- **Fact table** stores *measurements* of a business process: how many units sold, how much revenue, how long the call lasted. Rows are immutable events; columns are mostly numeric.
+- **Dimension table** stores *context* for those measurements: who (customer), what (product), where (store), when (date). Rows are entities; columns are descriptive attributes.
+
+The fact table has foreign keys pointing to each dimension. A "sale" fact has FKs to customer, product, store, and date — answering "Customer X bought Product Y at Store Z on Date D for $W".
+
+#### C.2 Star schema
+
+```
+        ┌──────────────┐
+        │  dim_date    │
+        └──────┬───────┘
+               │
+┌────────┐    ┌─▼────────┐    ┌──────────┐
+│dim_cust│───▶│fact_sales│◀───│dim_product│
+└────────┘    └─┬────────┘    └──────────┘
+                │
+        ┌───────▼──────┐
+        │  dim_store   │
+        └──────────────┘
+```
+
+Fact in the center; dimensions surround it like a star. Each dimension is fully denormalized — the product dimension contains category_name, subcategory_name, brand_name as columns rather than further-normalized tables. Queries are a single join from fact to each needed dimension.
+
+#### C.3 Snowflake schema
+
+Same idea but dimensions are normalized: `dim_product` references `dim_category`, which references `dim_department`. Trades query simplicity for storage efficiency and easier dimension updates. Most modern warehouses (Snowflake, BigQuery) prefer star — storage is cheap, optimizer handles wide tables well, queries are simpler.
+
+#### C.4 Fact granularity
+
+The single most important decision: at what grain does each fact row live?
+
+- **Transaction grain:** one row per event (one row per line item in an order). Most flexible.
+- **Periodic snapshot:** one row per entity per period (account balance per day per account).
+- **Accumulating snapshot:** one row per process instance, with timestamps for each milestone (one row per order, with `placed_at`, `paid_at`, `shipped_at`, `delivered_at`).
+
+Always model at the *finest* grain you have. You can always aggregate up; you cannot disaggregate.
+
+### D. Slowly Changing Dimensions
+
+Dimension attributes change over time — a customer moves cities, a product gets a new category. How do you preserve history without rewriting every fact row? Six standard SCD types:
+
+| Type | Behavior | Trade-off |
+|------|----------|-----------|
+| **Type 0** | Never change (e.g. birth date) | Trivial; only for truly immutable attributes |
+| **Type 1** | Overwrite, no history | Simplest; loses past — facts now appear under the new value |
+| **Type 2** | New row per change with `valid_from` / `valid_to` / `is_current` | Full history; fact rows reference the version active at fact time |
+| **Type 3** | Add `previous_value` column | Limited history (only one prior value); simple |
+| **Type 4** | Move history to a separate table | Keeps current dimension small; queries that need history join the history table |
+| **Type 6** | Hybrid Type 1 + 2 + 3 | Most flexible, most complex |
+
+Type 2 is the workhorse. The fact table's FK to the dimension references the *surrogate key* of the version active at the fact's event time, so a 2022 sale forever shows the 2022 customer city even if the customer moved in 2023.
+
+#### D.1 The surrogate key discipline
+
+Dimension tables use *surrogate keys* — meaningless integers — as primary keys, not the natural business key (customer_id from the source system). Why?
+
+1. **SCD Type 2 needs it.** If natural key were PK, you could not have multiple rows for the same customer. Surrogate key allows one customer to have many rows (one per historical version).
+2. **Decouples warehouse from source.** Source system's customer_id might change format; surrogate key is stable forever.
+3. **Smaller fact tables.** Surrogate key is 4-byte integer; natural key might be a 36-byte UUID string.
+
+### From Theory to the Practice Below
+
+Each section that follows operationalizes one piece of this framework:
+
+- §1 (Dimensional Modeling) operationalizes §C — facts, dimensions, star schema.
+- §2 (Star vs Snowflake) is §C.2 vs §C.3 in concrete schema.
+- §3 (Slowly Changing Dimensions) is §D in SQL — implementing Types 1, 2, 3.
+- §4 (Common Patterns) — date dimensions, surrogate keys, junk dimensions — applies §D.1 and §C in practice.
+- §5 (Data Vault) is an alternative to §C for highly auditable / regulatory environments.
+- §6 (Normalization Trade-offs) is §B — choosing 3NF vs star vs Data Vault per workload.
+
+---
+
 ## Overview
 
 Data modeling is the process of defining the structure, relationships, and constraints of data. In data warehouses and analytics systems, dimensional modeling is widely used.

@@ -15,6 +15,167 @@ After completing this lesson, you will be able to:
 
 ---
 
+## Theory & Principles
+
+Data quality and governance are usually treated as compliance overhead, but the deeper truth is operational: trust in data is the rate-limiting factor for analytics value. A perfectly built pipeline producing untrusted data has zero value. Quality and governance are the engineering disciplines that produce trust.
+
+- **(A) The dimensions of data quality** — accuracy, completeness, consistency, timeliness, uniqueness, validity.
+- **(B) Expectations and the validation pipeline** — Great Expectations, dbt tests, and where to validate.
+- **(C) Lineage as the backbone of impact analysis** — column-level vs table-level lineage.
+- **(D) Access control: RBAC, ABAC, and the principle of least privilege** — who can see and modify what.
+- **(E) GDPR / CCPA: deletion, anonymization, and the right-to-be-forgotten** — what privacy regulation actually requires of data systems.
+
+### A. The Dimensions of Data Quality
+
+A widely-used taxonomy. Every quality issue maps to one or more of these dimensions; checks are designed against each.
+
+| Dimension | Question | Example check |
+|-----------|----------|---------------|
+| **Accuracy** | Does data reflect reality? | Sample-vs-source verification, anomaly detection |
+| **Completeness** | Are all expected rows/columns present? | row_count > expected, column not_null |
+| **Consistency** | Do related values agree? | sum(line_items) = order.total |
+| **Timeliness** | Is data fresh enough? | max(updated_at) within SLA window |
+| **Uniqueness** | Are there duplicates? | unique constraint on PK |
+| **Validity** | Does data conform to format / domain? | regex on email, value in accepted_values |
+
+Every dimension has a typical failure mode and a typical check. Production data quality is the discipline of running these checks continuously.
+
+### B. Expectations and the Validation Pipeline
+
+The pattern: declare expectations as code, run them against every batch, fail loudly when violated.
+
+#### B.1 Where to validate
+
+Validation happens at three natural points:
+
+1. **At ingestion** — does the raw data have the expected schema and ranges? This catches upstream contract violations early.
+2. **After each transformation** — does the silver/gold output meet downstream expectations? This catches your own bugs.
+3. **Continuously on production** — has the production table drifted from expected behavior? This catches operational issues (a dimension exploding from 1K to 10M rows means something is wrong).
+
+Each layer catches a different class of issue. Validation only at one layer leaves blind spots.
+
+#### B.2 Great Expectations: declarative expectations
+
+```python
+expect_column_values_to_be_unique("customer_id")
+expect_column_values_to_not_be_null("email")
+expect_column_values_to_match_regex("email", r"^[\w.+-]+@\w+\.\w+$")
+expect_column_values_to_be_between("amount", min_value=0, max_value=1_000_000)
+expect_table_row_count_to_be_between(min_value=1000, max_value=10_000_000)
+```
+
+Each expectation is a Python function. The runtime checks the data and produces a structured report — pass/fail counts, sample failing rows, statistics. The report is data; you can store it, alert on it, dashboard it.
+
+#### B.3 dbt tests vs Great Expectations
+
+For warehouse-resident data, dbt tests cover the same expectation patterns with less overhead — they compile to SQL and run inside the warehouse. Great Expectations shines for non-warehouse data (Pandas DataFrames in pipelines, Spark DataFrames, files in lakes) and for richer statistical expectations.
+
+The pattern many teams settle on: dbt tests for warehouse models, Great Expectations for ingestion validation and pre-warehouse pipelines.
+
+#### B.4 The data contract pattern
+
+A formal step beyond ad-hoc tests. The producer team declares a *contract* (schema + expectations) for the data they emit. The consumer team can rely on it. CI fails if the producer breaks the contract; the producer cannot ship a contract-violating change.
+
+Contracts move quality from "consumers complain after breakage" to "breakage is impossible." See Lesson 21 for the modern data contracts pattern.
+
+### C. Lineage as the Backbone of Impact Analysis
+
+When a bug is found in a column upstream, which downstream dashboards and ML models are affected? Without lineage, the answer is "manual archaeology — grep, ask people, hope you found everything." With lineage, the answer is automatic.
+
+#### C.1 Table-level vs column-level lineage
+
+- **Table lineage:** "Table B is built from Table A." Useful for "if A is broken, what do I need to rebuild?" Captured by dbt automatically (via `ref()` graph).
+- **Column lineage:** "Column B.country is derived from A.country_code via lookup table C." Useful for "if A.country_code's format changes, which downstream columns break?" Harder to capture; requires SQL parsing.
+
+Modern catalog tools (DataHub, Atlas, Amundsen, Open Lineage) extract column-level lineage from SQL/Spark plans automatically.
+
+#### C.2 The blast radius use case
+
+A common production scenario: "the upstream API changed `amount` from cents to dollars; everything downstream is now wrong by 100x." With lineage, you query "what touches `amount`?" and get a list of every model, dashboard, ML feature affected. Without lineage, the bug propagates silently for weeks.
+
+This is why Dagster's software-defined assets (Lesson 20) put lineage at the architectural center.
+
+### D. Access Control: RBAC, ABAC, Least Privilege
+
+Who can read and modify what.
+
+#### D.1 RBAC (Role-Based Access Control)
+
+Users are assigned to roles; roles have permissions on resources.
+
+```
+role: analyst
+  permissions:
+    - SELECT on schema marts.*
+    - SELECT on schema staging.*
+    
+role: data_engineer
+  permissions:
+    - ALL on schema marts.*
+    - ALL on schema staging.*
+    - SELECT on schema raw.*
+```
+
+Simple, well-understood, supported by every database. Limitation: roles must be enumerated; complex policies blow up the role count.
+
+#### D.2 ABAC (Attribute-Based Access Control)
+
+Permissions evaluated as policies over user attributes, resource attributes, and context:
+
+```
+allow if user.department == resource.department
+       and user.clearance >= resource.classification
+       and time.now() in business_hours
+```
+
+More expressive — handles "users can see their own department's data" without one role per department. Standard in modern policy engines (Open Policy Agent, Ranger). Harder to audit than RBAC because the effective permissions depend on data values.
+
+#### D.3 Least privilege
+
+Always grant the minimum permission needed. Anti-patterns: giving every analyst write access "for convenience"; giving service accounts SELECT * on everything; giving production credentials to dev environments. Each shortcut is a future incident.
+
+Modern warehouses (Snowflake, BigQuery) support row-level security and column-level masking — apply once at the table, all queries respect it. This is more robust than relying on every analyst to write the right WHERE clause.
+
+### E. GDPR / CCPA and the Right-to-Be-Forgotten
+
+The single most operationally disruptive part of privacy regulation: when a user requests deletion, you must actually delete their data — including from backups, logs, derived tables, ML features.
+
+#### E.1 The deletion challenge
+
+A user's data may live in:
+- Source databases (OLTP).
+- Bronze lake tier (raw events).
+- Silver/gold warehouse tables.
+- ML feature store (online + offline).
+- Logs (sometimes containing user IDs).
+- Backups.
+
+Each must be deleted (or the user's data anonymized) within the regulatory window (typically 30 days).
+
+#### E.2 Two strategies
+
+- **Hard delete:** physically remove rows. Required by some regulators. Painful in append-only systems (lake bronze) and with backups.
+- **Anonymization / pseudonymization:** replace the user's PII with a salted hash; data remains for analytics but can no longer be traced to the individual.
+
+The pattern many lakehouses adopt: anonymize old PII proactively (hash user_id after 90 days; keep the salt mapping in a separate, deletable table). When a user requests deletion, drop their salt entry — anonymization becomes irreversible.
+
+#### E.3 Sensitive data detection and classification
+
+You cannot protect what you do not know about. Tools like Spark's data classification, Snowflake's auto-classification, and AWS Macie scan tables to flag PII columns automatically. Classification feeds into RBAC: PII columns get stricter access policies than aggregate metrics.
+
+### From Theory to the Practice Below
+
+Each section that follows operationalizes one piece of this framework:
+
+- §1 (Data Quality Concepts) is §A — the dimensions and check patterns.
+- §2 (Great Expectations) is §B.2 — declarative expectations in Python.
+- §3 (dbt Tests) is §B.3 — SQL-based expectations inside the warehouse.
+- §4 (Data Governance) is §C and §D — lineage, catalogs, access control.
+- §5 (GDPR Compliance) is §E — deletion, anonymization, classification.
+- §6 (Production Patterns) is the integration: continuous validation + lineage-aware alerting + access policies enforced as code.
+
+---
+
 ## Overview
 
 Data quality ensures the accuracy, completeness, and consistency of data, while data governance is a framework for systematically managing data assets. Both are essential for building trustworthy data pipelines.

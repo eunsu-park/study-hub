@@ -15,6 +15,175 @@
 
 ---
 
+## 이론과 원리
+
+Spark Structured Streaming의 중심 개념적 움직임: **스트림은 계속 성장하는 unbounded 테이블입니다**. 정적 테이블에 대해 계산하는 같은 DataFrame 연산 — `groupBy`, `agg`, `join` — 이 스트리밍 테이블에 적용되며, 이제는 *지속적으로 업데이트되는 결과* 를 생산합니다. 이 한 프로그래밍 모델 아래 배치와 스트리밍의 통합이 그 명성의 주장이며; 그 아래의 트레이드오프를 이해하는 것이 옳은 프로덕션 시스템과 깨진 시스템을 분리하는 것입니다.
+
+- **(A) Unbounded 테이블 모델** — 입력이 "지금까지 본 모든 이벤트, 매 micro-batch마다 성장"일 때 무엇이 바뀌는가
+- **(B) Micro-batch vs continuous 처리** — Spark의 두 실행 모드, 지연 vs 처리량 트레이드오프
+- **(C) 체크포인팅과 Chandy-Lamport 알고리즘** — 상태가 어떻게 실패에서 살아남는가; 재시작이 어떻게 정확히 재개하는가
+- **(D) 출력 모드: append, update, complete** — 매 배치에서 sink로 무엇이 emit되는가
+- **(E) 종단간 exactly-once** — Spark가 제공하는 것, sink가 추가해야 하는 것
+
+### A. Unbounded 테이블 모델
+
+```python
+streamingDF = (spark.readStream
+    .format("kafka").option("subscribe", "events").load())
+
+result = (streamingDF
+    .groupBy(window("event_time", "1 minute"), "user_id")
+    .count())
+
+(result.writeStream
+    .outputMode("update")
+    .format("delta")
+    .option("checkpointLocation", "/checkpoint/")
+    .start("/output_table/"))
+```
+
+이 코드는 배치 잡과 동일하게 보임. 시프트: `read` 대신 `readStream`, `write` 대신 `writeStream`, 추가로 `outputMode`와 `checkpointLocation`. 그 사이 모든 것은 일반 DataFrame.
+
+#### A.1 "테이블이 성장한다"가 실제로 의미하는 것
+
+Spark는 내부적으로 쿼리를 위한 *결과 테이블* 을 유지. 새 입력 행이 도착하면 Spark는 결과 테이블을 업데이트 — 아마 새 행 추가(SELECT), 집계 업데이트(groupBy), 또는 조인 상태 유지(join).
+
+sink로의 출력은 이 배치에서 결과 테이블에서 변경된 무엇이든. 다른 출력 모드(§D)는 다른 부분집합을 emit.
+
+이 추상화는 스트리밍 쿼리를 배치 쿼리와 같은 방식으로 추론할 수 있게 함 — "지금까지의 모든 데이터에 대해 이 쿼리를 실행하면 무엇을 생산할까?" — 그리고 Spark가 그 결과를 증분적으로 유지하는 것을 신뢰.
+
+### B. Micro-batch vs Continuous 처리
+
+Spark는 매우 다른 트레이드오프를 가진 두 실행 모드를 제공.
+
+#### B.1 Micro-batch (기본)
+
+"스트림"이 작은 배치의 시퀀스로 처리됨. 각 트리거 간격(기본: 가능한 한 빠르게, 종종 ~100ms-1s)마다:
+1. Spark가 마지막 배치 이후의 새 데이터 읽음(Kafka 오프셋, 파일 경로 등).
+2. DataFrame 연산을 일반 Spark 잡으로 실행.
+3. 출력 작성(전체 또는 증분, 출력 모드별).
+4. 새 "high-water" 위치를 체크포인트에 기록.
+
+지연: 100ms-1s. 처리량: 매우 높음. 같은 Catalyst 옵티마이저, 같은 DataFrame API, 체크포인팅을 통한 내결함성.
+
+이것이 기본이며 프로덕션 Structured Streaming의 99%가 사용하는 것입니다.
+
+#### B.2 Continuous 처리 (실험적)
+
+각 태스크가 지속적으로 실행, 각 이벤트가 도착할 때 처리. 지연: 밀리초 규모. 처리량: 노드당 더 낮음. 제한적 오퍼레이터 지원(최근까지 집계 없음).
+
+사용 시점: sub-second 지연이 요구되고 워크로드가 단순(필터, 프로젝션). 대부분 사용 사례에서 micro-batch 지연이 충분.
+
+#### B.3 트리거 구성
+
+- **`Trigger.ProcessingTime("10 seconds")`**: 10초마다 micro-batch 실행.
+- **`Trigger.Once()`**: 가용한 모든 데이터에 대해 한 배치를 실행한 후 멈춤. "스트림을 일회성 배치로" 패턴에 유용(예: 스케줄된 시간당 스트리밍 잡).
+- **`Trigger.AvailableNow()`**: Once()와 비슷하지만 필요하면 가용한 모든 것을 여러 배치로 처리. 현대 선호 선택.
+- **`Trigger.Continuous(...)`**: continuous 모드로 전환(드뭄).
+
+### C. 체크포인팅과 Chandy-Lamport
+
+스트리밍 쿼리는 일이나 월 동안 실행됨; 실패는 필연적. 복구는 시스템이 실패 전에 가지고 있던 정확한 상태를 복원해야 함. 메커니즘은 Chandy-Lamport 분산 스냅샷 알고리즘에 기반한 **체크포인팅(checkpointing)**.
+
+#### C.1 무엇이 체크포인트되는가
+
+각 micro-batch 후 Spark는 체크포인트 디렉토리에 작성:
+- 이 배치에서 소비된 **입력 오프셋**(Kafka 오프셋, 파일 목록 등).
+- 상태 저장소(state store) **스냅샷**(집계와 조인 같은 stateful 연산용).
+- 이 배치의 성공적 완료를 기록하는 **commit log** 항목.
+
+스트리밍 쿼리가 충돌하면 재시작 시 Spark는:
+1. 마지막 체크포인트 읽음.
+2. 스냅샷에서 상태 저장소 복원.
+3. 기록된 오프셋에서 입력 소비 재개.
+4. 입력에서 in-flight 배치 재처리.
+
+#### C.2 이 컨텍스트에서의 Chandy-Lamport
+
+Chandy-Lamport 분산 스냅샷 알고리즘은 소스에서 데이터 스트림에 **마커(marker)** 를 주입하는 것으로 작동. 각 오퍼레이터가 마커를 보면:
+1. 자신의 상태를 스냅샷.
+2. 마커를 다운스트림으로 전달.
+3. (다중 입력 오퍼레이터의 경우) 아직 마커를 보내지 않은 입력의 데이터를 버퍼링하여, 스냅샷이 입력 간 일관되도록.
+
+Spark Structured Streaming은 micro-batch가 자연스러운 barrier를 제공하므로 단순화된 버전을 사용: 각 배치가 *barrier 이고*, 상태 스냅샷이 배치 경계에서 발생.
+
+#### C.3 Spark 내 exactly-once 보장
+
+조합 — 입력 오프셋 기록 + 상태 스냅샷 + 원자적 commit log — 이 *스트리밍 쿼리 내* 에서 Spark에 exactly-once 의미론을 제공. 실패한 배치는 재생됨; 입력은 같음; 상태는 롤백됨; 결과는 같음. Spark 자체에 의해 도입된 중복 없음.
+
+### D. 출력 모드
+
+매 배치에서 sink로 무엇이 emit되는가?
+
+#### D.1 Append 모드
+
+마지막 배치 이후 추가된 **새 행** 만. 불변 행을 생산하는 쿼리에 사용: 필터, 프로젝션, append-only 조인, append-only 집계(워터마크가 윈도우를 닫은 후의 윈도우 집계).
+
+가장 효율적; sink가 항상 insert만 봄.
+
+#### D.2 Update 모드
+
+마지막 배치 이후 **변경된 행** 만. 진행 중인 집계에 사용: `groupBy("user").count()` — 매 배치가 새 이벤트를 가진 사용자의 카운트를 업데이트.
+
+Sink가 업데이트를 지원해야 함(예: 기본 키가 있는 데이터베이스, MERGE를 가진 Delta/Iceberg 테이블).
+
+#### D.3 Complete 모드
+
+매 배치에서 **전체 결과 테이블**. 메모리에 들어가는 작은 집계에 사용: 작은 국가 집합에 대한 `groupBy("country").count()`.
+
+큰 상태에 비효율적; 프로덕션에서 거의 사용되지 않음.
+
+#### D.4 윈도우 집계를 위한 Watermark + append
+
+`groupBy(window(...))`에 대해 append 모드를 작동하게 만드는 패턴: 워터마크(레슨 16 §B.3)가 "N분보다 오래된 늦은 이벤트 없음"을 선언. 워터마크가 윈도우의 끝 시간 + N을 지나면 윈도우가 닫히고 append 모드의 불변 행으로 emit.
+
+```python
+result = (streamingDF
+    .withWatermark("event_time", "10 minutes")
+    .groupBy(window("event_time", "1 minute"), "user_id")
+    .count())
+```
+
+10분 후 각 1분 윈도우가 finalize되고 sink에 append됨. 10분보다 더 늦은 이벤트는 드롭.
+
+### E. 종단간 Exactly-Once
+
+Spark의 exactly-once는 *내부적* — Spark 쿼리 내, 입력과 결과 테이블 사이. 종단간 exactly-once는 *sink* 도 트랜잭셔널이어야 함을 요구.
+
+#### E.1 Two-phase commit 패턴
+
+종단간 EOS를 위해 sink는 two-phase commit을 지원해야 함:
+1. **Phase 1 (prepare):** sink가 배치의 쓰기를 stage하지만 visibly 커밋하지 않음.
+2. **Phase 2 (commit):** Spark가 체크포인트를 성공적으로 작성한 후 sink에 커밋 지시.
+
+Spark가 phase 사이에 충돌하면 재시작 시 staged-but-not-committed 배치를 보고 커밋하거나(체크포인트가 성공이라고 말하면) abort(아니면).
+
+#### E.2 EOS를 native하게 지원하는 sink
+
+- **Kafka:** 트랜잭셔널 producer + 멱등 producer + read_committed consumer(레슨 10 §D.3). Spark가 트랜잭션 조정.
+- **Delta Lake / Iceberg:** 테이블 포맷의 트랜잭션 로그가 원자적 커밋 제공; Spark가 native하게 통합.
+- **파일 (Parquet to S3):** `_committed_<batch_id>` 마커를 통해 원자적, 그러나 eventual consistency 주의 사항과 함께.
+
+#### E.3 그렇지 않은 sink
+
+- **일반 JDBC:** 일반적으로 배치당 멱등 키를 가진 two-phase commit 패턴을 수동으로 구현하지 않으면 at-least-once 제공.
+- **HTTP / REST API:** at-least-once가 얻을 수 있는 최선; 멱등 엔드포인트에 의존.
+
+실용적 진실: 종단간 EOS는 Kafka↔Kafka, Kafka↔Delta, 그리고 몇몇 native 경로에 대해 달성 가능. 다른 모든 것에 대해 at-least-once + 멱등 sink 쓰기(레슨 1 §A.2 멱등성)에 맞춰 설계.
+
+### From Theory to the Code Below
+
+이어지는 각 절은 위 프레임워크의 한 조각을 운영합니다:
+
+- §1 (Structured Streaming 개념)은 §A — unbounded 테이블 모델.
+- §2 (소스와 싱크)는 I/O 표면(Kafka, 파일, 소켓) 더하기 §E.2.
+- §3 (윈도우 집계와 워터마크)는 §D.4 — 워터마크가 있는 append 모드 패턴.
+- §4 (Stateful 처리)는 §C.1 + §D.2 — 상태 저장소와 update 모드.
+- §5 (체크포인팅과 내결함성)는 §C — 무엇이 체크포인트되고 어떻게 복구가 작동하는가.
+- §6 (Kafka 통합과 프로덕션 패턴)은 §E — 구체적 코드의 종단간 EOS.
+
+---
+
 ## 개요
 
 Spark Structured Streaming은 DataFrame API를 확장하여 무한한 데이터 스트림(unbounded data stream)을 처리합니다. 스트림을 지속적으로 증가하는 테이블로 간주하여, 스트리밍 데이터에 배치(batch)와 유사한 쿼리를 수행할 수 있습니다. 이 레슨에서는 프로그래밍 모델, 소스/싱크(source/sink), 윈도우 집계(windowed aggregation), 상태 기반 처리(stateful processing), 그리고 Kafka 통합을 다룹니다.

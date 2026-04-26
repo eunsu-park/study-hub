@@ -15,6 +15,175 @@ After completing this lesson, you will be able to:
 
 ---
 
+## Theory & Principles
+
+Spark Structured Streaming's central conceptual move: **a stream is an unbounded table that keeps growing**. The same DataFrame operations that compute on a static table — `groupBy`, `agg`, `join` — apply to the streaming table, except now they produce *continuously updated results*. This unification of batch and streaming under one programming model is its claim to fame; understanding the trade-offs underneath is what separates correct production systems from broken ones.
+
+- **(A) The unbounded table model** — what changes when the input is "all events seen so far, growing every micro-batch."
+- **(B) Micro-batch vs continuous processing** — Spark's two execution modes, latency vs throughput trade-off.
+- **(C) Checkpointing and the Chandy-Lamport algorithm** — how state survives failure; how restart resumes correctly.
+- **(D) Output modes: append, update, complete** — what gets emitted to the sink each batch.
+- **(E) End-to-end exactly-once** — what Spark provides, what the sink must add.
+
+### A. The Unbounded Table Model
+
+```python
+streamingDF = (spark.readStream
+    .format("kafka").option("subscribe", "events").load())
+
+result = (streamingDF
+    .groupBy(window("event_time", "1 minute"), "user_id")
+    .count())
+
+(result.writeStream
+    .outputMode("update")
+    .format("delta")
+    .option("checkpointLocation", "/checkpoint/")
+    .start("/output_table/"))
+```
+
+This code looks identical to a batch job. The shift: `readStream` instead of `read`, `writeStream` instead of `write`, plus `outputMode` and `checkpointLocation`. Everything between is normal DataFrame.
+
+#### A.1 What "the table grows" actually means
+
+Spark internally maintains a *result table* for the query. As new input rows arrive, Spark updates the result table — perhaps adding new rows (a SELECT), updating aggregates (a groupBy), or maintaining join state (a join).
+
+The output to the sink is whatever changed in the result table this batch. Different output modes (§D) emit different subsets.
+
+This abstraction lets you reason about streaming queries the same way as batch queries — "what would this query produce if I ran it on all data so far?" — and trust Spark to incrementally maintain that result.
+
+### B. Micro-batch vs Continuous Processing
+
+Spark provides two execution modes with very different trade-offs.
+
+#### B.1 Micro-batch (default)
+
+The "stream" is processed as a sequence of small batches. Each trigger interval (default: as fast as possible, often ~100ms-1s):
+1. Spark reads new data since the last batch (Kafka offsets, file paths, etc.).
+2. Runs the DataFrame operations as a normal Spark job.
+3. Writes the output (full or incremental, per output mode).
+4. Records the new "high-water" position to checkpoint.
+
+Latency: 100ms-1s. Throughput: very high. Same Catalyst optimizer, same DataFrame API, fault tolerance via checkpointing.
+
+This is the default and what 99% of production Structured Streaming uses.
+
+#### B.2 Continuous processing (experimental)
+
+Each task runs continuously, processing each event as it arrives. Latency: millisecond-scale. Throughput: lower per node. Limited operator support (no aggregations until recently).
+
+Use when: sub-second latency is required and the workload is simple (filters, projections). For most use cases, micro-batch latency is fine.
+
+#### B.3 Trigger configurations
+
+- **`Trigger.ProcessingTime("10 seconds")`**: run a micro-batch every 10 seconds.
+- **`Trigger.Once()`**: run one batch over all available data, then stop. Useful for "stream as one-shot batch" patterns (e.g., scheduled hourly streaming job).
+- **`Trigger.AvailableNow()`**: like Once() but processes all available in multiple batches if needed. The modern preferred choice.
+- **`Trigger.Continuous(...)`**: switch to continuous mode (rare).
+
+### C. Checkpointing and Chandy-Lamport
+
+Streaming queries run for days or months; failure is inevitable. Recovery must restore exactly the state the system had before failure. The mechanism is **checkpointing**, based on the Chandy-Lamport distributed snapshot algorithm.
+
+#### C.1 What gets checkpointed
+
+After each micro-batch, Spark writes to the checkpoint directory:
+- The **input offsets** consumed in this batch (Kafka offsets, file lists, etc.).
+- The **state store** snapshots (for stateful operations like aggregations and joins).
+- The **commit log** entry recording successful completion of this batch.
+
+If the streaming query crashes, on restart Spark:
+1. Reads the last checkpoint.
+2. Restores state stores from the snapshots.
+3. Resumes consuming input from the recorded offsets.
+4. Reprocesses any in-flight batch from the input.
+
+#### C.2 Chandy-Lamport in this context
+
+The Chandy-Lamport distributed snapshot algorithm works by injecting **markers** into the data stream at the source. Each operator, on seeing a marker:
+1. Snapshots its state.
+2. Forwards the marker downstream.
+3. (For multi-input operators) buffers data from inputs that haven't yet sent a marker, so the snapshot is consistent across inputs.
+
+Spark Structured Streaming uses a simplified version because micro-batches give a natural barrier: each batch *is* a barrier, and state snapshotting happens at batch boundaries.
+
+#### C.3 The exactly-once-within-Spark guarantee
+
+The combination — input offset recording + state snapshotting + atomic commit log — gives Spark exactly-once semantics *within the streaming query*. A failed batch is replayed; the inputs are the same; the state was rolled back; the result is the same. No duplicates introduced by Spark itself.
+
+### D. Output Modes
+
+What gets emitted to the sink each batch?
+
+#### D.1 Append mode
+
+Only **new rows** added since the last batch. Used for queries that produce immutable rows: filter, project, append-only joins, append-only aggregations (windowed aggregations after a watermark closes the window).
+
+Most efficient; sink only ever sees inserts.
+
+#### D.2 Update mode
+
+Only **changed rows** since the last batch. Used for ongoing aggregations: `groupBy("user").count()` — every batch updates the count for users who had new events.
+
+Sink must support updates (e.g., a database with primary key, a Delta/Iceberg table with MERGE).
+
+#### D.3 Complete mode
+
+The **entire result table** every batch. Used for small aggregations that fit in memory: `groupBy("country").count()` over a small set of countries.
+
+Inefficient for large state; rarely used in production.
+
+#### D.4 Watermark + append for windowed aggregations
+
+The pattern that makes append mode work for `groupBy(window(...))`: a watermark (Lesson 16 §B.3) declares "no late events older than N minutes." When the watermark passes a window's end time + N, the window is closed and emitted as immutable rows in append mode.
+
+```python
+result = (streamingDF
+    .withWatermark("event_time", "10 minutes")
+    .groupBy(window("event_time", "1 minute"), "user_id")
+    .count())
+```
+
+After 10 minutes, each 1-minute window is finalized and appended to the sink. Late events more than 10 minutes late are dropped.
+
+### E. End-to-End Exactly-Once
+
+Spark's exactly-once is *internal* — within the Spark query, between input and result table. End-to-end exactly-once requires the *sink* to be transactional too.
+
+#### E.1 The two-phase commit pattern
+
+For end-to-end EOS, the sink must support a two-phase commit:
+1. **Phase 1 (prepare):** the sink stages the batch's writes but doesn't commit them visibly.
+2. **Phase 2 (commit):** Spark, after writing checkpoint successfully, instructs the sink to commit.
+
+If Spark crashes between phases, on restart it sees the staged-but-not-committed batch and either commits it (if checkpoint says success) or aborts (if not).
+
+#### E.2 Sinks that support EOS natively
+
+- **Kafka:** transactional producer + idempotent producer + read_committed consumer (Lesson 10 §D.3). Spark coordinates the transaction.
+- **Delta Lake / Iceberg:** the table format's transaction log provides atomic commit; Spark integrates natively.
+- **Files (Parquet to S3):** atomic via `_committed_<batch_id>` markers, but with caveats around eventual consistency.
+
+#### E.3 Sinks that don't
+
+- **Generic JDBC:** typically gives at-least-once unless you implement the two-phase commit pattern manually with a per-batch idempotency key.
+- **HTTP / REST APIs:** at-least-once is the best you get; rely on idempotent endpoints.
+
+The pragmatic truth: end-to-end EOS is achievable for Kafka↔Kafka, Kafka↔Delta, and a few other native paths. For everything else, design for at-least-once + idempotent sink writes (Lesson 1 §A.2 idempotency).
+
+### From Theory to the Code Below
+
+Each section that follows operationalizes one piece of this framework:
+
+- §1 (Structured Streaming Concepts) is §A — the unbounded table model.
+- §2 (Sources and Sinks) is the I/O surface (Kafka, files, sockets) plus §E.2.
+- §3 (Windowed Aggregations and Watermarks) is §D.4 — the append-mode pattern with watermarks.
+- §4 (Stateful Processing) is §C.1 + §D.2 — state stores and the update mode.
+- §5 (Checkpointing and Fault Tolerance) is §C — what gets checkpointed and how recovery works.
+- §6 (Kafka Integration and Production Patterns) is §E — end-to-end EOS in concrete code.
+
+---
+
 ## Overview
 
 Spark Structured Streaming extends the DataFrame API to handle unbounded data streams. It treats a stream as a continuously growing table, enabling batch-like queries on streaming data. This lesson covers the programming model, sources/sinks, windowed aggregations, stateful processing, and Kafka integration.

@@ -15,6 +15,204 @@
 
 ---
 
+## 이론과 원리
+
+TaskFlow API는 단지 "오퍼레이터 대신 데코레이터"가 아닙니다 — 이는 DAG가 표현되는 방식의 근본적 시프트입니다. 전통적 오퍼레이터 패턴은 태스크를 데이터 흐름이 암묵적인(XCom 문자열을 통한) 불투명한 작업 단위로 취급; TaskFlow는 태스크를 입력과 출력이 타입 검사기에 보이는 함수로 취급. 이 시프트는 역사적으로 그것에 저항했던 시스템에 Python 언어 ergonomic을 가져옵니다.
+
+- **(A) 함수 모델: 함수로서의 태스크** — 태스크가 `Operator(...)` 대신 `def f(x: int) -> int`일 때 무엇이 바뀌는가
+- **(B) 암묵적 XCom과 의존성 그래프** — `result = task_a(); task_b(result)`이 어떻게 데이터 흐름과 의존성 모두를 구성하는가
+- **(C) 타입 안전성과 테스트 표면** — 단위 테스트에서 평범한 Python으로 태스크 실행; mypy 지원
+- **(D) TaskFlow와 전통적 오퍼레이터 혼합** — `@task`이 잘못된 때와 오퍼레이터 생태계가 필요한 때
+
+### A. 함수 모델: 함수로서의 태스크
+
+전통적 Airflow 패턴:
+
+```python
+def my_callable(**context):
+    value = context['ti'].xcom_pull(task_ids='upstream_task')
+    return value * 2
+
+PythonOperator(
+    task_id='my_task',
+    python_callable=my_callable,
+    provide_context=True,
+)
+```
+
+TaskFlow 동등물:
+
+```python
+@task
+def my_task(value: int) -> int:
+    return value * 2
+```
+
+무엇이 바뀌었는가:
+
+- **`**context` 배관 없음.** 데코레이터가 XCom pull/push를 투명하게 처리.
+- **실제 Python 시그니처.** `value: int`이 실제 매개변수; mypy로 타입 검사됨.
+- **반환 값이 XCom임.** 함수가 반환하는 무엇이든 자동으로 push됨.
+
+이것이 "함수 모델"입니다: 태스크는 입력의 함수이고, 출력을 반환. 프레임워크가 오케스트레이션 배관을 숨김.
+
+#### A.1 데코레이터 변환
+
+`@task`이 실제로 하는 것: DAG 파싱 시점에 Python 함수를 합성된 `PythonOperator` 같은 객체로 래핑. 데코레이트된 함수 호출(`my_task(upstream_value)`)은 함수를 실행하지 않음 — DAG 그래프에 *태스크 인스턴스 참조* 를 생성하고 `upstream_value`의 생산 태스크에 대한 의존성을 기록.
+
+멘탈 모델: 그 아래는 여전히 XCom이 있는 오퍼레이터이지만, 개발자 경험은 "Python을 작성; DAG가 떨어져 나옴"입니다.
+
+### B. 암묵적 XCom과 의존성 그래프 구성
+
+가장 깊은 TaskFlow 트릭: **한 태스크의 출력을 다른 태스크의 입력으로 사용하는 행위가 동시에 데이터 흐름과 의존성을 생성합니다.**
+
+```python
+with DAG("pipeline", ...) as dag:
+    raw = extract()
+    cleaned = transform(raw)
+    load(cleaned)
+```
+
+세 가지 일이 발생:
+1. `extract` 태스크 등록.
+2. `transform` 태스크 등록, `extract`에 대한 의존성 기록(`raw`이 `extract`의 출력이므로).
+3. `load` 태스크 등록, `transform`에 의존.
+
+`extract >> transform >> load`을 절대 작성하지 않았습니다. 데이터 흐름이 그것을 표현했습니다.
+
+이는 *거대한* ergonomic 개선입니다. 옛 스타일에서:
+
+```python
+extract = PythonOperator(task_id='extract', python_callable=extract_fn)
+transform = PythonOperator(task_id='transform', python_callable=transform_fn,
+                           op_args=["{{ ti.xcom_pull(task_ids='extract') }}"])
+load = PythonOperator(task_id='load', python_callable=load_fn,
+                      op_args=["{{ ti.xcom_pull(task_ids='transform') }}"])
+extract >> transform >> load
+```
+
+데이터 흐름(XCom 문자열)과 의존성(`>>`)은 별도로 명시되고 일관되게 유지되어야 했습니다. TaskFlow로 데이터 흐름을 한 번 표현하면 의존성이 따라옵니다.
+
+#### B.1 다중 출력과 구조화된 데이터
+
+```python
+@task
+def split() -> dict:
+    return {"users": [...], "orders": [...]}
+
+@task
+def process_users(users): ...
+
+@task
+def process_orders(orders): ...
+
+result = split()
+process_users(result["users"])
+process_orders(result["orders"])
+```
+
+`result["users"]`의 dict-key 접근은 TaskFlow가 접근된 것을 기록하고 런타임에 적절한 XCom pull로 변환하는 proxy 객체를 반환하므로 작동합니다.
+
+다중 출력 태스크의 경우, `@task(multiple_outputs=True)`는 dict 반환의 각 키를 별도 XCom으로 push — 다운스트림 태스크가 다른 키를 소비할 때 유용.
+
+### C. 타입 안전성과 테스트 표면
+
+#### C.1 mypy가 작동
+
+태스크가 타입 주석된 시그니처를 가진 함수이므로 mypy가 잡을 수 있음:
+
+```python
+@task
+def upstream() -> int: return 42
+
+@task
+def downstream(s: str): print(s)
+
+downstream(upstream())  # mypy: error - int is not str
+```
+
+옛 오퍼레이터 패턴에서 XCom 값은 `Any`로 타입됨; 이런 버그는 런타임에만, 종종 프로덕션에서 표면화.
+
+#### C.2 Airflow 없이 단위 테스트
+
+```python
+def test_transform():
+    result = transform.function({"raw": 100})  # 기저 함수를 직접 호출
+    assert result["clean"] == 100
+```
+
+데코레이트된 함수는 `.function`을 노출 — 원래의 데코레이트되지 않은 callable. Airflow 런타임 없이, 스케줄러 없이, 메타데이터 DB 없이 단위 테스트에서 호출할 수 있음. 이는 옛 스타일에서 거의 불가능했음.
+
+#### C.3 TaskFlow가 표현할 수 있는 것의 경계
+
+TaskFlow가 처리:
+- 순수 Python 태스크.
+- 다른 태스크가 소비 가능한 데이터를 반환하는 태스크.
+- Airflow 컨텍스트가 필요한 태스크(`@task`이 시그니처가 받아들이면 `**kwargs` 주입).
+
+TaskFlow가 직접 처리하지 않음:
+- Bash 명령 호출(`BashOperator`을 직접 사용, 가능하면 `@task` 래퍼 안에).
+- 클러스터에 Spark 잡 제출(`SparkSubmitOperator` 사용).
+- 외부 이벤트 폴링(`Sensor` / `@task.sensor` 사용).
+
+실무에서 실제 DAG는 Python 작업에 `@task`을 시스템 통합에 전통적 오퍼레이터를 혼합합니다.
+
+### D. TaskFlow와 전통적 오퍼레이터 혼합
+
+실용적 패턴: Python glue에 TaskFlow, 무거운 작업에 오퍼레이터.
+
+```python
+with DAG(...) as dag:
+    @task
+    def prepare_config() -> dict:
+        return {"input": "/data/today.parquet", "output": "/results/today/"}
+
+    config = prepare_config()
+
+    spark_job = SparkSubmitOperator(
+        task_id='spark_transform',
+        application='/jobs/transform.py',
+        application_args=[
+            "--input", "{{ ti.xcom_pull(task_ids='prepare_config')['input'] }}",
+            "--output", "{{ ti.xcom_pull(task_ids='prepare_config')['output'] }}",
+        ],
+    )
+
+    @task
+    def post_process(spark_output_dir: str): ...
+
+    config >> spark_job >> post_process(config["output"])
+```
+
+Python 태스크(`prepare_config`, `post_process`)는 TaskFlow; Spark 잡은 전통적 오퍼레이터. 자동 추론이 적용될 수 없는 곳에서 명시적 의존성 화살표로 그것들을 연결합니다.
+
+#### D.1 `@task.virtualenv`와 `@task.docker` 확장
+
+비표준 Python 의존성을 가진 태스크의 경우, 데코레이터가 격리된 virtualenv나 Docker 컨테이너에서 함수 실행:
+
+```python
+@task.virtualenv(requirements=["pandas==2.1", "scikit-learn==1.4"])
+def ml_task(): ...
+
+@task.docker(image="my-ml:1.0")
+def heavy_ml_task(): ...
+```
+
+이것이 TaskFlow가 `KubernetesExecutor` 운영 오버헤드 없이 태스크별 의존성을 처리하는 방법 — 혼합 환경에 유용.
+
+### From Theory to the Code Below
+
+이어지는 각 절은 위 프레임워크의 한 조각을 운영합니다:
+
+- §1 (TaskFlow 개요)는 §A — 함수 모델.
+- §2 (@task로 태스크 정의)는 §A.1 + §B — 데코레이터 메커니즘, XCom 흐름.
+- §3 (데이터 전달)은 §B — 암묵적 XCom과 구조화된 데이터 흐름.
+- §4 (전통적 오퍼레이터와 혼합)은 §D — 스타일 연결.
+- §5 (고급 데코레이터)는 `@task.virtualenv` / `@task.docker` 생태계.
+- §6 (옛 스타일에서 마이그레이션)은 레거시 DAG의 실용적 리팩토링 경로.
+
+---
+
 ## 개요
 
 Airflow 2.0에서 도입된 TaskFlow API는 데코레이터(decorator)를 사용하여 DAG를 파이썬 네이티브 방식으로 정의할 수 있는 방법을 제공합니다. 기존의 오퍼레이터(Operator) 기반 패턴을 `@task` 데코레이터로 대체하여 자동 XCom 전달, 더 깔끔한 코드, 그리고 향상된 타입 안전성(type safety)을 지원합니다. 이것은 Airflow DAG를 작성하는 현대적인 표준입니다.

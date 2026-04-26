@@ -15,6 +15,180 @@
 
 ---
 
+## 이론과 원리
+
+CDC의 더 깊은 주장은 "near-real-time"이 아니라 — **정확성** 입니다. "updated_at > last_checkpoint인 행"을 폴링하는 것은 삭제를 놓치고, 빠른 sub-second 업데이트를 놓치고, writer와 race합니다. 데이터베이스의 자체 write-ahead log를 읽으면 *모든* mutation이 commit 순서로 캡처됩니다. CDC는 OLTP 데이터베이스의 상태를 다른 곳으로 미러링하는 유일하게 옳은 방법입니다.
+
+- **(A) 폴링(Polling) vs 로그 기반 CDC** — 각 접근이 무엇을 캡처하고 무엇을 놓치는가
+- **(B) 진실의 원천으로서의 write-ahead log (WAL)** — PostgreSQL의 logical replication, MySQL의 binlog, MongoDB의 oplog
+- **(C) Debezium의 snapshot + stream 모델** — 초기 상태 부트스트래핑, 그 다음 따라잡기
+- **(D) 이벤트 형식과 스키마 진화** — Kafka Connect, Debezium 이벤트 envelope, schema registry
+- **(E) Transactional outbox 패턴** — 분산 트랜잭션 없이 애플리케이션 수준 이벤트 소싱을 위해 CDC 사용
+
+### A. 폴링 vs 로그 기반 CDC
+
+#### A.1 폴링: 순진한 접근
+
+```sql
+SELECT * FROM orders WHERE updated_at > '{last_checkpoint}';
+-- last_checkpoint를 결과 집합의 max(updated_at)로 업데이트
+```
+
+괜찮아 보임. 무엇을 놓치는가:
+
+- **삭제.** 삭제된 행은 더 이상 존재하지 않음; 쿼리할 `updated_at` 없음. 폴링은 글자 그대로 삭제를 감지할 수 없음.
+- **In-flight 트랜잭션.** 한 트랜잭션 내에서 10:00:01.500과 다시 10:00:01.700에 업데이트된 행은 최신만 보여줌. 사이의 업데이트는 손실.
+- **Sub-second 변경.** 폴링 간격이 60초이면 그 윈도우 내 모든 변경이 "동시"로 나타남; 순서 손실.
+- **행 지연.** 1분 폴링 간격은 다운스트림이 평균 1분 늦게 변경을 보는 것을 의미.
+- **Race condition.** 쿼리가 읽는 순간 행이 업데이트되고 있다면? 격리 수준에 따라 옛 또는 새 값을 봄 — 그리고 어느 것인지 알 방법이 없음.
+
+대부분 분석 사용 사례에서 폴링은 "충분히 좋음." 정확성을 요구하는 모든 것에 — 보조 데이터베이스로 복제, 스트리밍 시스템 피딩, 감사 로그 — 폴링은 잘못됨.
+
+#### A.2 로그 기반 CDC: 옳은 접근
+
+모든 관계형 데이터베이스는 내부적으로 *write-ahead log* (WAL)를 작성: 모든 insert/update/delete가 데이터 파일이 건드려지기 *전에* 로그에 append. 이 로그가 데이터베이스를 충돌 안전하게 만드는 것(WAL 재생으로 복구).
+
+로그 기반 CDC:
+1. 데이터베이스에 *replication 클라이언트* 로 연결(read replica가 하는 것과 같은 방식).
+2. WAL 이벤트 스트리밍: 모든 insert, update, delete를 트랜잭션 commit 순서로.
+3. 구조화된 변경 이벤트로 번역.
+4. Kafka(또는 다른 sink)에 publish.
+
+이것이 캡처하는 것: **모든 mutation을, commit 순서로, 전체 before/after 상태와 함께**. 삭제 포함. Sub-second 업데이트 포함. 지연: 일반적으로 commit에서 이벤트까지 <1초.
+
+이것이 Debezium이 하는 것입니다. MySQL 복제, PostgreSQL logical replication, Oracle GoldenGate와 같은 근본적 접근.
+
+### B. Write-Ahead Log
+
+WAL 구조는 데이터베이스별로 다양:
+
+#### B.1 PostgreSQL: WAL + logical replication
+
+PostgreSQL은 물리적 WAL(페이지의 바이너리 델타)을 작성. CDC를 위해 **logical replication** 이 필요: 페이지 수준 바이너리 diff가 아닌 컬럼 값을 가진 행 수준 이벤트를 생산하는 WAL의 별도 디코딩된 스트림.
+
+설정:
+1. `wal_level = logical` 설정(재시작 필요).
+2. *replication slot* 생성 — "Debezium이 어디까지 읽었는지" 기억하는 서버 측 커서.
+3. *publication* 생성 — publish할 테이블 선언.
+4. Debezium이 연결, slot 읽음, 이벤트 디코딩.
+
+Replication slot은 Debezium 재시작 간 위치 유지. Debezium이 소비하는 한 PostgreSQL은 slot이 아직 읽지 않은 WAL 세그먼트를 유지. **결정적 운영 제약:** Debezium이 너무 오래 멈추면 PostgreSQL 측에 WAL이 누적되어 디스크를 채울 수 있음.
+
+#### B.2 MySQL: binlog
+
+MySQL은 row 형식(`binlog_format=ROW`)으로 모든 커밋된 트랜잭션의 *binary log*(binlog)를 작성. Debezium은 replication 프로토콜을 통해 binlog를 직접 읽음 — read replica가 하는 방식과 같음.
+
+설정: row 형식으로 binlog 활성화, REPLICATION CLIENT와 REPLICATION SLAVE 권한을 가진 사용자를 Debezium에 부여.
+
+#### B.3 MongoDB: oplog
+
+MongoDB의 *operations log*(oplog)는 모든 mutation의 capped 컬렉션. Replica set 멤버가 동기화 유지를 위해 읽음. Debezium은 마치 replica set 멤버인 것처럼 oplog를 읽음.
+
+#### B.4 공통 패턴
+
+셋 모두: 데이터베이스가 자체 내부 목적(복제, 복구)을 위해 모든 변경의 로그를 이미 생산하고 있음. CDC 도구가 그 로그에 tap. **primary에 추가 부하 없음**, 애플리케이션 변경 필요 없음, 전체 mutation 이력 캡처.
+
+### C. Debezium의 Snapshot + Stream 모델
+
+새 CDC consumer는 *과거 상태* 와 *진행 중인 변경* 모두를 필요로 함. Debezium은 세 단계로 처리:
+
+#### C.1 Snapshot 단계
+
+처음 시작 시:
+1. 일관된 시점 snapshot 획득(MySQL의 `FLUSH TABLES WITH READ LOCK`이나 PostgreSQL의 snapshot 트랜잭션).
+2. 모니터되는 모든 테이블의 모든 행 읽음.
+3. 각 행을 `READ` 이벤트로 Kafka에 emit.
+4. snapshot 시작 시 WAL/binlog 위치 기록.
+
+이는 다운스트림에 완전한 현재 상태를 제공.
+
+#### C.2 Stream 단계
+
+Snapshot 완료 후:
+1. 기록된 위치에서 WAL/binlog 읽기 재개.
+2. 각 후속 변경을 `INSERT`, `UPDATE`, 또는 `DELETE` 이벤트로 emit.
+
+핸드오프는 정확함 — snapshot 시작 위치와 stream 시작 위치 사이의 이벤트는 놓치지 않음.
+
+#### C.3 중복 문제
+
+미묘한 이슈: snapshot 동안 WAL은 *또한 새 트랜잭션과 함께 진행* 되고 있었음. 위치 P에서의 Debezium snapshot은 P 이전에 커밋된 행을 포함. 위치 P에서 forward의 stream은 그것들의 효과가 snapshot 동안 발생했다면 같은 트랜잭션을 포함할 것.
+
+현대 Debezium(2.0+)은 이를 정확하게 처리하는 *incremental snapshot* 사용: 스트림을 동시에 소비하면서 청크로 snapshot하고, 기본 키로 deduplicate.
+
+### D. 이벤트 형식과 스키마 진화
+
+#### D.1 Debezium envelope
+
+각 CDC 이벤트:
+
+```json
+{
+  "before": { "id": 1, "name": "Alice", "email": "alice@old.com" },
+  "after":  { "id": 1, "name": "Alice", "email": "alice@new.com" },
+  "source": { "ts_ms": 1700000000000, "table": "users", "db": "prod", "lsn": 12345 },
+  "op": "u",
+  "ts_ms": 1700000000050
+}
+```
+
+`op`: `c`(create/insert), `u`(update), `d`(delete), `r`(read/snapshot).
+`before`와 `after`: 행 상태. insert에 대해 `before`은 null; delete에 대해 `after`은 null.
+`source`: 출처 — 정확히 어느 데이터베이스, 테이블, 로그 위치.
+`ts_ms`: 이벤트가 작성된 시점.
+
+Consumer는 변경을 결정적으로 적용 가능: update의 경우 "PK X를 가진 행이 시간 `ts_ms`에 `before`에서 `after`로 갔음."
+
+#### D.2 Schema registry와 진화
+
+이벤트 스키마(특히 `before`/`after`)는 형식적 — Avro나 JSON Schema로 정의되고 Confluent Schema Registry에 등록됨. 소스 테이블의 스키마가 변경되면(컬럼 추가/제거) Debezium은 새 스키마로 이벤트를 생산하고, registry가 새 버전을 저장하고, 호환 deserializer를 사용하는 consumer가 변경을 처리.
+
+Schema Registry가 호환성을 강제: 기본적으로 backward-호환 변경(nullable 컬럼 추가, 절대 제거나 retype 안 함)만 허용. 이는 깨는 스키마 변경을 등록 시점에 잡음, consumer를 깨뜨리기 전에.
+
+#### D.3 Kafka Connect
+
+Debezium은 *Kafka Connect connector* 로 실행 — Connect는 운영 관심사(분산 런타임, 실패 시 재시작, 병렬성(파티션당 한 태스크), 메트릭 보고)를 처리하는 프레임워크. Debezium 자체는 소스별 로직(WAL과 대화, 이벤트 디코딩). Kafka Connect가 다른 모든 것을 제공.
+
+### E. Transactional Outbox 패턴
+
+악명 높은 문제를 해결하는 CDC의 특정 응용: 데이터베이스 트랜잭션과 **원자적으로** 어떻게 Kafka에 이벤트를 publish하는가?
+
+순진한 접근:
+
+```python
+def create_order(order):
+    db.insert("orders", order)              # 트랜잭션 1
+    kafka.publish("order_created", order)   # 트랜잭션 안 함
+```
+
+DB insert가 성공한 후 Kafka publish가 실패하면 이벤트 없는 주문이 있음. Kafka publish 후 DB commit이 실패하면 주문 없는 이벤트가 있음. DB와 Kafka 간 two-phase commit은 비실용적.
+
+Outbox 패턴:
+
+```python
+def create_order(order):
+    with db.transaction():
+        db.insert("orders", order)
+        db.insert("outbox", {"event": "order_created", "payload": order})
+```
+
+두 insert가 같은 DB 트랜잭션에 있음; 둘 다 일어나거나 둘 다 안 일어남. `outbox` 테이블이 Debezium에 의해 모니터링됨; outbox에서의 CDC 이벤트가 Kafka 이벤트가 됨. 원자성 보존.
+
+이는 관계형 데이터베이스로 받쳐진 이벤트 구동 아키텍처에서 가장 중요한 단일 패턴입니다.
+
+### From Theory to the Code Below
+
+이어지는 각 절은 위 프레임워크의 한 조각을 운영합니다:
+
+- §1 (CDC 개념)은 §A — 폴링 vs 로그 기반.
+- §2 (Debezium 아키텍처)는 §B + §D.3 — connector, Kafka Connect, 소스별 구현.
+- §3 (PostgreSQL/MySQL Connector)는 §B.1 + §B.2 — 구체적 설정.
+- §4 (이벤트 형식과 스키마 진화)는 §D — envelope, schema registry, 호환성.
+- §5 (Snapshot 전략)은 §C — 초기 snapshot 패턴과 incremental snapshot.
+- §6 (프로덕션 패턴)은 §E(outbox), 모니터링, 재시작, 지연을 모음.
+
+---
+
 ## 개요
 
 변경 데이터 캡처(CDC, Change Data Capture)는 데이터베이스에서 행 수준의 변경 사항을 캡처하여 이벤트로 스트리밍합니다. 주기적인 배치 추출 방식 대신, CDC는 시스템 간 거의 실시간(near-real-time) 데이터 동기화를 제공합니다. 이 레슨에서는 CDC 개념, Debezium 아키텍처, Kafka Connect 통합, 이벤트 형식, 스키마 진화(schema evolution), 그리고 프로덕션 패턴을 다룹니다.

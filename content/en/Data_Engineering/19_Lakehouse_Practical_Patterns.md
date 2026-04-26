@@ -15,6 +15,218 @@ After completing this lesson, you will be able to:
 
 ---
 
+## Theory & Principles
+
+The lakehouse table format (Lesson 11 §C) is the *capability*; the practical patterns are how you actually use it in production. The same table format that provides ACID and time travel can be a fast queryable warehouse or a slow, fragmented mess depending on whether you understand its operational contract — small files vs compaction, MERGE vs append, partition vs Z-order.
+
+- **(A) The medallion in production** — what bronze/silver/gold actually look like as Delta/Iceberg tables.
+- **(B) MERGE: the workhorse of incremental processing** — the SQL pattern that handles inserts, updates, deletes, and SCD Type 2.
+- **(C) The small files problem and compaction** — why every streaming write creates this problem and how to fix it.
+- **(D) Z-ordering and data skipping** — the optimizer hint that turns full scans into precise reads.
+- **(E) Time travel and operational use cases** — debugging, rollback, audit, point-in-time joins.
+
+### A. The Medallion in Production
+
+The conceptual medallion (Lesson 11 §D) becomes concrete table layouts.
+
+#### A.1 Bronze: append-only, schema-on-read
+
+```
+/lakehouse/bronze/orders/
+  _delta_log/
+  ingest_date=2024-03-15/
+    part-0001.parquet
+    part-0002.parquet
+  ingest_date=2024-03-16/
+    ...
+```
+
+Partitioned by ingest date. Append-only — Spark just writes new daily partitions. No transformation; raw events as they came. Schema may be loose (a JSON column for full payload + extracted top-level keys).
+
+Failure recovery: rebuild from source. Cost: low compute, high storage (we keep everything).
+
+#### A.2 Silver: typed, validated, deduplicated
+
+```
+/lakehouse/silver/orders/
+  _delta_log/
+  event_date=2024-03-15/
+    part-0001.parquet
+```
+
+Built from bronze via Spark/dbt. Schema enforced. Dupes removed. Joined with reference dimensions. Validated by Great Expectations / dbt tests.
+
+Each silver table has a clear lineage to bronze tables; rebuilds are deterministic.
+
+#### A.3 Gold: business-ready aggregates
+
+```
+/lakehouse/gold/daily_revenue_by_region/
+  _delta_log/
+  date=2024-03-15/
+    part-0001.parquet
+```
+
+Pre-aggregated wide tables consumed by BI / ML / dashboards. Often denormalized (region name, not just region_id). Sized for the query patterns that hit them.
+
+### B. MERGE: The Workhorse of Incremental Processing
+
+The single most important DML pattern in the lakehouse. MERGE handles the canonical "incremental upsert + delete" in one statement, atomically.
+
+#### B.1 Basic upsert
+
+```sql
+MERGE INTO silver.dim_customer AS target
+USING bronze.customer_changes AS source
+ON target.customer_id = source.customer_id
+WHEN MATCHED THEN UPDATE SET *
+WHEN NOT MATCHED THEN INSERT *;
+```
+
+The atomic guarantee: either the entire MERGE succeeds (all rows applied) or the table is unchanged. Concurrent readers see either the pre-MERGE snapshot or the post-MERGE snapshot, never half.
+
+This is what makes incremental processing safe to retry and idempotent (Lesson 1 §A.2).
+
+#### B.2 SCD Type 2 in MERGE
+
+The lakehouse-native way to maintain SCD Type 2 history (Lesson 2 §D):
+
+```sql
+MERGE INTO silver.dim_customer_history AS target
+USING (
+    SELECT
+        s.customer_id,
+        s.email,
+        s.city,
+        current_timestamp() AS valid_from
+    FROM bronze.customer_changes s
+    LEFT JOIN silver.dim_customer_history t
+        ON s.customer_id = t.customer_id AND t.is_current = true
+    WHERE t.customer_id IS NULL  -- new customer
+       OR t.email != s.email       -- changed
+       OR t.city != s.city
+) AS source
+ON target.customer_id = source.customer_id AND target.is_current = true
+WHEN MATCHED THEN UPDATE SET valid_to = source.valid_from, is_current = false
+WHEN NOT MATCHED THEN INSERT (customer_id, email, city, valid_from, valid_to, is_current)
+                      VALUES (source.customer_id, source.email, source.city,
+                              source.valid_from, NULL, true);
+```
+
+Two passes implicit in one MERGE: close out the old "current" row, insert the new "current" row. Atomic.
+
+#### B.3 GDPR-compliant delete
+
+```sql
+MERGE INTO silver.dim_customer AS target
+USING (SELECT customer_id FROM gdpr_deletion_requests) AS source
+ON target.customer_id = source.customer_id
+WHEN MATCHED THEN DELETE;
+```
+
+Real row deletion, recorded in the transaction log. The next `OPTIMIZE` / `VACUUM` (§C) physically removes the rows from underlying files.
+
+### C. The Small Files Problem and Compaction
+
+Every commit to a Delta/Iceberg table writes new Parquet files. Streaming writes (every micro-batch creates files) and frequent batch writes accumulate **many small files**.
+
+#### C.1 Why small files hurt
+
+A query against a table with 10,000 small files (1 MB each) instead of 100 large files (100 MB each):
+- 10,000 file open syscalls vs 100.
+- 10,000 metadata reads vs 100.
+- 10,000 worker tasks (Spark schedules one task per file) vs 100.
+- Per-file overhead dominates; throughput collapses.
+
+Read latency for the small-files version can be 10-100x worse.
+
+#### C.2 OPTIMIZE: compaction
+
+```sql
+OPTIMIZE silver.fact_orders;
+```
+
+Reads many small files, rewrites as fewer large files (typically 128 MB or 1 GB targets). The transaction log records "removed files A, B, C; added file D." Atomic — readers see either the old layout or the new, never partial.
+
+Run regularly: nightly batch jobs, after streaming jobs accumulate state, etc.
+
+#### C.3 VACUUM: deleting unreferenced files
+
+After compaction or DELETE, the old files still exist on disk — only the transaction log says they're no longer referenced. This enables time travel (§E).
+
+```sql
+VACUUM silver.fact_orders RETAIN 168 HOURS;  -- keep 7 days of history
+```
+
+Physically deletes files no longer referenced and older than the retention window. Reduces storage cost; loses time-travel beyond the window.
+
+Production discipline: tune retention based on debugging needs. 7 days is a common default.
+
+### D. Z-Ordering and Data Skipping
+
+For very large tables, partitioning alone isn't enough — within a single partition you may still scan billions of rows. Lakehouse formats add **data skipping** based on file-level statistics, optimized via **Z-ordering**.
+
+#### D.1 File-level stats
+
+Each Parquet file in a Delta/Iceberg table has min/max stats per column in its metadata. A query `WHERE customer_id = 12345` checks each file's [min, max] for `customer_id` and skips files where 12345 is outside the range. With well-distributed data, this can skip 99% of files.
+
+#### D.2 Z-ordering
+
+Stats only help if data is *clustered* — files have narrow min/max ranges. Random distribution gives wide ranges; every file might contain 12345. Z-ordering is a multi-dimensional clustering algorithm:
+
+```sql
+OPTIMIZE silver.fact_orders ZORDER BY (customer_id, product_id);
+```
+
+Reorganizes data so that files are clustered in the (customer_id, product_id) Z-curve. Queries filtering on either column see narrow file-level ranges and skip aggressively.
+
+This is one of the most impactful optimizations for high-cardinality filter columns. Apply at ETL time; queries get free speedup.
+
+#### D.3 Bloom filters (Iceberg)
+
+Iceberg tables can also maintain bloom filters per column per file — queries with high-selectivity equality filters (`WHERE id = X`) check the bloom filter before opening the file. Often 10x faster than min/max alone for point lookups.
+
+### E. Time Travel and Operational Use Cases
+
+Lakehouse tables retain version history (until VACUUMed). This enables operational patterns the warehouse never had.
+
+#### E.1 The version log
+
+Every commit gets a version number. Read the table at any version:
+
+```sql
+SELECT * FROM silver.dim_customer VERSION AS OF 1234;
+SELECT * FROM silver.dim_customer TIMESTAMP AS OF '2024-03-15 10:00:00';
+```
+
+#### E.2 Operational use cases
+
+- **Debugging:** "what did this table look like before yesterday's bad ETL run?" Read the previous version, compare.
+- **Rollback:** "the new ETL had a bug; revert to yesterday." `RESTORE TABLE silver.dim_customer TO VERSION AS OF 1233`.
+- **Audit:** "what was the customer's email on 2023-12-31?" — point-in-time query, no SCD needed if the table itself versions.
+- **Reproducibility:** ML model trained on data at version N; later, retrain on the exact same data by reading version N. No need to snapshot copies.
+
+#### E.3 The retention trade-off
+
+VACUUM frees storage but eliminates time-travel beyond the retention window. Pick:
+- **Aggressive vacuum** (24h): low storage cost, only short-window debugging.
+- **Long retention** (30+ days): higher storage cost, longer audit/debug window, regulatory compliance often requires this.
+
+Default 7 days is a reasonable balance for most teams.
+
+### From Theory to the Code Below
+
+Each section that follows operationalizes one piece of this framework:
+
+- §1 (Lakehouse Architecture in Practice) is §A — the medallion physically realized.
+- §2 (MERGE for Incremental Processing) is §B — the workhorse pattern.
+- §3 (SCD Type 2 in Delta/Iceberg) is §B.2 in concrete code.
+- §4 (Compaction and Optimization) is §C and §D — OPTIMIZE, Z-ordering, data skipping.
+- §5 (Time Travel) is §E — version log, rollback, point-in-time queries.
+- §6 (Multi-Engine Interoperability) is the practical Spark/Trino/Flink interop story.
+
+---
+
 ## Overview
 
 The Lakehouse architecture combines the reliability of data warehouses with the scalability of data lakes. This lesson covers production patterns for Delta Lake and Apache Iceberg: the medallion architecture, incremental processing with MERGE, Slowly Changing Dimensions (SCD Type 2), compaction, time travel, and multi-engine interoperability.

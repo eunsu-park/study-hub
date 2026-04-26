@@ -15,6 +15,165 @@ After completing this lesson, you will be able to:
 
 ---
 
+## Theory & Principles
+
+Spark SQL optimization is mostly an exercise in *not fighting Catalyst*. Catalyst is already excellent at the easy wins (predicate pushdown, projection pruning, broadcast joins for small tables). What it struggles with — skew, missing statistics, badly partitioned input — is exactly what experienced Spark engineers spend their time fixing.
+
+- **(A) Reading the physical plan** — `EXPLAIN`, the stage boundary at every Exchange, and what to look for.
+- **(B) Adaptive Query Execution (AQE)** — runtime re-planning that handles what static planning cannot.
+- **(C) Partitioning and bucketing** — physical layout that makes joins and aggregations cheap.
+- **(D) Caching and storage levels** — when persist pays off, when it costs more than recomputation.
+- **(E) Join strategies in depth** — broadcast vs shuffle hash vs sort merge, and when each wins.
+
+### A. Reading the Physical Plan
+
+The single most important Spark optimization skill: read `df.explain(True)` and understand what it says. Output has four sections:
+
+```
+== Parsed Logical Plan ==     # what your code expressed
+== Analyzed Logical Plan ==    # column types resolved
+== Optimized Logical Plan ==   # after rule-based passes
+== Physical Plan ==            # what actually runs
+```
+
+The physical plan is what you tune. Key things to look for:
+
+#### A.1 Exchange = shuffle = stage boundary
+
+Every `Exchange` node is a shuffle. Count them; minimize them. A query with 5 Exchanges has 6 stages and shuffles N×5 times where N is your data size.
+
+#### A.2 PushedFilters and PartitionFilters
+
+```
+*(1) FileScan parquet [user_id, amount, region]
+       PushedFilters: [GreaterThan(amount, 100)]
+       PartitionFilters: [region = 'US']
+```
+
+`PushedFilters` are read-time filters (Parquet skips row groups). `PartitionFilters` use directory partitioning to skip directories entirely. If you wrote a filter and it does *not* appear in PushedFilters, the optimizer could not push it — usually because it involves a UDF or non-trivial expression.
+
+#### A.3 Join strategy
+
+Look for `BroadcastHashJoin`, `ShuffledHashJoin`, `SortMergeJoin` in the plan. If you expected a broadcast and got a shuffle, your "small" side is bigger than the threshold (or stats were missing).
+
+### B. Adaptive Query Execution (AQE)
+
+Static query planning chooses join strategies and partition counts *before* running. Sometimes the choices are wrong because:
+
+- Statistics were stale or missing.
+- Filters reduced data more (or less) than expected.
+- One key turned out to be skewed.
+
+AQE (enabled by default in Spark 3.2+) replans **at stage boundaries** using actual runtime statistics. Three main optimizations:
+
+#### B.1 Coalescing shuffle partitions
+
+After a shuffle, AQE looks at actual partition sizes. If many are small (< target size, default 64 MB), it coalesces them — fewer, bigger partitions = fewer task overheads.
+
+#### B.2 Switching join strategy
+
+A join planned as `SortMergeJoin` based on bad stats: AQE sees the actual size of one side after a filter and switches to `BroadcastHashJoin` mid-query. Massive speedup when stats were wrong.
+
+#### B.3 Skew handling
+
+AQE detects partitions much larger than the median (5x by default) and splits them into multiple smaller ones, then runs the join in parallel against the broadcast or shuffled small side.
+
+The discipline: **enable AQE, then trust it**. The cases where AQE makes things worse are rare and usually indicate other problems (very small data where coalescing was wrong, exotic joins).
+
+### C. Partitioning and Bucketing
+
+Two physical layout decisions that survive across queries.
+
+#### C.1 Partitioning
+
+`df.write.partitionBy("year", "month").parquet("/data/sales")` writes to a directory tree:
+
+```
+/data/sales/year=2024/month=01/part-001.parquet
+/data/sales/year=2024/month=01/part-002.parquet
+/data/sales/year=2024/month=02/...
+```
+
+A query `WHERE year = 2024 AND month = 1` reads only that one directory. **Partition pruning** can reduce 10 TB scan to 100 GB.
+
+Picking partition columns:
+- **High cardinality is bad.** `partitionBy("user_id")` with 100 M users → 100 M tiny files. Cluster killer.
+- **Low cardinality is good.** Date dimensions (year/month/day) typically have hundreds of values. Right cardinality.
+- **Filter columns first.** Partition by what you filter most often.
+
+#### C.2 Bucketing
+
+```python
+df.write.bucketBy(200, "user_id").saveAsTable("sales_bucketed")
+```
+
+Hash-buckets rows into 200 files within each partition. The advantage: when joining `sales_bucketed` to another table also bucketed on `user_id` with the same N buckets, **the join needs no shuffle**. Spark can co-locate matching buckets.
+
+For large repeated joins, bucketing once at write time saves a shuffle every read time.
+
+### D. Caching and Storage Levels
+
+`df.cache()` (or `.persist(level)`) materializes the DataFrame's result so subsequent actions reuse it instead of recomputing.
+
+Storage levels:
+- `MEMORY_ONLY` — JVM objects in heap. Fastest read; lost if memory pressure evicts.
+- `MEMORY_AND_DISK` (default) — spills to disk if memory full.
+- `MEMORY_ONLY_SER` — serialized bytes; smaller, slower to read.
+- `DISK_ONLY` — only on disk; rarely worthwhile vs recompute.
+
+#### D.1 When to cache
+
+Cache pays off when:
+- The DataFrame is used **multiple times** (e.g., before a join and a separate aggregation).
+- Recomputation is **expensive** (long lineage, big shuffle).
+- The cached size **fits in cluster memory** (or on local SSD).
+
+Cache hurts when:
+- The DataFrame is used once — cache + read = recompute, plus serialization cost.
+- The data is too big — eviction churns, you pay both cache cost and recompute.
+
+#### D.2 unpersist
+
+Cached data stays in memory until `df.unpersist()` or the SparkSession dies. In long-running notebooks/jobs, explicitly unpersist when done — otherwise memory fills with stale cached datasets.
+
+### E. Join Strategies in Depth
+
+The single most consequential Catalyst decision. Three strategies, three trade-offs:
+
+#### E.1 Broadcast Hash Join
+
+Small side broadcast to all executors; each executor builds a hash table and probes locally. **No shuffle.**
+
+- **When chosen:** small side < `autoBroadcastJoinThreshold` (10 MB default; bump to 100 MB for many workloads).
+- **Failure mode:** if "small side" turns out to be 5 GB, broadcasting blows up driver / executor memory.
+- **Force it:** `broadcast(small_df).join(large_df, ...)` if you know the size.
+
+#### E.2 Shuffle Hash Join
+
+Both sides shuffled by key, then per-partition hash join. Faster than sort-merge when one side is much smaller (but not small enough to broadcast).
+
+- **When chosen:** rare; Catalyst usually picks sort-merge for safety.
+
+#### E.3 Sort Merge Join
+
+Both sides shuffled, sorted, then merge-joined. Default for large-large joins. Memory-efficient (streaming merge) but pays a sort cost.
+
+- **When chosen:** large × large joins.
+- **Skew killer:** if one key has 50% of rows, that one merge partition takes 100x longer. AQE skew handling helps.
+
+### From Theory to the Code Below
+
+Each section that follows operationalizes one piece of this framework:
+
+- §1 (Catalyst Optimizer) is §A — reading plans, understanding what optimizations apply.
+- §2 (Partitioning Strategies) is §C.1 — when and how to partition.
+- §3 (Caching) is §D — storage levels, when to use, unpersist hygiene.
+- §4 (Join Strategies) is §E — broadcast, shuffle hash, sort merge.
+- §5 (Bucketing) is §C.2 — write-time layout for shuffle-free joins.
+- §6 (Adaptive Query Execution) is §B — runtime re-planning.
+
+---
+
 ## Overview
 
 To optimize Spark SQL performance, you need to understand how the Catalyst optimizer works and properly utilize partitioning, caching, join strategies, and other techniques.
