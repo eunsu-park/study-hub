@@ -22,6 +22,159 @@ Traditional regression fits parameters to a fixed equation form: linear regressi
 
 ---
 
+## Theory & Principles
+
+Symbolic regression is fundamentally different from every other algorithm in this curriculum: it searches over the *space of equations* rather than the parameters of a fixed equation. The two dominant approaches — genetic programming and sparse linear regression over a function library (SINDy) — solve this search in completely different ways, with completely different assumptions and trade-offs.
+
+### A. The Search Space: Expression Trees
+
+An equation can be represented as a tree:
+
+```
+y = x₁² + sin(x₂)
+
+       +
+      / \
+     ²   sin
+     |    |
+    x₁   x₂
+```
+
+Internal nodes are *operators* (`+`, `-`, `*`, `/`, `sin`, `exp`, `log`, ...); leaves are *variables* (`x₁`, `x₂`, ...) or *constants* (`1.0`, `π`, ...). The search space is all valid expression trees up to some maximum depth — exponentially large but discrete.
+
+This is a fundamentally different problem from parameter optimization. Linear regression has a smooth, convex loss surface in `ℝ^p`; symbolic regression has a combinatorial search space with no useful gradient. Different algorithmic toolkits are required.
+
+### B. Genetic Programming: Evolution as Search
+
+**Genetic programming (GP)** treats expression trees as the "individuals" in a Darwinian evolutionary process:
+
+```
+1. Initialize a population of random expression trees.
+2. Evaluate fitness of each tree: f(tree) = -error_on_data + λ · complexity_penalty
+3. Select trees probabilistically by fitness (tournament or roulette).
+4. Apply genetic operators to selected trees:
+     - Crossover: swap subtrees between two parents
+     - Mutation: replace a random subtree with a new random subtree
+     - Reproduction: copy unchanged
+5. Replace the old population with the offspring.
+6. Repeat from step 2 until convergence or budget exhausted.
+```
+
+The fitness function is the heart of the algorithm. The two terms encode **Pareto trade-off** between accuracy and parsimony:
+
+```
+fitness = α · (-MSE)  -  β · complexity(tree)
+```
+
+Without the complexity penalty, GP overfits — finding huge trees that memorize the training data. With the right `β`, GP finds the *Pareto frontier*: the set of trees that are best at each level of complexity. The user picks the trade-off afterwards.
+
+### B.1 GP Strengths and Weaknesses
+
+Strengths:
+- No assumption about equation form (linear, polynomial, trigonometric, mixed — all in the same search).
+- Outputs are interpretable closed-form expressions.
+- Can re-discover known physical laws from data (Kepler's laws, F = ma).
+
+Weaknesses:
+- Computationally expensive (population × generations × evaluations).
+- Stochastic — different runs can find different equations.
+- Hyperparameter-heavy (population size, mutation rate, max depth, fitness weights).
+- Can fall into local optima of the search space.
+
+Modern implementations (PySR, gplearn) include sophisticated tricks — multi-population islands, adaptive mutation rates, simplification rules — to mitigate these.
+
+### C. SINDy: Sparse Regression Over a Library
+
+**SINDy** (Sparse Identification of Nonlinear Dynamics, Brunton et al., 2016) takes a completely different approach. Instead of searching expression trees, it builds a *library* `Θ(x)` of candidate functions:
+
+```
+Θ(x) = [1, x₁, x₂, x₁², x₁·x₂, x₂², sin(x₁), cos(x₁), exp(x₂), ...]
+```
+
+Then it solves a linear regression with **sparsity constraint**:
+
+```
+y = Θ(x) · ξ           where ‖ξ‖_0 should be small
+```
+
+Most coefficients in `ξ` are forced to zero, so the discovered equation uses only a few library terms. The sparsity is what gives interpretability — a 100-term polynomial regression is not interpretable; one with 3 nonzero terms is.
+
+The optimization typically uses **STLSQ** (Sequentially Thresholded Least Squares):
+
+```
+ξ = least-squares solve of y = Θ ξ
+loop:
+    set entries of ξ with |ξ_i| < threshold to zero
+    re-solve least squares on the remaining entries
+until convergence
+```
+
+This is a discrete approximation of the L0-penalized regression, faster than exact L0 and more sparse than L1 (Lasso) typically gives.
+
+### C.1 SINDy Strengths and Weaknesses
+
+Strengths:
+- Fast: a single linear regression instead of an evolutionary search.
+- Deterministic.
+- Excellent for dynamical systems (`dx/dt = f(x)`) where the library can include time derivatives, polynomial nonlinearities, and trigonometric forcing.
+- The sparsity threshold is the only critical hyperparameter.
+
+Weaknesses:
+- The library must be specified in advance; if the right term is not in the library, SINDy cannot find it.
+- Library size grows combinatorially in input dimension and term complexity.
+- Works best when the true equation is *exactly* sparse in the chosen library; struggles with novel non-linearities.
+
+SINDy and GP are complementary: SINDy when you have domain knowledge about likely terms, GP when you do not.
+
+### D. The Pareto Frontier: Accuracy vs Complexity
+
+Both methods produce families of candidate equations along a Pareto frontier:
+
+```
+        higher complexity
+            |
+   error    |  ●         ← complex, accurate
+            |    ●
+            |      ●
+            |        ●   ← simple, less accurate
+            |          ●
+            +----------- complexity
+```
+
+The "best" equation depends on what you value. For physics discovery, you typically want the simplest equation that adequately fits — Occam's razor. For prediction, you might pick the most accurate within a complexity budget. PySR returns the entire frontier; you choose.
+
+### E. Where Symbolic Regression Wins
+
+Symbolic regression is not a replacement for tabular ML. Gradient-boosted trees still dominate for opaque-but-accurate predictions. Symbolic regression wins when:
+
+- **Discoverable structure exists**: the underlying process really is governed by a compact equation (physics, chemistry, biology, engineering).
+- **Interpretability is a hard constraint**: regulatory, scientific publication, embedded-system deployment.
+- **Extrapolation matters**: a closed-form equation can extrapolate beyond the training distribution; tree models cannot.
+- **Compact deployment matters**: an evolved equation is bytes; a tree ensemble is megabytes.
+
+When *none* of these hold, gradient boosting will out-predict symbolic regression at a fraction of the search cost. Symbolic regression is a specialty tool, not a general-purpose default.
+
+### F. Validation: Symbolic Regression Has the Same Statistical Pitfalls
+
+Despite its different search algorithm, symbolic regression is still ML and is subject to the same evaluation discipline:
+
+- **Train/test split**: required, just as for any model.
+- **Cross-validation**: harder because each fit is expensive, but possible (small `K`, parallelize folds).
+- **Beware of multiple-comparison effects**: searching over many equations and reporting only the best is exactly the same statistical sin as peeking in A/B testing. The reported test error is biased downward.
+- **Held-out validation set for the Pareto frontier**: pick the spot on the frontier using a validation set, then report the chosen equation's error on a separate test set.
+
+The discipline matters even more here because GP can produce equations that look elegant and overfit simultaneously — the symbolic form is reassuring but the test error is what matters.
+
+### From Theory to the Code Below
+
+- Section 2's expression-tree visualization and operator/terminal sets are the search-space definition from (A).
+- Section 3's `gplearn.SymbolicRegressor` or `pysr.PySRRegressor` runs the genetic programming loop from (B); the `parsimony_coefficient` parameter is the `β` in the fitness function.
+- Section 4's `pysindy.SINDy` builds the function library and runs STLSQ from (C); `threshold` is the sparsity parameter.
+- Section 5's Pareto-frontier plot and equation selection is the trade-off explorer from (D).
+- Section 6's "when to use symbolic regression" guidance maps to the niche analysis in (E).
+
+---
+
 ## 1. Core Concepts
 
 ### 1.1 What is Symbolic Regression?

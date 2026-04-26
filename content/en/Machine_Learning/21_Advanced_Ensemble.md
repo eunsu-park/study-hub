@@ -26,6 +26,114 @@ You have already learned two major ensemble strategies: bagging (L07), which red
 
 ---
 
+## Theory & Principles
+
+Stacking and blending look like simple "use a model to combine other models" tricks, but the mathematics underneath determines whether they actually help or just add complexity. The two pivotal questions are: how do you train the meta-learner without leaking information, and what kinds of base-model diversity actually combine well?
+
+### A. The Stacking Architecture
+
+Stacking has two layers:
+
+```
+Layer 0 (base):     M base models  f_1, ..., f_M    each takes x → ŷ_m
+Layer 1 (meta):     meta-learner g  takes (ŷ_1, ..., ŷ_M) → ŷ
+```
+
+The meta-learner is trained on the *predictions* of the base models, not on the original features. The whole pipeline is `g(f_1(x), ..., f_M(x))`. The meta-learner can be linear (logistic regression is the most common choice — interpretable weights), or non-linear (a small gradient boosting model can pick up interactions between base predictions).
+
+### B. The Critical Leakage Problem
+
+If you train base models `f_m` on training data, get their predictions `f_m(x_train)`, and then train the meta-learner on `(f_m(x_train), y_train)`, you have created a leakage disaster. The base models *memorized* the training labels, so their training-set predictions are unrealistically good. The meta-learner learns to trust them perfectly. When you deploy on real test data, the base models predict less well — and the meta-learner is now miscalibrated.
+
+The fix is **out-of-fold (OOF) predictions**:
+
+```
+Split training data into K folds.
+For each fold k:
+    Train each base model f_m on the other K-1 folds.
+    Generate predictions for fold k.
+After all folds: every training row has a prediction from each base model
+                  that was *not* trained on that row.
+Train the meta-learner on these OOF predictions vs the true labels.
+```
+
+For test predictions: train each base model on the *full* training set, predict on test, feed those predictions to the meta-learner. This is symmetric — at deployment, base models predict on data they have not seen.
+
+scikit-learn's `StackingClassifier` and `StackingRegressor` implement OOF training automatically. Custom stacking implementations almost always have a leakage bug; use the library version unless you have a specific reason not to.
+
+### C. Blending: a Cheaper Cousin
+
+**Blending** is a simplified version of stacking that uses a single train/holdout split instead of K-fold OOF predictions:
+
+```
+Split training data into A (e.g., 80%) and B (e.g., 20%).
+Train each base model f_m on A.
+Generate predictions for B: ŷ_m^{(B)} = f_m(x_B).
+Train the meta-learner on (ŷ_m^{(B)}, y_B).
+For test: predict with each f_m trained on A, feed to meta-learner.
+```
+
+Trade-off:
+- **Cheaper**: each base model trains once, not K times.
+- **Less data for the meta-learner**: only `|B|` examples, not `|train|`.
+- **Higher variance**: the meta-learner sees a single noisy split.
+
+Blending is a reasonable choice when base-model training is very expensive (e.g., neural nets) and the validation set is large enough to fit a stable meta-learner.
+
+### D. What Makes Base Models Combine Well
+
+Stacking does not improve over its best base model unless the base models are sufficiently *diverse*. Two base models that always agree contribute no extra information.
+
+The rough criterion: errors should be uncorrelated across base models. Sources of useful diversity:
+- **Different model families**: Logistic Regression + Random Forest + LightGBM gives three very different inductive biases (linear, axis-aligned splits with bagging, axis-aligned splits with boosting).
+- **Different feature views**: same model class on different feature subsets (e.g., text-only model + numerical-only model + combined).
+- **Different hyperparameters**: deeper vs shallower trees of the same algorithm.
+- **Different training data slices**: by time period, by region, by user segment.
+
+Diminishing returns set in fast: the gain from adding the 2nd diverse model is large; from the 5th, marginal; from the 10th, often negative as overfitting and complexity dominate.
+
+### E. The Meta-Learner Choice
+
+The meta-learner is usually:
+
+- **Linear (Logistic / Linear Regression)**: simplest, most interpretable. Coefficients tell you each base model's relative weight. Hard to overfit. Standard default.
+- **Linear with regularization (Lasso, Ridge)**: when many base models are correlated, regularization keeps the weights stable. Lasso can zero out useless models automatically.
+- **Gradient Boosting (small)**: captures non-linear interactions between base predictions. More expressive but more prone to overfit the meta-learner. Use only when the linear meta-learner shows clear gains and you suspect non-linear interactions.
+- **Average / weighted average**: not really a "learned" meta-learner, but a useful baseline. If the linear meta-learner is barely beating a simple average, the diverse base models are not adding much; consider whether stacking is worth the operational cost.
+
+A specific danger: a non-linear meta-learner can re-introduce overfitting that the OOF discipline removed. Always evaluate the stacker against simple averaging on a held-out set before declaring it the winner.
+
+### F. Stacking, Blending, and Voting in One Frame
+
+| Method | Combiner | Cost | When |
+|--------|----------|------|------|
+| Hard voting | Majority class | Free | Quick, multi-class, no probabilities needed |
+| Soft voting | Average probabilities | Free | When base models output well-calibrated probabilities |
+| Weighted voting | Pre-fixed weights | Free (after weight selection) | When you know which base model is better |
+| Blending | Meta-learner on holdout | Cheap | Expensive base models, large validation set |
+| Stacking | Meta-learner on OOF | K× base cost | Default for serious ensembles |
+
+The progression is from "use a fixed rule" (voting) to "learn the rule from a small dataset" (blending) to "learn the rule from cross-validated predictions" (stacking). Each step trades compute for accuracy, with diminishing returns past stacking.
+
+### G. When Not to Stack
+
+The diminishing-returns curve from Lesson 14 applies sharply here. Stacking adds:
+- 2× to 5× training cost (K base models × K folds + final retrain + meta-learner).
+- 2× to 5× inference latency at deployment (every base model must be evaluated).
+- Substantial operational complexity (each base model is a separate artifact to version, monitor, retrain).
+
+The right question is "is the gain worth the operational cost?" Often a single well-tuned LightGBM matches the accuracy of a stacked ensemble with 1/10 the inference latency and 1/5 the operational headache. Stack when the accuracy budget demands it; otherwise, ship the simpler model.
+
+### From Theory to the Code Below
+
+- Section 1's bias-variance table is the rationale for diverse base models from (D).
+- Section 2's `StackingClassifier(estimators=[...], final_estimator=LogisticRegression())` from scikit-learn implements (A) with OOF training as in (B).
+- Section 3's blending example with a single train/val split is the algorithm in (C).
+- Section 4's comparison of meta-learners (Linear vs LightGBM) maps to the choices in (E).
+- Section 5's `cross_val_score` on the stacked model vs the best base model is the empirical check from (G) — does the stack actually beat its best component?
+
+---
+
 ## 1. Why Stacking Works
 
 ### 1.1 The Bias-Variance Perspective

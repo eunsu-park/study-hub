@@ -22,6 +22,73 @@ Every day, you interact with machine learning systems -- from email spam filters
 
 ---
 
+## Theory & Principles
+
+Before walking through the workflow and the scikit-learn API, it pays to anchor three ideas that will follow you through every later lesson: what loss function each ML paradigm is actually minimizing, why generalization error decomposes into bias, variance, and noise, and what the No Free Lunch theorem says about choosing algorithms.
+
+### A. Three Paradigms, Three Loss Functions
+
+The split into supervised, unsupervised, and reinforcement learning is usually presented as "do you have labels?" — but the cleaner separator is the loss function each one optimizes.
+
+- **Supervised learning** has paired data `{(x_i, y_i)}` and minimizes empirical risk over a known target: `L(f) = (1/N) · Σ ℓ(f(x_i), y_i)`. Regression typically uses squared loss `(y - ŷ)²`; classification uses cross-entropy `-Σ y_k · log p_k`. The training signal is dense — every example has a correct answer.
+- **Unsupervised learning** has only `{x_i}` and must invent its own objective. Clustering minimizes within-cluster distortion `Σ Σ ‖x - μ_c‖²`. Density estimation maximizes log-likelihood `Σ log p(x_i ; θ)`. Dimensionality reduction minimizes reconstruction error `Σ ‖x_i - g(f(x_i))‖²`. There is no ground truth to compare against — the loss *is* the definition of "good".
+- **Reinforcement learning** has neither labels nor a fixed dataset. It maximizes expected discounted return `J(π) = E[Σ γ^t · r_t]` over trajectories produced by interacting with an environment. The signal is sparse, delayed, and depends on the agent's own actions — a fundamentally harder optimization landscape than the other two.
+
+The same algorithm class can sit in different paradigms depending on the loss. A neural network trained with cross-entropy is supervised; trained with reconstruction loss it is an autoencoder (unsupervised); trained with policy gradient it is RL. The architecture is secondary — the loss is what defines the problem.
+
+### B. Bias-Variance Decomposition: Why You Cannot Just "Add More Capacity"
+
+Pick a fixed query point `x` and let `y = f*(x) + ε` be the true label with irreducible noise `ε ~ (0, σ²)`. Train your model on a random dataset `D` to get `f_D`. The expected squared error of `f_D(x)` over the random draws of both `D` and `ε` decomposes as:
+
+```
+E_{D, ε}[(y - f_D(x))²]
+    = (E_D[f_D(x)] - f*(x))²    ← bias²       (systematic error)
+    + E_D[(f_D(x) - E_D[f_D(x)])²] ← variance  (sensitivity to data)
+    + σ²                          ← noise      (irreducible)
+```
+
+The cross-terms vanish because `ε` is independent of the model and `(f_D - E_D[f_D])` has zero mean over `D`. This decomposition is *exact* — not an approximation — for squared loss.
+
+Three consequences shape every modeling choice:
+
+1. **There is a floor.** No model can beat `σ²`. Any error metric below the noise level is overfitting to that specific test set.
+2. **The other two terms trade off.** A constant predictor has zero variance and huge bias. A model that memorizes the training set has zero training bias and huge variance. The minimum total error sits somewhere in between, and where exactly depends on `N`, the noise level, and the function class.
+3. **More data shrinks variance, not bias.** Doubling `N` makes `f_D` more stable across draws (lower variance) but does not change the expected approximation error of the function class (bias). To reduce bias you must change the model, not the dataset.
+
+This is why "just use a bigger model" is wrong advice without context. With small `N` and a flexible model, the variance term dominates and you overfit. With large `N` and a rigid model, the bias term dominates and you underfit. Capacity is a knob, not a direction.
+
+### C. The No Free Lunch Theorem: Why Algorithm Choice Is Never Universal
+
+Wolpert's No Free Lunch (NFL) theorem says: averaged over *all possible* target functions, every learning algorithm has the same expected generalization performance. If you pick a benchmark uniformly at random from the space of all functions, random forest, SVM, and a coin flip are equally good in expectation.
+
+The theorem sounds nihilistic, but the resolution is the *uniformity* assumption. Real-world problems are not uniformly distributed over function space — they cluster around smoothness, locality, compositional structure, and approximate sparsity. Algorithms succeed in practice because they encode *inductive biases* that match these clusters:
+
+- Linear models bias toward smooth, monotone-in-features mappings.
+- Trees bias toward axis-aligned, piecewise-constant regions.
+- Convolutional nets bias toward translation-equivariant, hierarchically composed features.
+- k-nearest-neighbors biases toward locally constant labels.
+
+NFL's actual lesson: *no single algorithm dominates all problems*, so model selection (CV) and ensembling (which averages biases) are not optional add-ons — they are the way you discover which inductive bias matches *your* data.
+
+### D. Train / Validation / Test: a Statistical Argument
+
+A model's training error is a biased downward estimate of its true error — the same data was used to fit and to evaluate, so the estimate is optimistic. The standard fix is to split the data into three disjoint pools:
+
+- **Train** is consumed by the optimizer.
+- **Validation** is consumed by the modeler — for picking hyperparameters, comparing architectures, deciding when to stop. Each comparison leaks a bit of information about the validation set into the chosen model.
+- **Test** is touched exactly once, at the end, after every modeling decision is locked. Touching it more turns it into a second validation set, and the reported number stops being an unbiased estimate of deployment performance.
+
+The three-way split is not a convention — it is a direct consequence of the fact that *any data used to make a choice cannot also serve as an unbiased estimator of that choice's outcome*. Cross-validation (Lesson 5) is a more efficient version of the train/val split when data is scarce, but the test set rule never changes: one look, at the end.
+
+### From Theory to the Code Below
+
+- Section 2's split into supervised / unsupervised / RL is the loss-function distinction from (A).
+- Section 3's overfitting / underfitting discussion and the U-shaped error curve are the bias-variance trade-off from (B) drawn graphically.
+- Section 4's `train_test_split` and the train/val/test pattern come straight from (D).
+- The `StandardScaler` / `MinMaxScaler` choice in Section 5 is one of the inductive biases from (C): you are pre-shaping the data to match what your downstream algorithm assumes.
+
+---
+
 ## 1. What is Machine Learning?
 
 Machine Learning is an algorithm that learns from data to perform predictions or decisions without explicit programming.

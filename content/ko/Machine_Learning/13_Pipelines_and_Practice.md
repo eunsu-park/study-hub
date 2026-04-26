@@ -22,6 +22,128 @@
 
 ---
 
+## 이론과 원리
+
+scikit-learn 파이프라인은 편의 래퍼 이상입니다 — 전처리 변환의 대수와 모든 단계가 따라야 할 계약(contract)을 형식화합니다. 이 계약을 이해하는 것이 가장 음흉한 ML 버그를 막습니다: 데이터 누수(data leakage), 즉 테스트셋의 정보가 학습 절차를 조용히 오염시키는 것.
+
+### A. 함수 합성으로서의 Estimator/Transformer 인터페이스
+
+모든 scikit-learn 단계는 두 가지 중 하나입니다:
+- **변환기(Transformer)**: `.fit(X, y)`와 `.transform(X)`를 구현. 예: `StandardScaler`, `PCA`, `OneHotEncoder`.
+- **추정기(Estimator)**: `.fit(X, y)`와 `.predict(X)`(또는 `.predict_proba(X)`)를 구현. 예: `LogisticRegression`, `RandomForestClassifier`.
+
+`Pipeline([(name_1, T_1), ..., (name_n, T_n), (name_final, E)])`는 이들을 추정기처럼 동작하는 단일 객체로 합성합니다:
+
+```
+Pipeline.fit(X, y):
+    X_1 = T_1.fit_transform(X, y)
+    X_2 = T_2.fit_transform(X_1, y)
+    ...
+    E.fit(X_n, y)
+
+Pipeline.predict(X):
+    X_1 = T_1.transform(X)              ← 주의: .transform이지 .fit_transform이 아님
+    X_2 = T_2.transform(X_1)
+    ...
+    return E.predict(X_n)
+```
+
+비대칭성이 핵심입니다: `fit` 동안, 각 변환기가 `fit_transform`을 통해 *학습* 데이터에서 매개변수를 학습합니다. `predict` 동안, 각 변환기가 `transform`을 통해 *이미 학습된* 매개변수를 적용합니다. 변환 매개변수는 모델의 일부이지 데이터의 일부가 아닙니다.
+
+### B. 파이프라인이 누수를 막는 이유
+
+고전적인 누수 버그:
+
+```python
+# 잘못
+scaler = StandardScaler().fit(X)        # 전체 데이터셋에서 평균/표준편차 학습
+X_scaled = scaler.transform(X)
+X_train, X_test, y_train, y_test = train_test_split(X_scaled, y)
+cross_val_score(model, X_train, y_train, cv=5)
+```
+
+스케일러가 평균/표준편차를 계산할 때 테스트 데이터를 봤으므로 테스트 정보가 "학습" 파이프라인으로 누설. CV 점수가 위쪽으로 편향되고; 배포 수치는 더 나쁠 것.
+
+파이프라인 버전은 자동으로 올바릅니다:
+
+```python
+# 올바름
+pipe = Pipeline([('scaler', StandardScaler()), ('model', LogisticRegression())])
+cross_val_score(pipe, X, y, cv=5)
+```
+
+각 CV 폴드 안에서 scikit-learn은 `pipe.fit(X_train_fold, y_train_fold)` 다음 `pipe.predict(X_val_fold)`를 호출. 스케일러는 학습 폴드에서만 `fit`되고; 검증 폴드의 `transform`은 학습 폴드의 평균/표준편차를 사용. 누수 없음. 이것이 파이프라인을 사용하는 *가장 중요한 단일 이유*입니다.
+
+같은 성질이 그리드 탐색으로 확장됩니다: `GridSearchCV(pipe, params)`는 후보 하이퍼파라미터를 적용하여 각 폴드에서 전체 파이프라인(변환기 포함)을 처음부터 재학습. 하이퍼파라미터 `model__C`(이중 밑줄에 주의)는 `model` 단계의 `C`를 설정.
+
+### C. ColumnTransformer: 이질적 전처리
+
+실제 데이터셋은 타입을 섞습니다: 수치 특성은 스케일링이 필요, 범주형 특성은 인코딩 필요, 텍스트 특성은 벡터화 필요. 모든 것에 단일 변환을 적용하면 실패. `ColumnTransformer`는 다른 열을 다른 변환기로 라우팅하고 결과를 연결할 수 있게 해줍니다:
+
+```
+ColumnTransformer(
+    [('num', StandardScaler(),    ['age', 'income']),
+     ('cat', OneHotEncoder(),     ['city', 'occupation']),
+     ('txt', TfidfVectorizer(),   'review_text')],
+    remainder='drop' | 'passthrough'
+)
+```
+
+출력은 변환기별 출력의 수평 스택. 전체 `ColumnTransformer` 자체가 변환기이므로 파이프라인 안에 끼워집니다:
+
+```
+Pipeline([('preproc', ColumnTransformer(...)), ('model', RandomForestClassifier())])
+```
+
+이 단일 객체가 이제 데이터-에서-예측 스택 전체: `pipe.fit(df, y)`가 스케일러 평균, OHE 범주, TF-IDF 어휘를 학습 *그리고* 랜덤 포레스트를 학습. `pipe.predict(new_df)`가 누수 없이 모든 것을 순서대로 적용.
+
+### D. 그 뒤의 합성 대수
+
+수학적으로 파이프라인은 함수 합성 `f_n ∘ ... ∘ f_2 ∘ f_1`이며, 각 `f_i`는 단계 `i-1`의 학습 출력에 적합된 매개변수 `θ_i`를 가진 학습된 함수 `f_i(x; θ_i)`. 단계 `i`의 `fit_transform` 메서드는
+
+```
+f_i_fit_transform(X, y):
+    θ_i ← argmin_θ  L_i(X, y, θ)              ← 단계 i의 매개변수 학습
+    return f_i(X; θ_i)                         ← 방금 학습한 함수 적용
+```
+
+대부분의 전처리기에서 `L_i`는 암묵적입니다(예: StandardScaler는 `mean = 0, std = 1`을 만족하도록 `θ = (μ, σ)`를 고름). PCA의 경우 `L_i`는 Lesson 12의 분산 최대화 목적. 요점은 그것들 모두 같은 `fit` / `transform` 분할을 존중한다는 것.
+
+이 대수가 파이프라인을 교차검증, 그리드 탐색, 모델 직렬화(`joblib.dump(pipe, 'model.pkl')`), 배포와 합성할 수 있게 합니다 — 모두가 표준 인터페이스 뒤에 내부 구조가 숨겨진 함수 `pipe.predict(·)`에 대한 연산일 뿐.
+
+### E. 사용자 정의 변환기와 계약
+
+내장 변환기가 맞지 않을 때, `BaseEstimator`와 `TransformerMixin`을 서브클래싱하여 자신의 것을 작성:
+
+```python
+from sklearn.base import BaseEstimator, TransformerMixin
+
+class MyTransformer(BaseEstimator, TransformerMixin):
+    def __init__(self, param=1.0):
+        self.param = param
+
+    def fit(self, X, y=None):
+        # 학습 데이터에 의존하는 어떤 것이든 학습
+        self.learned_ = X.mean()
+        return self
+
+    def transform(self, X):
+        # 학습된 매개변수 적용
+        return X - self.learned_
+```
+
+계약은: 학습된 매개변수를 `_`로 끝나는 속성으로 저장, `fit`에서 `self` 반환, `transform`에서 변환된 데이터 반환. 그것을 존중하는 한, 변환기가 어떤 내장처럼 파이프라인, 그리드 탐색, 직렬화에 끼워집니다.
+
+### From Theory to the Code Below
+
+- 섹션 1.2의 `Pipeline([...])` 생성자는 (A)의 함수 합성; 단계별 fit-vs-transform 분할은 (B)의 누수 방지.
+- 섹션 2의 `ColumnTransformer`는 (C)의 이질적 라우팅 객체; `remainder` 인자가 라우팅되지 않은 열에 무엇을 할지 결정.
+- 섹션 3의 `GridSearchCV(pipe, {'model__C': [...]})`는 이중 밑줄 매개변수 구문 — `step__hyperparameter` — 을 사용해 그리드 탐색이 파이프라인 안으로 도달.
+- 섹션 4의 `joblib.dump(pipe, ...)`와 `joblib.load(...)`는 파이프라인의 매개변수가 (D)의 `θ_i` 속성에 모두 저장되어 있기 *때문에* 작동.
+- 섹션 5의 사용자 정의 `Transformer` 예제는 (E)에 명시된 계약을 따름.
+
+---
+
 ## 1. Pipeline 기초
 
 ### 1.1 Pipeline의 필요성

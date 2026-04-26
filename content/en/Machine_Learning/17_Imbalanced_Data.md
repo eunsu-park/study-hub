@@ -22,6 +22,135 @@ A fraud detection model that achieves 99.9% accuracy sounds impressive -- until 
 
 ---
 
+## Theory & Principles
+
+The three families of imbalance-handling techniques — resampling (SMOTE and friends), class weighting, and threshold tuning — attack the same problem from three different mathematical angles. Knowing which one to reach for first requires understanding what each one actually does to the loss surface and the decision boundary.
+
+### A. Why Imbalance Hurts: the Loss-Surface View
+
+Standard classification loss is a sum over examples:
+
+```
+L(θ) = (1/N) · Σ_i  ℓ(y_i, f(x_i; θ))
+```
+
+If 99% of `y_i` are the negative class, then 99% of the gradient signal `∂L/∂θ` comes from the majority class. The minority class barely moves the parameters. Worse, the *trivial* solution `f(x) = 0` (always predict majority) achieves a near-optimal loss even though it has zero diagnostic value.
+
+The bias-variance lens (Lesson 1) sharpens the picture: imbalanced data biases the empirical risk toward the majority class, even though the true risk (cost-weighted) treats both classes as important. Every mitigation in this lesson is a way to re-align the empirical risk with what you actually care about.
+
+### B. SMOTE and Its Interpolation Algorithm
+
+**SMOTE** (Synthetic Minority Over-sampling Technique, Chawla et al., 2002) generates synthetic minority-class examples by linear interpolation:
+
+```
+for each minority example x_i:
+    pick k nearest minority neighbors of x_i        (typically k = 5)
+    for each desired synthetic sample:
+        pick one neighbor x_n at random
+        pick λ ~ Uniform(0, 1)
+        synthetic = x_i + λ · (x_n - x_i)            ← interpolated point
+```
+
+Each synthetic point lies on a line segment between a minority example and one of its minority neighbors. Repeated, this multiplies the minority population to any desired ratio. The model now sees a balanced training distribution (in the loss-surface sense from A) without you ever throwing data away.
+
+The assumption is that the convex combination of two minority points is *also* a plausible minority point — i.e., the minority class is convex (or at least locally so) in feature space. When this fails, SMOTE creates points that fall in the majority region and *worsens* the boundary. Two important variants address this:
+
+- **Borderline SMOTE**: only interpolates from minority points that have at least one majority neighbor (the "borderline" cases). Focuses synthetic generation where the boundary is.
+- **ADASYN**: weights the synthetic generation by how *hard* each minority point is to classify (more synthetic samples near majority neighbors). Adapts to local difficulty.
+
+### B.1 Critical: SMOTE Must Live Inside the Pipeline
+
+SMOTE applied to the entire training set before CV is the most subtle and damaging leakage in imbalance handling. The synthetic points generated using a row also depend on that row's neighbors — and in a CV fold, those neighbors might be in the validation slice. The model effectively sees the validation labels through the synthetic points.
+
+The fix: use `imblearn.pipeline.Pipeline` (which knows to call SMOTE only on the train side of each split) rather than `sklearn.pipeline.Pipeline` (which would call it on everything). Or wrap manually inside each CV fold. Never SMOTE before splitting.
+
+### C. Undersampling and the Information Loss Trade-off
+
+The opposite approach: throw away majority examples until the classes balance. **Random undersampling** is the simplest version. It is fast, makes training cheaper, and avoids the "synthetic points are unrealistic" problem of SMOTE — but it discards information.
+
+When undersampling makes sense:
+- Majority class is enormous and largely redundant (e.g., billions of legitimate clicks, hundreds of fraudulent ones).
+- Compute is the binding constraint and you cannot train on the full majority set.
+- Combined with ensembling (BalancedRandomForest, EasyEnsemble): each base estimator sees a different undersampled split, so no information is permanently lost — different majority subsets cover the full dataset across the ensemble.
+
+Smarter variants like **Tomek links** (remove pairs of opposite-class nearest neighbors) and **NearMiss** (keep only majority points close to the minority boundary) try to remove the "easy" majority points and keep the informative ones.
+
+### D. Class Weighting: Re-weighting the Loss Directly
+
+Instead of changing the data, change the loss. **Class-weighted loss** scales each example's contribution by a class-dependent weight:
+
+```
+L_weighted(θ) = (1/N) · Σ_i  w_{y_i} · ℓ(y_i, f(x_i; θ))
+```
+
+The standard `class_weight='balanced'` recipe in scikit-learn is:
+
+```
+w_k = N / (K · n_k)
+```
+
+where `K` is the number of classes and `n_k` is the count of class `k`. This makes each *class* contribute the same total to the loss, regardless of how many examples it has.
+
+Class weighting is mathematically equivalent (up to constants) to oversampling the minority by `w_minority / w_majority`, but cheaper — no synthetic points to generate, no extra rows to process. The model still sees the original distribution; the gradient is reweighted.
+
+Class weighting is preferred when:
+- The base learner supports it (most scikit-learn classifiers, XGBoost via `scale_pos_weight`, LightGBM via `is_unbalance` / `scale_pos_weight`).
+- You want to keep evaluation on the original (imbalanced) distribution.
+- You distrust the convexity assumption of SMOTE.
+
+### E. Threshold Tuning: the Cheapest and Most Underused Tool
+
+Every probabilistic classifier outputs a score in `[0, 1]`. Converting to a hard prediction requires picking a threshold. The default 0.5 is rarely optimal under imbalance.
+
+Recall the Bayes-optimal cost rule from Lesson 4:
+
+```
+predict positive  ⟺  P(y=1 | x) > c_FP / (c_FP + c_FN)
+```
+
+Under imbalance, `c_FN` (cost of missing a positive) is typically much larger than `c_FP`, so the optimal threshold is *much* lower than 0.5. Concretely:
+- Sweep thresholds from 0 to 1.
+- For each threshold, compute the metric you actually care about (F1, F-beta, total cost).
+- Pick the argmax.
+
+Threshold tuning is the single most underused tool in imbalance handling. It costs nothing — no extra training, no architectural change — and often recovers most of the gain that SMOTE or weighting would provide. In production, the threshold can even be tuned per-segment (different cost structures per region/customer-tier).
+
+### F. Evaluating on Imbalanced Data: the Metric Matters
+
+Accuracy is the wrong metric here, as Section 1 already shows. The right metrics are:
+
+- **Precision-Recall curve and AUC-PR**: focuses only on the positive class. Better than ROC-AUC under heavy imbalance because ROC's FPR is dominated by the abundant negatives.
+- **F-beta score**: harmonic mean weighted toward precision (`β < 1`) or recall (`β > 1`).
+- **Balanced accuracy**: average of per-class recalls. Treats both classes symmetrically regardless of size.
+- **Cohen's kappa**: agreement adjusted for chance, robust to class skew.
+- **Cost-weighted error**: if you know the actual costs, the right metric is exactly the dollar amount.
+
+The CV strategy must also account for imbalance: **stratified K-fold** preserves class proportion in every fold. Without stratification, an unlucky fold can have zero positive examples in the validation slice, producing meaningless scores.
+
+### G. Combining the Tools: a Practical Recipe
+
+There is no single best method — the right combination depends on data size, base model, and cost structure. A reasonable default order:
+
+1. **Always**: stratified CV, AUC-PR (not accuracy) as the primary metric, plot the precision-recall curve.
+2. **First try**: `class_weight='balanced'` (or `scale_pos_weight = n_neg / n_pos` for XGBoost). Cheapest, often sufficient.
+3. **If still under-recall**: add threshold tuning on top. Cheapest gain after weighting.
+4. **If still under-recall**: try SMOTE / Borderline SMOTE inside the pipeline.
+5. **If majority is enormous and redundant**: try undersampling or BalancedRandomForest.
+6. **If costs are explicit**: use the Bayes-optimal threshold from (E) directly.
+
+Steps 1–3 cover the majority of real cases. Steps 4–6 are escalations for harder problems.
+
+### From Theory to the Code Below
+
+- Section 1's "always predict majority" demonstration is the loss-surface argument from (A) — accuracy is high because the loss is dominated by majority-class examples.
+- Section 2's `SMOTE`, `BorderlineSMOTE`, `ADASYN` from `imbalanced-learn` are the algorithms in (B); the use of `imblearn.pipeline.Pipeline` is the leakage discipline from (B.1).
+- Section 3's `RandomUnderSampler`, `TomekLinks`, `NearMiss` are the undersampling variants from (C); `BalancedRandomForestClassifier` and `EasyEnsembleClassifier` are the ensemble-based information-preservation strategies.
+- Section 4's `class_weight='balanced'` and `scale_pos_weight` are the weighting from (D).
+- Section 5's threshold-tuning loop is exactly (E); the cost-matrix variant implements the Bayes-optimal rule.
+- Section 6's `precision_recall_curve`, `f1_score`, `balanced_accuracy_score` are the imbalance-friendly metrics from (F).
+
+---
+
 ## 1. The Imbalance Problem
 
 ### 1.1 Why Accuracy Fails

@@ -22,6 +22,108 @@ Algorithms and theory only matter if you can apply them to real problems end-to-
 
 ---
 
+## Theory & Principles
+
+A practical ML project is not just a sequence of API calls — it is a series of architectural trade-offs, each one constrained by the bias-variance lens, the no-free-lunch reality, and the leakage rules from earlier lessons. The "theory" of practical projects is the discipline of making those trade-offs explicit instead of letting defaults silently pick them for you.
+
+### A. The Cost Structure of an ML Project
+
+Every project has the same approximate cost shape:
+
+```
+Effort budget by stage (Andrew Ng, rough industry rule):
+- Problem definition:           ~5%
+- Data collection / cleaning:   ~50-70%
+- EDA:                          ~10%
+- Modeling (train/tune):        ~10-20%
+- Evaluation / iteration:       ~10%
+- Deployment / monitoring:      ~10%
+```
+
+The brutal asymmetry is that 60–80% of the work is not "modeling" at all. If your bottleneck is data quality, swapping XGBoost for a fancier model gains you nothing. The first architectural question is always: *where does the marginal hour go furthest?*
+
+### B. Why a Baseline First
+
+The very first model in any project should be the dumbest one that works:
+- Classification baseline: predict the majority class (or stratified random).
+- Regression baseline: predict the mean (or median).
+- Slightly better baseline: a single linear/logistic model on un-engineered features.
+
+This baseline is not a serious contender — it is the **floor that any serious model must beat**. Two reasons:
+1. **Sanity check on the pipeline.** If your fancy model is somehow doing *worse* than predicting the majority class, you have a bug — likely a leakage bug, target column flip, or train/test mismatch — that needs fixing before any tuning matters.
+2. **Reference point for ROI.** A 1% accuracy improvement over the baseline is not the same as a 1% improvement over an already-strong model. You need the baseline to know whether the next iteration is worth the effort.
+
+The bias-variance decomposition from Lesson 1 is what tells you which side of the trade-off your baseline is failing on. Underfitting (high bias) ⟹ try a more flexible model. Overfitting (high variance, train >> test) ⟹ regularize, get more data, or simplify.
+
+### C. The Leakage Audit
+
+Every transformation must be classified as "fits on train only" vs "computed once globally". Get this wrong and your CV score is fiction.
+
+Things that **must be inside the pipeline** (fit only on training fold):
+- All scaling and normalization
+- All imputation (mean, median, KNN, model-based)
+- Target encoding for categorical features
+- Feature selection (variance thresholds, mutual information, model-based)
+- Dimensionality reduction (PCA, etc.)
+- Class balancing (SMOTE, undersampling — must be after the train/test split)
+
+Things that are **safe to compute globally**:
+- One-hot encoding *if* the encoder uses a fixed schema (`handle_unknown='ignore'`)
+- Constant transforms (log, sqrt, log1p)
+- Hand-coded feature engineering that uses only the row itself
+
+The discipline is: if a transformation reads the *value* of any other row (mean, median, percentile, neighbor distance), it must live inside the pipeline. Without exception.
+
+### D. Model Selection as Bias-Variance Search
+
+The "no free lunch" theorem from Lesson 1 says no single model is best for all problems. The practical strategy is to map the trade-off space:
+
+| Bias-variance position | Try first |
+|------------------------|-----------|
+| Small `N`, simple structure | Linear / Logistic Regression with regularization |
+| Tabular data, mixed types | Gradient Boosting (XGBoost / LightGBM) |
+| High-dimensional, sparse, text | Linear models, Naive Bayes |
+| Image/audio/text raw signals | Pretrained deep model + fine-tuning |
+| Need interpretability for stakeholders | Logistic Regression, single Decision Tree, EBM |
+| Need maximum accuracy, interpretation secondary | Boosting + Stacking + careful CV |
+
+The order matters: start cheap, measure the gap to baseline, then escalate to more flexible (and more expensive to tune) models only if the cheap ones leave a meaningful gap on the table.
+
+### E. The CV Strategy Is the Architecture
+
+Lesson 5 introduced the CV variants; here is when to use which in a project context:
+
+- **Stratified K-fold (5 or 10)**: default for balanced classification.
+- **Stratified K-fold + `class_weight='balanced'`**: for moderate imbalance (10:1 to 100:1).
+- **Stratified K-fold + SMOTE inside the pipeline**: for severe imbalance (>100:1) — never SMOTE outside CV.
+- **Group K-fold**: when rows from the same source (user, patient, document) appear repeatedly.
+- **Time-series split (expanding/rolling window)**: when the data is temporal and deployment is forward-in-time.
+- **Nested CV (outer 5, inner 3 or 5)**: only when you have the compute and the comparison between models needs to be statistically clean.
+
+Picking the wrong CV strategy is the most common reason a model that "looks great in the notebook" performs poorly in production. The CV split must mimic deployment.
+
+### F. Stacking and the Diminishing-Returns Curve
+
+Once you have several reasonable models, stacking (Lesson 21) can squeeze out 1–3% more accuracy. But the marginal cost grows fast — more models to maintain, more inference latency, more places for bugs. The right question is not "can I stack?" but "is the gain worth the complexity?"
+
+A simple decision rule:
+- Single best model: use if it meets the accuracy target.
+- Average of top-3 with different inductive biases (e.g., LightGBM + Random Forest + Logistic Regression on engineered features): cheap diversification, almost always helps.
+- Full stacking with a meta-learner: only if the previous step still leaves a meaningful gap.
+
+Each step adds operational cost; spend it only when the accuracy budget demands it.
+
+### From Theory to the Code Below
+
+- Section 1's workflow diagram is the cost structure from (A); the time-allocation suggestion mirrors the rule of thumb there.
+- Section 2's "establish baseline first" step is the discipline from (B).
+- Section 3's `Pipeline` + `ColumnTransformer` setup is the leakage-audit checklist from (C) being implemented as code.
+- Section 4's model comparison loop (Logistic, RF, XGBoost, LightGBM, ...) is the bias-variance search from (D).
+- Section 5's CV setup follows the rules in (E); the choice between `StratifiedKFold` and `GroupKFold` should be deliberate, not default.
+- Section 6's voting/stacking experiment is the diminishing-returns calibration from (F).
+
+---
+
 ## 1. Machine Learning Project Workflow
 
 ### 1.1 Overall Process

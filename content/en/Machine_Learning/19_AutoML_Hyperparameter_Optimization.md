@@ -22,6 +22,116 @@ Tuning hyperparameters manually is tedious and biased by human intuition. AutoML
 
 ---
 
+## Theory & Principles
+
+AutoML and Bayesian hyperparameter optimization are not magic — they are concrete algorithms with well-defined trade-offs against the simpler grid/random alternatives from Lesson 5. Understanding what each method actually does to the search budget is what lets you pick the right tool for a given compute envelope.
+
+### A. The Search-Algorithm Hierarchy
+
+Lesson 5 introduced grid and random search. Bayesian optimization and successive halving are the next two rungs:
+
+| Method | Sample efficiency | Per-step overhead | Best when |
+|--------|-------------------|-------------------|-----------|
+| Grid | Low (curse of dimensionality) | Zero | Few hyperparameters, unlimited compute |
+| Random | Medium | Zero | Few important hyperparameters among many |
+| Bayesian | High | Moderate (fits surrogate) | Each evaluation expensive |
+| Successive halving | High (early stopping bad trials) | Low | Many trials with cheap partial evaluations |
+
+The right axis to compare them on is *sample efficiency* — how many trials it takes to find a near-optimal hyperparameter configuration. Grid scales worst (exponential in dimension), Bayesian and successive halving scale best.
+
+### B. Bayesian Optimization: Surrogate + Acquisition
+
+Bayesian optimization (BO) treats the (unknown) function `f(hp)` from hyperparameters to validation score as the object to maximize. The procedure:
+
+```
+initialize with a few random evaluations
+loop:
+    1. Fit a surrogate model p(f | observed) to all data so far
+    2. Pick hp_next = argmax_{hp} A(hp; surrogate)        ← acquisition function
+    3. Evaluate f(hp_next), add to observations
+```
+
+The two components define the algorithm:
+
+**Surrogate model**: a probabilistic regressor from `hp` to predicted `f(hp)`. Standard choices:
+- **Gaussian Process (GP)**: smooth, gives a calibrated posterior `(μ(hp), σ(hp))`. Costs `O(N³)` per fit, so scales badly past ~1000 evaluations.
+- **Tree-structured Parzen Estimator (TPE)**: models the conditional `p(hp | f > threshold)` and `p(hp | f ≤ threshold)`, picks `hp` to maximize their ratio. The Optuna default — fast, handles categorical hyperparameters naturally.
+- **Random Forest** or **Bayesian neural network**: alternatives for high-dimensional or mixed search spaces.
+
+**Acquisition function**: balances *exploration* (uncertain regions) against *exploitation* (regions predicted to be good). The standard choices:
+
+```
+Expected Improvement (EI):  A(hp) = E[max(0, f(hp) - f*)]    f* = best so far
+Upper Confidence Bound:     A(hp) = μ(hp) + κ · σ(hp)        κ controls exploration
+Probability of Improvement: A(hp) = P(f(hp) > f*)
+```
+
+EI is the most common default; it explicitly rewards "improvement over current best, weighted by probability". UCB is a simple, principled alternative whose tuning knob `κ` is interpretable as the exploration weight.
+
+The catch is the per-step overhead: fitting the surrogate and optimizing the acquisition function takes time. For evaluations that take seconds (small models, fast inference), the overhead can dominate the savings. BO shines when each evaluation costs minutes-to-hours.
+
+### C. Successive Halving and Hyperband
+
+A different angle: instead of choosing trials more cleverly, run *more* trials but cut off the bad ones early. **Successive halving** (Karnin et al., 2013):
+
+```
+1. Sample N random configurations
+2. Train each for r resources (epochs, samples, time, ...)
+3. Keep the top N/η, double the resource budget per remaining trial
+4. Repeat until 1 configuration remains
+```
+
+The total budget is `O(N · r · log_η(N))` — only a `log` factor more than running one configuration to completion, but it explores `N` configurations early. Bad configurations are killed before consuming much resource; good configurations survive to receive more.
+
+The risk: a configuration that starts slow but ends great gets killed prematurely. **Hyperband** (Li et al., 2017) hedges by running multiple successive-halving brackets with different `(N, r)` trade-offs, then taking the best across brackets. More robust to this failure mode at modest extra cost.
+
+scikit-learn's `HalvingRandomSearchCV` and `HalvingGridSearchCV` implement successive halving directly; Optuna includes it as a *pruner* that can be combined with TPE.
+
+### D. The CASH Problem and Full AutoML
+
+**CASH** (Combined Algorithm Selection and Hyperparameter optimization) is the joint problem: pick both the algorithm and its hyperparameters. AutoML frameworks solve CASH by treating the algorithm choice as a top-level categorical hyperparameter and running BO/Hyperband over the joint space.
+
+Auto-sklearn, FLAML, H2O AutoML, AutoGluon, TPOT all implement variants of this. Differences:
+
+- **Auto-sklearn**: BO over the full sklearn space + meta-learning warm-start (uses similar past datasets to seed promising configurations).
+- **FLAML**: cost-aware BO that explicitly models compute budget vs accuracy gain — picks cheap-and-good configurations first.
+- **AutoGluon**: focuses on stacking and ensembling rather than aggressive HPO; often produces strong models with simple defaults.
+- **TPOT**: genetic programming over scikit-learn pipelines (including preprocessing).
+
+The trade-off is reproducibility and interpretability. AutoML-found pipelines can be hard to explain ("we used a stack of these 7 models with these specific hyperparameters because the search picked it"). For regulatory or stakeholder-facing work, manual selection of a smaller, justified model often wins despite the accuracy cost.
+
+### E. The Multi-Fidelity Idea
+
+Both Hyperband and modern BO variants exploit the **multi-fidelity** insight: cheap approximations of `f(hp)` (training on a subset, training for fewer epochs) are correlated with the full-fidelity score. Use cheap evaluations to filter, expensive evaluations to confirm.
+
+BOHB (Bayesian Optimization + Hyperband) combines the two: Hyperband decides how to allocate budget across brackets, BO chooses configurations within brackets. This is currently one of the strongest known algorithms for HPO of expensive evaluations.
+
+### F. When Not to AutoML
+
+AutoML is most useful when:
+- The data is well-understood and clean.
+- The model class is largely settled (you know boosting beats linear here).
+- You can afford the search budget (one model evaluation × many trials).
+
+It is *less* useful when:
+- The bottleneck is data quality, not model choice.
+- You need a model that you can fully explain to a regulator.
+- The search budget is too small to benefit from sample-efficient algorithms (just use random search).
+- Domain knowledge gives you a strong prior on architecture choices.
+
+The honest summary: AutoML is a powerful tool for the modeling step, but it cannot fix problems upstream of modeling.
+
+### From Theory to the Code Below
+
+- Section 1's CASH definition and the "AutoML levels" hierarchy are the framing from (D).
+- Section 2's Optuna example uses TPE from (B); the `study.optimize(objective, n_trials=N)` loop is the Bayesian-optimization recursion.
+- Section 2's `optuna.pruners.SuccessiveHalvingPruner` or `MedianPruner` is the successive-halving filter from (C).
+- Section 3's `HalvingRandomSearchCV` from scikit-learn is the standalone successive-halving algorithm from (C).
+- Section 4's FLAML / Auto-sklearn / AutoGluon examples each implement one variant of the CASH solver from (D).
+- The acquisition-function choice in Optuna (`acquisition_func='EI' | 'UCB' | ...`, when configurable) maps to (B).
+
+---
+
 ## 1. The AutoML Landscape
 
 ### 1.1 What AutoML Automates

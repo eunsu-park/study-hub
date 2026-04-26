@@ -22,6 +22,131 @@ A model that makes accurate predictions but cannot explain them is a liability i
 
 ---
 
+## Theory & Principles
+
+The four explainability methods in this lesson — SHAP, LIME, PDP, ICE — answer four genuinely different questions, and they have four very different mathematical foundations. SHAP comes from cooperative game theory and is uniquely characterized by four axioms. LIME approximates a black-box locally with a linear model. PDP/ICE compute marginal effects directly. Knowing which method answers which question prevents the most common explainability mistake: reading a global explanation as if it were local, or vice versa.
+
+### A. SHAP and the Shapley Value Axioms
+
+Shapley values come from cooperative game theory (Shapley, 1953). The setup: `p` players cooperate to produce a payout `v(S)` (the "value function" of any subset `S` of players). How do you fairly distribute the total payout `v(N)` among the `p` players?
+
+Shapley proved that there is a *unique* allocation `φ_i` satisfying four axioms:
+
+1. **Efficiency**: the allocations sum to the total. `Σ φ_i = v(N) - v(∅)`.
+2. **Symmetry**: if two players are interchangeable (`v(S ∪ {i}) = v(S ∪ {j})` for all `S`), they get the same allocation.
+3. **Dummy** (or null player): if a player adds nothing to any coalition, their allocation is zero.
+4. **Additivity**: for two games `v` and `w`, `φ_i(v + w) = φ_i(v) + φ_i(w)`.
+
+The unique solution is the **Shapley value**:
+
+```
+φ_i = Σ_{S ⊆ N \ {i}}  [|S|! · (p - |S| - 1)!  /  p!] · (v(S ∪ {i}) - v(S))
+```
+
+The summand is the *marginal contribution* of player `i` to coalition `S`, weighted by the number of orderings that produce `S` as the set already present when `i` arrives.
+
+**SHAP** (SHapley Additive exPlanations, Lundberg & Lee, 2017) interprets this for ML: players are features, the "payout" is the model prediction, the "coalition" is a subset of features whose values are observed (the rest are marginalized over the data distribution). The Shapley value `φ_i` for feature `i` and a specific input `x` is the average contribution of feature `x_i` to that prediction, fairly distributed across all possible orders in which features could be added to the explanation.
+
+The four axioms give SHAP its theoretical guarantees:
+- Efficiency ⟹ explanations are exhaustive (sum equals the prediction minus the baseline).
+- Symmetry ⟹ identical features get identical attributions.
+- Dummy ⟹ truly irrelevant features get zero attribution.
+- Additivity ⟹ ensemble explanations are sums of base-model explanations.
+
+The cost: computing `φ_i` exactly requires summing over `2^p` subsets — exponential in feature count. SHAP's practical contribution is a family of *efficient approximations*: TreeSHAP (exact in `O(TLD²)` for tree ensembles), KernelSHAP (model-agnostic, uses sampling and weighted least squares), DeepSHAP (uses backprop to propagate attributions in deep nets).
+
+### B. LIME: Local Linear Surrogate
+
+LIME (Local Interpretable Model-agnostic Explanations, Ribeiro et al., 2016) takes a totally different approach. Instead of axiomatic attribution, LIME locally *approximates* the black-box model with an interpretable surrogate.
+
+For a single instance `x` to explain:
+
+```
+1. Generate perturbed samples z_1, ..., z_K around x         (random masking of features)
+2. Predict each: f(z_k)
+3. Weight each by proximity to x: w_k = π_x(z_k)           (e.g., RBF kernel)
+4. Fit a sparse linear model g (LASSO) on (z_k, f(z_k)) with weights w_k
+5. The coefficients of g are the local feature attributions
+```
+
+LIME's claim: in a small enough neighborhood of `x`, even a complex model behaves approximately linearly. The fitted surrogate `g` is the local linear approximation. Coefficients are interpretable directly.
+
+The strengths:
+- Truly model-agnostic (only needs `f(·)`, no gradients required).
+- Works on tabular, image (super-pixel masks), and text (token presence) inputs uniformly.
+- Cheap per instance.
+
+The weaknesses:
+- Sensitive to the perturbation distribution and proximity kernel — different choices give different explanations.
+- Locality is heuristic; "small enough neighborhood" is not formalized.
+- Two nearby instances can get very different LIME explanations because the random perturbations differ.
+
+LIME and SHAP often disagree on the same instance. SHAP is preferable when consistency and theoretical guarantees matter; LIME is preferable when speed and ease of implementation dominate.
+
+### C. PDP: the Marginal Effect of a Feature
+
+A **partial dependence plot (PDP)** for feature `j` shows the average prediction as a function of `x_j`, marginalizing out all other features:
+
+```
+PDP_j(v) = (1/N) · Σ_{i=1..N}  f(x_i with x_{i,j} replaced by v)
+```
+
+Mathematically: `PDP_j(v) = E_{X_{-j}}[f(v, X_{-j})]`. Pick a value `v` for feature `j`, set every training example's `j`-th feature to `v`, average the model's predictions. Sweep `v` across the feature's range to get the curve.
+
+PDP shows the **average global effect** of a feature. Useful for: "as income increases, does the predicted churn rate go up or down?"
+
+Two well-known weaknesses:
+
+1. **Hides heterogeneity.** The average can be a flat line even when the model assigns strongly positive effect to half the population and strongly negative to the other half. The averages cancel.
+2. **Breaks under correlated features.** If `x_j` is correlated with `x_k`, then setting `x_j = v` while leaving `x_k` at its observed value creates a row that may not exist in the data distribution. PDP queries the model in regions where it was never trained — extrapolation noise.
+
+### D. ICE: PDP Without the Average
+
+**Individual Conditional Expectation (ICE)** plots are PDPs without the averaging step:
+
+```
+For each individual i, plot f(x_i with x_{i,j} replaced by v) as v sweeps.
+```
+
+You see one curve per individual. The PDP is the average of these curves. ICE exposes heterogeneity that PDP hides:
+- All curves parallel and similar shape ⟹ feature has a uniform effect, PDP is faithful.
+- Curves criss-cross or diverge ⟹ effect varies across the population, PDP averages a misleading signal.
+
+For correlated-features distortion, **ALE (Accumulated Local Effects)** is the principled fix: instead of replacing `x_j = v` everywhere, integrate the local conditional gradient `∂f/∂x_j` over `x_j`'s range, weighted by the empirical density. ALE plots are not affected by the unrealistic-data problem.
+
+### E. Local vs Global, and What "Explanation" Means
+
+The four methods split along two axes:
+
+|  | Per-instance (local) | Across the dataset (global) |
+|---|----------------------|------------------------------|
+| Attribution | SHAP (per-instance values), LIME | SHAP (mean absolute per-feature) |
+| Functional shape | ICE (per-instance curves) | PDP, ALE |
+
+Global explanations like "feature `j` is the most important" do not tell you *how* the model uses feature `j` (monotone? non-monotone? interacts with `k`?). Local explanations like "for *this* customer, age contributed +12% to the churn prediction" do not tell you whether age matters across the whole population. Use both.
+
+A common mistake: reading a feature-importance bar chart (global) as if it explained an individual decision (local). For a regulator-facing report on a denied loan, you need a per-instance SHAP explanation, not a global feature-importance ranking.
+
+### F. The Cost of Explainability
+
+Each method adds inference cost:
+- TreeSHAP: `O(TLD²)` per instance, often the cheapest exact option for tree models.
+- KernelSHAP: `O(K · M)` per instance where `K` is sample count and `M` is forward-pass cost. Slow for large `M`.
+- LIME: `O(K · M)` per instance, similar to KernelSHAP.
+- PDP / ICE: `O(N · G)` for `N` training examples and `G` grid points. One-shot per feature; cheap.
+
+Production systems often pre-compute SHAP values offline for a representative sample, then serve the closest pre-computed explanation at query time.
+
+### From Theory to the Code Below
+
+- Section 2's `shap.TreeExplainer(model)` uses TreeSHAP from (A); `shap.KernelExplainer` uses KernelSHAP. The waterfall plot visualizes the per-feature `φ_i` from (A).
+- Section 3's `lime.lime_tabular.LimeTabularExplainer` runs the perturb-and-fit procedure from (B).
+- Section 4's `partial_dependence` and `PartialDependenceDisplay` compute and plot the PDP from (C).
+- The same `PartialDependenceDisplay(kind='individual')` produces the ICE curves from (D).
+- The "feature importance" bar chart at the end is the global aggregate from (E); SHAP's `mean(|φ_i|)` is the principled version of it.
+
+---
+
 ## 1. Interpretability vs. Explainability
 
 ### 1.1 Key Concepts

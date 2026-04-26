@@ -22,6 +22,106 @@ Despite its name, logistic regression is a classification algorithm -- and one o
 
 ---
 
+## Theory & Principles
+
+Logistic regression looks like a small modification of linear regression — wrap the linear output in a sigmoid — but it is built on a completely different principle: maximum likelihood estimation under a Bernoulli model. That single change cascades into a different loss function (cross-entropy), a different gradient, and a different geometric interpretation (linear decision boundaries in log-odds space).
+
+### A. The Sigmoid and Why It Has That Specific Derivative
+
+Define `σ(z) = 1 / (1 + e^{-z})`. Two properties matter:
+
+```
+σ(z) ∈ (0, 1)               ← can be read as a probability
+σ(-z) = 1 - σ(z)            ← symmetric
+σ'(z) = σ(z) · (1 - σ(z))   ← derivative in terms of σ itself
+```
+
+The last identity is the reason the sigmoid (rather than some other 0–1 squashing function) became standard. Working it out:
+
+```
+σ(z)  = 1 / (1 + e^{-z})
+σ'(z) = e^{-z} / (1 + e^{-z})²
+      = [1 / (1 + e^{-z})] · [e^{-z} / (1 + e^{-z})]
+      = σ(z) · (1 - σ(z))
+```
+
+The derivative depends only on the *output* of the sigmoid, not the input. During gradient descent you have already computed `σ(z)` for the forward pass — getting the gradient costs essentially nothing extra. This is the same property that makes sigmoid (and tanh, softmax) numerically efficient in neural networks.
+
+### B. From Maximum Likelihood to Cross-Entropy
+
+Model each label as Bernoulli: `P(y = 1 | x) = σ(βᵀx) = p`, `P(y = 0 | x) = 1 - p`. For a single example this writes compactly as
+
+```
+P(y | x; β) = p^y · (1 - p)^{1-y}
+```
+
+The likelihood of the dataset is the product over `N` independent examples; taking logs gives the log-likelihood
+
+```
+ℓ(β) = Σ_i [ y_i · log p_i + (1 - y_i) · log(1 - p_i) ]
+```
+
+Maximum likelihood estimation maximizes `ℓ(β)`; equivalently, it *minimizes* the negative log-likelihood, which is exactly the **binary cross-entropy loss**:
+
+```
+L_CE(β) = - (1/N) · Σ_i [ y_i · log p_i + (1 - y_i) · log(1 - p_i) ]
+```
+
+So cross-entropy is not a heuristic — it is the negative log-likelihood of the Bernoulli model. The gradient simplifies beautifully because of the sigmoid identity:
+
+```
+∂L/∂β = (1/N) · Xᵀ (p - y)            ← same shape as OLS gradient
+```
+
+The gradient is the design matrix times the residual `p - y`. Replace `p` with `Xβ` and you get the OLS gradient back — the two algorithms share the *form* of the gradient, just with a different "predicted" quantity.
+
+Unlike OLS, this loss has no closed-form minimizer (the sigmoid breaks linearity inside the gradient). You solve it with an iterative method: gradient descent, Newton-Raphson (which gives IRLS — iteratively reweighted least squares), or quasi-Newton (L-BFGS, scikit-learn's default).
+
+### C. Multinomial Extension: the Softmax
+
+For `K` classes, replace the sigmoid with the **softmax**:
+
+```
+p_k = exp(β_kᵀ x) / Σ_j exp(β_jᵀ x)         k = 1, ..., K
+```
+
+The softmax outputs a valid probability distribution over `K` classes (positive, sums to one). The loss generalizes to **categorical cross-entropy**:
+
+```
+L_CE = - (1/N) · Σ_i Σ_k [ 1{y_i = k} · log p_{i,k} ]
+```
+
+The gradient again has the elegant form `∂L/∂β_k = (1/N) · Xᵀ (p_{·,k} - 1{y = k})`. Binary cross-entropy is the special case `K = 2` with one weight vector instead of two (the second is fixed to zero by the redundancy of `Σ_k p_k = 1`).
+
+Softmax has a non-uniqueness: adding the same constant to every `β_kᵀ x` leaves all `p_k` unchanged, so the parameters are identifiable only up to one additive shift. scikit-learn breaks this by either fitting `K-1` weight vectors (the `multinomial` formulation when paired with regularization) or running `K` independent one-vs-rest binary problems.
+
+### D. The Linear Decision Boundary in Log-Odds Space
+
+Logistic regression is *linear* in a non-obvious sense. The model's prediction `p` is a non-linear function of `x`, but the **log-odds** (logit) is linear:
+
+```
+logit(p) = log(p / (1-p)) = βᵀx
+```
+
+So the assumption baked into logistic regression is: the log-odds of the positive class are a linear function of the features. The decision boundary `p = 0.5` corresponds to `βᵀx = 0` — a hyperplane in feature space, exactly like a linear classifier. The sigmoid only controls how *confidence* changes with distance from the boundary; it does not curve the boundary itself.
+
+Two practical consequences:
+
+1. **Coefficients are interpretable as log-odds-ratios.** A unit increase in feature `x_j` multiplies the odds `p / (1-p)` by `exp(β_j)`. This is the property that makes logistic regression irreplaceable in medicine, credit scoring, and other domains where coefficient interpretability is required by stakeholders.
+2. **Non-linear boundaries require feature engineering.** If the true boundary is curved, plain logistic regression cannot fit it. Polynomial features, interactions, or kernel tricks (Lesson 9) extend the same algorithm to non-linear decision surfaces — but the *log-odds linearity* assumption stays.
+
+Regularization (L1/L2) adds the same `λ ‖β‖_p` penalty to `L_CE` as in linear regression, with the same effects: L2 stabilizes correlated features, L1 produces sparsity. scikit-learn's `LogisticRegression(penalty=...)` exposes both.
+
+### From Theory to the Code Below
+
+- Section 1.1's `sigmoid(z)` is the function from (A); the plot shows the S-shape that arises from `σ' = σ(1-σ)`.
+- Section 1.2's `LogisticRegression().fit(X, y)` minimizes the binary cross-entropy from (B) using L-BFGS by default.
+- The decision boundary plotted in Section 2 is the `βᵀx = 0` hyperplane from (D) — it is straight in raw feature space, even though the predicted probabilities curve.
+- Section 3's `multi_class='multinomial'` switches the loss to the categorical cross-entropy from (C); the softmax is computed inside the predict step.
+- The `C` parameter in scikit-learn is the *inverse* of the regularization strength `λ`: smaller `C` ⟹ stronger regularization. (This is one of the most frequent bugs to watch for — opposite convention from `Ridge(alpha=...)`.)
+
+---
+
 ## 1. Binary Classification
 
 ### 1.1 Sigmoid Function

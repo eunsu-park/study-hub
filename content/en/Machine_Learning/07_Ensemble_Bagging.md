@@ -22,7 +22,76 @@ A single decision tree is fast and interpretable but fragile -- small changes in
 
 ---
 
-> **The wisdom of a committee.** Imagine asking 100 people to guess the number of jelly beans in a jar. Each person's guess may be wildly off, but the *average* of all guesses is remarkably close to the truth -- this is the "wisdom of crowds" effect. Bagging (Bootstrap Aggregating) applies the same principle: train many diverse models on slightly different random samples of the data, then average their predictions. Each individual model may overfit to its sample, but the ensemble cancels out the individual errors.
+## Theory & Principles
+
+The "wisdom of crowds" intuition is more than a metaphor — it follows from a precise statistical theorem about averaging independent estimators. Bagging operationalizes that theorem with bootstrap sampling, and Random Forest extends it with one extra randomization step. Understanding both is the easiest way to see why these methods are *the* default for tabular data.
+
+### A. The Variance-Reduction Theorem
+
+Let `Z_1, Z_2, ..., Z_M` be `M` random variables, each with mean `μ` and variance `σ²`. The mean is `Z̄ = (1/M) · Σ Z_m`. Then:
+
+```
+E[Z̄]   = μ                                     ← bias unchanged
+Var[Z̄] = σ²/M                                  ← if Z_m are independent
+       = ρ · σ² + (1 - ρ) · σ²/M               ← if Z_m have pairwise correlation ρ
+```
+
+The independence formula is the textbook variance-of-the-mean. The correlated version (which is what we actually have, since the `M` trees are trained on overlapping bootstrap samples of the same dataset) shows the catch: as `M → ∞` the second term vanishes but `ρ · σ²` does not. Variance reduction asymptotes at the *correlation floor* `ρ · σ²`.
+
+This is the entire mathematical engine of bagging: average many estimators to reduce variance. The bias term is untouched — bagging an underfit model produces another underfit model. The *base learner must already be low-bias* (a deep, fully-grown tree, for example) for bagging to help, because all bagging can do is shrink variance.
+
+### B. Bootstrap Sampling: How to Manufacture Diversity
+
+Bagging trains each base estimator on a **bootstrap sample**: draw `N` items from the `N`-row training set *with replacement*. Some rows appear multiple times, others not at all. The probability that a specific row is *not* drawn in `N` independent draws is
+
+```
+P(row i never drawn) = (1 - 1/N)^N  →  1/e ≈ 0.368  as N → ∞
+```
+
+So each bootstrap sample contains roughly `1 - 1/e ≈ 63.2%` of the unique rows; the other `36.8%` are **out-of-bag (OOB)** for that tree. Each tree is trained on its own bootstrap sample, which differs from the others — that is where the diversity comes from. Without diversity, all `M` trees would be identical and `ρ = 1`, killing the variance reduction.
+
+The OOB rows have a delightful side effect: each row is OOB for ~37% of the trees. Aggregating predictions for row `i` only over the trees that did not see `i` gives the **OOB error** — a free, almost-unbiased estimate of generalization error, computed without a separate validation set.
+
+### C. Random Forest: a Second Source of Decorrelation
+
+Bagged trees are still highly correlated when one or two features dominate — every tree picks the same root split. Random Forest (Breiman, 2001) adds a second randomization to break this correlation:
+
+> **At each split**, consider only a random subset of `m_try` features (typically `√p` for classification, `p/3` for regression), not all `p`.
+
+This is the change that turns "bagged trees" into "random forest". Forcing each tree to occasionally pick a worse split reduces individual-tree accuracy slightly but reduces the pairwise correlation `ρ` substantially. The variance formula `ρ · σ² + (1 - ρ) · σ²/M` is decreasing in `ρ`, so the trade is favorable: a small bias increase in exchange for a large variance decrease.
+
+Empirically, Random Forest dominates plain bagging precisely because of this `m_try` mechanism. The hyperparameter `max_features` in scikit-learn is exactly `m_try`.
+
+### D. Aggregation: Averaging vs Voting
+
+For regression, the ensemble prediction is the simple mean:
+
+```
+ŷ_ensemble(x) = (1/M) · Σ_m  T_m(x)
+```
+
+For classification, two natural options:
+
+- **Hard voting**: each tree predicts a class; the ensemble picks the majority. Equivalent to averaging then arg-maxing on a one-hot encoded vote.
+- **Soft voting**: each tree outputs class probabilities; the ensemble averages the probabilities, then takes argmax. Strictly better in practice — uses more information from each tree, especially when probabilities are well-calibrated.
+
+scikit-learn's `RandomForestClassifier` defaults to soft voting (it averages `predict_proba` outputs, then argmaxes).
+
+### E. What Bagging Cannot Fix
+
+Variance reduction has a ceiling. If your base learner is biased, bagging cannot save it — the ensemble inherits the bias. If features are very few or very weak, decorrelation has no room to operate. And if the irreducible noise `σ²` (from the bias-variance decomposition in Lesson 1) is large, the ensemble error will plateau at that noise floor regardless of `M`.
+
+The classical regime where bagging shines: a flexible, low-bias, high-variance base learner (deep decision trees) on tabular data with many moderately informative features. That regime covers an enormous fraction of real-world ML problems, which is why Random Forest is one of the most widely deployed algorithms in practice.
+
+### From Theory to the Code Below
+
+- Section 1's framing of bagging vs boosting vs stacking is the variance-vs-bias distinction from (A) and (E).
+- Section 2's bootstrap-sample loop is the row-resampling step from (B); the OOB error reported by `RandomForestClassifier(oob_score=True)` is the free estimator from (B).
+- Section 3's `RandomForestClassifier(max_features='sqrt')` is the `m_try` decorrelation step from (C).
+- Section 3's `n_estimators` parameter is the `M` in the variance formula in (A) — diminishing returns as `M` increases past the point where `(1-ρ)σ²/M` becomes negligible compared to `ρσ²`.
+- Section 4's `voting='hard'` vs `voting='soft'` toggle is the choice from (D).
+
+---
 
 ## 1. Basic Concepts of Ensemble Learning
 

@@ -22,6 +22,125 @@ Support Vector Machines find the decision boundary that maximally separates clas
 
 ---
 
+## Theory & Principles
+
+SVM stands out among classical ML algorithms because every step has a closed mathematical justification: the maximum margin from a geometric optimization, the dual problem from Lagrangian duality, and the kernel trick from Mercer's theorem. These pieces fit together so cleanly that once you see the derivation, the API parameters (`C`, `kernel`, `gamma`) become obvious knobs on a single underlying object.
+
+### A. Maximum Margin: from Geometry to a Convex Program
+
+A separating hyperplane in `ℝ^p` is parametrized by `w ∈ ℝ^p` and `b ∈ ℝ`:
+
+```
+{ x : wᵀx + b = 0 }
+```
+
+The **functional margin** of point `(x_i, y_i)` (with `y_i ∈ {-1, +1}`) is `y_i · (wᵀx_i + b)`. It is positive when the point is on the correct side, but the magnitude is meaningless because scaling `(w, b)` by a constant scales it linearly without changing the geometric position of the hyperplane.
+
+The **geometric margin** divides out that scale ambiguity:
+
+```
+margin(x_i) = y_i · (wᵀx_i + b) / ‖w‖
+```
+
+This is the actual signed distance from `x_i` to the hyperplane in feature space units. Maximizing the minimum geometric margin over all points is the **maximum-margin classifier**.
+
+By the scale ambiguity above, we can choose the canonical normalization where the closest points satisfy `y_i · (wᵀx_i + b) = 1`. The geometric margin is then `1/‖w‖`, so maximizing margin is equivalent to **minimizing ‖w‖²**:
+
+```
+minimize_{w, b}    ½ · ‖w‖²
+subject to         y_i · (wᵀx_i + b) ≥ 1   for all i
+```
+
+This is a quadratic program (convex objective, linear constraints) — globally solvable, no local minima.
+
+### B. The Dual Problem and Why It Matters
+
+The above is the **primal** SVM problem. Form the Lagrangian by attaching multipliers `α_i ≥ 0` to each constraint:
+
+```
+L(w, b, α) = ½ · ‖w‖² - Σ α_i · [y_i · (wᵀx_i + b) - 1]
+```
+
+Set ∂L/∂w = 0 and ∂L/∂b = 0:
+
+```
+w  = Σ α_i · y_i · x_i           (1)
+0  = Σ α_i · y_i                  (2)
+```
+
+Substitute (1) and (2) back into `L` to eliminate `w` and `b`. The result is the **dual problem**:
+
+```
+maximize_α   Σ α_i  -  ½ · Σ_i Σ_j α_i α_j · y_i y_j · (x_i ᵀ x_j)
+subject to   α_i ≥ 0,  Σ α_i y_i = 0
+```
+
+Two consequences shape everything that follows:
+
+1. **The training data appears only as inner products `x_iᵀ x_j`.** No features ever appear in isolation in the optimization. This is the door that opens the kernel trick.
+2. **Support vectors fall out of the KKT conditions.** Complementary slackness says `α_i · [y_i (wᵀx_i + b) - 1] = 0`. So either `α_i = 0` (the example is irrelevant to the boundary) or the example sits exactly on the margin (`y_i (wᵀx_i + b) = 1`). Only the latter — the **support vectors** — contribute to `w` via equation (1). The rest of the dataset can be deleted without changing the solution. This sparsity is what makes SVM memory-efficient at prediction time.
+
+### C. The Kernel Trick and Mercer's Theorem
+
+The dual depends on `x_iᵀ x_j` only. If we map every `x` through a feature transform `φ: ℝ^p → ℝ^d` (potentially `d = ∞`), the same algorithm runs verbatim on `φ(x_i)ᵀ φ(x_j)`. We never need to compute `φ(x)` explicitly — only the inner product. A function `K(x, x') = φ(x)ᵀ φ(x')` that returns this inner product without forming `φ` is a **kernel**.
+
+**Mercer's theorem** characterizes which functions are valid kernels: `K` is a valid kernel iff for any finite set of points the matrix `K_{ij} = K(x_i, x_j)` is symmetric positive semi-definite. Equivalently, there exists *some* (possibly infinite-dimensional) feature space in which `K` is the inner product. That guarantee is what makes the kernel trick mathematically sound rather than a hack.
+
+Standard kernels:
+
+| Kernel | Formula | Implicit feature space |
+|--------|---------|------------------------|
+| Linear | `K(x, x') = xᵀx'` | the original space |
+| Polynomial (deg `d`) | `(γ · xᵀx' + r)^d` | all monomials up to degree `d` |
+| RBF (Gaussian) | `exp(-γ · ‖x - x'‖²)` | infinite-dimensional |
+| Sigmoid | `tanh(γ · xᵀx' + r)` | not always positive semi-definite — beware |
+
+The **RBF kernel** can be expanded as a Taylor series in `xᵀx'` with all monomial degrees present, giving an infinite-dimensional implicit feature space. Despite this, the inner product is a single scalar `exp(-γ · ‖x - x'‖²)` — that is the entire trick. The hyperparameter `γ` controls how quickly similarity decays with distance: large `γ` ⟹ very local kernel, prone to overfitting; small `γ` ⟹ smooth decision boundaries, prone to underfitting.
+
+### D. Soft Margin: Living with Non-Separable Data
+
+The hard-margin formulation in (A) requires that some hyperplane separates the data perfectly — usually false in practice. The **soft-margin** SVM relaxes the constraints by introducing slack variables `ξ_i ≥ 0`:
+
+```
+minimize_{w, b, ξ}    ½ · ‖w‖² + C · Σ ξ_i
+subject to            y_i · (wᵀx_i + b) ≥ 1 - ξ_i,  ξ_i ≥ 0
+```
+
+`ξ_i = 0` for points on the correct side outside the margin, `0 < ξ_i < 1` for points on the correct side but inside the margin, `ξ_i ≥ 1` for misclassified points. The penalty `C · Σ ξ_i` controls how much the model dislikes margin violations.
+
+The hyperparameter `C` is the central knob:
+
+- **Large `C`**: violations are very expensive, the model behaves like hard-margin and tries to classify every training point correctly. High variance, low bias — overfits.
+- **Small `C`**: violations are cheap, the model accepts some misclassifications in exchange for a wider margin. Low variance, higher bias — generalizes more smoothly.
+
+In the dual, soft margin only adds an upper bound to the multipliers: `0 ≤ α_i ≤ C`. Everything else stays the same. The kernel trick still works.
+
+### E. Hinge Loss: SVM as Loss Minimization
+
+There is a third, complementary view. Define the **hinge loss**:
+
+```
+ℓ_hinge(y, f) = max(0, 1 - y · f)
+```
+
+Then the soft-margin SVM is exactly:
+
+```
+minimize_{w, b}   (1/N) · Σ ℓ_hinge(y_i, wᵀx_i + b)  +  λ · ‖w‖²
+```
+
+(with `λ ∝ 1/C`). This puts SVM in the same framework as logistic regression (which uses log loss instead of hinge loss) — both are linear classifiers with L2 regularization, just with different loss functions. Hinge loss has the unique property of being *exactly zero* once a point is correctly classified beyond the margin — that is what produces the support-vector sparsity from a different angle.
+
+### From Theory to the Code Below
+
+- Section 1's "hyperplane and margin" picture is the geometric setup from (A).
+- Section 1's "support vectors" terminology is the KKT consequence from (B).
+- Section 2's hard-margin / soft-margin discussion is exactly (A) vs (D); the `C` parameter in `SVC(C=...)` is the penalty in (D) — *larger* `C` means harder margin.
+- Section 3's `kernel='linear' | 'poly' | 'rbf' | 'sigmoid'` selects the kernel from (C); the `gamma` parameter controls the RBF bandwidth.
+- The `LinearSVC` class is a special case implemented with the hinge-loss formulation from (E), optimized for the linear-kernel case at large `N`.
+
+---
+
 ## 1. Core Concepts of SVM
 
 ### 1.1 Hyperplane and Margin
