@@ -16,6 +16,8 @@
 
 ## Table of Contents
 
+Before the hook tour, read [**Theory & Principles**](#theory--principles) — how hooks are stored as a positional list on a fiber, why call order matters, the closure trap of `useState`, and what `useEffect`'s dependency array compares.
+
 1. [useState: Managing State](#1-usestate-managing-state)
 2. [useEffect: Side Effects](#2-useeffect-side-effects)
 3. [useRef: Refs and Mutable Values](#3-useref-refs-and-mutable-values)
@@ -24,6 +26,173 @@
 6. [Custom Hooks](#6-custom-hooks)
 7. [Rules of Hooks](#7-rules-of-hooks)
 8. [Practice Problems](#practice-problems)
+
+---
+
+## Theory & Principles
+
+Hooks look like ordinary function calls — `const [count, setCount] = useState(0)` — but they are nothing of the sort. Each hook call has a hidden side effect: it reads from or writes to a slot on the currently-rendering component's internal storage. The whole API depends on the order of those calls being identical between every render. This single fact explains the Rules of Hooks, the dependency array, the stale-closure trap, and why custom hooks compose without ceremony.
+
+### A. The Internal Representation: a Positional List on the Fiber
+
+Every component instance in React is backed by an internal object called a **fiber**. The fiber holds the props, the rendered output, the child fibers, and — crucially — a **linked list of hook records**. Each hook record stores whatever that hook needs to remember between renders: for `useState`, the current value and the dispatch function; for `useEffect`, the previous dependency array and the previous cleanup; for `useRef`, the mutable `.current` box.
+
+```
+fiber for <Counter />
+   ├─ memoizedState (head of hooks list)
+   │     hook 0: { state: 0, queue: ... }      // useState(0)
+   │     hook 1: { state: 'red', queue: ... }  // useState('red')
+   │     hook 2: { deps: [0], cleanup: ... }   // useEffect(...)
+   │     hook 3: { current: null }             // useRef(null)
+   │     ...
+   └─ ...
+```
+
+There is a single internal counter that tracks "which slot are we on" while the render runs. Each `useState` call advances the counter and reads slot `i`; each `useEffect` does the same one slot later; and so on. The hook function itself does not know its index — it just asks the runtime "give me the next slot."
+
+This design buys two important things:
+
+1. **No naming overhead.** You never assign a hook a name or a key. The slot is identified by the order it was reached.
+2. **Hooks compose cheaply.** A custom hook that internally calls `useState` and `useEffect` just consumes two slots from whoever called it. Recursive composition is just nested slot consumption.
+
+It also creates the one big constraint everything else flows from: **the slot count and the slot order must match between renders.** If render 1 calls `useState`, `useState`, `useEffect` and render 2 calls `useState`, `useEffect`, `useState`, then on render 2 React reads the second slot (which holds a `useState` record) and tries to use it as a `useEffect`. Memory corruption in spirit if not in fact.
+
+### B. Why the Rules of Hooks Exist
+
+Two rules:
+
+1. **Only call hooks at the top level of a component or another hook** — not inside `if`, `for`, `while`, `try`, after an early `return`, inside a callback.
+2. **Only call hooks from React functions** — components or other hooks.
+
+Both rules exist to enforce the invariant in (A). A hook inside an `if` might be called on render 1 (the condition was true) and skipped on render 2 (the condition was false). The slot count differs and every subsequent hook reads from the wrong slot. The lint rule `eslint-plugin-react-hooks` flags this at write time precisely because the runtime cannot detect it cleanly — it only sees the wrong slot value, not the structural reason.
+
+The corollary: conditional behavior must live *inside* a hook call, not *around* it.
+
+```jsx
+// WRONG — hook count differs across renders
+if (loggedIn) {
+  const [name, setName] = useState('');
+}
+
+// RIGHT — always call the hook; condition lives in the value or in an effect
+const [name, setName] = useState('');
+useEffect(() => {
+  if (loggedIn) {
+    fetchProfile().then(p => setName(p.name));
+  }
+}, [loggedIn]);
+```
+
+### C. `useState` and the Stale Closure Problem
+
+Each render runs your component function from scratch. Every value defined inside — including the `count` returned from `useState` — is a fresh local variable bound to the value as of that render. If a callback closes over `count` and that callback is called *later*, the callback still sees the old `count`.
+
+```jsx
+function Counter() {
+  const [count, setCount] = useState(0);
+
+  useEffect(() => {
+    const id = setInterval(() => {
+      setCount(count + 1); // BUG: `count` is captured at mount, always 0
+    }, 1000);
+    return () => clearInterval(id);
+  }, []); // <- empty deps: effect runs once, captures the first `count`
+
+  return <div>{count}</div>;
+}
+```
+
+The fix is to break the dependency on the captured value:
+
+- **Functional update**: `setCount(prev => prev + 1)` — the setter receives the latest state from the queue, regardless of what was captured.
+- **Add to dependencies**: include `count` in the dependency array — but then the effect tears down and recreates the interval every tick, which is usually not what you want.
+- **Ref**: store the latest value in `useRef` and read `ref.current` inside the callback — escapes the dependency tracking entirely.
+
+The closure problem is not a React bug; it is JavaScript working as designed. Hooks just make it visible because re-renders create fresh closures repeatedly, and old closures linger in subscriptions, timers, and event handlers.
+
+### D. `useEffect`'s Dependency Array as Reference Equality
+
+After every render, React runs effects whose dependencies have changed since the last run. "Changed" means **`Object.is` comparison, element by element**, against the previous dependency array. There is no deep equality, no structural comparison, no diffing.
+
+```
+prev deps: [user, setting]
+new  deps: [user, setting]
+
+For each i: Object.is(prev[i], new[i]) ?
+  - if all true: skip the effect, keep previous cleanup
+  - if any false: run cleanup of previous effect, run new effect
+```
+
+This is why an inline object or array in dependencies always re-runs:
+
+```jsx
+useEffect(() => { ... }, [{ id: userId }]); // new object every render → re-runs every render
+useEffect(() => { ... }, [userId]);          // primitive → only re-runs when userId changes
+```
+
+And why functions defined in the body need `useCallback` if they are dependencies:
+
+```jsx
+const handleSave = () => save(value); // new function every render
+useEffect(() => { ... }, [handleSave]); // re-runs every render
+
+const handleSave = useCallback(() => save(value), [value]); // stable while value stable
+useEffect(() => { ... }, [handleSave]); // re-runs only when value changes
+```
+
+The cleanup function makes effects safe to re-run: it is the inverse of the setup, and React calls it before the next setup (and at unmount). The mental model: an effect *synchronizes* the component to some external system. If the inputs to the synchronization change, you tear down the old synchronization and set up the new one.
+
+### E. `useMemo` / `useCallback`: Same Mechanism, Different Payload
+
+Both are memoization primitives that key on a dependency array using the same `Object.is` comparison.
+
+- `useMemo(fn, deps)` — runs `fn()` on first render, caches the result; on later renders, if `deps` are equal, returns the cached value; otherwise re-runs `fn()` and caches the new value.
+- `useCallback(fn, deps)` — exactly equivalent to `useMemo(() => fn, deps)`. The "memoized value" is the function itself.
+
+They cost memory (one slot per call) and they cost a comparison every render. They are worth it only when:
+
+1. The cached computation is genuinely expensive, OR
+2. The cached value is used as a dependency for another hook, OR
+3. The cached value is passed as a prop to a `React.memo`-wrapped child whose re-render is expensive.
+
+Wrapping every value in `useMemo` "just in case" makes the application *slower*: you pay the comparison cost on every render and gain nothing because the consumer was not benefitting from referential stability.
+
+### F. Custom Hooks: Function Composition That Happens to Use Slots
+
+A custom hook is just a function whose name starts with `use` and which calls other hooks. There is no registration, no lifecycle, no React-specific magic. Calling `useFormField()` inside your component is exactly the same as inlining its body — it consumes whatever slots its internal `useState`/`useEffect` calls consume.
+
+```jsx
+// custom hook
+function useDebounced(value, delay) {
+  const [debounced, setDebounced] = useState(value);
+  useEffect(() => {
+    const id = setTimeout(() => setDebounced(value), delay);
+    return () => clearTimeout(id);
+  }, [value, delay]);
+  return debounced;
+}
+
+// usage
+function Search() {
+  const [query, setQuery] = useState('');
+  const debouncedQuery = useDebounced(query, 300);
+  // ↑ from the fiber's perspective: this consumes 2 slots
+  // ↑ from your perspective: it's just a function call returning a value
+}
+```
+
+The two abstractions — slots and functions — meet cleanly because of the Rules of Hooks. Top-level calls only means the slot consumption is fully predictable, which means custom hooks compose without leaks.
+
+### From Theory to the Hook-by-Hook Sections Below
+
+Each hook in the rest of this lesson is a different payload on the same underlying mechanism:
+
+- §1 *useState* — the slot stores `(value, queue)`; setters push to the queue, the next render reads it.
+- §2 *useEffect* — the slot stores `(deps, cleanup)`; (D) is the comparison; the closure trap (C) is what makes the dependency array non-optional.
+- §3 *useRef* — the slot stores a single mutable `.current`; reading or writing it does *not* trigger a render, which is exactly what you want for values that should not drive UI.
+- §4 *useMemo / useCallback* — (E); same dependency comparison as `useEffect`, different payload.
+- §6 *Custom Hooks* — (F); function composition over slot consumption.
+- §7 *Rules of Hooks* — (B); the lint rule that protects (A) from breaking.
 
 ---
 

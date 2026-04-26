@@ -20,6 +20,8 @@ Vue는 복잡한 애플리케이션으로 확장하면서도 접근성을 강조
 
 ## 목차
 
+문법 투어에 들어가기 전에 [**이론과 원리**](#이론과-원리)를 먼저 읽어보세요. Vue의 반응성(Vue 2의 `Object.defineProperty` vs Vue 3의 `Proxy`), 템플릿 컴파일이 무엇을 만들어 내는지, 디렉티브가 왜 "마법의 속성"이 아닌지를 다룹니다.
+
 1. [단일 파일 컴포넌트](#1-단일-파일-컴포넌트)
 2. [템플릿 문법](#2-템플릿-문법)
 3. [ref()를 이용한 반응형 데이터](#3-ref를-이용한-반응형-데이터)
@@ -27,6 +29,167 @@ Vue는 복잡한 애플리케이션으로 확장하면서도 접근성을 강조
 5. [조건부 렌더링](#5-조건부-렌더링)
 6. [목록 렌더링](#6-목록-렌더링)
 7. [이벤트 처리](#7-이벤트-처리)
+
+---
+
+## 이론과 원리
+
+Vue의 광고 문구는 "HTML을 쓰고, JavaScript를 쓰면, 프레임워크가 둘을 엮어 준다"입니다. `.vue` 파일에서 읽는 모든 줄은 짧고, 인터랙티브함은 자동으로 느껴집니다. 그 아래에서는 세 가지 독립적인 메커니즘이 그 느낌을 만들어 냅니다. 상태의 읽기/쓰기를 가로채는 **반응성 시스템(reactivity system)**, 작성한 HTML을 렌더 함수로 바꿔 주는 **템플릿 컴파일러(template compiler)**, "어느 렌더 함수가 어느 상태를 읽었는가"를 연결해 쓰기 한 번이 정확히 필요한 재렌더만 트리거하게 하는 **이펙트 그래프(effect graph)**. 이 절은 각각을 분해합니다 — React와의 차이(훅 호출 순서, 의존성 배열, 가상 DOM diff)는 결국 이 셋 중 하나에 대한 다른 선택으로 환원되기 때문입니다.
+
+### A. 반응성: Vue 2의 `Object.defineProperty`에서 Vue 3의 `Proxy`로
+
+반응성이 푸는 핵심 문제: "사용자가 어떤 상태를 변경했다 — 이제 어떤 UI를 갱신해야 하나?" Vue의 답은 상태 변경을 *관찰 가능*하게 만들고, 각 렌더 동안 어떤 상태가 *읽혔는지* 기록하는 것입니다.
+
+**Vue 2**는 `Object.defineProperty`로 반응형 객체의 모든 속성을 getter/setter 쌍으로 재귀적으로 교체했습니다.
+
+```js
+function makeReactive(obj) {
+  Object.keys(obj).forEach(key => {
+    let value = obj[key];
+    Object.defineProperty(obj, key, {
+      get() { track(obj, key); return value; },
+      set(newValue) { value = newValue; trigger(obj, key); }
+    });
+  });
+}
+```
+
+읽기는 `track(...)`을 실행하고, 쓰기는 `trigger(...)`를 실행합니다. 작동은 하지만 단단한 한계가 있습니다.
+
+1. **속성 추가가 보이지 않음.** `state.newField = 1`은 어떤 setter도 거치지 않습니다 — 그 속성에는 setter가 정의된 적이 없습니다. Vue 2는 우회로 `this.$set`을 노출해야 했습니다.
+2. **배열 변경 메서드(`push`, `splice`)가 보이지 않음.** Vue 2는 일곱 개의 변경 메서드를 monkey-patch해 반응형으로 만들었습니다.
+3. **인덱스 할당이 보이지 않음.** `state.items[0] = 'x'`는 속성 추가와 같은 문제입니다.
+4. **재귀 순회가 즉시 일어남.** 정의 시점에 모든 깊이의 모든 속성에 getter/setter가 부여되어, 한 번도 읽히지 않을 속성에 대해서도 셋업 시간과 메모리를 소비합니다.
+
+**Vue 3**는 이를 `Proxy` 위에 다시 작성했습니다.
+
+```js
+function makeReactive(obj) {
+  return new Proxy(obj, {
+    get(target, key) { track(target, key); return Reflect.get(target, key); },
+    set(target, key, value) { Reflect.set(target, key, value); trigger(target, key); return true; },
+    deleteProperty(target, key) { Reflect.deleteProperty(target, key); trigger(target, key); return true; },
+    has(target, key) { track(target, key); return Reflect.has(target, key); }
+  });
+}
+```
+
+`Proxy`는 객체에 대한 *모든* 연산을 가로챕니다 — 추가, 삭제, `in` 검사, 배열 인덱스 set 포함. 위 네 한계가 모두 사라집니다. 또한 lazy합니다 — 중첩 객체는 접근될 때만 자기 프록시로 감싸이므로, 큰 반응형 객체를 선언하는 비용이 쌉니다. 대가는 `Proxy`가 모던 브라우저를 요구한다는 것(폴리필 불가). 그래서 Vue 3는 IE 11 지원을 버렸습니다.
+
+이 전환은 사용자 코드에서는 보이지 않지만, Vue 3의 모든 기능 — `ref`, `reactive`, `computed`, `watch`, Composition API 전체 — 의 토대입니다.
+
+### B. 이펙트 그래프: 자동 의존성 추적
+
+**반응형 이펙트(reactive effect)** 는 반응형 상태를 읽고 어떤 출력(DOM 갱신, 파생값, 사이드 이펙트)을 만들어 내는 함수입니다. Vue 런타임은 이펙트가 어떤 반응형 속성을 읽었는지 추적하고, 그 속성 중 어느 하나라도 쓰일 때 이펙트를 다시 실행합니다.
+
+```
+                ┌────────────────┐
+                │  count (ref)   │
+                └───┬────────┬───┘
+                    │        │
+        읽음 ───────┘        └─────── 읽음
+                    │        │
+                    ▼        ▼
+        ┌────────────────┐  ┌──────────────────────┐
+        │ 렌더 이펙트    │  │ computed: count*2    │
+        │ (DOM 갱신)     │  │ (캐시됨, count       │
+        └────────────────┘  │  변경 시 재계산)     │
+                            └──────────────────────┘
+```
+
+메커니즘은 단순합니다.
+
+```
+이펙트가 실행될 때:
+  "현재 활성 이펙트" = 이 이펙트
+  이펙트 함수 호출
+    내부의 모든 반응형 읽기는 track(target, key) 호출
+      → (target, key) → effect를 의존성 맵에 추가
+  "현재 활성 이펙트" 해제
+
+반응형 쓰기 발생 시:
+  trigger(target, key) 호출
+    → 의존성 맵에서 해당 이펙트들 조회
+    → 각 이펙트 재실행 (보통 스케줄러 경유)
+```
+
+의존성 배열도, 수동 구독도 없습니다. 프레임워크가 *이펙트가 실행 중에 실제로 무엇을 읽었는가*로 의존성을 발견합니다. 이것이 **fine-grained reactivity**입니다 — 바뀐 값을 읽은 이펙트만 재실행됩니다. React와 비교하세요. React는 컴포넌트 안의 어떤 상태 변경이든 컴포넌트 함수 전체를(그리고 메모이제이션을 따르는 자식들을) 재실행합니다.
+
+렌더 함수도 그저 하나의 이펙트입니다. `computed`는 출력을 캐시하는 또 다른 이펙트. `watch`는 의존성이 바뀔 때 콜백을 호출하는 이펙트. 모두 같은 프리미티브 — `effect(() => { ... })` — 의 다른 모자입니다.
+
+### C. 템플릿 컴파일: HTML에서 렌더 함수로
+
+작성한 코드:
+
+```vue
+<template>
+  <div>
+    <p>{{ count }}</p>
+    <button @click="count++">+1</button>
+  </div>
+</template>
+```
+
+Vue 컴파일러(빌드 시점, 또는 runtime-only 빌드를 쓰면 런타임)가 템플릿을 파싱해 렌더 함수를 만들어 냅니다.
+
+```js
+import { openBlock, createElementBlock, createElementVNode, toDisplayString } from 'vue';
+
+function render(ctx) {
+  return (openBlock(), createElementBlock('div', null, [
+    createElementVNode('p', null, toDisplayString(ctx.count), 1 /* TEXT */),
+    createElementVNode('button', { onClick: () => ctx.count++ }, '+1')
+  ]));
+}
+```
+
+세 가지 주목점:
+
+1. **렌더 함수가 `ctx.count`를 읽는다.** 프레임워크가 이 함수를 반응형 이펙트 안에서 실행하면, 그 읽기가 추적됩니다. 나중에 `count`를 변경하면 재실행이 트리거됩니다.
+2. **각 VNode는 `patchFlag`를 가진다**(`1 /* TEXT */`). 컴파일러가 템플릿을 분석해 `<p>`가 텍스트 컨텐츠만 바뀌고 속성은 절대 바뀌지 않는다는 점을 알아챘습니다. diff 시점에 Vue는 텍스트만 검사하고 props나 children은 검사하지 않습니다. 이것이 **컴파일러가 정보를 주는 런타임(compiler-informed runtime)** — React의 "전부 비교" diff에 비해 큰 성능 이점입니다.
+3. **정적 부분은 호이스팅된다.** 바인딩 없는 리터럴 `<h1>Hello</h1>`은 렌더 함수 바깥의 상수가 되어, 한 번 할당되고 매 렌더마다 재사용됩니다. diff는 이를 완전히 건너뜁니다.
+
+`v-if`, `v-for`, `v-model` 같은 디렉티브는 컴파일러가 확장하는 문법 설탕입니다.
+
+- `v-if="ok"`는 렌더 함수 안의 삼항이 됩니다: `ok ? createElement(...) : createCommentVNode('v-if')`.
+- `v-for="x in items"`는 `.map(...)` 호출이 됩니다.
+- `v-model="value"`는 `:value="value" @input="value = $event.target.value"`(value 바인딩 + input 리스너)로 desugar됩니다.
+
+Angular처럼 런타임 "디렉티브 시스템"이 있는 것이 아닙니다 — 컴파일러가 모두를 평범한 VNode 트리와 JS 표현식으로 해소합니다.
+
+### D. `ref`와 `reactive`: 같은 메커니즘의 두 모양
+
+Vue 3는 반응성을 두 함수로 노출합니다.
+
+- `reactive(obj)` — `obj`의 Proxy를 반환. 프록시에 대한 읽기/쓰기가 추적됩니다. 속성들을 반응형으로 만들고 싶은 객체가 있을 때 사용.
+- `ref(value)` — `{ value: <Proxy 또는 박싱된 원시값> }`을 반환. 원시값(`number`, `string`, `boolean`)은 직접 프록시할 수 없으므로 감싸기가 필요합니다. `.value`를 읽고 쓰는 것이 추적됩니다.
+
+```js
+const count = ref(0);
+console.log(count.value); // 0    ← .value가 박싱된 읽기
+count.value++;             // count.value를 읽은 모든 이펙트를 트리거
+
+const user = reactive({ name: 'Ada', age: 30 });
+user.name = 'Linus';       // user.name을 읽은 모든 이펙트를 트리거
+```
+
+`<template>` 안에서는 Vue가 최상위 ref를 자동 unwrap합니다 — `{{ count }}`로 쓰지 `{{ count.value }}`로 쓰지 않습니다. `<script setup>` 안에서는 `.value`를 명시적으로 씁니다. 비대칭은 템플릿이 Vue가 분석할 수 있는 고정된 모양을 가지지만, 임의 JavaScript는 그렇지 않기 때문입니다.
+
+둘이 공존하는 이유는 서로 다른 사용감을 커버하기 때문입니다.
+
+- 단일 값 또는 컴포저블에서 반환하는 핸들: `ref`.
+- 여러 관련 필드를 가진 객체: `reactive`.
+
+둘 다 동일한 이펙트 추적 동작을 만들어 냅니다. 호출 지점에서 더 잘 읽히는 쪽으로 고르세요.
+
+### 이론에서 아래 절들로
+
+- §1 *단일 파일 컴포넌트* — 템플릿, 스크립트, 스타일을 묶는 파일 형식. (C)의 컴파일러가 `.vue` 파일을 처리.
+- §2 *템플릿 문법* — (C)의 디렉티브들. 각각이 적절한 patch flag와 함께 VNode 트리 구성으로 desugar됨.
+- §3 *ref()를 이용한 반응형 데이터* — (D). 반응성 API의 `ref` 절반.
+- §4 *계산된 속성* — (B)의 "출력을 캐시하는 이펙트". `computed(() => ...)`는 그저 파생 이펙트.
+- §5 *조건부 렌더링*과 §6 *목록 렌더링* — (C)의 `v-if`/`v-for` desugaring. `key` 요구는 React와 같은 diff 알고리즘 제약.
+- §7 *이벤트 처리* — `@click`은 핸들러를 값으로 갖는 VNode의 prop으로 desugar됨. 런타임 입장에서는 평범한 콜백.
 
 ---
 

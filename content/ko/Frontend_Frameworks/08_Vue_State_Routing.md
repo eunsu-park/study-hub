@@ -20,6 +20,8 @@ Vue 애플리케이션이 커질수록 두 가지 도전이 등장한다: 많은
 
 ## 목차
 
+API 투어에 들어가기 전에 [**이론과 원리**](#이론과-원리)를 먼저 읽어보세요. Pinia 스토어가 반응형 컴포저블이라는 점, "여러 작은 스토어"가 단일 글로벌 스토어를 이기는 이유, Vue Router의 hash mode vs history mode 트레이드오프를 다룹니다.
+
 1. [Pinia: 상태 관리](#1-pinia-상태-관리)
 2. [Pinia vs Vuex](#2-pinia-vs-vuex)
 3. [스토어 조합과 플러그인](#3-스토어-조합과-플러그인)
@@ -27,6 +29,180 @@ Vue 애플리케이션이 커질수록 두 가지 도전이 등장한다: 많은
 5. [동적 및 중첩 라우트](#5-동적-및-중첩-라우트)
 6. [내비게이션 가드](#6-내비게이션-가드)
 7. [라우트 메타와 지연 로딩](#7-라우트-메타와-지연-로딩)
+
+---
+
+## 이론과 원리
+
+상태 관리와 라우팅은 두 무관한 문제처럼 보이지만, Vue에서는 같은 기반 메커니즘을 공유합니다. 둘 다 *전역 서비스로 등록된 반응형 컴포저블*입니다. Pinia 스토어와 Vue Router 인스턴스 모두 상태가 반응형인 객체이고(그래서 그것을 읽는 어떤 컴포넌트든 변경 시 리렌더), `app.use(...)`로 한 번 설치되며, 반응형 핸들을 반환하는 훅(`useUserStore()`, `useRoute()`)을 노출합니다.
+
+이 절은 Pinia가 Vuex를 대체한 이유, "여러 작은 스토어" 패턴이 어떻게 확장되는지, 그리고 서버 구성과 URL 미관 모두에 영향을 주는 라우팅 트레이드오프를 설명합니다.
+
+### A. Pinia: 스토어는 그저 컴포저블
+
+Pinia 스토어는 컴포저블 작성과 동일하게 정의되며, 외부 래퍼 하나만 추가됩니다.
+
+```js
+import { defineStore } from 'pinia';
+import { ref, computed } from 'vue';
+
+export const useUserStore = defineStore('user', () => {
+  // === state ===
+  const name = ref('');
+  const isLoggedIn = ref(false);
+
+  // === getters ===
+  const initial = computed(() => name.value[0] ?? '?');
+
+  // === actions ===
+  function login(n: string) { name.value = n; isLoggedIn.value = true; }
+  function logout() { name.value = ''; isLoggedIn.value = false; }
+
+  return { name, isLoggedIn, initial, login, logout };
+});
+```
+
+두 가지 주목점:
+
+1. **본문이 평범한 컴포저블.** `ref`, `computed`, 평범한 함수 — `<script setup>`에서 작성하는 것과 정확히 같음. 7강의 반응성 규칙이 그대로 적용.
+2. **`defineStore`가 두 가지 추가 일을 함:** 스토어를 id `'user'`로 등록(devtools와 SSR 하이드레이션에 사용), 그리고 `useUserStore()`가 호출될 때마다 *같은* 인스턴스를 반환하도록 보장. 스토어는 앱에 설치된 Pinia 인스턴스에 스코프된 싱글턴.
+
+이 설계는 구조적 결과를 가집니다.
+
+```
+어떤 컴포넌트 안에서든 useStore()
+    ↓
+같은 프록시 반환
+    ↓
+store.x를 읽는 어떤 컴포넌트든 store.x가 바뀔 때 리렌더
+    ↓
+provider 불필요, prop-drilling 불필요
+```
+
+Pinia 스토어는 *Vue 3 반응형 객체* 그 자체입니다 — `reactive()`를 받치는 같은 Proxy 기계. 속성을 읽으면 의존성이 추적되고, 쓰면 모든 구독자를 트리거합니다. 별도의 구독 API가 없습니다 — 컴포넌트나 컴포저블이 읽는 모든 곳에서 반응성이 자동입니다.
+
+### B. Pinia가 Vuex를 대체한 이유
+
+Vuex는 Composition API보다 앞서 있고, Options API의 정신 모델(전역 단일 스토어 + `state`, `mutations`, `actions`, `getters`, `modules`)을 중심으로 구축되었습니다. Pinia는 대부분을 버립니다.
+
+| 개념 | Vuex | Pinia |
+|------|------|-------|
+| 스토어 | 하나의 글로벌 스토어와 모듈 | 여러 작은 스토어 |
+| Mutations vs actions | 동기 mutations *그리고* actions | actions만 (mutations 흡수) |
+| 네임스페이싱 | 모듈 경로 문자열 ('user/login') | 함수명 그대로 (`useUserStore().login()`) |
+| TypeScript | 우회, 타입 augmentation | 스토어 본문에서 추론 |
+| API 표면 | `mapState`, `mapActions`, `commit`, `dispatch` | 직접 속성 접근, 메서드 호출 |
+
+세 가지 구조적 이득:
+
+1. **mutation/action 구분 없음.** Vuex는 mutation은 동기여야 하고 action만 비동기를 가질 수 있게 했습니다. 이 분리는 시간여행 디버깅을 위한 것이었지만 모든 상태 변경에 의식을 더했습니다. Pinia는 Vue 3의 반응성을 직접 사용합니다 — 스토어 안의 어떤 함수든 동기/비동기로 상태를 변경할 수 있고, Vue의 스케줄러가 갱신을 올바르게 배칭합니다.
+2. **네임스페이싱 문자열 없음.** `commit('user/login', payload)`이 `useUserStore().login(payload)`로 대체됩니다 — 타입 검사, 리팩터 안전, 정의로 점프 가능.
+3. **TypeScript가 자동.** setup 함수의 반환 타입이 *그대로* 스토어의 공개 타입입니다. 선언 병합도, 별도 타입 정의도 없음.
+
+"여러 작은 스토어" 패턴은 Pinia의 규칙이 아니라 (1)과 (2)의 결과입니다. 스토어 정의 비용이 컴포저블 작성과 거의 같으면, 모두를 한 곳에 욱여넣지 않고 관심사별로 하나씩 만들게 됩니다(`useUserStore`, `useCartStore`, `useThemeStore`). 각 스토어는 자기 구독자만 리렌더해 7강의 속성별 반응성을 더 거친 입자도로 미러링합니다.
+
+### C. 스토어가 스토어를 합성
+
+스토어의 setup 함수는 다른 스토어 훅을 호출할 수 있어, 스토어 간 의존성이 명시적입니다.
+
+```js
+export const useCartStore = defineStore('cart', () => {
+  const userStore = useUserStore();         // user에 대한 반응형 참조
+  const items = ref([]);
+
+  const total = computed(() => {
+    const discount = userStore.isPremium ? 0.9 : 1;
+    return items.value.reduce((s, i) => s + i.price, 0) * discount;
+  });
+
+  return { items, total };
+});
+```
+
+세 가지 보장:
+
+1. **경계를 넘는 반응성.** `userStore.isPremium`은 반응형. `total` computed는 `items`나 `userStore.isPremium` 어느 쪽이 바뀌어도 재평가.
+2. **초기화 순서 불필요.** Pinia는 첫 접근 시 스토어를 lazy 초기화합니다. `useCartStore` 안에서 `useUserStore`를 import해도 어느 한쪽이 먼저 정의될 필요가 없습니다.
+3. **사이클 감지.** 스토어 A가 스토어 B를 사용하고 B가 다시 A를 사용하면, 무한 루프 대신 접근 시점에 명확히 던집니다.
+
+이 합성 패턴은 Redux/Zustand의 셀렉터의 구조적 등가물입니다 — 파생 상태가 단일 글로벌 computed 목록이 아니라 가장 관련성 있는 곳에 살게 됩니다.
+
+### D. Vue Router: 반응형 상태로서의 라우트
+
+Vue Router 4는 React Router와 같은 방식으로 History API를 감싸지만, `useRoute()` 훅이 **반응형** 라우트 객체를 반환합니다.
+
+```vue
+<script setup>
+import { useRoute } from 'vue-router';
+import { computed } from 'vue';
+
+const route = useRoute();
+const productId = computed(() => route.params.id);
+//   ↑ 라우트가 바뀔 때 재평가. 재마운트 불필요
+</script>
+```
+
+`route`가 반응형이므로 `/products/1`에서 `/products/2`로 내비게이션해도 `ProductDetail` 컴포넌트가 언마운트되지 *않습니다* — 같은 컴포넌트 인스턴스가 계속 마운트된 채로, `route.params.id`가 반응형으로 `'2'`가 되고, 그것에 의존하는 모든 computed가 갱신됩니다. 이는 React Router와의 의미 있는 차이입니다 — React Router에서는 동적 파라미터가 컴포넌트 리렌더를 트리거하지만 인스턴스는 같습니다. Vue에서는 반응성이 어떤 `useEffect` 스타일 watch 없이도 전파를 매끄럽게 만듭니다.
+
+파라미터 변경 시 *재마운트를 원한다면* opt-in:
+
+```vue
+<router-view :key="route.fullPath" />
+```
+
+명시적 `key`(1강 메커니즘)가 URL당 새 컴포넌트 인스턴스를 강제합니다.
+
+### E. Hash 모드 vs History 모드: 서버 구성 트레이드
+
+React Router와 같은 이분법을 라우터 생성 시 선택 가능합니다.
+
+```js
+import { createRouter, createWebHistory, createWebHashHistory } from 'vue-router';
+
+const router = createRouter({
+  history: createWebHistory(),       // /products/42
+  // history: createWebHashHistory(), // /#/products/42
+  routes: [...]
+});
+```
+
+| 모드 | URL 모양 | 서버 구성 필요 | 장점 | 단점 |
+|------|----------|------------------|------|------|
+| `createWebHistory` | `/products/42` | 알 수 없는 경로에 대해 `index.html` 서빙(SPA fallback) | 깔끔한 URL, 크롤러가 인덱싱, SSR과 호환 | 서버 협력 필요 |
+| `createWebHashHistory` | `/#/products/42` | 없음 — `#`과 그 뒤는 서버에 보이지 않음 | 어떤 정적 호스트에서도 작동(S3, GitHub Pages는 rewrite 없이) | URL이 보기 흉함, SEO 더 나쁨, SSR 불가 |
+
+History 모드의 서버 측 규칙: 실제 파일에 매치되지 않는 모든 요청은 `index.html`을 반환해야 합니다. Nginx: `try_files $uri /index.html;`. Apache: rewrite 규칙. Vercel/Netlify: 기본 구성. 이것이 없으면 `/products/42`에서 hard refresh 시 404.
+
+### F. 내비게이션 가드: 라우팅 주위의 동기적 훅
+
+Vue Router는 세 단계의 입자도로 훅을 노출합니다.
+
+```
+beforeEach (전역)         — 모든 내비게이션 전에 실행
+  └─ beforeEnter (라우트별) — 이 특정 라우트로 진입할 때 실행
+       └─ beforeRouteEnter (컴포넌트 내) — 진입한 컴포넌트 안에서 실행
+```
+
+각 훅은 `(to, from)`을 받고 다음을 반환할 수 있습니다.
+
+- `true` 또는 아무것도 → 내비게이션 진행
+- `false` → 내비게이션 취소
+- 라우트 객체 또는 경로 문자열 → 그곳으로 리다이렉트
+- Promise → 내비게이션이 대기
+
+인증 검사, 리다이렉트 로직, 라우트 레벨 데이터 prefetch에 자연스러운 자리입니다. 계약은 "동기처럼 느껴지는" 것입니다 — 가드가 해소될 때까지 사용자의 URL이 바뀌지 않으므로, 인증 실패는 단지 URL 바를 롤백할 뿐 — 보호된 페이지의 깜박임 없음.
+
+대가는 오래 걸리는 가드가 내비게이션을 블록한다는 점입니다. 싼 동기 검사(사용자가 로그인했는가?)와 싸거나 캐시된 비동기 데이터 prefetch에 사용하세요. 무거운 fetch는 컴포넌트나 loader 스타일 패턴에 속합니다.
+
+### 이론에서 아래 절들로
+
+- §1 *Pinia: 상태 관리* — (A). setup-store 형태와 state/getters/actions.
+- §2 *Pinia vs Vuex* — (B). Vuex가 공식 선택에서 사라진 구조적 이유.
+- §3 *스토어 조합과 플러그인* — (C). 스토어가 다른 스토어를 호출하는 방법, 그리고 Pinia의 plugin 훅(영속성, devtools 같은 횡단 관심사).
+- §4 *Vue Router 4* — (D)+(E). 라우터 생성, `<router-link>`와 `<router-view>`, 모드 선택.
+- §5 *동적 및 중첩 라우트* — params와 자식 라우트. React Router와 같은 매칭 로직이지만 반응형 `route`.
+- §6 *내비게이션 가드* — (F). 3단계 훅 시스템.
+- §7 *라우트 메타와 지연 로딩* — 라우트별 `meta` 필드와 `component: () => import(...)`로 코드 분할(5강의 라우트별 청크 패턴과 동일).
 
 ---
 

@@ -16,6 +16,8 @@
 
 ## 목차
 
+훅 투어에 들어가기 전에 [**이론과 원리**](#이론과-원리)를 먼저 읽어보세요. 훅이 fiber 위의 위치 기반 리스트로 저장된다는 점, 호출 순서가 왜 중요한지, `useState`의 클로저 함정, `useEffect`의 의존성 배열이 무엇을 비교하는지 다룹니다.
+
 1. [useState: 상태 관리](#1-usestate-상태-관리)
 2. [useEffect: 사이드 이펙트](#2-useeffect-사이드-이펙트)
 3. [useRef: Ref와 변경 가능한 값](#3-useref-ref와-변경-가능한-값)
@@ -24,6 +26,173 @@
 6. [커스텀 훅](#6-커스텀-훅)
 7. [훅의 규칙](#7-훅의-규칙)
 8. [연습 문제](#연습-문제)
+
+---
+
+## 이론과 원리
+
+훅은 평범한 함수 호출처럼 보입니다 — `const [count, setCount] = useState(0)`. 그러나 전혀 그렇지 않습니다. 모든 훅 호출에는 숨은 사이드 이펙트가 있습니다: 현재 렌더링 중인 컴포넌트의 내부 저장소에 있는 슬롯을 읽거나 씁니다. API 전체가 그 호출들의 순서가 모든 렌더 간 동일하다는 데 의존합니다. 이 한 사실이 훅의 규칙(Rules of Hooks), 의존성 배열, stale-closure 함정, 커스텀 훅의 자연스러운 합성 가능성을 모두 설명합니다.
+
+### A. 내부 표현: fiber 위의 위치 기반 리스트
+
+React의 모든 컴포넌트 인스턴스는 **fiber**라 불리는 내부 객체로 뒷받침됩니다. fiber는 props, 렌더링 결과, 자식 fiber를 들고 있고 — 결정적으로 — **훅 레코드의 연결 리스트**를 들고 있습니다. 각 훅 레코드는 그 훅이 렌더 사이에 기억해야 할 것을 저장합니다. `useState`라면 현재 값과 dispatch 함수, `useEffect`라면 이전 의존성 배열과 이전 cleanup, `useRef`라면 변경 가능한 `.current` 박스.
+
+```
+<Counter />의 fiber
+   ├─ memoizedState (훅 리스트의 머리)
+   │     hook 0: { state: 0, queue: ... }      // useState(0)
+   │     hook 1: { state: 'red', queue: ... }  // useState('red')
+   │     hook 2: { deps: [0], cleanup: ... }   // useEffect(...)
+   │     hook 3: { current: null }             // useRef(null)
+   │     ...
+   └─ ...
+```
+
+렌더가 도는 동안 "지금 몇 번째 슬롯인가"를 추적하는 단일 내부 카운터가 있습니다. `useState` 호출마다 카운터를 증가시키고 슬롯 `i`를 읽으며, 다음 `useEffect`도 한 슬롯 뒤에서 같은 일을 하고, 이런 식으로 이어집니다. 훅 함수 자체는 자기 인덱스를 모릅니다 — 그저 런타임에게 "다음 슬롯 줘"라고 요청할 뿐입니다.
+
+이 설계는 두 가지 중요한 이득을 줍니다.
+
+1. **이름 지정 부담이 없다.** 훅에 이름이나 키를 부여하지 않아도 됩니다. 슬롯은 도달한 순서로 식별됩니다.
+2. **훅이 싸게 합성된다.** 내부적으로 `useState`와 `useEffect`를 호출하는 커스텀 훅은 호출자에게서 두 슬롯을 소비할 뿐입니다. 재귀적 합성도 그저 중첩된 슬롯 소비입니다.
+
+여기서 다른 모든 것이 따라 나오는 큰 제약 하나가 생깁니다. **슬롯의 개수와 순서가 렌더 간 일치해야 한다.** 렌더 1이 `useState`, `useState`, `useEffect`를 호출하고 렌더 2가 `useState`, `useEffect`, `useState`를 호출하면, 렌더 2에서 React는 두 번째 슬롯(`useState` 레코드)을 읽고 그것을 `useEffect`로 사용하려 합니다. 사실상 메모리 손상에 가깝습니다.
+
+### B. 훅의 규칙이 존재하는 이유
+
+두 가지 규칙:
+
+1. **훅은 컴포넌트 또는 다른 훅의 최상위(top level)에서만 호출한다** — `if`, `for`, `while`, `try`, 이른 `return` 이후, 콜백 안에서 호출하지 말 것.
+2. **훅은 React 함수에서만 호출한다** — 컴포넌트 또는 다른 훅에서.
+
+두 규칙 모두 (A)의 불변량을 강제하기 위해 존재합니다. `if` 안의 훅은 렌더 1에서 호출되고(조건이 참) 렌더 2에서 건너뛸 수 있습니다(조건이 거짓). 슬롯 개수가 달라지고, 이후 모든 훅이 잘못된 슬롯을 읽습니다. lint 규칙 `eslint-plugin-react-hooks`가 작성 시점에 이를 잡아내는 이유는 정확히 이것입니다 — 런타임은 잘못된 슬롯 값만 볼 수 있을 뿐, 구조적 원인은 깔끔하게 감지할 수 없습니다.
+
+따름정리: 조건부 동작은 훅 호출 *주변*이 아니라 훅 호출 *내부*에 있어야 합니다.
+
+```jsx
+// 잘못됨 — 렌더마다 훅 개수가 달라짐
+if (loggedIn) {
+  const [name, setName] = useState('');
+}
+
+// 올바름 — 훅은 항상 호출, 조건은 값이나 이펙트 안에서
+const [name, setName] = useState('');
+useEffect(() => {
+  if (loggedIn) {
+    fetchProfile().then(p => setName(p.name));
+  }
+}, [loggedIn]);
+```
+
+### C. `useState`와 stale closure 문제
+
+각 렌더는 컴포넌트 함수를 처음부터 다시 실행합니다. 함수 안에서 정의되는 모든 값 — `useState`가 반환한 `count`까지 포함 — 은 그 렌더 시점의 값에 묶인 새로운 지역 변수입니다. 콜백이 `count`를 클로저로 캡처하고 그 콜백이 *나중에* 실행되면, 콜백은 여전히 옛 `count`를 봅니다.
+
+```jsx
+function Counter() {
+  const [count, setCount] = useState(0);
+
+  useEffect(() => {
+    const id = setInterval(() => {
+      setCount(count + 1); // 버그: `count`는 마운트 시점에 캡처됨, 항상 0
+    }, 1000);
+    return () => clearInterval(id);
+  }, []); // <- 빈 deps: 이펙트는 한 번만 실행, 처음의 `count`를 캡처
+
+  return <div>{count}</div>;
+}
+```
+
+해법은 캡처된 값에 대한 의존을 끊는 것:
+
+- **함수형 업데이트(functional update)**: `setCount(prev => prev + 1)` — 세터가 큐에서 최신 상태를 받으므로 캡처 시점과 무관.
+- **의존성에 추가**: 의존성 배열에 `count`를 포함 — 다만 그러면 매 틱마다 인터벌이 해체되고 재생성되며, 보통 원하는 동작이 아님.
+- **Ref**: 최신 값을 `useRef`에 저장하고 콜백 안에서 `ref.current`를 읽음 — 의존성 추적을 완전히 우회.
+
+클로저 문제는 React 버그가 아니라 JavaScript가 설계대로 작동하는 것입니다. 훅이 이를 가시화하는 이유는 리렌더가 새 클로저를 반복해서 만들고, 옛 클로저들이 구독, 타이머, 이벤트 핸들러 안에 남아 있기 때문입니다.
+
+### D. 참조 동등성으로서의 `useEffect` 의존성 배열
+
+매 렌더 후 React는 마지막 실행 이후 의존성이 바뀐 이펙트를 실행합니다. "바뀜"은 이전 의존성 배열에 대해 **원소별 `Object.is` 비교**를 의미합니다. 깊은 동등성(deep equality)도, 구조적 비교도, diff도 없습니다.
+
+```
+prev deps: [user, setting]
+new  deps: [user, setting]
+
+각 i에 대해: Object.is(prev[i], new[i]) ?
+  - 모두 true: 이펙트 건너뜀, 이전 cleanup 유지
+  - 하나라도 false: 이전 이펙트 cleanup 실행, 새 이펙트 실행
+```
+
+그래서 의존성에 인라인 객체나 배열을 넣으면 항상 다시 실행됩니다.
+
+```jsx
+useEffect(() => { ... }, [{ id: userId }]); // 매 렌더마다 새 객체 → 매 렌더마다 재실행
+useEffect(() => { ... }, [userId]);          // 원시값 → userId가 바뀔 때만 재실행
+```
+
+본문에서 정의된 함수가 의존성이라면 `useCallback`이 필요한 이유도 같습니다.
+
+```jsx
+const handleSave = () => save(value); // 매 렌더마다 새 함수
+useEffect(() => { ... }, [handleSave]); // 매 렌더마다 재실행
+
+const handleSave = useCallback(() => save(value), [value]); // value가 안정한 동안 안정
+useEffect(() => { ... }, [handleSave]); // value가 바뀔 때만 재실행
+```
+
+cleanup 함수는 이펙트를 안전하게 재실행 가능하게 만듭니다. 셋업의 역(inverse)이며, React는 다음 셋업 직전(그리고 언마운트 시)에 호출합니다. 정신 모델: 이펙트는 컴포넌트를 어떤 외부 시스템에 *동기화*합니다. 동기화 입력이 바뀌면, 옛 동기화를 해체하고 새로운 동기화를 셋업합니다.
+
+### E. `useMemo` / `useCallback`: 같은 메커니즘, 다른 페이로드
+
+둘 다 같은 `Object.is` 비교로 의존성 배열에 키잉되는 메모이제이션 프리미티브입니다.
+
+- `useMemo(fn, deps)` — 첫 렌더에서 `fn()`을 실행하고 결과를 캐시. 이후 렌더에서 `deps`가 같으면 캐시된 값을 반환, 다르면 `fn()`을 다시 실행하고 새 값을 캐시.
+- `useCallback(fn, deps)` — 정확히 `useMemo(() => fn, deps)`와 등가. "메모된 값"이 함수 그 자체.
+
+비용은 메모리(호출당 슬롯 하나)와 매 렌더마다의 비교입니다. 다음 중 하나일 때만 가치가 있습니다.
+
+1. 캐시되는 계산이 진짜로 비싼 경우, 또는
+2. 캐시된 값이 다른 훅의 의존성으로 쓰이는 경우, 또는
+3. 캐시된 값이 `React.memo`로 감싼 자식의 prop으로 전달되고 그 자식의 리렌더가 비싼 경우.
+
+"혹시 모르니"라며 모든 값을 `useMemo`로 감싸면 애플리케이션이 *느려집니다*. 매 렌더마다 비교 비용을 지불하면서, 소비자가 참조 안정성에서 이득을 보지 않으니 얻는 것이 없습니다.
+
+### F. 커스텀 훅: 슬롯을 사용하는 함수 합성
+
+커스텀 훅은 그저 이름이 `use`로 시작하고 다른 훅을 호출하는 함수입니다. 등록도, 라이프사이클도, React 특유의 마법도 없습니다. 컴포넌트 안에서 `useFormField()`를 호출하는 것은 그 함수 본문을 인라인하는 것과 정확히 같습니다 — 내부 `useState`/`useEffect` 호출이 소비하는 슬롯들을 그대로 소비합니다.
+
+```jsx
+// 커스텀 훅
+function useDebounced(value, delay) {
+  const [debounced, setDebounced] = useState(value);
+  useEffect(() => {
+    const id = setTimeout(() => setDebounced(value), delay);
+    return () => clearTimeout(id);
+  }, [value, delay]);
+  return debounced;
+}
+
+// 사용
+function Search() {
+  const [query, setQuery] = useState('');
+  const debouncedQuery = useDebounced(query, 300);
+  // ↑ fiber 입장: 슬롯 2개 소비
+  // ↑ 사용자 입장: 값을 반환하는 그저 함수 호출
+}
+```
+
+두 추상 — 슬롯과 함수 — 이 깔끔하게 만나는 것은 훅의 규칙 덕분입니다. 최상위 호출만 허용된다는 것은 슬롯 소비가 완전히 예측 가능하다는 뜻이고, 그래서 커스텀 훅이 누수 없이 합성됩니다.
+
+### 이론에서 아래 훅별 절들로
+
+이 레슨의 나머지 각 훅은 같은 기반 메커니즘 위의 다른 페이로드입니다.
+
+- §1 *useState* — 슬롯에 `(value, queue)` 저장. 세터가 큐에 push, 다음 렌더가 읽음.
+- §2 *useEffect* — 슬롯에 `(deps, cleanup)` 저장. (D)가 비교 방식. 클로저 함정 (C)이 의존성 배열을 선택사항이 아니게 만드는 이유.
+- §3 *useRef* — 슬롯에 변경 가능한 `.current` 하나만 저장. 읽거나 써도 렌더를 *트리거하지 않음* — UI를 구동해서는 안 되는 값에 정확히 맞는 동작.
+- §4 *useMemo / useCallback* — (E). `useEffect`와 같은 의존성 비교, 다른 페이로드.
+- §6 *커스텀 훅* — (F). 슬롯 소비 위의 함수 합성.
+- §7 *훅의 규칙* — (B). (A)가 깨지지 않도록 보호하는 lint 규칙.
 
 ---
 

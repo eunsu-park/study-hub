@@ -25,6 +25,8 @@
 
 ## Table of Contents
 
+Before the syntax tour, read [**Theory & Principles**](#theory--principles) — JSX as sugar for `React.createElement`, the virtual DOM as a comparable value, and why `key` is the lever that controls reconciliation.
+
 1. [JSX Fundamentals](#1-jsx-fundamentals)
 2. [Functional Components](#2-functional-components)
 3. [Props and Children](#3-props-and-children)
@@ -34,6 +36,135 @@
 7. [Event Handling](#7-event-handling)
 8. [Composing Components](#8-composing-components)
 9. [Practice Problems](#practice-problems)
+
+---
+
+## Theory & Principles
+
+The user-facing surface of React looks like HTML embedded in JavaScript with a sprinkling of curly braces. Underneath, three independent ideas do all the work: JSX is just sugar for plain function calls; those calls produce a tree of plain objects called the virtual DOM; and a heuristic diff algorithm — driven by component type and the `key` prop — decides what to do to the real DOM. This section makes each one explicit, because every "weird" React behavior (lost input focus, lost component state, wasted renders) traces back to one of them.
+
+### A. JSX Is Just `React.createElement`
+
+JSX has no runtime semantics of its own. A build tool (Babel, SWC, esbuild, the TypeScript compiler) rewrites every JSX expression into a function call before the browser ever sees it. With the classic transform:
+
+```jsx
+// You write:
+const view = <button className="primary" onClick={handleClick}>Save</button>;
+
+// The compiler emits:
+const view = React.createElement(
+  'button',
+  { className: 'primary', onClick: handleClick },
+  'Save'
+);
+```
+
+With the modern automatic transform (the default since React 17), the imported function is `jsx` from `react/jsx-runtime`, but the shape is the same. The result of either call is a plain JavaScript object — sometimes called a "React element" — that looks roughly like:
+
+```js
+{ type: 'button', props: { className: 'primary', onClick: handleClick, children: 'Save' }, key: null, ... }
+```
+
+Three consequences fall out of this immediately:
+
+1. **The capitalization rule is not arbitrary.** A lowercase tag name like `button` is emitted as the *string* `'button'` and treated as an HTML element. A capitalized name like `Button` is emitted as the *variable* `Button` and treated as a component reference. JSX has no way to distinguish the two except by the first character.
+2. **`className` instead of `class`, `htmlFor` instead of `for`.** The props object becomes property assignments on a JavaScript object, and `class` and `for` are reserved words.
+3. **JSX must have a single root.** Function calls return a single value; you cannot return two adjacent elements without wrapping them. `<>...</>` (the Fragment shorthand) emits `React.createElement(React.Fragment, null, ...)` — one call, one return value, no extra DOM node.
+
+The whole "JSX is just JavaScript" framing is exact: anywhere a JavaScript expression is allowed, JSX is allowed; anywhere only statements are allowed (an `if` block, a `for` loop body), JSX is *not* allowed. That is why React idioms reach for `&&`, ternaries, and `.map(...)` instead — they are all expressions.
+
+### B. The Virtual DOM Is a Comparable Value
+
+A render is the result of calling your component function. The return value is a tree of those `{ type, props, children }` objects all the way down. React holds onto the previous tree and compares it against the new one. The real DOM is mutated only by the difference.
+
+```
+state changes
+   │
+   ▼
+component function runs → new VDOM tree (plain objects)
+   │
+   ▼
+diff against previous VDOM tree
+   │
+   ▼
+minimal sequence of DOM operations
+   │
+   ▼
+real DOM updated
+```
+
+Three properties of the virtual DOM tree make this work:
+
+1. **Cheap to allocate.** It is just object literals — no DOM allocation, no layout, no paint. Building the new tree costs roughly what running your render function costs, which is almost always less than running real DOM mutations.
+2. **Comparable position-by-position.** Both trees have the same root, and the algorithm walks them in parallel. At every position it asks: "is the type the same?" If yes, update in place; if no, throw away the subtree and rebuild.
+3. **Decoupled from the renderer.** The same VDOM trees can be consumed by `react-dom` (browser DOM), `react-native` (native views), `react-three-fiber` (WebGL scene graph). The diff algorithm does not know what kind of "DOM" it is patching.
+
+The general tree diff problem is O(n³). React makes it O(n) by giving up on optimal moves between subtrees and committing to a single rule: **at the same position in two consecutive trees, if the type changed, throw away the old subtree entirely.** A `<div>` becoming a `<span>` discards the div and all its descendants — including any state held by components inside it. A `<UserCard>` becoming `<AdminCard>` does the same, even though the rendered DOM might look almost identical. This is the most common cause of "my input lost focus" and "why did my form clear itself": somewhere up the tree, the component type at a position changed.
+
+### C. `key`: How Reconciliation Identifies List Items
+
+Lists are the one place where the "compare position-by-position" rule breaks down, because the meaning of "the same position" is not obvious. Suppose you render `[A, B, C]` and then `[X, A, B, C]`. Position-by-position:
+
+```
+old:  [A, B, C]
+new:  [X, A, B, C]
+
+position 0: A vs X — different, replace
+position 1: B vs A — different, replace
+position 2: C vs B — different, replace
+position 3: (nothing) vs C — mount
+```
+
+Every element looks "changed" even though the user just inserted one item at the front. State inside `A`, `B`, `C` (input values, scroll positions, focus) is lost. That is the bug `key` exists to fix.
+
+When children have keys, React no longer matches by index. It builds two maps `key → element` from old and new lists and matches by key:
+
+```
+old:  [A(key=a), B(key=b), C(key=c)]
+new:  [X(key=x), A(key=a), B(key=b), C(key=c)]
+
+key=a: present in both at different positions → move, do not remount
+key=b: present in both at different positions → move, do not remount
+key=c: present in both at different positions → move, do not remount
+key=x: only in new → mount
+```
+
+Three rules follow:
+
+1. **Keys must be stable across renders.** Using `Math.random()` or `Date.now()` regenerates every render and defeats the matching — every item looks new every time.
+2. **Keys must be unique among siblings.** Duplicates make the `key → element` map ambiguous. Uniqueness across the whole tree is *not* required — only siblings.
+3. **Index as key is a last resort.** It is correct only if the list never reorders, never has items inserted or removed in the middle, and items are not stateful. Once any of those conditions fails, you reintroduce the original bug.
+
+The general principle: a key tells React "this is the *same logical item* across renders, even if it moved." Without a key, identity is positional; with a key, identity is whatever you say it is.
+
+### D. The Render → Commit Pipeline
+
+A render is not an immediate DOM update. React splits the work into two phases:
+
+```
+RENDER PHASE (can be paused, restarted, thrown away)
+   - call your component functions
+   - build the new VDOM tree
+   - diff against the previous tree
+   - produce a list of "effects" — the DOM operations needed
+   - no DOM mutation yet, no side effects yet
+
+COMMIT PHASE (synchronous, cannot be interrupted)
+   - apply DOM operations in order
+   - run cleanup of previous effects
+   - run new effects (useEffect, useLayoutEffect)
+   - flush refs
+```
+
+This split is why your component function must be **pure with respect to rendering**: it can be called multiple times, in any order, and the calls that get thrown away must not have done anything observable. Every side effect — fetching, subscribing, logging, DOM mutation — belongs in the commit phase, accessed via `useEffect` and friends. The render phase exists to compute the description; the commit phase exists to apply it.
+
+### From Theory to the Sections Below
+
+- §1 *JSX Fundamentals* shows the surface syntax that desugars to (A).
+- §2 *Functional Components* and §3 *Props and Children* are how you author the function whose return value is (B).
+- §6 *List Rendering* is (C) made operational — every `key` warning is the diff algorithm protecting you.
+- §7 *Event Handling* hooks into the commit phase: handlers attach during commit, fire later, and trigger the next render → commit cycle.
+- §8 *Composing Components* relies on the structural identity that (B)'s position-plus-type rule provides — that is what lets you nest, reorder, and reuse components without losing track of which is which.
 
 ---
 

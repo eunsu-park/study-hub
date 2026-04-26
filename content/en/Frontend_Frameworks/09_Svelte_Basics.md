@@ -20,6 +20,8 @@ Svelte takes a fundamentally different approach from React and Vue. While those 
 
 ## Table of Contents
 
+Before the syntax tour, read [**Theory & Principles**](#theory--principles) — compile-time reactivity, what `$:` actually emits, the no-virtual-DOM trade-off, and why bundles are smaller.
+
 1. [Svelte Philosophy](#1-svelte-philosophy)
 2. [Component Structure](#2-component-structure)
 3. [Reactive Declarations](#3-reactive-declarations)
@@ -28,6 +30,154 @@ Svelte takes a fundamentally different approach from React and Vue. While those 
 6. [Bindings](#6-bindings)
 7. [Template Logic Blocks](#7-template-logic-blocks)
 8. [Transitions and Animations](#8-transitions-and-animations)
+
+---
+
+## Theory & Principles
+
+React and Vue are *runtimes*: they ship a library to the browser that contains the diff algorithm, the reactivity system, and all the lifecycle plumbing. Your component code gets handed to that runtime, which interprets it on every render. Svelte goes the other way: at build time, the compiler reads your `.svelte` file and emits a bespoke piece of imperative JavaScript that updates the DOM directly. There is no diff, no virtual DOM, no central runtime. The framework's "engine" is unrolled into your component code.
+
+This section explains the mechanics of that approach, what `$:` actually compiles to, and the trade-offs Svelte accepts in exchange for the smaller bundle and faster initial paint.
+
+### A. Compile-Time Reactivity
+
+In React, when you write `setCount(count + 1)`, the framework re-runs your component, builds a new VDOM, diffs it against the old one, and patches the DOM. In Vue, the proxy traps the write, runs the effect graph, re-runs the render function, and patches the DOM. In both cases, the *runtime* decides what changed and what to update.
+
+Svelte does that work *during compilation*. Given:
+
+```svelte
+<script>
+  let count = 0;
+</script>
+
+<button on:click={() => count++}>{count}</button>
+```
+
+The compiler analyzes the template, sees that `{count}` is the only thing that depends on `count`, and emits code roughly like:
+
+```js
+function create_fragment(ctx) {
+  let button;
+  let t;
+  return {
+    c() {
+      button = document.createElement('button');
+      t = document.createTextNode(ctx[0]); // ctx[0] is count
+      button.appendChild(t);
+    },
+    m(target, anchor) {
+      target.insertBefore(button, anchor);
+      button.addEventListener('click', ctx[1]); // ctx[1] is the click handler
+    },
+    p(ctx, [dirty]) {
+      if (dirty & 1 /* count changed */) t.data = ctx[0];
+    },
+    d() { button.remove(); }
+  };
+}
+
+function instance($$self, $$props, $$invalidate) {
+  let count = 0;
+  const click_handler = () => $$invalidate(0, count = count + 1);
+  return [count, click_handler];
+}
+```
+
+Three things to notice:
+
+1. **No diff.** The `p` function ("update") receives a `dirty` bitmask saying which variables changed. It only touches the exact DOM nodes that depend on those variables — no comparison loop, no VDOM trees.
+2. **No reactivity system in the framework.** The reactivity is the assignment itself, instrumented by the compiler: `count = count + 1` becomes `$$invalidate(0, count = count + 1)`. The framework only needs to know "variable at index 0 changed."
+3. **The DOM operations are bespoke.** Each component generates its own `create`/`mount`/`update`/`destroy` functions. There is no general-purpose `createElement('button')` happening at runtime — Svelte emits the literal `document.createElement('button')` for this specific button.
+
+The runtime that ships to the browser is tiny — mostly the `$$invalidate` plumbing and the lifecycle scheduler. Most "framework code" lives inside your bundled components.
+
+### B. The `$:` Reactive Statement
+
+In Svelte 4, `$:` marks a statement as reactive — it re-runs whenever any variable it reads is reassigned:
+
+```svelte
+<script>
+  let count = 0;
+  $: doubled = count * 2;
+  $: console.log(`count is now ${count}`);
+</script>
+```
+
+The compiler walks the AST of each `$:` statement, identifies the variables it reads (`count`), and emits a re-execution call inside the `update` function whenever those variables' bits are dirty. The `$:` syntax is JavaScript's labeled-statement syntax repurposed — it's valid JS that does nothing in plain JS, but Svelte's compiler treats it specially.
+
+Three rules follow from this:
+
+1. **Reactivity is by assignment, not mutation.** `arr.push(x)` does not trigger Svelte; `arr = [...arr, x]` (or `arr = arr` after a push) does. The compiler instruments the `=` operator, not deep mutations.
+2. **`$:` only tracks top-level variables in the component instance.** Reading `obj.field` triggers when `obj` is reassigned, not when `obj.field` is mutated.
+3. **Order matters.** `$:` statements are topologically sorted by dependency, so `$: y = x * 2; $: z = y + 1` re-runs in the right order. But ordinary `let` declarations are evaluated top-to-bottom regardless.
+
+Svelte 5 introduces **runes** (covered in lesson 10) — `$state`, `$derived`, `$effect` — which replace `$:` with an explicit, more flexible syntax. Same compile-time approach, but the dependency graph is encoded in function calls instead of label syntax.
+
+### C. The No-Virtual-DOM Trade-Off
+
+Skipping the VDOM has real performance benefits:
+
+- **Smaller runtime.** Svelte's runtime is roughly 1.6 KB gzipped baseline; React + react-dom is closer to 45 KB. Bundles for small-to-medium apps can be 5-10× smaller.
+- **Faster updates for fine-grained changes.** Updating a single text node is one DOM write, no comparisons.
+- **Lower memory.** No VNode trees living alongside the DOM.
+
+But there are real costs:
+
+1. **Component-internal updates are the optimal case; cross-component updates are not necessarily faster.** When state passed as a prop changes, Svelte still has to call into each child component's update function. The wins shrink in deeply prop-heavy trees.
+2. **You cannot return a component tree from arbitrary JavaScript.** Svelte components are `.svelte` files; you cannot programmatically construct them at runtime the way React's `createElement` lets you. This makes some patterns (like dynamic component selection) more verbose.
+3. **The bundle scales with component count.** Because every component compiles to its own bespoke JS, a large app with hundreds of unique components ends up with more bundled code than a React app with hundreds of components — at some app size, the curves cross. Svelte stays smaller for typical app sizes; React stays smaller for very large apps.
+4. **Compile-time analysis can be fooled.** `$: doubled = compute(count)` works if the compiler can see `count` in the expression. If you compute it via dynamic property access or eval-like indirection, the dependency is invisible.
+
+The rule of thumb: Svelte excels at small-to-medium apps where bundle size and per-component performance matter. React's ecosystem dominates very large apps where shared infrastructure amortizes the runtime cost.
+
+### D. Component Boundaries and Update Granularity
+
+Svelte's update function knows exactly which DOM nodes depend on which variables (the bitmask). Within a component, only the affected nodes are touched. But the unit of update *is still the component*: when a parent passes a changed prop, the child's update function is called, even if the prop is unused inside the child. There is no per-node subscription across component boundaries.
+
+This is conceptually similar to React's "the whole component re-renders on any state change," with the difference that the re-execution is a tiny update function rather than the full render function. The result is that component composition has roughly the same shape across all three frameworks at the architectural level — what differs is the *cost per update*.
+
+### E. Two-Way Bindings: Sugar Over `prop + event`
+
+Svelte's `bind:value={name}` looks like the two-way binding from old MVC frameworks. The compiler desugars it into one-way data + event:
+
+```svelte
+<input bind:value={name} />
+
+<!-- compiles roughly to: -->
+<input value={name} on:input={(e) => name = e.target.value} />
+```
+
+There is no magic two-way reactivity at runtime. The pattern is just compiler sugar over the prop-down-event-up convention from lesson 1. Same goes for `bind:checked`, `bind:group`, and `bind:this` (refs).
+
+### F. Scoped Styles by Default
+
+A `<style>` block inside a `.svelte` file is **scoped to the component** by default. The compiler rewrites class names (or attaches generated classes) to ensure that selector inside one component doesn't leak to another:
+
+```svelte
+<style>
+  p { color: red; }
+</style>
+
+<!-- compiles to something like: -->
+<style>
+  p.svelte-abc123 { color: red; }
+</style>
+
+<p class="svelte-abc123">hello</p>
+```
+
+No CSS-in-JS library, no manually-prefixed BEM, no `:scope` complexity. The compiler does the work at build time, the runtime carries no CSS overhead.
+
+### From Theory to the Sections Below
+
+- §1 *Svelte Philosophy* — names the compile-time vs runtime distinction in (A) and the bundle-size argument in (C).
+- §2 *Component Structure* — the `<script>`, `<template>`, `<style>` layout that the compiler in (A) operates on, with scoping per (F).
+- §3 *Reactive Declarations* — (B); `$:` and the assignment-as-reactivity rule.
+- §4 *Props* — `export let name` (Svelte 4) is how a top-level variable is marked as a prop; the compiler lifts it into the parent's update bitmask.
+- §5 *Events* — DOM events use `on:click`; custom events use `createEventDispatcher`. Both compile to direct `addEventListener` calls.
+- §6 *Bindings* — (E); the desugaring of `bind:value` into prop+event.
+- §7 *Template Logic Blocks* — `{#if}`, `{#each}`, `{#await}`. Each block becomes its own micro-fragment with its own `create`/`update`/`destroy` functions, mounted and unmounted as the condition or list changes.
+- §8 *Transitions and Animations* — the lifecycle hooks for entering/leaving DOM are first-class because the compiler controls every mount and unmount; transitions are just functions called at those moments with the DOM node as input.
 
 ---
 

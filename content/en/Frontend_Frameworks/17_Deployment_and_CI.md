@@ -16,6 +16,8 @@
 
 ## Table of Contents
 
+Before the platform tour, read [**Theory & Principles**](#theory--principles) — what a build artifact really contains, edge functions vs SSR, CDN cache strategies, and the hydration metrics that decide whether deployment is "fast enough."
+
 1. [Build Process](#1-build-process)
 2. [Vercel](#2-vercel)
 3. [Netlify](#3-netlify)
@@ -24,6 +26,162 @@
 6. [Environment Management](#6-environment-management)
 7. [CDN and Caching Strategies](#7-cdn-and-caching-strategies)
 8. [Practice Problems](#practice-problems)
+
+---
+
+## Theory & Principles
+
+Deployment is the moment when your code stops being your problem and starts being everyone's problem. The decisions that matter most — where the JavaScript runs, where the HTML is generated, what the CDN caches — were already made implicitly by the architectural choices in the previous lessons (CSR vs SSR vs SSG, route-level code splitting, hydration). This section makes the deployment-side mechanics explicit: what a build artifact actually is, how an edge function differs from a long-lived server, what cache headers tell the CDN to do, and which metrics tell you the deployment is meeting users' expectations.
+
+### A. What's in the Build Artifact
+
+A modern frontend build (Vite, Rollup, esbuild, webpack) produces a `dist/` directory with a specific structure:
+
+```
+dist/
+├── index.html              entry HTML, references hashed JS/CSS
+├── assets/
+│   ├── index-a1b2c3.js     main JS bundle (hashed)
+│   ├── vendor-d4e5f6.js    third-party deps split
+│   ├── route-products-...  per-route chunk
+│   ├── index-9f8e7d.css    main stylesheet (hashed)
+│   └── images/
+│       └── hero-...avif    optimized image
+└── service-worker.js       optional, for PWA
+```
+
+Three properties matter:
+
+1. **Hashed filenames.** `index-a1b2c3.js` includes a hash of the file's contents. Change one line, get a new hash. This lets the CDN cache files *forever* — when you deploy a new version, the new HTML references new filenames, so the CDN serves them as cache misses while still caching the old ones (which are no longer referenced and can be purged later).
+2. **Single entry HTML.** `index.html` is small (~5 KB) and never cached aggressively. It is the immutable layer the user always fetches; it embeds the references to the hashed assets.
+3. **Pre-compressed.** Modern build tools emit `.gz` and `.br` siblings. The server (or CDN) serves the appropriate one based on the request's `Accept-Encoding` header. Brotli is ~20% smaller than gzip for typical JS/CSS.
+
+The build output is a *self-contained, immutable, content-addressed* set of files. This is why deploying is just "upload these files and update which `index.html` is served" — the rest is cache hits.
+
+### B. Edge Functions vs Long-Lived Servers
+
+Two ends of a spectrum for "where SSR happens":
+
+**Long-lived server (Node.js process)**:
+
+```
+Request arrives → app server (already running, has DB pool open) →
+  render HTML → respond
+```
+
+Pros: full Node.js APIs, persistent DB connections, large JS bundles fine. Cons: cold start if scaled to zero, single region (latency for global users), per-request server cost.
+
+**Edge function (V8 isolates, Cloudflare Workers, Vercel Edge, Deno Deploy)**:
+
+```
+Request arrives at PoP nearest to user → spawn V8 isolate (warm in ~5ms) →
+  run handler → respond
+```
+
+Pros: latency ~10ms anywhere on Earth (PoP near every user), instant cold starts, zero idle cost, serverless billing per request. Cons: limited APIs (no Node-only modules — `fs`, raw TCP), bundle size cap (~1 MB), no persistent connections (every DB call goes over the wire to the database's region).
+
+| Use case | Better fit |
+|----------|-----------|
+| Simple SSR, static-ish | Edge function |
+| Heavy data fetching from your own DB | Long-lived server (in same region as DB) |
+| Globally distributed audience | Edge function (or both: edge for public pages, server for app) |
+| WebSocket, server-sent events | Long-lived server (edge functions are typically per-request) |
+| Image processing, large payloads | Long-lived server |
+
+The "edge" naming is marketing for "PoP" — the cloud provider has data centers near population centers, and your function runs in the one closest to the user. It is real and significant for first-byte latency.
+
+### C. CDN and Cache-Control Headers
+
+A CDN (Cloudflare, Fastly, CloudFront) sits between your user and your origin. Each request first hits the CDN; if the response is cached, the CDN serves it without contacting origin. The cache decision is driven by HTTP headers:
+
+```
+Cache-Control: public, max-age=31536000, immutable    ← perfect for hashed assets
+                       └─ 1 year cache
+Cache-Control: public, max-age=0, must-revalidate     ← forces a check on every request
+Cache-Control: public, s-maxage=60, stale-while-revalidate=86400
+                       └─ CDN serves cached for 60s, then serves stale + refetches
+```
+
+The standard split for a frontend deployment:
+
+| File | Cache headers | Reason |
+|------|---------------|--------|
+| `index.html` | `Cache-Control: public, max-age=0, must-revalidate` | Must always check for new version |
+| `assets/*.js`, `*.css` (hashed) | `Cache-Control: public, max-age=31536000, immutable` | Hash changes when content does, so cache forever |
+| `assets/images/*` | `Cache-Control: public, max-age=31536000, immutable` if hashed | Same logic |
+| API responses | Varies; often `Cache-Control: no-store` for personalized data | Avoid caching user-specific data on shared CDN |
+
+**Stale-while-revalidate** is a powerful pattern: the CDN serves the cached response immediately (zero latency), then refetches in the background, so the next user gets the fresh version. The user sees old data for one cycle but never waits for the origin.
+
+`s-maxage` is CDN-specific (overrides `max-age` for CDNs only); `max-age` applies to browser caches. Combine them to give different policies to browser and CDN.
+
+### D. Preview Deployments and Atomic Deploys
+
+A modern platform (Vercel, Netlify, Cloudflare Pages) deploys *every PR* to a unique URL automatically. The PR description includes a link like `pr-42-myapp.vercel.app` that anyone can visit. This is **preview deployments**.
+
+Under the hood:
+
+1. Push to branch triggers a CI build.
+2. Build artifact is uploaded.
+3. A new "deployment ID" is assigned.
+4. A unique subdomain points to that deployment.
+5. The previous production deployment is untouched.
+
+When you merge to main, the same artifact (or a new build) becomes the production deployment by atomically swapping which deployment ID the production domain points to. **Atomic deploys** mean there's no moment where users see a half-deployed app — either they're hitting the old version or the new, never a mix.
+
+This is also how rollback works: every old deployment is still alive at its own ID. To roll back, just point the production domain at the previous deployment ID. Seconds, not redeploys.
+
+### E. The CI Pipeline as Quality Gate
+
+A typical pipeline:
+
+```
+Push → CI runs:
+  ├─ install (cached node_modules)
+  ├─ lint (ESLint, Prettier)
+  ├─ typecheck (tsc --noEmit)
+  ├─ test (Vitest, in parallel shards)
+  ├─ build (vite build)
+  └─ if main branch: deploy
+       else: post preview URL to PR
+```
+
+Three principles that determine whether the pipeline helps or hurts:
+
+1. **Fast feedback on the most-broken thing.** Lint fails in 5s; tests in 90s; build in 60s. Run them in parallel where possible. The 5s lint result is back before the test results — devs can fix the lint without waiting.
+2. **Idempotent.** Re-running the pipeline on the same commit produces the same result. No random flakes from network races, no "works on Tuesday" bugs.
+3. **No deploys without all gates green.** A test failure must block deploy. Otherwise the gate is decorative.
+
+Caching matters: `npm ci` re-downloads everything every run unless you cache `node_modules` (or pnpm's content-addressed store) keyed on the lockfile hash. A 30s install vs a 3-minute install matters when the pipeline runs hundreds of times a day.
+
+### F. Hydration Metrics and Real-User Monitoring
+
+Lighthouse and synthetic tests give you a number, but they're run from a single location at one time. **Real-User Monitoring (RUM)** collects metrics from actual users — the only ground truth.
+
+Three measurement APIs the browser exposes:
+
+- **Performance Observer**: subscribes to events (LCP, FID/INP, CLS) as they happen on the user's device.
+- **Resource Timing**: per-resource fetch durations.
+- **Navigation Timing**: total page-load timeline (DNS, TCP, TTFB, DOMContentLoaded, load).
+
+Send these to an analytics endpoint (Sentry, Datadog, Vercel Analytics, your own backend) and you get distributions instead of point estimates: "median LCP 1.8s, p95 4.2s" tells you where to optimize. Most users are fine; the slow tail is where conversion drops.
+
+For SSR specifically:
+
+- **Time-to-first-byte (TTFB)**: how long until the first byte of HTML arrives. Reflects server speed, edge function performance, DB query time.
+- **Time-to-interactive (TTI)**: when can the user click? In SSR, this is gated by hydration.
+- **Hydration completion time**: when did `hydrateRoot` finish? Custom metric you instrument.
+
+A common discovery: server is fast, hydration is slow. The fix is partial hydration (lesson 14), not server tuning.
+
+### From Theory to the Sections Below
+
+- §1 *Build Process* — (A); what Vite produces and how to inspect it (`vite build --mode analyze`).
+- §2 *Vercel* and §3 *Netlify* — (D); preview deploys, atomic swaps, and the platform-specific edge function APIs.
+- §4 *Self-Hosted Deployment* — Nginx + Docker + PM2; the equivalent of (A)+(C) without a managed platform.
+- §5 *GitHub Actions CI Pipeline* — (E); the pipeline structure and caching tactics.
+- §6 *Environment Management* — `.env` files, build-time vs runtime env vars, feature flags.
+- §7 *CDN and Caching Strategies* — (C); applied to actual platforms.
 
 ---
 

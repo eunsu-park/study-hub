@@ -20,12 +20,219 @@ Composition API는 복잡한 컴포넌트 로직을 구성하는 Vue 3의 해법
 
 ## 목차
 
+API 투어에 들어가기 전에 [**이론과 원리**](#이론과-원리)를 먼저 읽어보세요. 반응형 프리미티브(`ref` vs `reactive`), 이펙트 그래프와 자동 의존성 추적, 그리고 Vue의 fine-grained 반응성이 React의 컴포넌트 레벨 모델과 어떻게 다른지를 다룹니다.
+
 1. [ref vs reactive](#1-ref-vs-reactive)
 2. [Computed: 파생 상태](#2-computed-파생-상태)
 3. [watch와 watchEffect](#3-watch와-watcheffect)
 4. [라이프사이클 훅](#4-라이프사이클-훅)
 5. [컴포저블](#5-컴포저블)
 6. [provide / inject](#6-provide--inject)
+
+---
+
+## 이론과 원리
+
+Composition API는 "Vue 컴포넌트를 쓰는 또 다른 방법"이 아닙니다. 그 아래 깔린 반응성 시스템의 가공되지 않은 표면입니다. 6강에서 메커니즘 — Proxy, 추적되는 읽기, 트리거되는 이펙트 — 을 암시했습니다. 이 레슨에서는 *그것을 직접 프로그래밍합니다*. 세 가지 독립적인 발상이 모든 것을 구동합니다. 값을 감싸는 반응형 프리미티브, 누가 무엇을 읽었는지를 기록하는 이펙트 그래프, 언제 flush할지를 결정하는 스케줄러. 컴포저블은 이 셋을 재사용 가능한 단위로 묶는 관습일 뿐입니다.
+
+### A. 반응형 프리미티브: `ref`와 `reactive`는 서로 다른 포장의 같은 것
+
+`ref`와 `reactive` 모두 읽기가 추적되고 쓰기가 이펙트를 트리거하는 Proxy를 만듭니다. 감싸는 모양만 다릅니다.
+
+```
+reactive(obj):
+  obj  ──Proxy──>  reactiveProxy
+  읽기  reactiveProxy.field   → track(reactiveProxy, 'field')
+  쓰기  reactiveProxy.field=x → trigger(reactiveProxy, 'field')
+
+ref(value):
+  { value: <wrapped> }
+  읽기  ref.value             → track(ref, 'value')
+  쓰기  ref.value = x         → trigger(ref, 'value')
+```
+
+분기가 존재하는 이유는 `Proxy`가 원시값을 감쌀 수 없기 때문입니다 — `new Proxy(0, ...)`는 던집니다. 그래서:
+
+- **객체, 배열, map, set**에는: `reactive()`로 직접 감쌈.
+- **원시값**(number, string, boolean) 또는 단일하게 교체 가능한 핸들이 필요한 경우: `ref()`로 `{ value: ... }`에 박싱.
+
+`ref(obj)`를 객체와 함께 호출하면, 내부적으로 `obj`가 `reactive(obj)`로 업그레이드되어 `.value`로 저장됩니다. 즉 `ref`와 `reactive`는 *내부적으로 같은 프록시*입니다 — 차이는 접근 경로뿐.
+
+#### A.1 왜 중요한가: 디스트럭처링이 반응성을 끊는다
+
+```js
+const state = reactive({ count: 0, name: 'A' });
+
+// 반응성 끊김:
+const { count } = state;
+// `count`는 이제 프록시에서 복사된 평범한 숫자입니다. state.count를 변경해도
+// `count`를 읽는 누구에게도 더 이상 알리지 않습니다 — 변수가 단절됨.
+
+// 반응성 보존:
+const { count } = toRefs(state);
+// `count`는 이제 state.count를 가리키는 ref. 변경이 전파됨.
+```
+
+ref도 같은 함정:
+
+```js
+const count = ref(0);
+const { value } = count; // 끊김 — `value`는 숫자 스냅샷
+count.value++; // `value`를 통해서는 아무것도 트리거하지 않음
+```
+
+정신 모델: 반응형 값의 정체성은 *프록시 그 자체*입니다. 프록시에서 데이터를 빼내면 이펙트 시스템과 연결된 선이 끊깁니다.
+
+### B. 자동 의존성 추적, 단계별로
+
+Vue의 이펙트 러너는 작은 상태 머신입니다.
+
+```
+let activeEffect = null;
+
+function effect(fn) {
+  const runner = () => {
+    activeEffect = runner;
+    runner.deps = [];   // 이전 deps를 잊고 새로 수집
+    try { fn(); }
+    finally { activeEffect = null; }
+  };
+  runner();
+  return runner;
+}
+
+function track(target, key) {
+  if (!activeEffect) return;             // 구독할 게 없음
+  const dep = depsMap.get(target).get(key) ?? new Set();
+  dep.add(activeEffect);                 // 양방향 링크
+  activeEffect.deps.push(dep);
+  depsMap.get(target).set(key, dep);
+}
+
+function trigger(target, key) {
+  const dep = depsMap.get(target)?.get(key);
+  if (!dep) return;
+  for (const e of dep) scheduler(e);     // 각 이펙트를 재실행 큐에 넣음
+}
+```
+
+매 이펙트 실행마다 세 가지가 일어납니다.
+
+1. **`activeEffect`가 이 이펙트로 설정됨.** 이펙트 본문 실행 중 발생하는 모든 `track(...)` 호출이 이 이펙트를 해당 (target, key) 쌍에 구독시킵니다.
+2. **이전 구독이 정리됨.** 이펙트는 매 실행마다 의존성을 다시 수집하므로, 조건부 읽기(`if (cond) state.a` else `state.b`)는 실행된 분기에만 구독됩니다. 오래된 의존성이 누적되지 않습니다.
+3. **본문 실행.** 도중의 모든 반응형 읽기가 의존성을 연결합니다. 끝.
+
+쓰기가 트리거되면 모든 구독 이펙트가 큐에 들어갑니다. 스케줄러(기본: 마이크로태스크 flush)가 중복 제거 후 한 틱당 한 번 실행합니다. 그래서 같은 틱에서 `state.a = 1; state.a = 2`를 해도 최종 값으로 한 번만 이펙트가 실행됩니다.
+
+### C. Vue의 fine-grained 반응성 vs React의 컴포넌트 레벨 리렌더
+
+이것이 두 프레임워크의 가장 결정적인 차이입니다.
+
+```
+React:
+  상태 변경
+     → 컴포넌트 함수 전체 재실행
+     → 새 VDOM 반환
+     → 옛 VDOM과 diff
+     → DOM 패치
+  (컴포넌트 안의 어떤 상태든 컴포넌트 전체의 리렌더를 트리거.
+   메모이제이션은 자식을 좁히지, 컴포넌트 자체를 좁히지 않음)
+
+Vue:
+  state.field 변경
+     → trigger 발화
+     → state.field를 읽은 이펙트만 실행됨
+     → 렌더 이펙트가 재실행(그 컴포넌트의 VNode 트리를 다시 만듦).
+       다른 이펙트(computed, watch)는 구독되어 있을 때만 재실행
+  (컴포넌트 레벨 리렌더는 React와 같지만, 더 가는 입자도로 구독된
+   non-render 이펙트들을 많이 가질 수 있음)
+```
+
+구체적 결과 둘:
+
+- **세 개의 반응형 값에 의존하는 `computed`는 그 셋 중 하나가 바뀔 때만 다시 평가됩니다.** 의존성 배열도, `useMemo` 의식도 필요 없음.
+- **단일 속성을 관찰하는 `watch`는 그 속성이 바뀔 때만 발화** — 컴포넌트 안의 어떤 상태가 바뀌든 모두 발화하는 게 아님.
+
+Vue의 컴포넌트 리렌더 *역시* 이펙트이므로 같은 규칙을 따릅니다. 렌더 함수가 `state.a`와 `state.b`를 읽었다면, `state.c`를 변경해도 그 컴포넌트는 리렌더되지 않습니다. React는 기본적으로 어떤 로컬 상태 변경에도 컴포넌트 전체를 리렌더합니다.
+
+순수하게 더 좋아 보이고, 많은 경우에 그렇습니다. 트레이드는 정신적입니다 — 읽기가 추적된다는 것과 디스트럭처링이 선을 끊는다는 것(A.1)을 인지해야 합니다. React의 "전부가 매번 다시 실행"은 개념적으로 더 단순한 대신, 중요한 곳을 메모이제이션하라고 요구합니다.
+
+### D. `computed`와 `watch`는 그저 특수화된 이펙트
+
+```
+effect(fn)               — 내부 어떤 읽기든 바뀌면 fn 재실행
+computed(fn)             — effect와 같지만 반환값을 캐시.
+                           .value를 읽는 소비자는 computed에 구독됨
+                           (변경이 추이적으로 전파)
+watch(source, callback)  — `source`가 바뀔 때 callback 재실행. 옛/새 값 받음.
+                           callback을 즉시 실행하지 않음
+watchEffect(fn)          — 내부 어떤 읽기든 바뀌면 fn 재실행.
+                           기본 스케줄러를 가진 effect()와 동등
+```
+
+같은 프리미티브 위의 층입니다. 차이는 함수가 **언제** 실행되고 **무엇을** 반환하느냐이지, 의존성을 어떻게 수집하느냐가 아닙니다.
+
+미묘한 점: `watch`는 무엇을 관찰할지 명시할 수 있어(`watch(() => user.name, cb)`) 정밀한 제어를 줍니다. `watchEffect`는 본문에서 읽는 모든 것을 자동 관찰해 더 간결하지만 조건부 읽기가 있으면 예측이 더 어렵습니다.
+
+### E. 스케줄러: 갱신이 배칭되는 이유
+
+같은 동기 틱에서 여러 쓰기가 일어날 때:
+
+```js
+state.a = 1;
+state.b = 2;
+state.c = 3;
+// 각 trigger()가 이펙트를 큐에 넣지만 즉시 실행하지 않음.
+// 틱 끝에서 큐가 flush됨:
+//   - 이펙트는 중복 제거 (렌더 이펙트가 3번 큐됐다 → 한 번만 실행)
+//   - 우선순위 순으로 실행 (computed → render → user watch)
+//   - DOM은 한 번 갱신
+```
+
+그래서 `await nextTick()`이 "Vue가 큐를 flush하고 DOM이 현재 상태를 반영할 때까지 대기"의 관용구입니다. 배칭이 없다면 매 쓰기가 동기로 렌더 이펙트를 재실행해 중간 상태를 그렸을 것입니다. 스케줄러는 "셋을 설정하고 한 번의 갱신을 본다"와 "셋을 설정하고 세 번의 깜박임을 본다"의 차이입니다.
+
+### F. 컴포저블: 재사용 가능한 이펙트 그래프
+
+컴포저블은 이름이 `use`로 시작하고 본문이 Composition API를 사용하는 평범한 함수입니다. React 커스텀 훅의 Vue 대응물이지만, 결정적 차이가 하나 있습니다.
+
+```js
+function useMouse() {
+  const x = ref(0);
+  const y = ref(0);
+
+  function update(e) { x.value = e.pageX; y.value = e.pageY; }
+
+  onMounted(() => window.addEventListener('mousemove', update));
+  onUnmounted(() => window.removeEventListener('mousemove', update));
+
+  return { x, y };
+}
+```
+
+사용:
+
+```vue
+<script setup>
+import { useMouse } from './useMouse';
+const { x, y } = useMouse();
+</script>
+<template>마우스 위치 {{ x }}, {{ y }}</template>
+```
+
+컴포저블은 ref를 반환하고(반응 선 보존), `onMounted`/`onUnmounted`는 컴포저블 안에서 호출되지만 *현재 렌더링 중인 컴포넌트*(Composition API의 setup 컨텍스트)에 등록됩니다. 컴포넌트가 언마운트될 때 리스너는 자동으로 정리됩니다.
+
+React 훅과 달리 **컴포저블의 규칙은 없습니다.** "최상위에서만" 같은 규칙도, "조건문 안 됨"도 없습니다. 이유: Vue 컴포저블은 위치 기반 슬롯 리스트에 의존하지 않습니다. `ref()`는 매 호출마다 새 ref를 반환하고, `onMounted`는 컴포넌트의 라이프사이클 큐에 콜백을 등록합니다. 렌더 간에 유지해야 할 슬롯 개수가 없습니다 — Vue의 컴포넌트 setup 함수는 인스턴스당 한 번만 실행되고 렌더당 한 번이 아니기 때문입니다.
+
+이는 (B)까지 거슬러 올라가는 구조적 단순화입니다. 의존성이 런타임의 읽기로 추적될 때, 재실행 간 상태를 정렬하기 위한 위치 프로토콜이 필요 없습니다. 재실행은 그저 자기가 읽는 것을 읽고, 프레임워크는 새 의존성 맵을 받아들이면 됩니다.
+
+### 이론에서 아래 절들로
+
+- §1 *ref vs reactive* — (A)와 디스트럭처링 함정 (A.1)의 실전.
+- §2 *Computed: 파생 상태* — (D)의 `computed`. 캐시되는 이펙트.
+- §3 *watch와 watchEffect* — (D)의 `watch`와 `watchEffect`. 명시적 source vs 자동 추적 변형.
+- §4 *라이프사이클 훅* — `onMounted`, `onUnmounted` 등. `<script setup>` 또는 컴포저블 안에서 컴포넌트의 라이프사이클 큐에 등록.
+- §5 *컴포저블* — (F). ref, computed, watch, 라이프사이클 훅을 재사용 가능한 단위로 묶는 관습.
+- §6 *provide / inject* — 부모가 prop-drilling 없이 임의 자손에게 값을 노출할 수 있게 해 주는 의존성 주입 프리미티브. 반응형 값은 경계를 넘어도 반응성을 유지.
 
 ---
 

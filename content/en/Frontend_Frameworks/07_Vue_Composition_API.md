@@ -20,12 +20,219 @@ The Composition API is Vue 3's answer to organizing complex component logic. Ins
 
 ## Table of Contents
 
+Before the API tour, read [**Theory & Principles**](#theory--principles) — the reactive primitive (`ref` vs `reactive`), the effect graph and automatic dependency tracking, and how Vue's fine-grained reactivity differs from React's component-level model.
+
 1. [ref vs reactive](#1-ref-vs-reactive)
 2. [Computed: Derived State](#2-computed-derived-state)
 3. [watch and watchEffect](#3-watch-and-watcheffect)
 4. [Lifecycle Hooks](#4-lifecycle-hooks)
 5. [Composables](#5-composables)
 6. [provide / inject](#6-provide--inject)
+
+---
+
+## Theory & Principles
+
+The Composition API is not "another way to write Vue components." It is the unfiltered surface of the reactivity system underneath. Lesson 6 hinted at the mechanism — Proxies, tracked reads, triggered effects. This lesson is where you start *programming directly against it*. Three independent ideas drive everything: a reactive primitive that wraps a value, an effect graph that records who-reads-what, and a scheduler that decides when to flush. Composables are just the convention that lets you bundle these into reusable units.
+
+### A. The Reactive Primitive: `ref` and `reactive` Are the Same Thing in Different Packaging
+
+Both `ref` and `reactive` create a Proxy whose reads are tracked and whose writes trigger effects. The wrapping differs only in shape:
+
+```
+reactive(obj):
+  obj  ──Proxy──>  reactiveProxy
+  read  reactiveProxy.field   → track(reactiveProxy, 'field')
+  write reactiveProxy.field=x → trigger(reactiveProxy, 'field')
+
+ref(value):
+  { value: <wrapped> }
+  read  ref.value             → track(ref, 'value')
+  write ref.value = x         → trigger(ref, 'value')
+```
+
+The split exists because `Proxy` cannot wrap a primitive — `new Proxy(0, ...)` throws. So:
+
+- For **objects, arrays, maps, sets**: `reactive()` wraps directly.
+- For **primitives** (number, string, boolean) or for cases where you want a single replaceable handle: `ref()` boxes them into `{ value: ... }`.
+
+When `ref(obj)` is called with an object, internally `obj` is upgraded to `reactive(obj)` and stored as `.value`. So `ref` and `reactive` are *the same proxy* underneath — the only difference is the access path.
+
+#### A.1 Why this matters: destructuring breaks reactivity
+
+```js
+const state = reactive({ count: 0, name: 'A' });
+
+// breaks reactivity:
+const { count } = state;
+// `count` is now a plain number copied out of the proxy. Mutating state.count
+// no longer notifies anyone reading `count` — the variable is disconnected.
+
+// preserves reactivity:
+const { count } = toRefs(state);
+// `count` is now a ref pointing back into state.count. Mutations propagate.
+```
+
+The same trap with refs:
+
+```js
+const count = ref(0);
+const { value } = count; // BREAK — `value` is a number snapshot
+count.value++; // does not trigger anything via `value`
+```
+
+The mental model: a reactive value's identity *is* the proxy. Pull data out of the proxy and you've dropped the wire that connects you to the effect system.
+
+### B. Automatic Dependency Tracking, Step by Step
+
+Vue's effect runner is a small state machine:
+
+```
+let activeEffect = null;
+
+function effect(fn) {
+  const runner = () => {
+    activeEffect = runner;
+    runner.deps = [];   // forget previous deps; we'll re-collect
+    try { fn(); }
+    finally { activeEffect = null; }
+  };
+  runner();
+  return runner;
+}
+
+function track(target, key) {
+  if (!activeEffect) return;             // nothing to subscribe
+  const dep = depsMap.get(target).get(key) ?? new Set();
+  dep.add(activeEffect);                 // bidirectional link
+  activeEffect.deps.push(dep);
+  depsMap.get(target).set(key, dep);
+}
+
+function trigger(target, key) {
+  const dep = depsMap.get(target)?.get(key);
+  if (!dep) return;
+  for (const e of dep) scheduler(e);     // schedule each effect to re-run
+}
+```
+
+Three things happen on every effect run:
+
+1. **`activeEffect` is set to this effect.** Any `track(...)` call that fires while the effect's body runs will subscribe this effect to the touched (target, key) pair.
+2. **Old subscriptions are cleared.** Effects re-collect their dependencies on every run, so a conditional read (`if (cond) state.a` else `state.b`) only subscribes to whichever branch ran. No stale-dep accumulation.
+3. **The body runs.** Every reactive read along the way wires up a dependency. Done.
+
+When a write triggers, every subscribed effect is queued. The scheduler (default: a microtask flush) deduplicates and runs them once per tick. That's why setting `state.a = 1; state.a = 2` in the same tick produces only one effect run with the final value.
+
+### C. Vue's Fine-Grained Reactivity vs React's Component-Level Re-render
+
+This is the most consequential difference between the two frameworks.
+
+```
+React:
+  state changes
+     → component function re-runs entirely
+     → returns new VDOM
+     → diff against old VDOM
+     → patch DOM
+  (every state in the component triggers a full re-render of the component;
+   memoization narrows the children, not the component itself)
+
+Vue:
+  state.field changes
+     → trigger fires
+     → only the effects that read state.field run
+     → render effect re-runs (which re-creates the VNode tree for that
+       component); other effects (computed, watch) re-run only if subscribed
+  (component-level re-render is the same as React, but you can have many
+   non-render effects subscribed at finer granularity)
+```
+
+Two concrete consequences:
+
+- **A `computed` that depends on three reactive values is re-evaluated only when one of those three changes.** No dependency array required, no `useMemo` ceremony.
+- **A `watch` that observes a single property fires only when that property changes** — not when any state in the component changes.
+
+The component re-render in Vue is *also* an effect, so it follows the same rules: when the render function reads `state.a` and `state.b`, mutating `state.c` does not re-render the component. React, by default, re-renders the whole component on any local state change.
+
+This sounds purely better, and for many cases it is. The trade is mental: you must be aware that reads are tracked and that destructuring breaks the wire (A.1). React's "everything re-runs every time" is conceptually simpler at the cost of asking you to memoize where it matters.
+
+### D. `computed` and `watch` Are Just Specialized Effects
+
+```
+effect(fn)               — re-runs fn whenever any read inside changes
+computed(fn)             — like effect, but caches return value;
+                           consumers that read .value subscribe to the computed
+                           (so changes propagate transitively)
+watch(source, callback)  — re-runs callback when `source` changes; receives
+                           old and new values; does not run callback eagerly
+watchEffect(fn)          — re-runs fn whenever any read inside changes;
+                           same as effect() with a default scheduler
+```
+
+They are layers on the same primitive. The differences are about **when** the function runs and **what** it returns, not how dependencies are collected.
+
+A subtlety: `watch` lets you specify what to observe (`watch(() => user.name, cb)`) which gives precise control; `watchEffect` automatically observes whatever you read in its body, which is more concise but harder to predict if reads happen conditionally.
+
+### E. The Scheduler: Why Updates Are Batched
+
+When multiple writes happen in the same synchronous tick:
+
+```js
+state.a = 1;
+state.b = 2;
+state.c = 3;
+// each trigger() queues effects, but does not run them immediately.
+// at the end of the tick, the queue is flushed:
+//   - effects are deduplicated (the render effect was queued 3 times → runs once)
+//   - effects run in priority order (computed before render, render before user watch)
+//   - the DOM is updated once
+```
+
+This is why `await nextTick()` is the idiom for "wait until Vue has flushed the queue and the DOM reflects current state." Without batching, every write would synchronously re-run the render effect, painting intermediate states. The scheduler is the difference between "set three things, see one update" and "set three things, see three flickers."
+
+### F. Composables: Reusable Effect Graphs
+
+A composable is a plain function whose name starts with `use` and whose body uses the Composition API. It is the Vue analog of a React custom hook, but with one crucial difference:
+
+```js
+function useMouse() {
+  const x = ref(0);
+  const y = ref(0);
+
+  function update(e) { x.value = e.pageX; y.value = e.pageY; }
+
+  onMounted(() => window.addEventListener('mousemove', update));
+  onUnmounted(() => window.removeEventListener('mousemove', update));
+
+  return { x, y };
+}
+```
+
+Used like:
+
+```vue
+<script setup>
+import { useMouse } from './useMouse';
+const { x, y } = useMouse();
+</script>
+<template>Mouse at {{ x }}, {{ y }}</template>
+```
+
+The composable returns refs (preserves the reactive wire); `onMounted`/`onUnmounted` are called inside the composable but register against the *currently-rendering component* (the Composition API's setup context). When the component unmounts, the listener is cleaned up automatically.
+
+Unlike React hooks, **there are no Rules of Composables.** No "only call at the top level," no "no conditionals." The reason: Vue composables don't depend on a positional slot list. `ref()` returns a fresh ref every call; `onMounted` registers a callback against the component's lifecycle queue. There is no slot count to maintain across renders, because Vue's component setup function only runs once per instance — not once per render.
+
+This is a structural simplification that traces all the way back to (B): when dependencies are tracked by what is read at runtime, you do not need a positional protocol to align state across reruns. The reruns simply read whatever they read, and the framework picks up the new dependency map.
+
+### From Theory to the Sections Below
+
+- §1 *ref vs reactive* — (A) and the destructuring trap (A.1) made operational.
+- §2 *Computed: Derived State* — (D)'s `computed`; the cached effect.
+- §3 *watch and watchEffect* — (D)'s `watch` and `watchEffect`; the explicit-source vs auto-tracked variants.
+- §4 *Lifecycle Hooks* — `onMounted`, `onUnmounted`, etc., registering against the component's lifecycle queue from inside `<script setup>` or composables.
+- §5 *Composables* — (F): the convention for bundling refs, computed, watch, and lifecycle hooks into reusable units.
+- §6 *provide / inject* — the dependency-injection primitive that lets a parent expose values to any descendant without prop-drilling. Reactive values stay reactive across the boundary.
 
 ---
 

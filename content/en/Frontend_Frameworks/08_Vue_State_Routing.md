@@ -20,6 +20,8 @@ As Vue applications grow, two challenges emerge: sharing state across many compo
 
 ## Table of Contents
 
+Before the API tour, read [**Theory & Principles**](#theory--principles) — Pinia's store as a reactive composable, why "many small stores" beats one global store, and Vue Router's hash mode vs history mode trade-offs.
+
 1. [Pinia: State Management](#1-pinia-state-management)
 2. [Pinia vs Vuex](#2-pinia-vs-vuex)
 3. [Store Composition and Plugins](#3-store-composition-and-plugins)
@@ -27,6 +29,180 @@ As Vue applications grow, two challenges emerge: sharing state across many compo
 5. [Dynamic and Nested Routes](#5-dynamic-and-nested-routes)
 6. [Navigation Guards](#6-navigation-guards)
 7. [Route Meta and Lazy Loading](#7-route-meta-and-lazy-loading)
+
+---
+
+## Theory & Principles
+
+State management and routing look like two unrelated problems, but in Vue they share an underlying mechanism: both are *reactive composables registered as global services*. A Pinia store and a Vue Router instance are both objects whose state is reactive (so any component reading them re-renders on change), both are installed once via `app.use(...)`, and both expose a hook (`useUserStore()`, `useRoute()`) that returns reactive handles.
+
+This section explains why Pinia replaced Vuex, what makes the "many small stores" pattern scale, and the routing trade-offs that affect both your server config and your URL aesthetics.
+
+### A. Pinia: a Store Is Just a Composable
+
+A Pinia store is defined the same way you write a composable, with one extra wrapper:
+
+```js
+import { defineStore } from 'pinia';
+import { ref, computed } from 'vue';
+
+export const useUserStore = defineStore('user', () => {
+  // === state ===
+  const name = ref('');
+  const isLoggedIn = ref(false);
+
+  // === getters ===
+  const initial = computed(() => name.value[0] ?? '?');
+
+  // === actions ===
+  function login(n: string) { name.value = n; isLoggedIn.value = true; }
+  function logout() { name.value = ''; isLoggedIn.value = false; }
+
+  return { name, isLoggedIn, initial, login, logout };
+});
+```
+
+Two things to notice:
+
+1. **The body is a regular composable.** `ref`, `computed`, and plain functions — exactly what you'd write in `<script setup>`. The reactivity rules from lesson 7 apply unchanged.
+2. **`defineStore` does two extra things:** it registers the store under the id `'user'` (used by devtools and SSR hydration), and it ensures `useUserStore()` returns the *same* instance every time it is called. The store is a singleton scoped to the Pinia instance installed on the app.
+
+This design has a structural consequence:
+
+```
+useStore() inside any component
+    ↓
+returns the same proxy
+    ↓
+any component reading store.x re-renders when store.x changes
+    ↓
+no provider needed, no prop-drilling
+```
+
+A Pinia store *is* a Vue 3 reactive object — the same Proxy machinery that backs `reactive()`. Reading a property tracks the dependency; writing it triggers all subscribers. There is no separate subscription API; reactivity is automatic everywhere a component or composable reads from it.
+
+### B. Why Pinia Replaced Vuex
+
+Vuex predates Composition API and was built around the Options API mental model: a single store with `state`, `mutations`, `actions`, `getters`, and `modules`. Pinia drops most of this.
+
+| Concept | Vuex | Pinia |
+|---------|------|-------|
+| Stores | One global store with modules | Many small stores |
+| Mutations vs actions | Synchronous mutations *and* actions | Just actions (mutations folded in) |
+| Namespacing | Module path strings ('user/login') | Just the function name (`useUserStore().login()`) |
+| TypeScript | Workarounds, type augmentation | Inferred from store body |
+| API surface | `mapState`, `mapActions`, `commit`, `dispatch` | Direct property access and method calls |
+
+Three structural wins:
+
+1. **No mutation/action distinction.** Vuex required mutations to be synchronous and actions to be the only place async could live. The split was justified for time-travel debugging but added ceremony to every state change. Pinia uses Vue 3's reactivity directly: any function inside the store can mutate state, sync or async, and Vue's scheduler batches updates correctly.
+2. **No namespacing strings.** `commit('user/login', payload)` is replaced by `useUserStore().login(payload)` — type-checked, refactor-safe, jump-to-definition friendly.
+3. **TypeScript is automatic.** The return type of the setup function *is* the store's public type. No declaration merging, no separate type definitions.
+
+The "many small stores" pattern is not a Pinia rule but a consequence of (1) and (2): when defining a store costs you essentially the same as writing a composable, you make one per concern (`useUserStore`, `useCartStore`, `useThemeStore`) instead of cramming everything into one. Each store re-renders only its own subscribers, mirroring the per-property reactivity from lesson 7 at a coarser granularity.
+
+### C. Stores Composing Stores
+
+A store's setup function can call other store hooks, so cross-store dependencies are explicit:
+
+```js
+export const useCartStore = defineStore('cart', () => {
+  const userStore = useUserStore();         // reactive reference to user
+  const items = ref([]);
+
+  const total = computed(() => {
+    const discount = userStore.isPremium ? 0.9 : 1;
+    return items.value.reduce((s, i) => s + i.price, 0) * discount;
+  });
+
+  return { items, total };
+});
+```
+
+Three guarantees:
+
+1. **Reactive across boundaries.** `userStore.isPremium` is reactive; the `total` computed re-evaluates when either `items` or `userStore.isPremium` changes.
+2. **No initialization order needed.** Pinia lazily initializes stores on first access. Importing `useUserStore` inside `useCartStore` does not require either to be defined first.
+3. **Cycles are detected.** Store A using store B using store A throws clearly at access time rather than producing an infinite loop.
+
+This composition pattern is the structural equivalent of selectors in Redux/Zustand: derived state lives where it is most relevant, not in a single global computed list.
+
+### D. Vue Router: Routes as Reactive State
+
+Vue Router 4 wraps the History API the same way React Router does, but the `useRoute()` hook returns a **reactive** route object:
+
+```vue
+<script setup>
+import { useRoute } from 'vue-router';
+import { computed } from 'vue';
+
+const route = useRoute();
+const productId = computed(() => route.params.id);
+//   ↑ re-evaluates when route changes; does not require a re-mount
+</script>
+```
+
+Because `route` is reactive, navigating from `/products/1` to `/products/2` does *not* unmount the `ProductDetail` component — the same component instance stays mounted, `route.params.id` reactively becomes `'2'`, and any computed depending on it updates. This is a meaningful difference from React Router, where dynamic params trigger a re-render of the component but the component instance is the same; in Vue, the reactivity makes the propagation seamless without any `useEffect`-style watching.
+
+If you *want* a remount on param change, you opt in:
+
+```vue
+<router-view :key="route.fullPath" />
+```
+
+The explicit `key` (lesson 1's mechanism) forces a fresh component instance per URL.
+
+### E. Hash Mode vs History Mode: a Server-Config Trade
+
+Same dichotomy as React Router, made selectable at router creation:
+
+```js
+import { createRouter, createWebHistory, createWebHashHistory } from 'vue-router';
+
+const router = createRouter({
+  history: createWebHistory(),       // /products/42
+  // history: createWebHashHistory(), // /#/products/42
+  routes: [...]
+});
+```
+
+| Mode | URL shape | Server config required | Pros | Cons |
+|------|-----------|-----------------------|------|------|
+| `createWebHistory` | `/products/42` | Server must serve `index.html` for unknown paths (SPA fallback) | Clean URLs, indexable by crawlers, works with SSR | Requires server cooperation |
+| `createWebHashHistory` | `/#/products/42` | None — the `#` and after is invisible to the server | Works on any static host (S3, GitHub Pages without rewrites) | Ugly URL, worse SEO, no SSR |
+
+The server-side rule for history mode: any request that doesn't match an actual file should return `index.html`. Nginx: `try_files $uri /index.html;`. Apache: a rewrite rule. Vercel/Netlify: configured by default. Without this, a hard refresh on `/products/42` returns 404.
+
+### F. Navigation Guards: Synchronous Hooks Around Routing
+
+Vue Router exposes hooks at three levels of granularity:
+
+```
+beforeEach (global)         — runs before every navigation
+  └─ beforeEnter (per-route) — runs when entering this specific route
+       └─ beforeRouteEnter (in-component) — runs in the entered component
+```
+
+Each hook receives `(to, from)` and returns:
+
+- `true` or nothing → navigation proceeds
+- `false` → navigation cancelled
+- a route object or path string → redirect there
+- a Promise → navigation waits
+
+This is the natural place for authentication checks, redirect logic, and route-level data prefetching. The contract is "synchronous-feeling": the user's URL is held back from changing until the guards resolve, so failed auth simply rolls back the URL bar — no flash of the protected page.
+
+The cost is that long-running guards block navigation. Use them for cheap synchronous checks (is the user logged in?) and async data prefetches that are cheap or cached. Heavy fetches belong in the component or a loader-style pattern.
+
+### From Theory to the Sections Below
+
+- §1 *Pinia: State Management* — (A); the setup-store form, with state/getters/actions.
+- §2 *Pinia vs Vuex* — (B); the structural reasons Vuex was deprecated as the official choice.
+- §3 *Store Composition and Plugins* — (C); how stores call other stores, plus Pinia's plugin hook for cross-cutting concerns (persistence, devtools).
+- §4 *Vue Router 4* — (D)+(E); creating the router, `<router-link>` and `<router-view>`, mode selection.
+- §5 *Dynamic and Nested Routes* — params and child routes; the same matching logic as React Router but with reactive `route`.
+- §6 *Navigation Guards* — (F); the three-level hook system.
+- §7 *Route Meta and Lazy Loading* — `meta` fields per route + `component: () => import(...)` for code-splitting (the same chunk-per-route pattern from lesson 5).
 
 ---
 

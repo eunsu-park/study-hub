@@ -16,6 +16,8 @@
 
 ## Table of Contents
 
+Before the optimization recipes, read [**Theory & Principles**](#theory--principles) — React Fiber and time slicing, the dependency graph that code splitting traverses, and what memoization actually saves you (and where it costs more than it saves).
+
 1. [Core Web Vitals](#1-core-web-vitals)
 2. [Code Splitting](#2-code-splitting)
 3. [Tree Shaking](#3-tree-shaking)
@@ -25,6 +27,185 @@
 7. [Memoization](#7-memoization)
 8. [Performance Measurement](#8-performance-measurement)
 9. [Practice Problems](#practice-problems)
+
+---
+
+## Theory & Principles
+
+Performance optimization is full of folklore — "useMemo everything," "always virtualize lists," "code-split everywhere." Most of it is wrong without context. The right move depends on which budget you are spending: bytes (network), milliseconds (CPU), or memory. This section names the underlying mechanisms — Fiber's time slicing, the dependency-graph splitting code-bundlers do, the avoid-recomputation logic of memoization — so you can match the optimization to the actual bottleneck instead of cargo-culting.
+
+### A. The Three Performance Budgets
+
+Every frontend optimization spends from one of three budgets:
+
+| Budget | Measured by | Spent by | Replenished by |
+|--------|-------------|----------|----------------|
+| **Network bytes** | KB transferred | Adding code, images, fonts | Code splitting, tree shaking, image optimization, caching |
+| **CPU time** | ms blocked on main thread | Rendering, JS execution, layout | Memoization, virtualization, time slicing, web workers |
+| **Memory** | MB allocated | Long lists, retained closures | Virtualization, weak references, cleanup in effects |
+
+Most "optimizations" that backfire spend one budget to save another *and* the trade is wrong. `useMemo`-ing every value spends memory and a comparison-per-render to save a recomputation that was already cheap. Virtualizing a 20-item list spends complexity to save almost nothing. Code-splitting too aggressively spends round-trips to save bytes that were already small.
+
+The first question for every optimization: **which budget is exhausted, and how much does the proposed change cost from the other two?**
+
+### B. Core Web Vitals: What the Browser Actually Measures
+
+Google's Core Web Vitals reduce three user experiences to three numbers:
+
+- **LCP (Largest Contentful Paint)**: time until the largest visible element is rendered. Spent on: network (downloading the asset), server (TTFB), CPU (rendering). Optimized by: preloading hero images, reducing render-blocking JS, caching.
+- **INP (Interaction to Next Paint)**: median time from user input to the next visual update. Spent on: CPU (JS execution, layout). Optimized by: breaking long tasks, deferring non-critical work, using `useTransition` to mark updates as low-priority.
+- **CLS (Cumulative Layout Shift)**: visual stability — how much elements jump as the page loads. Spent on: layout shifts caused by late-arriving images without dimensions, fonts swapping, async-inserted ads. Optimized by: setting `width`/`height`, reserving space, `font-display: optional`.
+
+These three are first-class because they correspond to "is the page slow?", "is the page laggy?", and "is the page jumpy?" — the user-felt symptoms.
+
+### C. React Fiber and Time Slicing
+
+Pre-React 16, a render walked the entire component tree synchronously. A 30 ms render blocked the main thread for 30 ms — long enough to drop a frame, longer to delay a click handler. **Fiber** (introduced in React 16, expanded in React 18) restructured the renderer to be **interruptible**.
+
+```
+Old reconciler (synchronous):
+  render() → walk entire tree → commit
+  ↑─────────────── 30ms blocked ─────────────────↑
+
+Fiber (interruptible):
+  render() → process N units of work → check: should we yield?
+                                          yes → save state, return to event loop
+                                          no  → continue
+  → process more units → ... → commit
+  ↑──5ms──↑──5ms──↑──5ms──↑──5ms──↑──5ms──↑──5ms──↑
+   yield   yield   yield   yield   yield   yield
+   (browser handles input, scrolls, paints between)
+```
+
+Each component's render becomes a **fiber** (a unit of work). The scheduler processes fibers, checks every few milliseconds whether the browser needs the main thread (for input, animation, paint), and yields if so. The render is paused, resumed, or — for low-priority updates — discarded and restarted with newer state.
+
+Two user-facing APIs expose this:
+
+- **`useTransition`**: mark a state update as low-priority. The render that follows can be interrupted by higher-priority renders (typing into an input, for example).
+- **`useDeferredValue`**: take a value and produce a "lagging" version that updates at low priority.
+
+Both let typing stay snappy even when the typed value drives an expensive list re-render. The list updates *eventually*, but only when nothing more urgent is in flight.
+
+Vue's scheduler and Svelte's update queue serve similar purposes (batching, microtask flushing) but neither has the full "interruptible-render" model that Fiber exposes.
+
+### D. Code Splitting: Walking the Module Dependency Graph
+
+The bundler builds a graph: nodes are modules, edges are `import` statements. By default, all of it is concatenated into one big file. **Code splitting** is the bundler's response to "you don't need all of this on first load."
+
+```
+Default bundle:
+  app.js = main + Header + Sidebar + Home + Products + Cart + Checkout + Settings + ...
+            ↑─────────────────────────── 800 KB ──────────────────────────────↑
+
+Route-split bundle:
+  app.js     = main + Header + Sidebar + Home                         (200 KB initial)
+  products.js = Products + ProductCard                                 (lazy-loaded on /products)
+  cart.js    = Cart + CartItem                                         (lazy-loaded on /cart)
+  checkout.js = Checkout + PaymentForm + AddressForm                   (lazy-loaded on /checkout)
+  settings.js = Settings + ProfileEdit + Preferences                   (lazy-loaded on /settings)
+```
+
+The mechanism is `import()` — a function that returns a Promise resolving to the module. The bundler sees `import('./Foo')`, makes Foo's transitive dependencies into a separate chunk, and arranges the runtime to fetch them on demand.
+
+```js
+// React.lazy is a thin wrapper around import()
+const Products = React.lazy(() => import('./Products'));
+
+// Vue's defineAsyncComponent
+const Products = defineAsyncComponent(() => import('./Products.vue'));
+
+// Svelte: dynamic import in route loader
+load: async () => ({ Products: (await import('./Products.svelte')).default });
+```
+
+Trade-offs:
+
+- **Each chunk is a network round-trip.** Splitting too aggressively into many small chunks turns a single 200 KB download into ten 20 KB downloads, with HTTP/2 multiplexing helping but not eliminating the latency.
+- **Shared dependencies must be deduplicated.** Two route chunks that both import `lodash` should not bundle `lodash` twice. Bundlers do this with "vendor" or "common" chunks.
+- **Granularity.** Route-level is usually right. Component-level only pays off when the component is heavy and rarely shown (e.g., a chart library shown on a settings page).
+
+### E. Memoization: Spending Memory to Avoid Recomputation
+
+Memoization caches a function's output keyed on its inputs. The next call with the same inputs returns the cache. The bet:
+
+```
+cost of cache lookup + cost of equality check  <  cost of recomputing
+```
+
+For a function that runs in 0.1 ms, cache lookup + equality check might be 0.05 ms — barely a win, often a loss when you account for memory. For a function that runs in 50 ms (sorting, filtering a large list), the cache wins decisively.
+
+In React's `useMemo` and `useCallback`:
+
+```jsx
+const sorted = useMemo(() => bigList.sort(compareFn), [bigList]);
+//   ↑ recomputes only when bigList reference changes
+```
+
+The dependency array is compared element-wise with `Object.is`. If equal, return the cached value; otherwise recompute. The savings are real when:
+
+1. The computation is expensive (sort, filter, reduce on large data).
+2. The dependency reference is stable across renders that don't change the actual data.
+3. The cached value is used as a prop for a memoized child or as a dependency of another hook.
+
+The savings are *negative* when:
+
+- The computation is cheap (e.g., `useMemo(() => a + b, [a, b])` — addition is faster than the comparison cost).
+- The dependencies change every render (the cache never hits; you pay only the lookup cost).
+- The cached value is consumed by something that doesn't care about reference stability.
+
+`React.memo(Component)` is the analog at the component level: skip the child's re-render if its props are equal by `Object.is`. Same trade as `useMemo` — worth it for expensive children with stable props, harmful for cheap children or unstable props.
+
+Vue's `computed` and Svelte's `$derived` are *automatically memoized* — they recompute only when their reactive sources change, by definition. You don't choose to memoize; reactivity does it for you. This is one of the structural reasons Vue and Svelte feel "less manual" about performance.
+
+### F. Virtualization: Render Only What's Visible
+
+A list of 10,000 rows in the DOM is 10,000 elements to layout, paint, and update. The browser slows even if the user only sees 30 rows.
+
+**Virtualization** (also called "windowing") renders only the visible rows plus a small buffer. As the user scrolls, the rendered set shifts:
+
+```
+viewport (visible 30 rows):
+   row 100, 101, ..., 129
+
+scroll down 5 rows:
+   render 105, 106, ..., 134
+   (rows 100-104 unmount, rows 130-134 mount)
+```
+
+Libraries like `react-window`, `react-virtual`, `@tanstack/virtual`, and Vue's `vue-virtual-scroller` implement this. They compute item positions, listen to scroll events, and re-render only the slice in view.
+
+Costs:
+
+- **Constant CPU on scroll** (mounts and unmounts every few rows).
+- **Implementation complexity.** Mixed-height items, sticky headers, focus preservation across virtual boundaries are all tricky.
+- **Accessibility.** Screen readers expect the full list in DOM; virtualization breaks that without explicit ARIA work.
+
+Worth it when: list ≥ 1000 items. Not worth it for: 50-item lists, paginated lists where the page size is already small.
+
+### G. Image and Font Performance
+
+Images dominate page weight. Three modern techniques each address a specific waste:
+
+- **Responsive images** (`srcset`, `<picture>`): the browser picks the smallest acceptable image for the viewport. A retina iPhone gets a 750px image; a desktop monitor gets a 1500px image. The server has both pre-generated.
+- **Lazy loading** (`loading="lazy"`): defer image fetch until it's near the viewport. Native browser support since 2020.
+- **Modern formats** (WebP, AVIF): 25-50% smaller than JPEG at equivalent quality. Backed by every modern browser.
+
+Fonts are layout shifts waiting to happen:
+
+- **`font-display: swap`**: show text in a fallback font until the web font loads. Causes a "FOIT/FOUT" (flash of invisible/unstyled text) — annoying but no CLS damage.
+- **`font-display: optional`**: use the web font only if it loaded fast enough; otherwise stick with the fallback. Eliminates layout shift entirely.
+- **Preload critical fonts**: `<link rel="preload" as="font" ...>` — the browser fetches the font in parallel with HTML parsing, instead of waiting until CSS reveals it's needed.
+
+### From Theory to the Sections Below
+
+- §1 *Core Web Vitals* — (B); the metrics every other section optimizes against.
+- §2 *Code Splitting* — (D); `import()` and route-level chunks.
+- §3 *Tree Shaking* — the bundler's other dependency-graph trick: dead-code elimination based on ES module imports.
+- §4 *Image Optimization* — (G)'s image half.
+- §5 *Font Optimization* — (G)'s font half.
+- §6 *Virtual Scrolling* — (F); when and why to virtualize.
+- §7 *Memoization* — (E); the React/Vue/Svelte APIs for skipping recomputation.
+- §8 *Performance Measurement* — Lighthouse, DevTools, real-user metrics; the scientific-method side of "what should I optimize?"
 
 ---
 

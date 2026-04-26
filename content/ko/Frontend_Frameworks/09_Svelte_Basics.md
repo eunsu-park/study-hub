@@ -20,6 +20,8 @@ Svelte는 React와 Vue와는 근본적으로 다른 접근 방식을 취한다. 
 
 ## 목차
 
+문법 투어에 들어가기 전에 [**이론과 원리**](#이론과-원리)를 먼저 읽어보세요. 컴파일 타임 반응성, `$:`이 실제로 무엇을 emit하는지, 가상 DOM 부재의 트레이드오프, 그리고 번들이 더 작아지는 이유를 다룹니다.
+
 1. [Svelte 철학](#1-svelte-철학)
 2. [컴포넌트 구조](#2-컴포넌트-구조)
 3. [반응형 선언](#3-반응형-선언)
@@ -28,6 +30,154 @@ Svelte는 React와 Vue와는 근본적으로 다른 접근 방식을 취한다. 
 6. [바인딩](#6-바인딩)
 7. [템플릿 로직 블록](#7-템플릿-로직-블록)
 8. [전환과 애니메이션](#8-전환과-애니메이션)
+
+---
+
+## 이론과 원리
+
+React와 Vue는 *런타임*입니다 — diff 알고리즘, 반응성 시스템, 모든 라이프사이클 배관을 담은 라이브러리를 브라우저로 보냅니다. 컴포넌트 코드는 그 런타임에 넘겨지고, 런타임이 매 렌더마다 그것을 해석합니다. Svelte는 반대 방향으로 갑니다 — 빌드 타임에 컴파일러가 `.svelte` 파일을 읽고 DOM을 직접 갱신하는 맞춤 명령형 JavaScript 조각을 emit합니다. diff도, 가상 DOM도, 중앙 런타임도 없습니다. 프레임워크의 "엔진"이 컴포넌트 코드 안으로 펼쳐집니다.
+
+이 절은 그 접근의 메커니즘, `$:`이 실제로 무엇으로 컴파일되는지, 그리고 더 작은 번들과 더 빠른 초기 페인트의 대가로 Svelte가 받아들이는 트레이드오프를 설명합니다.
+
+### A. 컴파일 타임 반응성
+
+React에서 `setCount(count + 1)`을 쓰면, 프레임워크는 컴포넌트를 다시 실행하고, 새 VDOM을 만들고, 옛 것과 diff하고, DOM을 패치합니다. Vue에서는 프록시가 쓰기를 가로채고, 이펙트 그래프를 돌리고, 렌더 함수를 다시 실행하고, DOM을 패치합니다. 두 경우 모두 *런타임*이 무엇이 바뀌었고 무엇을 갱신할지를 결정합니다.
+
+Svelte는 이 일을 *컴파일 동안* 합니다. 다음을 작성하면:
+
+```svelte
+<script>
+  let count = 0;
+</script>
+
+<button on:click={() => count++}>{count}</button>
+```
+
+컴파일러가 템플릿을 분석해 `{count}`가 `count`에 의존하는 유일한 것임을 알아내고, 대략 다음과 같은 코드를 emit합니다.
+
+```js
+function create_fragment(ctx) {
+  let button;
+  let t;
+  return {
+    c() {
+      button = document.createElement('button');
+      t = document.createTextNode(ctx[0]); // ctx[0]이 count
+      button.appendChild(t);
+    },
+    m(target, anchor) {
+      target.insertBefore(button, anchor);
+      button.addEventListener('click', ctx[1]); // ctx[1]이 클릭 핸들러
+    },
+    p(ctx, [dirty]) {
+      if (dirty & 1 /* count 변경 */) t.data = ctx[0];
+    },
+    d() { button.remove(); }
+  };
+}
+
+function instance($$self, $$props, $$invalidate) {
+  let count = 0;
+  const click_handler = () => $$invalidate(0, count = count + 1);
+  return [count, click_handler];
+}
+```
+
+세 가지 주목점:
+
+1. **diff 없음.** `p` 함수("update")는 어느 변수가 바뀌었는지 알려 주는 `dirty` 비트마스크를 받습니다. 그 변수에 의존하는 정확한 DOM 노드만 건드립니다 — 비교 루프도, VDOM 트리도 없음.
+2. **프레임워크에 반응성 시스템 없음.** 반응성은 컴파일러가 계측한 할당 그 자체입니다 — `count = count + 1`은 `$$invalidate(0, count = count + 1)`이 됩니다. 프레임워크는 "인덱스 0의 변수가 바뀜"만 알면 됩니다.
+3. **DOM 연산이 맞춤형.** 각 컴포넌트가 자기만의 `create`/`mount`/`update`/`destroy` 함수를 생성합니다. 런타임에 일반 목적의 `createElement('button')`이 일어나지 않습니다 — Svelte는 이 특정 버튼에 대해 리터럴 `document.createElement('button')`을 emit합니다.
+
+브라우저로 가는 런타임은 작습니다 — 대부분 `$$invalidate` 배관과 라이프사이클 스케줄러. 대부분의 "프레임워크 코드"는 번들된 컴포넌트 안에 살게 됩니다.
+
+### B. `$:` 반응형 문(reactive statement)
+
+Svelte 4에서 `$:`은 어떤 문(statement)을 반응형으로 표시합니다 — 그것이 읽는 어떤 변수든 재할당될 때 다시 실행됩니다.
+
+```svelte
+<script>
+  let count = 0;
+  $: doubled = count * 2;
+  $: console.log(`count is now ${count}`);
+</script>
+```
+
+컴파일러는 각 `$:` 문의 AST를 걸어 그것이 읽는 변수(`count`)를 식별하고, 그 변수들의 비트가 dirty할 때마다 `update` 함수 안에 재실행 호출을 emit합니다. `$:` 문법은 JavaScript의 labeled-statement 문법을 재활용한 것 — 평범한 JS에서는 아무 일도 하지 않는 유효한 JS이지만, Svelte 컴파일러가 특별 취급합니다.
+
+세 가지 규칙이 따라옵니다.
+
+1. **반응성은 할당이지 변형이 아님.** `arr.push(x)`는 Svelte를 트리거하지 않습니다. `arr = [...arr, x]`(또는 push 후 `arr = arr`)는 트리거합니다. 컴파일러는 `=` 연산자를 계측하지 깊은 변형을 계측하지 않습니다.
+2. **`$:`은 컴포넌트 인스턴스의 최상위 변수만 추적.** `obj.field`를 읽는 것은 `obj`가 재할당될 때 트리거되지, `obj.field`가 변형될 때 트리거되지 않습니다.
+3. **순서가 중요.** `$:` 문은 의존성으로 위상정렬됩니다. `$: y = x * 2; $: z = y + 1`은 올바른 순서로 다시 실행됩니다. 그러나 평범한 `let` 선언은 위에서 아래로 평가됩니다.
+
+Svelte 5는 **runes**(10강에서 다룸)를 도입합니다 — `$state`, `$derived`, `$effect` — `$:`을 명시적이고 더 유연한 문법으로 대체합니다. 같은 컴파일 타임 접근이지만, 의존성 그래프가 label 문법 대신 함수 호출에 인코딩됩니다.
+
+### C. 가상 DOM 부재의 트레이드오프
+
+VDOM을 건너뛰면 실제 성능 이득이 있습니다.
+
+- **더 작은 런타임.** Svelte 런타임은 gzipped 기준 약 1.6 KB. React + react-dom은 약 45 KB. 작거나 중간 규모 앱의 번들이 5-10× 더 작을 수 있습니다.
+- **세밀한 변경에 더 빠른 갱신.** 단일 텍스트 노드 갱신은 비교 없이 한 번의 DOM 쓰기.
+- **더 낮은 메모리.** DOM과 나란히 사는 VNode 트리가 없음.
+
+그러나 실제 비용도 있습니다.
+
+1. **컴포넌트 내부 갱신이 최적 사례. 컴포넌트 간 갱신은 반드시 더 빠르지 않음.** prop으로 전달된 상태가 바뀌면, Svelte는 여전히 각 자식 컴포넌트의 update 함수로 들어가야 합니다. prop이 무거운 깊은 트리에서는 이득이 줄어듭니다.
+2. **임의 JavaScript에서 컴포넌트 트리를 반환할 수 없음.** Svelte 컴포넌트는 `.svelte` 파일입니다 — React의 `createElement`처럼 런타임에 프로그램적으로 구성할 수 없습니다. 동적 컴포넌트 선택 같은 일부 패턴이 더 장황해집니다.
+3. **번들이 컴포넌트 수에 비례.** 모든 컴포넌트가 자기만의 맞춤 JS로 컴파일되므로, 수백 개의 고유 컴포넌트를 가진 큰 앱은 React 앱보다 더 많은 번들 코드를 갖게 됩니다 — 어떤 앱 크기에서 곡선이 교차합니다. Svelte는 일반적인 앱 크기에서 더 작고, React는 매우 큰 앱에서 더 작습니다.
+4. **컴파일 타임 분석이 속을 수 있음.** `$: doubled = compute(count)`는 컴파일러가 표현식에서 `count`를 볼 수 있을 때 작동합니다. 동적 속성 접근이나 eval 같은 간접화로 계산하면 의존성이 보이지 않습니다.
+
+대략의 규칙: Svelte는 번들 크기와 컴포넌트별 성능이 중요한 작거나 중간 규모 앱에서 빛납니다. React 생태계는 공유 인프라가 런타임 비용을 분산시키는 매우 큰 앱에서 우세합니다.
+
+### D. 컴포넌트 경계와 갱신 입자도
+
+Svelte의 update 함수는 어느 DOM 노드가 어느 변수에 의존하는지 정확히 압니다(비트마스크). 컴포넌트 안에서는 영향받는 노드만 건드려집니다. 그러나 갱신 단위는 *여전히 컴포넌트*입니다 — 부모가 바뀐 prop을 전달하면, 그 prop이 자식 안에서 사용되지 않더라도 자식의 update 함수가 호출됩니다. 컴포넌트 경계를 넘는 노드별 구독은 없습니다.
+
+이는 React의 "어떤 상태 변경에도 컴포넌트 전체가 리렌더"와 개념적으로 비슷합니다. 차이는 재실행이 전체 렌더 함수가 아니라 작은 update 함수라는 것. 결과적으로 컴포넌트 합성은 아키텍처 수준에서 세 프레임워크 모두 거의 같은 모양을 가집니다 — 다른 것은 *갱신당 비용*입니다.
+
+### E. 양방향 바인딩: `prop + event`의 설탕
+
+Svelte의 `bind:value={name}`은 옛 MVC 프레임워크의 양방향 바인딩처럼 보입니다. 컴파일러는 이를 단방향 데이터 + 이벤트로 desugar합니다.
+
+```svelte
+<input bind:value={name} />
+
+<!-- 대략 다음으로 컴파일: -->
+<input value={name} on:input={(e) => name = e.target.value} />
+```
+
+런타임에 마법의 양방향 반응성은 없습니다. 패턴은 1강의 prop-down-event-up 관습 위의 컴파일러 설탕일 뿐입니다. `bind:checked`, `bind:group`, `bind:this`(ref)도 마찬가지.
+
+### F. 기본으로 스코프된 스타일
+
+`.svelte` 파일 안의 `<style>` 블록은 기본적으로 **컴포넌트에 스코프**됩니다. 컴파일러가 클래스명을 다시 쓰거나(생성된 클래스 부착) 셀렉터가 다른 컴포넌트로 새지 않도록 보장합니다.
+
+```svelte
+<style>
+  p { color: red; }
+</style>
+
+<!-- 대략 다음으로 컴파일: -->
+<style>
+  p.svelte-abc123 { color: red; }
+</style>
+
+<p class="svelte-abc123">hello</p>
+```
+
+CSS-in-JS 라이브러리도, 수동 BEM 접두사도, `:scope` 복잡도도 없습니다. 컴파일러가 빌드 타임에 일을 하고, 런타임은 CSS 오버헤드를 지지 않습니다.
+
+### 이론에서 아래 절들로
+
+- §1 *Svelte 철학* — (A)의 컴파일 타임 vs 런타임 구분과 (C)의 번들 크기 논점.
+- §2 *컴포넌트 구조* — (A)의 컴파일러가 처리하는 `<script>`, `<template>`, `<style>` 레이아웃. (F)의 스코핑 적용.
+- §3 *반응형 선언* — (B). `$:`과 할당-as-반응성 규칙.
+- §4 *프롭* — `export let name`(Svelte 4)이 최상위 변수를 prop으로 표시하는 방법. 컴파일러가 이를 부모의 업데이트 비트마스크로 끌어올림.
+- §5 *이벤트* — DOM 이벤트는 `on:click`. 커스텀 이벤트는 `createEventDispatcher`. 둘 다 직접 `addEventListener` 호출로 컴파일.
+- §6 *바인딩* — (E). `bind:value`가 prop+event로 desugar.
+- §7 *템플릿 로직 블록* — `{#if}`, `{#each}`, `{#await}`. 각 블록이 자기 `create`/`update`/`destroy` 함수를 가진 마이크로 프래그먼트가 되어, 조건이나 리스트가 바뀔 때 마운트/언마운트.
+- §8 *전환과 애니메이션* — DOM 진입/퇴장의 라이프사이클 훅이 일급(first-class)인 이유는 컴파일러가 모든 마운트와 언마운트를 제어하기 때문. 전환은 그 시점에 DOM 노드를 입력으로 호출되는 함수일 뿐.
 
 ---
 

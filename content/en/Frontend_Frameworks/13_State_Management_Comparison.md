@@ -16,6 +16,8 @@
 
 ## Table of Contents
 
+Before the library tour, read [**Theory & Principles**](#theory--principles) — the four major state-architecture families (flux, atomic, proxy-based, subscribe-based) and their re-render patterns, complexity, and trade-offs.
+
 1. [The State Management Landscape](#1-the-state-management-landscape)
 2. [Zustand (React)](#2-zustand-react)
 3. [Pinia (Vue)](#3-pinia-vue)
@@ -24,6 +26,202 @@
 6. [TanStack Query: Server State](#6-tanstack-query-server-state)
 7. [When to Use What](#7-when-to-use-what)
 8. [Practice Problems](#practice-problems)
+
+---
+
+## Theory & Principles
+
+State management libraries look very different on the surface (Redux's `dispatch`/`reducer`/`store`, Zustand's `useStore`, Jotai's `atom`, Valtio's mutable proxy, Svelte stores' `subscribe`) but underneath there are only four fundamental architectures. Each makes a specific choice about *how state is held*, *how mutations propagate*, and *what triggers a re-render*. Once you can identify which family a library belongs to, the API differences are mostly cosmetic.
+
+This section names the four families, walks through their mechanics, and gives the time/space costs and re-render scope of each.
+
+### A. The Flux Family: Redux, Redux Toolkit, useReducer
+
+**Mechanism**: a single store holds all state. Mutations are described by *actions* (plain objects with a `type`) and applied by a pure *reducer* function `(state, action) => newState`. Components dispatch actions; selectors derive read-views from the store.
+
+```
+component.dispatch(action)
+       │
+       ▼
+reducer(currentState, action) → newState
+       │
+       ▼
+store.subscribers.forEach(notify)
+       │
+       ▼
+useSelector(s => s.user.name) — re-runs selector
+       │
+       ▼
+if selector result changed by reference, component re-renders
+```
+
+| Property | Value |
+|----------|-------|
+| State location | Single global store |
+| Mutation API | `dispatch(action)` |
+| Update mechanism | Pure reducer returns new state |
+| Re-render trigger | Selector return value's reference equality |
+| Time cost per dispatch | O(n) where n = number of subscribers |
+| Space cost | One store + reducer + selector cache per subscription |
+
+**Strengths**: every mutation has a name and payload, so devtools can replay, time-travel, and audit. Reducers being pure makes testing trivial. Action-based decoupling lets middleware insert across all writes (logging, optimistic updates).
+
+**Weaknesses**: ceremony per action. Even Redux Toolkit (which removes most of the boilerplate) still has the `dispatch → action → reducer → state` indirection. Selectors must be carefully memoized or every dispatch re-runs every component subscribed to anything.
+
+### B. The Atomic Family: Recoil, Jotai
+
+**Mechanism**: instead of one big store, you define many small **atoms** — independent reactive cells. Components subscribe to specific atoms. Derived values use **selectors** that combine atoms.
+
+```
+const countAtom = atom(0);
+const doubledAtom = atom((get) => get(countAtom) * 2);
+
+// Component A reads countAtom — subscribes to it.
+// Component B reads doubledAtom — subscribes to doubled (which depends on count).
+// Setting countAtom triggers both, but a hypothetical Component C reading
+// only an unrelated atom is not touched.
+```
+
+| Property | Value |
+|----------|-------|
+| State location | Many small atoms, registered globally per atom key |
+| Mutation API | `setAtom(value)` per atom |
+| Update mechanism | Setter mutates the atom's stored value, dependent atoms recompute |
+| Re-render trigger | Atom value changed by reference |
+| Time cost per write | O(k) where k = number of atoms transitively depending |
+| Space cost | One node per atom in the dependency graph |
+
+**Strengths**: extremely fine-grained re-renders. Adding state means adding an atom, not extending a global state shape. Derived state (selectors) is automatic and lazy.
+
+**Weaknesses**: many small pieces are harder to inspect than one big shape. Atom identity is by reference (you must export and import the *same* atom object), which makes module hot-reload subtle. Less devtools support than Flux.
+
+### C. The Proxy Family: Vue's `reactive`, Valtio, MobX
+
+**Mechanism**: state is a Proxy (lesson 6's `reactive`). Reads are tracked, writes trigger effects. Components are effects that re-run when their tracked reads are written.
+
+```
+const state = proxy({ user: { name: 'A' }, count: 0 });
+
+// Component reads state.user.name — subscribes to that property path.
+// Mutating state.count does not re-render this component.
+// Mutating state.user.name does.
+```
+
+| Property | Value |
+|----------|-------|
+| State location | A reactive proxy (one or many) |
+| Mutation API | Direct assignment: `state.x = 1`, `state.list.push(item)` |
+| Update mechanism | Proxy traps the write, looks up subscribers, schedules re-runs |
+| Re-render trigger | Property-level read tracking |
+| Time cost per write | O(k) where k = number of effects tracking that property |
+| Space cost | Proxy overhead per nested object + dependency map |
+
+**Strengths**: feels like plain JavaScript — `state.list.push(item)` Just Works. Property-level tracking gives the finest re-render scope of any family. No selectors needed.
+
+**Weaknesses**: destructuring breaks the wire (lesson 7.A.1). Compatibility with libraries that expect plain objects (JSON.stringify, structured cloning) requires `toRaw`-like escapes. Mental model is heavier in unfamiliar code paths because reads have implicit subscription side effects.
+
+### D. The Subscribe Family: Zustand, Svelte Stores, Valtio's `useSnapshot`
+
+**Mechanism**: state lives in an external store with a `subscribe(listener)` method. Components register a listener via a hook (`useStore(selector)`), get re-rendered when the selector's result changes.
+
+```
+const useStore = create((set) => ({
+  count: 0,
+  inc: () => set(s => ({ count: s.count + 1 }))
+}));
+
+// Component A:
+const count = useStore(s => s.count);  // subscribed to count slice
+// Component B:
+const inc = useStore(s => s.inc);      // subscribed to inc reference (stable)
+```
+
+| Property | Value |
+|----------|-------|
+| State location | One external store object per `create(...)` |
+| Mutation API | `set` inside the store, exposed as named methods |
+| Update mechanism | Store calls all listeners with the new state |
+| Re-render trigger | Selector result changed by `Object.is` (or custom equality) |
+| Time cost per write | O(n × cost_of_selector) where n = subscribers |
+| Space cost | One store + one subscription per `useStore` call |
+
+**Strengths**: minimal API surface. One function (`create`) defines the store; one hook (`useStore`) reads it. No provider needed (the store is module-level). Easy to share across React renders, web workers, and tests.
+
+**Weaknesses**: every write notifies every subscriber, who run their selectors. With many subscribers and slow selectors, this becomes a bottleneck. Mitigated by selector memoization or by using a more granular store layout.
+
+### E. Re-render Granularity, Compared
+
+The four families differ chiefly in *who re-renders when state changes*:
+
+```
+Family       | Re-render scope on a single property change
+─────────────┼──────────────────────────────────────────────
+Flux         | Every subscriber whose selector returns a new ref
+Atomic       | Every component reading the changed atom (or a derived atom transitively depending on it)
+Proxy        | Every component whose tracked read includes the changed property
+Subscribe    | Every subscriber whose selector returns a new ref
+```
+
+Flux and Subscribe look identical in the table — and they are mechanically similar. The differences are organizational (Flux: action-driven, single global store; Subscribe: direct method calls, multiple stores).
+
+Atomic and Proxy give the finest granularity but require buying into a different mental model (atoms as nodes; reads as subscriptions). Flux and Subscribe are easier to reason about ("on dispatch, every subscriber checks") at the cost of needing memoization to keep updates cheap.
+
+### F. Server State Is a Different Animal
+
+Lesson 4 named this; this lesson's TanStack Query coverage makes it concrete. The four families above all assume *the client owns the truth*. Server state breaks that assumption:
+
+- The server can change without the client knowing → cache must support invalidation, refetch.
+- The same data can be requested by many components → deduplication, request collapsing.
+- After a write, the local cache is stale → optimistic updates plus reconciliation.
+- Network is slow → loading, error, and retry states are first-class.
+
+**TanStack Query** (and SWR) implement a different architecture:
+
+```
+useQuery(['users'], fetchUsers) — registers a query in the global cache
+       │
+       ▼
+cache lookup:
+  - if fresh: return cached data immediately
+  - if stale: return cached data + trigger background refetch
+  - if missing: trigger fetch, return loading state
+
+useMutation(updateUser) — performs a write, then either
+       │
+       ▼
+  - invalidates queries by key (causes refetch)
+  - optimistically updates cache, rolls back on error
+```
+
+The cache is the source of truth for server state, and it has a lifecycle (fetched → fresh → stale → expired) that no client-state library models.
+
+**Practical rule**: if the data came from `fetch(...)`, use TanStack Query. If it lives entirely in the client (modal open/closed, theme, draft form input), use one of A-D.
+
+### G. Picking a Library
+
+Once you know the family, the library decision is mostly about ecosystem fit and team preference:
+
+| Need | Family | Common library |
+|------|--------|----------------|
+| Auditable enterprise React app | Flux | Redux Toolkit |
+| Lightweight React app | Subscribe | Zustand |
+| Highly interactive React app with many independent slices | Atomic | Jotai |
+| Vue app | Proxy + Subscribe (Pinia) | Pinia |
+| Svelte app | Subscribe | Built-in stores or runes |
+| MobX-style "just mutate" feel in React | Proxy | Valtio or MobX |
+| Server data of any kind | (server-cache) | TanStack Query / SWR |
+
+There is no universal best. Pick based on which family's mental model fits your team, then optimize within it.
+
+### From Theory to the Sections Below
+
+- §1 *The State Management Landscape* — names the four families and the server/client split (F).
+- §2 *Zustand (React)* — the Subscribe family in React.
+- §3 *Pinia (Vue)* — the Proxy + Subscribe hybrid in Vue (lesson 8 covered the API; this section frames it against the React/Svelte equivalents).
+- §4 *Svelte Stores* — the Subscribe family in Svelte (lesson 10's stores, viewed comparatively).
+- §5 *Side-by-Side: Todo App in All Three* — the same problem solved with each library, exposing the family-specific idioms.
+- §6 *TanStack Query: Server State* — (F); the cache-as-source-of-truth model.
+- §7 *When to Use What* — the decision matrix from (G).
 
 ---
 
