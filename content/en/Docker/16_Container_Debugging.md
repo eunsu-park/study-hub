@@ -17,7 +17,6 @@ After completing this lesson, you will be able to:
 
 ## Table of Contents
 
-Before the tool reference, read [**Theory & Principles**](#theory--principles) — what `setns()` does under `docker exec`, what `/proc` exposes about a container, the ephemeral debug container pattern in Kubernetes, and how `strace`/`lsof`/`tcpdump` work *inside* a container's namespace.
 
 1. [Interactive Debugging with docker exec](#1-interactive-debugging-with-docker-exec)
 2. [Container Logs and Log Drivers](#2-container-logs-and-log-drivers)
@@ -38,11 +37,11 @@ When containers misbehave, traditional debugging approaches often fall short. Yo
 
 ---
 
-## Theory & Principles
+## 1. Interactive Debugging with docker exec
 
-Container debugging is the same Linux process debugging you have always done — `strace`, `lsof`, `tcpdump`, `/proc` inspection — performed *inside* the right namespace. The novelty is the namespace plumbing. The kernel's `setns()` syscall, the `/proc/<pid>/ns/` symlinks, the ephemeral debug container pattern in Kubernetes — these are the bridges between the host's debugging tools and the container's view of the world. Once you can name what each tool does at the namespace level, container debugging stops being mysterious and becomes "the same thing as before, with one extra step."
+### Theory: `docker exec` and the `setns()` Syscall
 
-### A. `docker exec` and the `setns()` Syscall
+Container debugging is the same Linux process debugging you have always done — `strace`, `lsof`, `tcpdump`, `/proc` inspection — performed *inside* the right namespace. The novelty is the namespace plumbing.
 
 `docker exec -it <container> sh` does *not* fork a new container. It enters the existing container's namespaces. The mechanism is the kernel's **`setns()`** syscall: given a file descriptor pointing to `/proc/<pid>/ns/<type>`, `setns(fd, 0)` moves the calling process into that namespace.
 
@@ -70,84 +69,7 @@ The number in brackets is the namespace inode. Two processes are in the same nam
 
 `nsenter` is the standalone CLI version of the same operation: `nsenter -t <pid> -p -m -u -n -i <command>`. Useful when you want to enter only some namespaces (e.g., `-n` for network namespace only — useful for using host's `tcpdump` to sniff a container's traffic).
 
-### B. `/proc/<pid>/` as the Container Inspector
-
-Every Linux process has a directory under `/proc/<pid>/` that exposes its state via files. From the *host* (which sees real PIDs), these tell you almost everything about a container's process without entering it:
-
-| File | What it tells you |
-|------|-------------------|
-| `/proc/<pid>/status` | UID, GID, capabilities, namespace inodes, parent PID |
-| `/proc/<pid>/cmdline` | The argv that was exec'd |
-| `/proc/<pid>/environ` | The environment variables (only if you have permission) |
-| `/proc/<pid>/cgroup` | Which cgroup the process belongs to (and so its resource limits) |
-| `/proc/<pid>/maps` | Memory map: every loaded library, every heap segment |
-| `/proc/<pid>/fd/` | File descriptors the process has open (sockets, files, pipes) |
-| `/proc/<pid>/root/` | Magic symlink to the container's root filesystem (you can `cat /proc/<pid>/root/etc/passwd` from the host) |
-| `/proc/<pid>/cwd` | Current working directory |
-| `/proc/<pid>/net/tcp` | TCP connections (in the process's network namespace) |
-| `/proc/<pid>/limits` | RLIMIT settings |
-
-The most powerful one is `/proc/<pid>/root/`. From the host, with no shell inside the container required, you can read any file in the container's filesystem. For distroless containers where there is no shell, this is the primary inspection mechanism: `ls /proc/<pid>/root/app/`, `cat /proc/<pid>/root/etc/config`.
-
-`/proc/<pid>/net/tcp` and `/proc/<pid>/net/udp` give you connection state from the *container's* network namespace, even though you are reading from the host.
-
-### C. Logging: Where Stdout/Stderr Actually Go
-
-A container's process writes to file descriptors 1 (stdout) and 2 (stderr). Those FDs are owned not by the process itself but by **the container monitor** (`containerd-shim`, or `conmon` for Podman/CRI-O). The monitor reads them and routes them through a **log driver**:
-
-| Log driver | Where logs go |
-|------------|---------------|
-| `json-file` (Docker default) | `/var/lib/docker/containers/<id>/<id>-json.log` — JSON lines on disk |
-| `journald` | systemd-journald (queryable with `journalctl`) |
-| `syslog` | local syslog daemon |
-| `fluentd` / `gelf` / `awslogs` / `gcplogs` | streamed to a remote aggregator |
-| `none` | discarded |
-
-`docker logs <container>` reads the json-file (or queries journald, or whichever driver) and prints. `kubectl logs` does the equivalent via the kubelet.
-
-Implications:
-
-- **`docker logs` only works if the driver supports it.** json-file and journald do; remote drivers do not.
-- **A logging volume that fills up will hang the container.** json-file with no rotation is the classic outage. Set `--log-opt max-size=10m --log-opt max-file=3` (or use journald, which manages its own).
-- **Multi-line stack traces are one log entry per line by default.** Use a log shipper that knows how to merge consecutive lines belonging to one event, or have your app emit single-line JSON logs.
-
-### D. Network Debugging: Inside and Outside the Namespace
-
-Networking issues are the most common and most confusing container debugging task. The split:
-
-- **Tools that exist on the host and operate on the container's view via `nsenter`:** `tcpdump`, `iptables`, `ip route`, `ss`, `netstat`. The host has these even if the container doesn't.
-- **Tools that need to run inside the container:** `curl` to test what the application can reach, `dig` to test DNS the way the app sees it, `nslookup` for the same.
-
-The standard incantation to capture traffic from a container without installing tcpdump in it:
-
-```bash
-# Get the container's PID
-PID=$(docker inspect -f '{{.State.Pid}}' mycontainer)
-# Run tcpdump in the container's network namespace, from the host
-sudo nsenter -t $PID -n tcpdump -i any -w /tmp/cap.pcap
-```
-
-For DNS issues, check three places:
-
-1. `/etc/resolv.conf` *inside the container* — what nameservers the resolver will query.
-2. The Docker DNS server at `127.0.0.11` (in user-defined bridges) or CoreDNS in K8s — does it know the name?
-3. Upstream DNS — can the host even resolve the name?
-
-For "container can't reach the outside world," check iptables MASQUERADE and route tables. For "host can't reach the container," check iptables DNAT and the bridge's `forwarding` setting.
-
-### E. `strace`, `lsof`, and Inspection from Inside
-
-These are the workhorses of Linux process debugging, and they all work inside containers — they just need to be installed (or run via `nsenter` from the host).
-
-- **`strace -p <pid>`** — show every system call the process makes, with arguments and return values. Slow (intercept overhead is significant) but the most precise way to answer "what is the process actually trying to do?". Filter with `-e trace=network` or `-e trace=file` to reduce noise. `strace -f` follows forks for multi-process apps.
-- **`lsof -p <pid>`** — list open file descriptors with their paths/sockets/pipes. Find file leaks, find which port the process actually bound to, find what config file is open.
-- **`pgrep`, `pkill`, `ps -ef`** — basic process inspection. Inside the container's PID namespace, PIDs start at 1 (the entrypoint).
-- **`top`, `htop`** — resource usage from the container's view.
-- **`/proc/self/status` and `/proc/self/cgroup`** — confirm what UID, what capabilities, what cgroup the *currently-running shell* has, which is what your debug commands inherit.
-
-When the image is distroless (no shell, no `strace`, no `lsof`), the workflow shifts to debugging from the host using `/proc/<pid>/`, or attaching an **ephemeral debug container** (next section).
-
-### F. Ephemeral Debug Containers: The Modern Workflow
+### Theory: Ephemeral Debug Containers — The Modern Workflow
 
 Distroless and scratch images are great for production, terrible for debugging. Modern Kubernetes (1.23+) solves this with **ephemeral containers** (`kubectl debug`):
 
@@ -164,37 +86,6 @@ What happens:
 Docker has the equivalent via `docker run --network=container:other --pid=container:other --volumes-from=other busybox sh` — manually attach a debug container's namespaces to an existing one. The K8s `kubectl debug` is the same idea with Pod awareness.
 
 This pattern is what makes "harden the production image to bare minimum" practical. Distroless or scratch is the *production* image; the *debug* image is busybox or an alpine with whatever tools you need, attached on demand.
-
-### G. Health Checks and the Restart Loop
-
-A container's restart policy turns "the process exited" into "the orchestrator restarts it." For this to work as self-healing rather than as a denial-of-service against your own dependencies:
-
-- **Health check defines "alive."** `HEALTHCHECK CMD curl -f http://localhost/ || exit 1` in the Dockerfile, or `livenessProbe` in K8s. Runs periodically; `start_period` skips the first N seconds (for slow startup); `retries` count consecutive failures before declaring unhealthy.
-- **Liveness vs Readiness in K8s.** Liveness failure → restart the container. Readiness failure → remove from Service load balancing but don't restart. A common bug — using a single probe that does too much (e.g., DB query) and tearing down a healthy app because the DB is briefly slow.
-- **Backoff matters.** A container that crashes immediately on every start with no backoff would consume the host. Both Docker and K8s implement exponential backoff (`CrashLoopBackOff` in K8s) — restart immediately, then after 10s, 20s, 40s, ... up to 5 minutes. This is why a misconfigured Pod ends up "stuck in CrashLoopBackOff" — not stuck, just being restarted slowly so it doesn't burn the cluster.
-
-When debugging "container keeps restarting," your first questions:
-
-1. What was the *exit code*? `docker inspect -f '{{.State.ExitCode}}' <id>` or `kubectl describe pod`. 0 = clean exit (which the orchestrator restarted because policy is `always`); non-zero = crash; 137 = SIGKILL (likely OOM); 143 = SIGTERM (usually shutdown).
-2. What did the *last* container log? `docker logs --previous` or `kubectl logs --previous`. The current container is fresh; the *previous* one's log has the actual death message.
-3. What does `dmesg` on the host say? OOM kills appear there with the killed PID and memory totals.
-
-### From Theory to the Tool Reference Below
-
-- **`docker exec`** — `setns()` into the container's namespaces (§A); shell + tools must be in the image.
-- **`docker logs`** — read whatever the log driver is recording (§C).
-- **`docker inspect`** — dump the container's metadata, including the State.Pid you'll need for `nsenter` (§A, §B).
-- **`nsenter -t <pid> -n <cmd>`** — run host tools in the container's network namespace (§D).
-- **`strace`, `lsof`, `tcpdump`** — universal Linux process debuggers, used inside the container (§E) or via nsenter from the host (§D).
-- **`/proc/<pid>/root/`, `/proc/<pid>/net/tcp`, `/proc/<pid>/fd/`** — host-side inspection of container internals (§B).
-- **`HEALTHCHECK`, `--restart`, K8s liveness/readiness probes** — the self-healing loop (§G).
-- **`kubectl debug --image=...`** — ephemeral debug containers for distroless production images (§F).
-
-The remaining sections walk these tools with concrete examples. Whenever you are stuck, ask: which namespace is the symptom in (network? mount? PID?), and which tool gives me a view *into* that namespace from where I currently am?
-
----
-
-## 1. Interactive Debugging with docker exec
 
 ### Basic Usage
 
@@ -281,6 +172,26 @@ docker exec -it myapp sh
 ---
 
 ## 2. Container Logs and Log Drivers
+
+### Theory: Logging — Where Stdout/Stderr Actually Go
+
+A container's process writes to file descriptors 1 (stdout) and 2 (stderr). Those FDs are owned not by the process itself but by **the container monitor** (`containerd-shim`, or `conmon` for Podman/CRI-O). The monitor reads them and routes them through a **log driver**:
+
+| Log driver | Where logs go |
+|------------|---------------|
+| `json-file` (Docker default) | `/var/lib/docker/containers/<id>/<id>-json.log` — JSON lines on disk |
+| `journald` | systemd-journald (queryable with `journalctl`) |
+| `syslog` | local syslog daemon |
+| `fluentd` / `gelf` / `awslogs` / `gcplogs` | streamed to a remote aggregator |
+| `none` | discarded |
+
+`docker logs <container>` reads the json-file (or queries journald, or whichever driver) and prints. `kubectl logs` does the equivalent via the kubelet.
+
+Implications:
+
+- **`docker logs` only works if the driver supports it.** json-file and journald do; remote drivers do not.
+- **A logging volume that fills up will hang the container.** json-file with no rotation is the classic outage. Set `--log-opt max-size=10m --log-opt max-file=3` (or use journald, which manages its own).
+- **Multi-line stack traces are one log entry per line by default.** Use a log shipper that knows how to merge consecutive lines belonging to one event, or have your app emit single-line JSON logs.
 
 ### Basic Log Access
 
@@ -400,6 +311,27 @@ ls -lh $(docker inspect --format='{{.LogPath}}' myapp)
 
 ## 3. docker inspect for Metadata
 
+### Theory: `/proc/<pid>/` as the Container Inspector
+
+Every Linux process has a directory under `/proc/<pid>/` that exposes its state via files. From the *host* (which sees real PIDs), these tell you almost everything about a container's process without entering it:
+
+| File | What it tells you |
+|------|-------------------|
+| `/proc/<pid>/status` | UID, GID, capabilities, namespace inodes, parent PID |
+| `/proc/<pid>/cmdline` | The argv that was exec'd |
+| `/proc/<pid>/environ` | The environment variables (only if you have permission) |
+| `/proc/<pid>/cgroup` | Which cgroup the process belongs to (and so its resource limits) |
+| `/proc/<pid>/maps` | Memory map: every loaded library, every heap segment |
+| `/proc/<pid>/fd/` | File descriptors the process has open (sockets, files, pipes) |
+| `/proc/<pid>/root/` | Magic symlink to the container's root filesystem (you can `cat /proc/<pid>/root/etc/passwd` from the host) |
+| `/proc/<pid>/cwd` | Current working directory |
+| `/proc/<pid>/net/tcp` | TCP connections (in the process's network namespace) |
+| `/proc/<pid>/limits` | RLIMIT settings |
+
+The most powerful one is `/proc/<pid>/root/`. From the host, with no shell inside the container required, you can read any file in the container's filesystem. For distroless containers where there is no shell, this is the primary inspection mechanism: `ls /proc/<pid>/root/app/`, `cat /proc/<pid>/root/etc/config`.
+
+`/proc/<pid>/net/tcp` and `/proc/<pid>/net/udp` give you connection state from the *container's* network namespace, even though you are reading from the host.
+
 ### Container Inspection
 
 ```bash
@@ -485,6 +417,30 @@ diff \
 ---
 
 ## 4. Debugging Networking Issues
+
+### Theory: Network Debugging — Inside and Outside the Namespace
+
+Networking issues are the most common and most confusing container debugging task. The split:
+
+- **Tools that exist on the host and operate on the container's view via `nsenter`:** `tcpdump`, `iptables`, `ip route`, `ss`, `netstat`. The host has these even if the container doesn't.
+- **Tools that need to run inside the container:** `curl` to test what the application can reach, `dig` to test DNS the way the app sees it, `nslookup` for the same.
+
+The standard incantation to capture traffic from a container without installing tcpdump in it:
+
+```bash
+# Get the container's PID
+PID=$(docker inspect -f '{{.State.Pid}}' mycontainer)
+# Run tcpdump in the container's network namespace, from the host
+sudo nsenter -t $PID -n tcpdump -i any -w /tmp/cap.pcap
+```
+
+For DNS issues, check three places:
+
+1. `/etc/resolv.conf` *inside the container* — what nameservers the resolver will query.
+2. The Docker DNS server at `127.0.0.11` (in user-defined bridges) or CoreDNS in K8s — does it know the name?
+3. Upstream DNS — can the host even resolve the name?
+
+For "container can't reach the outside world," check iptables MASQUERADE and route tables. For "host can't reach the container," check iptables DNAT and the bridge's `forwarding` setting.
 
 ### Network Inspection
 
@@ -680,6 +636,18 @@ sudo cat /proc/$PID/limits
 
 ## 6. System Call Tracing
 
+### Theory: `strace`, `lsof`, and Inspection from Inside
+
+These are the workhorses of Linux process debugging, and they all work inside containers — they just need to be installed (or run via `nsenter` from the host).
+
+- **`strace -p <pid>`** — show every system call the process makes, with arguments and return values. Slow (intercept overhead is significant) but the most precise way to answer "what is the process actually trying to do?". Filter with `-e trace=network` or `-e trace=file` to reduce noise. `strace -f` follows forks for multi-process apps.
+- **`lsof -p <pid>`** — list open file descriptors with their paths/sockets/pipes. Find file leaks, find which port the process actually bound to, find what config file is open.
+- **`pgrep`, `pkill`, `ps -ef`** — basic process inspection. Inside the container's PID namespace, PIDs start at 1 (the entrypoint).
+- **`top`, `htop`** — resource usage from the container's view.
+- **`/proc/self/status` and `/proc/self/cgroup`** — confirm what UID, what capabilities, what cgroup the *currently-running shell* has, which is what your debug commands inherit.
+
+When the image is distroless (no shell, no `strace`, no `lsof`), the workflow shifts to debugging from the host using `/proc/<pid>/`, or attaching an **ephemeral debug container**.
+
 ### strace in Containers
 
 `strace` traces system calls made by a process, invaluable for debugging permission errors, file access issues, and hanging processes:
@@ -757,6 +725,20 @@ docker exec myapp strace -e trace=openat,stat -f -p 1
 ---
 
 ## 7. Health Checks and Restart Policies
+
+### Theory: Health Checks and the Restart Loop
+
+A container's restart policy turns "the process exited" into "the orchestrator restarts it." For this to work as self-healing rather than as a denial-of-service against your own dependencies:
+
+- **Health check defines "alive."** `HEALTHCHECK CMD curl -f http://localhost/ || exit 1` in the Dockerfile, or `livenessProbe` in K8s. Runs periodically; `start_period` skips the first N seconds (for slow startup); `retries` count consecutive failures before declaring unhealthy.
+- **Liveness vs Readiness in K8s.** Liveness failure → restart the container. Readiness failure → remove from Service load balancing but don't restart. A common bug — using a single probe that does too much (e.g., DB query) and tearing down a healthy app because the DB is briefly slow.
+- **Backoff matters.** A container that crashes immediately on every start with no backoff would consume the host. Both Docker and K8s implement exponential backoff (`CrashLoopBackOff` in K8s) — restart immediately, then after 10s, 20s, 40s, ... up to 5 minutes. This is why a misconfigured Pod ends up "stuck in CrashLoopBackOff" — not stuck, just being restarted slowly so it doesn't burn the cluster.
+
+When debugging "container keeps restarting," your first questions:
+
+1. What was the *exit code*? `docker inspect -f '{{.State.ExitCode}}' <id>` or `kubectl describe pod`. 0 = clean exit (which the orchestrator restarted because policy is `always`); non-zero = crash; 137 = SIGKILL (likely OOM); 143 = SIGTERM (usually shutdown).
+2. What did the *last* container log? `docker logs --previous` or `kubectl logs --previous`. The current container is fresh; the *previous* one's log has the actual death message.
+3. What does `dmesg` on the host say? OOM kills appear there with the killed PID and memory totals.
 
 ### Dockerfile HEALTHCHECK
 

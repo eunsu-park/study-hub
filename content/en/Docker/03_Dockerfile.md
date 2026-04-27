@@ -15,125 +15,7 @@ After completing this lesson, you will be able to:
 
 ---
 
-Before the syntax tour, read [**Theory & Principles**](#theory--principles) — how the build context is shipped to the daemon, how each instruction becomes a layer, and how BuildKit's graph-based execution decides cache hits and parallelism.
-
 While pulling pre-built images from Docker Hub is convenient, real-world projects require custom images tailored to your specific application and dependencies. The Dockerfile is the standard mechanism for defining these custom images as code. By learning Dockerfile syntax and best practices such as multi-stage builds and layer optimization, you gain full control over your application's packaging and can ensure consistent, secure, and efficient container images.
-
----
-
-## Theory & Principles
-
-A Dockerfile is just a text file. The interesting machinery is what happens when you run `docker build` against it: the **build context** is shipped to the engine, each **instruction** is interpreted as a transformation that produces a new image layer, the **cache** decides which transformations can be skipped, and **BuildKit** turns the linear instruction list into a parallel directed graph. Understanding these four pieces is what separates Dockerfiles that build in five seconds from those that build in five minutes.
-
-### A. The Build Context: What Gets Sent to the Daemon
-
-`docker build .` does not magically operate on your working directory. It does this:
-
-1. The CLI walks the directory passed as the build context (the trailing `.`).
-2. It reads `.dockerignore` and excludes matching paths.
-3. It tarballs everything that remains and streams it over the daemon socket.
-4. The daemon (which may be on a different machine entirely) starts building from that tarball.
-
-Two consequences follow immediately:
-
-- **Anything outside the context is invisible.** A `COPY ../config /etc` is a syntax error — `..` is not in the tarball. The build cannot reach files the CLI did not pack.
-- **Bigger context = slower build.** A 2 GB `node_modules` directory takes seconds just to upload, even before any instruction runs. `.dockerignore` is not a "nice to have"; it is the difference between a 10 MB context and a 2 GB context.
-
-`.dockerignore` syntax mirrors `.gitignore`: glob patterns, leading `!` for negation, leading `/` for repo-relative paths. Common entries: `node_modules`, `.git`, `*.log`, `dist/`, build outputs, IDE config, environment files. Many of these are also security-relevant — `.env` files in the context can leak credentials into image layers.
-
-### B. Instructions as Filesystem Transformations
-
-Every Dockerfile instruction either modifies the image filesystem (creating a new layer) or modifies metadata (creating a layer with no filesystem changes, but updating the image config JSON):
-
-| Instruction | Effect on filesystem | Effect on config |
-|-------------|----------------------|------------------|
-| `FROM` | Initializes from base image's layers | Inherits base config |
-| `RUN` | Runs a command, layer = filesystem diff | None |
-| `COPY`/`ADD` | Adds files from context (or URL for ADD), layer = added files | None |
-| `WORKDIR` | Creates dir if missing | Sets working directory |
-| `ENV`, `ARG`, `LABEL`, `EXPOSE`, `USER`, `VOLUME`, `STOPSIGNAL` | None | Updates config field |
-| `CMD`, `ENTRYPOINT`, `HEALTHCHECK` | None | Sets runtime defaults |
-
-Each `RUN` produces exactly one layer. So `RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*` is a layer with curl installed and the apt cache removed; splitting it into three `RUN` lines would produce three layers and the apt cache would persist in the middle one (still in the final image, since deletion in a later layer does not free the bytes from earlier layers).
-
-`COPY` always reads from the build context and writes into the image. `ADD` does the same plus two extras: it can fetch a URL (mostly discouraged — no caching guarantees, no checksum verification by default), and it auto-extracts local tar archives. The community consensus: prefer `COPY` for clarity unless you specifically want one of `ADD`'s extras.
-
-`CMD` and `ENTRYPOINT` together define what runs when the container starts. The mental model:
-
-- `ENTRYPOINT` is the program. `CMD` is the default arguments.
-- `ENTRYPOINT ["python", "app.py"]` + `CMD ["--port", "8080"]` runs `python app.py --port 8080`. `docker run image --port 9090` overrides `CMD` to `--port 9090` but the entrypoint stays.
-- Use the **exec form** `["arg1", "arg2"]` over the **shell form** `arg1 arg2`. Shell form wraps your command in `/bin/sh -c "..."`, which means signals (SIGTERM from `docker stop`) go to the shell, not your process. Your process never receives them and gets SIGKILL'd ten seconds later.
-
-### C. Layer Caching: The Algorithm That Decides Build Time
-
-`docker build` walks instructions in order. For each instruction, it computes a cache key. If the cache key matches an existing layer in the local store, the layer is reused and the instruction is skipped. Otherwise the instruction runs, produces a new layer, and from this point on every subsequent instruction is also a cache miss (the parent layer's digest is part of the next key).
-
-The cache key inputs are:
-
-| Instruction | Cache key includes |
-|-------------|---------------------|
-| `FROM` | Base image digest |
-| `RUN` | Instruction text + parent layer digest |
-| `COPY`/`ADD` (local) | Hash of the file contents being copied + parent layer digest |
-| `ARG`, `ENV`, etc. | Instruction text + parent layer digest |
-
-Two key implications:
-
-1. **Order from least- to most-changing.** Put your slowest, most-stable instructions first (`apt-get install`, `pip install -r requirements.txt`), then your most-volatile (`COPY . /app`). This way, editing source code only invalidates the last layer, not the dependency installation.
-2. **Copy dependency manifests separately.** `COPY package.json package-lock.json ./` followed by `RUN npm ci` is different from `COPY . . && RUN npm ci`. The first invalidates `npm ci` only when those two files change; the second invalidates it on *any* file change.
-
-`docker build --no-cache` disables this entirely (every instruction reruns). `docker build --cache-from <image>` lets CI pull a previous build's layers from a registry and use them as cache, which is how CI builds stay fast despite running on fresh runners.
-
-### D. BuildKit: Graph Execution and Cache Mounts
-
-The classic builder is sequential and stateless. **BuildKit** (default since Docker 23.0; enabled with `DOCKER_BUILDKIT=1` on older versions) is a complete rewrite that:
-
-1. **Parses the Dockerfile into a DAG (directed acyclic graph).** Each instruction is a node; edges are dependencies (instruction N depends on the layer N-1 produced).
-2. **Executes independent nodes in parallel.** In a multi-stage Dockerfile with two unrelated build stages, BuildKit runs them concurrently. Output of an unused stage is never built.
-3. **Skips unused outputs.** If only the final stage is targeted (`docker build --target prod`), stages that do not feed into `prod` are not executed.
-4. **Adds cache mounts.** `RUN --mount=type=cache,target=/root/.cache/pip pip install -r requirements.txt` exposes a writable cache directory that survives between builds *outside* the layer system. The downloaded wheels persist; the resulting layer does not contain them.
-5. **Adds bind mounts and secret mounts.** `RUN --mount=type=bind,source=.,target=/src ...` and `RUN --mount=type=secret,id=mytoken cat /run/secrets/mytoken` let you read context files or one-time secrets without baking them into a layer.
-6. **Adds multi-platform builds.** `docker buildx build --platform linux/amd64,linux/arm64 .` runs the build for each target architecture in parallel, producing a manifest list that the registry serves to the right platform automatically.
-
-The frontend is also pluggable. The default frontend is `dockerfile.v0`, which speaks Dockerfile syntax. Other frontends (`buildpacks`, `Earthly`, custom HCL frontends) emit the same LLB (Low-Level Build) intermediate representation that BuildKit executes, so the entire DAG/cache machinery is reusable.
-
-### E. Multi-Stage Builds: Compile Once, Ship Lean
-
-Many languages have a heavyweight compile step (`go build`, `npm run build`, `mvn package`) producing a small binary or artifact. You do not want the compiler, intermediate object files, or `node_modules` in the final image — they bloat it and broaden the attack surface.
-
-A multi-stage Dockerfile uses multiple `FROM` directives to chain images. A typical pattern:
-
-```dockerfile
-# Stage 1: builder
-FROM node:20 AS builder
-WORKDIR /app
-COPY package*.json ./
-RUN npm ci
-COPY . .
-RUN npm run build
-
-# Stage 2: runtime
-FROM nginx:alpine
-COPY --from=builder /app/dist /usr/share/nginx/html
-```
-
-The final image contains only the nginx layers plus the small `dist` directory. The `node:20` stage with all its build tooling is discarded — its layers stay in BuildKit's local cache for next time but are never pushed.
-
-You can have any number of stages, name them with `AS <name>`, copy from any earlier stage with `COPY --from=<name>`, and target a specific stage with `docker build --target <name>` to build only up to that point (useful for "test" or "lint" stages that you run in CI but never ship).
-
-### From Theory to the Instructions Below
-
-- `FROM <image>` — sets the base layer digest, which is the root of every cache key downstream.
-- `WORKDIR /app` — config-only, no layer with content.
-- `COPY package.json /app/` — context tarball lookup, file-content hash drives caching.
-- `RUN apt-get install -y ...` — text + parent digest = cache key; the resulting filesystem diff = the layer.
-- `ENV NODE_ENV=production` — config metadata; child of every `RUN` after it sees this env var.
-- `EXPOSE 8080` — pure documentation in the config; does not actually open a port.
-- `CMD ["node", "server.js"]` — config metadata; what `runc` will `execve` if no command is supplied to `docker run`.
-- `docker build -t myapp:1.0 .` — pack context (respecting `.dockerignore`), stream to daemon, walk instructions, hit or miss cache for each, push the resulting image into the local store under tag `myapp:1.0`.
-- `docker buildx build --platform linux/amd64,linux/arm64 -t myapp:1.0 --push .` — BuildKit fan-out, two parallel architecture builds, registry push of the resulting manifest list.
-
-The remaining sections walk each instruction. Whenever you wonder "is this rebuilding everything?", trace the cache-key inputs above.
 
 ---
 
@@ -181,6 +63,45 @@ INSTRUCTION argument
 ---
 
 ## 3. Instruction Details
+
+### Theory: The Build Context — What Gets Sent to the Daemon
+
+`docker build .` does not magically operate on your working directory. It does this:
+
+1. The CLI walks the directory passed as the build context (the trailing `.`).
+2. It reads `.dockerignore` and excludes matching paths.
+3. It tarballs everything that remains and streams it over the daemon socket.
+4. The daemon (which may be on a different machine entirely) starts building from that tarball.
+
+Two consequences follow immediately:
+
+- **Anything outside the context is invisible.** A `COPY ../config /etc` is a syntax error — `..` is not in the tarball. The build cannot reach files the CLI did not pack.
+- **Bigger context = slower build.** A 2 GB `node_modules` directory takes seconds just to upload, even before any instruction runs. `.dockerignore` is not a "nice to have"; it is the difference between a 10 MB context and a 2 GB context.
+
+`.dockerignore` syntax mirrors `.gitignore`: glob patterns, leading `!` for negation, leading `/` for repo-relative paths. Common entries: `node_modules`, `.git`, `*.log`, `dist/`, build outputs, IDE config, environment files. Many of these are also security-relevant — `.env` files in the context can leak credentials into image layers.
+
+### Theory: Instructions as Filesystem Transformations
+
+Every Dockerfile instruction either modifies the image filesystem (creating a new layer) or modifies metadata (creating a layer with no filesystem changes, but updating the image config JSON):
+
+| Instruction | Effect on filesystem | Effect on config |
+|-------------|----------------------|------------------|
+| `FROM` | Initializes from base image's layers | Inherits base config |
+| `RUN` | Runs a command, layer = filesystem diff | None |
+| `COPY`/`ADD` | Adds files from context (or URL for ADD), layer = added files | None |
+| `WORKDIR` | Creates dir if missing | Sets working directory |
+| `ENV`, `ARG`, `LABEL`, `EXPOSE`, `USER`, `VOLUME`, `STOPSIGNAL` | None | Updates config field |
+| `CMD`, `ENTRYPOINT`, `HEALTHCHECK` | None | Sets runtime defaults |
+
+Each `RUN` produces exactly one layer. So `RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*` is a layer with curl installed and the apt cache removed; splitting it into three `RUN` lines would produce three layers and the apt cache would persist in the middle one (still in the final image, since deletion in a later layer does not free the bytes from earlier layers).
+
+`COPY` always reads from the build context and writes into the image. `ADD` does the same plus two extras: it can fetch a URL (mostly discouraged — no caching guarantees, no checksum verification by default), and it auto-extracts local tar archives. The community consensus: prefer `COPY` for clarity unless you specifically want one of `ADD`'s extras.
+
+`CMD` and `ENTRYPOINT` together define what runs when the container starts. The mental model:
+
+- `ENTRYPOINT` is the program. `CMD` is the default arguments.
+- `ENTRYPOINT ["python", "app.py"]` + `CMD ["--port", "8080"]` runs `python app.py --port 8080`. `docker run image --port 9090` overrides `CMD` to `--port 9090` but the entrypoint stays.
+- Use the **exec form** `["arg1", "arg2"]` over the **shell form** `arg1 arg2`. Shell form wraps your command in `/bin/sh -c "..."`, which means signals (SIGTERM from `docker stop`) go to the shell, not your process. Your process never receives them and gets SIGKILL'd ten seconds later.
 
 ### FROM - Base Image
 
@@ -510,6 +431,30 @@ CMD ["nginx", "-g", "daemon off;"]
 
 Separate build and runtime environments to reduce image size.
 
+### Theory: Compile Once, Ship Lean
+
+Many languages have a heavyweight compile step (`go build`, `npm run build`, `mvn package`) producing a small binary or artifact. You do not want the compiler, intermediate object files, or `node_modules` in the final image — they bloat it and broaden the attack surface.
+
+A multi-stage Dockerfile uses multiple `FROM` directives to chain images. A typical pattern:
+
+```dockerfile
+# Stage 1: builder
+FROM node:20 AS builder
+WORKDIR /app
+COPY package*.json ./
+RUN npm ci
+COPY . .
+RUN npm run build
+
+# Stage 2: runtime
+FROM nginx:alpine
+COPY --from=builder /app/dist /usr/share/nginx/html
+```
+
+The final image contains only the nginx layers plus the small `dist` directory. The `node:20` stage with all its build tooling is discarded — its layers stay in BuildKit's local cache for next time but are never pushed.
+
+You can have any number of stages, name them with `AS <name>`, copy from any earlier stage with `COPY --from=<name>`, and target a specific stage with `docker build --target <name>` to build only up to that point (useful for "test" or "lint" stages that you run in CI but never ship).
+
 ### React App Example
 
 ```dockerfile
@@ -579,6 +524,26 @@ Dockerfile
 .dockerignore
 ```
 
+### Theory: Layer Caching — The Algorithm That Decides Build Time
+
+`docker build` walks instructions in order. For each instruction, it computes a cache key. If the cache key matches an existing layer in the local store, the layer is reused and the instruction is skipped. Otherwise the instruction runs, produces a new layer, and from this point on every subsequent instruction is also a cache miss (the parent layer's digest is part of the next key).
+
+The cache key inputs are:
+
+| Instruction | Cache key includes |
+|-------------|---------------------|
+| `FROM` | Base image digest |
+| `RUN` | Instruction text + parent layer digest |
+| `COPY`/`ADD` (local) | Hash of the file contents being copied + parent layer digest |
+| `ARG`, `ENV`, etc. | Instruction text + parent layer digest |
+
+Two key implications:
+
+1. **Order from least- to most-changing.** Put your slowest, most-stable instructions first (`apt-get install`, `pip install -r requirements.txt`), then your most-volatile (`COPY . /app`). This way, editing source code only invalidates the last layer, not the dependency installation.
+2. **Copy dependency manifests separately.** `COPY package.json package-lock.json ./` followed by `RUN npm ci` is different from `COPY . . && RUN npm ci`. The first invalidates `npm ci` only when those two files change; the second invalidates it on *any* file change.
+
+`docker build --no-cache` disables this entirely (every instruction reruns). `docker build --cache-from <image>` lets CI pull a previous build's layers from a registry and use them as cache, which is how CI builds stay fast despite running on fresh runners.
+
 ### Layer Optimization
 
 ```dockerfile
@@ -622,6 +587,19 @@ COPY --chown=appuser:appgroup . .  # --chown ensures the non-root user can read 
 ---
 
 ## 7. Image Build Commands
+
+### Theory: BuildKit — Graph Execution and Cache Mounts
+
+The classic builder is sequential and stateless. **BuildKit** (default since Docker 23.0; enabled with `DOCKER_BUILDKIT=1` on older versions) is a complete rewrite that:
+
+1. **Parses the Dockerfile into a DAG (directed acyclic graph).** Each instruction is a node; edges are dependencies (instruction N depends on the layer N-1 produced).
+2. **Executes independent nodes in parallel.** In a multi-stage Dockerfile with two unrelated build stages, BuildKit runs them concurrently. Output of an unused stage is never built.
+3. **Skips unused outputs.** If only the final stage is targeted (`docker build --target prod`), stages that do not feed into `prod` are not executed.
+4. **Adds cache mounts.** `RUN --mount=type=cache,target=/root/.cache/pip pip install -r requirements.txt` exposes a writable cache directory that survives between builds *outside* the layer system. The downloaded wheels persist; the resulting layer does not contain them.
+5. **Adds bind mounts and secret mounts.** `RUN --mount=type=bind,source=.,target=/src ...` and `RUN --mount=type=secret,id=mytoken cat /run/secrets/mytoken` let you read context files or one-time secrets without baking them into a layer.
+6. **Adds multi-platform builds.** `docker buildx build --platform linux/amd64,linux/arm64 .` runs the build for each target architecture in parallel, producing a manifest list that the registry serves to the right platform automatically.
+
+The frontend is also pluggable. The default frontend is `dockerfile.v0`, which speaks Dockerfile syntax. Other frontends (`buildpacks`, `Earthly`, custom HCL frontends) emit the same LLB (Low-Level Build) intermediate representation that BuildKit executes, so the entire DAG/cache machinery is reusable. So `docker build -t myapp:1.0 .` packs the context (respecting `.dockerignore`), streams it to the daemon, walks instructions, hits or misses cache for each, and pushes the resulting image into the local store under tag `myapp:1.0`. `docker buildx build --platform linux/amd64,linux/arm64 -t myapp:1.0 --push .` is BuildKit fan-out: two parallel architecture builds, registry push of the resulting manifest list.
 
 ```bash
 # Basic build

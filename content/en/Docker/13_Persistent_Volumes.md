@@ -16,7 +16,6 @@ After completing this lesson, you will be able to:
 
 ## Table of Contents
 
-Before the volume reference, read [**Theory & Principles**](#theory--principles) — how the kernel mounts each storage type (bind mount, named volume, tmpfs), how volume drivers extend this to network/cloud backends, and how Kubernetes's PV/PVC/StorageClass binding maps to the same underlying primitives.
 
 1. [Docker Storage Overview](#1-docker-storage-overview)
 2. [Volumes vs Bind Mounts vs tmpfs](#2-volumes-vs-bind-mounts-vs-tmpfs)
@@ -34,110 +33,6 @@ Before the volume reference, read [**Theory & Principles**](#theory--principles)
 ---
 
 Containers are ephemeral by design -- when a container is removed, all data written inside its writable layer disappears. Persistent volumes solve this fundamental problem by decoupling data from the container lifecycle. Understanding Docker's storage subsystem is critical for running stateful workloads like databases, message queues, and file-based applications in production.
-
----
-
-## Theory & Principles
-
-Volumes look conceptually simple — "data that survives the container" — but the implementation has real depth. Each storage type uses the kernel's mount machinery differently, the driver layer abstracts over local and remote backends, and Kubernetes adds another tier of indirection (PV / PVC / StorageClass) on top. The recurring issue with stateful containers is choosing the storage type whose semantics match what your application expects from a "filesystem."
-
-### A. The Three Mount Types and Their Linux Semantics
-
-Docker exposes three primitives for getting non-ephemeral storage into a container:
-
-| Type | What it actually is | Where data lives | Survives `docker rm`? |
-|------|---------------------|------------------|----------------------|
-| **bind mount** | A `mount --bind` from a host path into the container's mount namespace | Wherever you specified on the host | Yes (it was never owned by Docker) |
-| **named volume** | A directory under `/var/lib/docker/volumes/<name>/_data`, bind-mounted in | Inside Docker's data root | Yes (Docker owns it; explicit `docker volume rm` to delete) |
-| **tmpfs mount** | A `mount -t tmpfs` of an in-memory filesystem | RAM, never on disk | No (gone the moment the container exits) |
-
-All three end up as entries in the container's mount namespace, visible inside as a normal directory at the requested mount point. The kernel does not distinguish them at runtime — it is just a mount. The difference is *who manages the underlying storage*: you (bind), Docker (volume), the kernel page cache (tmpfs).
-
-The semantic differences that matter:
-
-- **Bind mounts inherit host filesystem semantics exactly.** If your host filesystem is ext4 you get ext4 semantics; if it is the macOS bind-mount-over-VirtioFS in Docker Desktop you get a thin shim with all of that shim's quirks (slow stats, broken file locking, occasional inotify weirdness). This is why Postgres on a macOS bind mount is a bug factory.
-- **Named volumes always live on the Docker host's native filesystem.** Even on Docker Desktop, a named volume sits inside the Linux VM, not on the macOS host. Performance and POSIX-correctness match a real Linux filesystem. This is why named volumes are the default recommendation for databases.
-- **tmpfs is fast and ephemeral.** Reads/writes hit RAM; latency is microseconds; cap is the smaller of `--tmpfs size=` and host RAM. Useful for `/tmp`, scratch space, secret material that should never touch disk.
-
-Kubernetes mirrors this trichotomy as `hostPath` (= bind), `emptyDir` (= tmpfs or per-Pod ephemeral disk), and `PersistentVolume` (= named volume but pluggable to network/cloud backends).
-
-### B. Volume Drivers: Local, Network, Cloud
-
-A Docker volume is created with a *driver*. The default driver is `local` — the directory under `/var/lib/docker/volumes/...` described above. The driver interface is pluggable: `docker volume create --driver <name>` invokes a registered plugin to provision storage.
-
-Common drivers and their substrates:
-
-| Driver | Backed by | Typical use |
-|--------|-----------|-------------|
-| `local` | Local filesystem under Docker root | Default; single-host stateful apps |
-| `nfs` (built into `local` with options, or as a plugin) | NFS server | Multi-host shared filesystem; classic enterprise NAS |
-| `cifs` / `smb` | SMB share | Windows file shares |
-| `rexray`, `convoy`, `flocker` (older) | Cloud block storage (EBS, GCE PD), or storage backends like Ceph | Multi-host orchestration with detach/reattach |
-| Cloud-native CSI drivers | EBS, EFS, Azure Disk, GCE PD, Cinder, ... | Kubernetes-managed cloud storage |
-
-The plugin contract is small — `Create`, `Remove`, `Mount`, `Unmount`, `Path`, `Get`, `List`, `Capabilities` — implemented as a Unix socket the daemon talks to. This is why Docker can talk to dozens of storage backends through one CLI.
-
-The local driver's `nfs` mode is worth knowing about: `docker volume create --driver local --opt type=nfs --opt o=addr=10.0.0.5,rw --opt device=:/exports/data myvol` creates a "volume" that is actually an NFS mount. The container sees a normal directory; the kernel routes its reads and writes to the NFS server.
-
-### C. Filesystem Semantics and Why They Bite
-
-Most applications assume their filesystem behaves like a real ext4 or xfs. When mounted storage doesn't match, things break in subtle ways:
-
-- **Locking.** SQLite, Postgres, MySQL all rely on `flock` / `fcntl` advisory locking. NFS v3 does not implement them correctly without `lockd`; SMB has its own locking model; macOS bind mounts in Docker Desktop forward locks through the Linux VM's VirtioFS layer with edge cases. A "database mysteriously corrupted" symptom often traces back to broken locking on the underlying mount.
-- **`fsync` durability.** Databases call `fsync` to ensure writes hit stable storage. tmpfs returns instantly with no actual durability (data is in RAM). Some network filesystems lie about fsync to look fast. Putting a database on tmpfs makes it fast and useless after a crash.
-- **Atomic rename.** Many applications write to `file.tmp` then `rename(file.tmp, file)` for atomic replacement. POSIX guarantees this within a filesystem; it does *not* guarantee it across mount points (and the rename will EXDEV-fail). Watch for this when bind-mounting deep into a container's tree.
-- **inotify.** File-watching tools (development hot reload, log tailers) use `inotify` to be notified of changes. NFS, FUSE, and some bind-mount layers do not propagate inotify events correctly. Symptom — your dev container doesn't notice your save.
-- **Permissions.** A bind-mounted host directory has host UIDs; if the container's process runs as a different UID, it cannot write. Solutions — make the host directory world-writable (bad), `chown` it to the container's UID (better), or use a volume (best — Docker manages permissions).
-
-### D. Kubernetes PV / PVC / StorageClass: The Same Idea, Decoupled
-
-Kubernetes splits storage into three resources to separate concerns between cluster admin and application developer:
-
-- **PersistentVolume (PV)** — an actual chunk of storage that exists. A specific EBS volume, an NFS export, a Ceph image. Cluster-scoped.
-- **PersistentVolumeClaim (PVC)** — a request for storage with required attributes (size, access mode, storage class). Namespaced; written by app developers.
-- **StorageClass** — a template for *dynamic provisioning*. When a PVC asks for storage class `fast-ssd`, Kubernetes calls the storage provisioner registered for that class to create a fitting PV on demand.
-
-The matchmaking algorithm:
-
-1. PVC is created with `requests: storage: 10Gi` and `storageClassName: fast-ssd`.
-2. The PV controller looks for an existing unclaimed PV that matches.
-3. If found, bind PVC to PV.
-4. If not found, look up StorageClass `fast-ssd`, find its provisioner (e.g. `ebs.csi.aws.com`), invoke it to create a 10Gi EBS volume, register a corresponding PV, then bind.
-5. The Pod referencing the PVC gets the volume mounted via the kubelet calling the CSI driver's `NodeStageVolume` and `NodePublishVolume` hooks.
-
-`accessModes` constrain how a PVC can be used:
-
-- `ReadWriteOnce` (RWO) — single node read-write. Most cloud block storage. Forces single-node Pod placement.
-- `ReadOnlyMany` (ROX) — multiple nodes read-only.
-- `ReadWriteMany` (RWX) — multiple nodes read-write. Requires NFS, EFS, CephFS, or similar.
-- `ReadWriteOncePod` (RWOP, newer) — single Pod (not just single node).
-
-**Reclaim policy** decides what happens when a PVC is deleted: `Retain` (PV keeps data, admin must clean), `Delete` (provisioner deletes the PV and its underlying storage), `Recycle` (deprecated).
-
-CSI (Container Storage Interface) is the standard plugin API. Every cloud and storage vendor ships a CSI driver, K8s talks to all of them through the same interface, and snapshots/clones/online resize are CSI features your driver may or may not support.
-
-### E. Volume Sharing and Concurrency
-
-A volume mounted into multiple containers is a *shared filesystem*. The same locking and concurrency rules apply as on a real shared FS:
-
-- **Two writers without coordination → data corruption.** This is not Docker's problem to solve; it's POSIX. If you mount `/data` into both `app-1` and `app-2` and both write to the same files without locking or partitioning, expect corruption.
-- **Reader/writer pattern.** One container writes, others read. Common for log aggregation, generated assets, configuration distribution. Works fine.
-- **Producer/consumer with a queue.** Use a real queue (Redis, RabbitMQ) instead of a shared filesystem. Filesystems are bad message queues.
-
-In Kubernetes, RWX volumes naturally support multi-Pod sharing; RWO does not (the scheduler refuses to place a second Pod on a different node). This is the most common reason a Deployment with `replicas: 3` and an RWO PVC ends up with all three Pods stuck Pending — only one can mount.
-
-### From Theory to the Volume CLI Below
-
-- **`docker volume create`, `docker volume ls`, `docker volume rm`, `docker volume inspect`** — the management interface for §A's named volumes (driver = local by default).
-- **`-v /host:/container`, `--mount type=bind,source=/host,target=/container`** — the bind-mount syntax of §A; `:ro` for read-only, `:Z` / `:z` for SELinux relabeling.
-- **`-v vol-name:/container`, `--mount type=volume,source=vol-name,target=/container`** — named volume syntax.
-- **`--mount type=tmpfs,destination=/tmp,tmpfs-size=64m`** — tmpfs mount.
-- **`docker volume create --driver nfs --opt ...`** — §B's driver-mediated provisioning.
-- **`docker volume prune`** — garbage-collect unused (un-referenced) volumes; useful when CI churn leaves dozens of dead volumes around.
-- **Compose `volumes:` top-level + service `volumes:`** — the named-volume model in declarative form.
-- **Kubernetes PV / PVC / StorageClass + `volumeMounts` in Pod spec** — §D in YAML form.
-
-The remaining sections walk these CLI primitives. Whenever a database "loses data" or a stateful Pod refuses to schedule, work back through the §C (semantics) and §D (RWO vs RWX) checklists before blaming the application.
 
 ---
 
@@ -193,6 +88,26 @@ The writable layer uses a **copy-on-write (CoW)** strategy. When a container mod
 ## 2. Volumes vs Bind Mounts vs tmpfs
 
 Docker provides three mechanisms for persisting data:
+
+### Theory: The Three Mount Types and Their Linux Semantics
+
+Volumes look conceptually simple — "data that survives the container" — but the implementation has real depth. Each storage type uses the kernel's mount machinery differently.
+
+| Type | What it actually is | Where data lives | Survives `docker rm`? |
+|------|---------------------|------------------|----------------------|
+| **bind mount** | A `mount --bind` from a host path into the container's mount namespace | Wherever you specified on the host | Yes (it was never owned by Docker) |
+| **named volume** | A directory under `/var/lib/docker/volumes/<name>/_data`, bind-mounted in | Inside Docker's data root | Yes (Docker owns it; explicit `docker volume rm` to delete) |
+| **tmpfs mount** | A `mount -t tmpfs` of an in-memory filesystem | RAM, never on disk | No (gone the moment the container exits) |
+
+All three end up as entries in the container's mount namespace, visible inside as a normal directory at the requested mount point. The kernel does not distinguish them at runtime — it is just a mount. The difference is *who manages the underlying storage*: you (bind), Docker (volume), the kernel page cache (tmpfs).
+
+The semantic differences that matter:
+
+- **Bind mounts inherit host filesystem semantics exactly.** If your host filesystem is ext4 you get ext4 semantics; if it is the macOS bind-mount-over-VirtioFS in Docker Desktop you get a thin shim with all of that shim's quirks (slow stats, broken file locking, occasional inotify weirdness). This is why Postgres on a macOS bind mount is a bug factory.
+- **Named volumes always live on the Docker host's native filesystem.** Even on Docker Desktop, a named volume sits inside the Linux VM, not on the macOS host. Performance and POSIX-correctness match a real Linux filesystem. This is why named volumes are the default recommendation for databases.
+- **tmpfs is fast and ephemeral.** Reads/writes hit RAM; latency is microseconds; cap is the smaller of `--tmpfs size=` and host RAM. Useful for `/tmp`, scratch space, secret material that should never touch disk.
+
+Kubernetes mirrors this trichotomy as `hostPath` (= bind), `emptyDir` (= tmpfs or per-Pod ephemeral disk), and `PersistentVolume` (= named volume but pluggable to network/cloud backends).
 
 ### Comparison Table
 
@@ -346,6 +261,51 @@ docker volume ls --filter label=project=myapp
 ---
 
 ## 4. Volume Drivers and Plugins
+
+### Theory: Volume Drivers — Local, Network, Cloud
+
+A Docker volume is created with a *driver*. The default driver is `local` — the directory under `/var/lib/docker/volumes/...`. The driver interface is pluggable: `docker volume create --driver <name>` invokes a registered plugin to provision storage.
+
+Common drivers and their substrates:
+
+| Driver | Backed by | Typical use |
+|--------|-----------|-------------|
+| `local` | Local filesystem under Docker root | Default; single-host stateful apps |
+| `nfs` (built into `local` with options, or as a plugin) | NFS server | Multi-host shared filesystem; classic enterprise NAS |
+| `cifs` / `smb` | SMB share | Windows file shares |
+| `rexray`, `convoy`, `flocker` (older) | Cloud block storage (EBS, GCE PD), or storage backends like Ceph | Multi-host orchestration with detach/reattach |
+| Cloud-native CSI drivers | EBS, EFS, Azure Disk, GCE PD, Cinder, ... | Kubernetes-managed cloud storage |
+
+The plugin contract is small — `Create`, `Remove`, `Mount`, `Unmount`, `Path`, `Get`, `List`, `Capabilities` — implemented as a Unix socket the daemon talks to. This is why Docker can talk to dozens of storage backends through one CLI.
+
+The local driver's `nfs` mode is worth knowing about: `docker volume create --driver local --opt type=nfs --opt o=addr=10.0.0.5,rw --opt device=:/exports/data myvol` creates a "volume" that is actually an NFS mount. The container sees a normal directory; the kernel routes its reads and writes to the NFS server.
+
+### Theory: Kubernetes PV / PVC / StorageClass — The Same Idea, Decoupled
+
+Kubernetes splits storage into three resources to separate concerns between cluster admin and application developer:
+
+- **PersistentVolume (PV)** — an actual chunk of storage that exists. A specific EBS volume, an NFS export, a Ceph image. Cluster-scoped.
+- **PersistentVolumeClaim (PVC)** — a request for storage with required attributes (size, access mode, storage class). Namespaced; written by app developers.
+- **StorageClass** — a template for *dynamic provisioning*. When a PVC asks for storage class `fast-ssd`, Kubernetes calls the storage provisioner registered for that class to create a fitting PV on demand.
+
+The matchmaking algorithm:
+
+1. PVC is created with `requests: storage: 10Gi` and `storageClassName: fast-ssd`.
+2. The PV controller looks for an existing unclaimed PV that matches.
+3. If found, bind PVC to PV.
+4. If not found, look up StorageClass `fast-ssd`, find its provisioner (e.g. `ebs.csi.aws.com`), invoke it to create a 10Gi EBS volume, register a corresponding PV, then bind.
+5. The Pod referencing the PVC gets the volume mounted via the kubelet calling the CSI driver's `NodeStageVolume` and `NodePublishVolume` hooks.
+
+`accessModes` constrain how a PVC can be used:
+
+- `ReadWriteOnce` (RWO) — single node read-write. Most cloud block storage. Forces single-node Pod placement.
+- `ReadOnlyMany` (ROX) — multiple nodes read-only.
+- `ReadWriteMany` (RWX) — multiple nodes read-write. Requires NFS, EFS, CephFS, or similar.
+- `ReadWriteOncePod` (RWOP, newer) — single Pod (not just single node).
+
+**Reclaim policy** decides what happens when a PVC is deleted: `Retain` (PV keeps data, admin must clean), `Delete` (provisioner deletes the PV and its underlying storage), `Recycle` (deprecated).
+
+CSI (Container Storage Interface) is the standard plugin API. Every cloud and storage vendor ships a CSI driver, K8s talks to all of them through the same interface, and snapshots/clones/online resize are CSI features your driver may or may not support.
 
 ### Local Driver Options
 
@@ -593,6 +553,16 @@ docker cp my_mongo:/tmp/backup.archive ./backup.archive
 
 ## 7. Volume Sharing Between Containers
 
+### Theory: Volume Sharing and Concurrency
+
+A volume mounted into multiple containers is a *shared filesystem*. The same locking and concurrency rules apply as on a real shared FS:
+
+- **Two writers without coordination → data corruption.** This is not Docker's problem to solve; it's POSIX. If you mount `/data` into both `app-1` and `app-2` and both write to the same files without locking or partitioning, expect corruption.
+- **Reader/writer pattern.** One container writes, others read. Common for log aggregation, generated assets, configuration distribution. Works fine.
+- **Producer/consumer with a queue.** Use a real queue (Redis, RabbitMQ) instead of a shared filesystem. Filesystems are bad message queues.
+
+In Kubernetes, RWX volumes naturally support multi-Pod sharing; RWO does not (the scheduler refuses to place a second Pod on a different node). This is the most common reason a Deployment with `replicas: 3` and an RWO PVC ends up with all three Pods stuck Pending — only one can mount.
+
 ### Shared Volume Pattern
 
 Multiple containers can mount the same volume for data exchange:
@@ -671,6 +641,16 @@ volumes:
 ---
 
 ## 8. Database Storage Best Practices
+
+### Theory: Filesystem Semantics and Why They Bite
+
+Most applications assume their filesystem behaves like a real ext4 or xfs. When mounted storage doesn't match, things break in subtle ways:
+
+- **Locking.** SQLite, Postgres, MySQL all rely on `flock` / `fcntl` advisory locking. NFS v3 does not implement them correctly without `lockd`; SMB has its own locking model; macOS bind mounts in Docker Desktop forward locks through the Linux VM's VirtioFS layer with edge cases. A "database mysteriously corrupted" symptom often traces back to broken locking on the underlying mount.
+- **`fsync` durability.** Databases call `fsync` to ensure writes hit stable storage. tmpfs returns instantly with no actual durability (data is in RAM). Some network filesystems lie about fsync to look fast. Putting a database on tmpfs makes it fast and useless after a crash.
+- **Atomic rename.** Many applications write to `file.tmp` then `rename(file.tmp, file)` for atomic replacement. POSIX guarantees this within a filesystem; it does *not* guarantee it across mount points (and the rename will EXDEV-fail). Watch for this when bind-mounting deep into a container's tree.
+- **inotify.** File-watching tools (development hot reload, log tailers) use `inotify` to be notified of changes. NFS, FUSE, and some bind-mount layers do not propagate inotify events correctly. Symptom — your dev container doesn't notice your save.
+- **Permissions.** A bind-mounted host directory has host UIDs; if the container's process runs as a different UID, it cannot write. Solutions — make the host directory world-writable (bad), `chown` it to the container's UID (better), or use a volume (best — Docker manages permissions).
 
 ### PostgreSQL
 

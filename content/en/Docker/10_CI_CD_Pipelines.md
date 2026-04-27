@@ -19,7 +19,6 @@ Building and deploying containers manually works for learning, but production te
 
 ## Table of Contents
 
-Before the GitHub Actions reference, read [**Theory & Principles**](#theory--principles) — the build/test/deploy stage isolation, registry authentication via OAuth2 token exchange, and the supply-chain attack surface that SLSA tries to formalize.
 
 1. [CI/CD Overview](#1-cicd-overview)
 2. [GitHub Actions Basics](#2-github-actions-basics)
@@ -32,11 +31,11 @@ Before the GitHub Actions reference, read [**Theory & Principles**](#theory--pri
 
 ---
 
-## Theory & Principles
+## 1. CI/CD Overview
 
-A CI/CD pipeline for containers is not "the same as a script that runs on every commit." It is a sequence of **trust boundaries** — each stage produces an artifact that the next stage consumes, and at each handoff there is an opportunity for compromise. Understanding the boundaries (build vs test vs deploy), the authentication models (OAuth2 token exchange, OIDC), and the supply-chain attack surface (SLSA) is what separates a working pipeline from a defensible one.
+### Theory: Stage Isolation — Why Build, Test, and Deploy Are Separate
 
-### A. Stage Isolation: Why Build, Test, and Deploy Are Separate
+A CI/CD pipeline for containers is not "the same as a script that runs on every commit." It is a sequence of **trust boundaries** — each stage produces an artifact that the next stage consumes, and at each handoff there is an opportunity for compromise.
 
 A pipeline that does `build && test && deploy` in a single shell process is fast to write and dangerous to operate. Three reasons separate stages exist:
 
@@ -45,105 +44,6 @@ A pipeline that does `build && test && deploy` in a single shell process is fast
 - **Different rollback semantics.** Once the build is pushed to the registry, it is immutable. Once the deploy succeeds, you can roll back to the previous immutable image. The image is the unit of versioning; the pipeline only orchestrates moving it from one stage to the next.
 
 The artifact handoff between stages is the **image digest**. Build pushes `myapp@sha256:abcd...`. Test pulls that exact digest. Deploy applies a Kubernetes manifest that references that exact digest. No "latest" tags, no race conditions where the tag is repointed mid-pipeline.
-
-### B. Pipeline Triggers: Push, PR, Tag, Schedule, Manual
-
-Every CI system distinguishes triggers because the *correct response* depends on the trigger. GitHub Actions models this as `on:`:
-
-| Trigger | Typical purpose |
-|---------|-----------------|
-| `push` to main | Build, push image, deploy to staging |
-| `pull_request` | Build, run tests, post status checks; do *not* push image |
-| `push` of a tag (`v*`) | Build a release image, push to prod registry, deploy to prod |
-| `schedule` (cron) | Nightly security scans, dependency-update PRs |
-| `workflow_dispatch` (manual) | One-off operations: rollback, production hotfix, data migration |
-
-PR builds should be careful with secrets — anyone with write access to a fork can submit a PR with arbitrary code. GitHub Actions' default `pull_request` event does not expose secrets to PRs from forks. `pull_request_target` does, and is the source of many supply-chain incidents because users use it without realizing the security tradeoff.
-
-### C. Container Registry Authentication: From Tokens to OIDC
-
-Every container registry exchange runs a small OAuth2 token dance:
-
-1. Client (CI runner) attempts to push to `ghcr.io/myorg/myapp:1.0`.
-2. Registry responds `401 Unauthorized` with a `WWW-Authenticate: Bearer realm=...,service=...,scope=repository:myorg/myapp:push,pull`.
-3. Client takes its credentials (a username/password, a static token, or an OIDC ID token) to the auth realm.
-4. Auth realm validates and returns a short-lived bearer token scoped to that exact `(repository, action)` pair.
-5. Client retries the push with `Authorization: Bearer <token>`.
-6. Registry validates the token and accepts the push.
-
-The credential model determines the security posture:
-
-- **Username/password** — long-lived, often shared across pipelines. Easy to leak. Easy to compromise.
-- **Personal/Service Access Token** — long-lived, scoped to specific repos. Better, but still a static credential that has to be stored as a CI secret.
-- **OIDC federation (best practice)** — the CI provider (GitHub Actions, GitLab CI, CircleCI) issues a short-lived OIDC ID token at job runtime that proves "this run is from this repo, this branch, this workflow." The registry (or AWS, GCP, Azure) is configured to trust the CI provider's OIDC issuer for specific subject patterns. No long-lived secret ever exists in the CI configuration.
-
-The OIDC pattern is what powers `permissions: id-token: write` in GitHub Actions. The job receives a JWT signed by GitHub asserting the run's identity. AWS / GCP / Azure / Vault / your own registry exchange that JWT for cloud credentials, scoped exactly to what the workflow declared. Compromising the CI secret store yields nothing because there is nothing in it.
-
-### D. Build Caching in CI: The Layer-Cache Bandwidth Problem
-
-CI runners are usually fresh — every run starts with no Docker layer cache. A naive `docker build` re-runs every layer on every run, which means re-downloading all dependencies, re-compiling everything, every commit. That's why CI builds are notoriously slow.
-
-Three remediations, in increasing complexity:
-
-1. **`actions/cache`** for non-Docker artifacts: cache `~/.npm`, `~/.cache/pip`, `~/.cargo` between runs. Saves dependency-fetch time.
-2. **BuildKit's `--cache-from` / `--cache-to`** with a registry backend. The build pushes its layer cache to a registry alongside the image; the next run pulls that cache before building. `type=registry,ref=ghcr.io/myorg/myapp:buildcache` is the standard incantation.
-3. **`docker buildx` with `cache-to: type=gha`** specifically for GitHub Actions. Uses the Actions cache backend natively, no extra registry overhead.
-
-With caching configured, a CI build on an unchanged dependency tree takes seconds; without it, every build is a from-scratch download and recompile. The difference compounds with team size — 10 developers each running 5 builds per day at 10 minutes saved per build is 8+ hours of compute per day reclaimed.
-
-### E. Supply-Chain Security and SLSA
-
-Every dependency in your image is a potential attack vector: the base image, the OS packages, the language packages (npm, pip, gem, ...), the application code. The **supply-chain attack** model attacks the chain anywhere it is weakest:
-
-- Inject malicious code into a popular open-source library and wait for downstream builds to pull it.
-- Compromise the build infrastructure to silently insert payloads into otherwise-clean images.
-- Steal signing keys to publish malicious images under trusted names.
-- Substitute a different image at the registry layer.
-
-**SLSA (Supply-chain Levels for Software Artifacts)** is a framework formalizing defenses. Four levels:
-
-- **L1** — provenance exists. The build process is documented; you know who built what.
-- **L2** — provenance is signed by the build platform. You can verify the artifact came from a specific build.
-- **L3** — provenance is from a hardened build platform that prevents tampering. The build runs in an isolated environment; non-falsifiable provenance.
-- **L4** — two-party review of all changes, hermetic builds (no network access during build), reproducible builds (same source produces bit-identical output).
-
-In practice, getting to L2 or L3 with cloud CI and Sigstore (`cosign sign` for image signing, `cosign attest` for signed attestations) is achievable. **Image signing** + **admission policies** (`Connaisseur`, `Kyverno`, `OPA Gatekeeper`) that reject unsigned images at the cluster boundary close the deploy-side loop.
-
-`SBOM (Software Bill of Materials)` — generated at build time (`syft`, `trivy sbom`, `docker sbom`), signed and attached to the image — lets you answer "what's in this image?" without opening it. When the next Log4Shell-class CVE drops, you query SBOMs across your registry to find every affected image in minutes instead of days.
-
-### F. GitOps: The Declarative Deployment Model
-
-Traditional CD pushes from CI: the pipeline runs `kubectl apply` against the cluster. **GitOps** inverts this. A controller running *inside the cluster* watches a Git repository of manifests; when the repo changes, the controller reconciles the cluster to match.
-
-The flow is:
-
-1. CI builds the image, pushes to registry.
-2. CI updates the deployment manifest (in a separate Git repo, usually) with the new image digest.
-3. ArgoCD or Flux (the in-cluster controller) sees the manifest commit, pulls it, applies it.
-
-The advantages over push-based:
-
-- **No CI credentials in the cluster.** The cluster pulls; nothing pushes in. The CI doesn't need cluster admin access.
-- **Audit log = git log.** Every change to production is a commit, with author, timestamp, message, diff. Rollback = `git revert`.
-- **Drift detection.** The controller continuously compares cluster state to repo state. Any out-of-band change (a kubectl edit, a manual deletion) is detected and either reverted or alerted on.
-- **Multi-cluster scales naturally.** Five clusters each with their own GitOps controller pointing at the same repo — they all converge to the same state.
-
-ArgoCD and Flux are the two dominant implementations; both are CRD-based controllers (§B/C of lesson 08).
-
-### From Theory to the Workflow Below
-
-- **`.github/workflows/*.yml`** — declarative pipeline definition; `on:` triggers from §B, `jobs:` are the stage isolation of §A.
-- **`docker/login-action` + `permissions: id-token: write`** — the OIDC handshake of §C; no static registry password required for ghcr.io / AWS ECR / etc.
-- **`docker/build-push-action` with `cache-from: type=gha`** — the BuildKit cache layered on the GitHub Actions cache (§D).
-- **`actions/checkout` followed by `helm upgrade` or `kubectl apply`** — the deploy stage; should consume the *digest* of the image built in the previous stage, not a re-derived tag.
-- **`cosign sign` and `cosign verify` (or `slsa-github-generator`)** — §E; sign the image and the SLSA provenance, gate admission on signature.
-- **ArgoCD `Application` CRD or Flux `Kustomization`** — §F; the in-cluster reconciler that pulls from the manifest repo.
-
-The remainder of the lesson walks these pieces in YAML. Whenever a pipeline gets a permission denied, look at the trigger event, the OIDC subject, and the registry's OIDC trust policy — the chain is short but every link matters.
-
----
-
-## 1. CI/CD Overview
 
 ### 1.1 CI/CD Pipeline
 
@@ -214,6 +114,20 @@ The remainder of the lesson walks these pieces in YAML. Whenever a pipeline gets
 ---
 
 ## 2. GitHub Actions Basics
+
+### Theory: Pipeline Triggers — Push, PR, Tag, Schedule, Manual
+
+Every CI system distinguishes triggers because the *correct response* depends on the trigger. GitHub Actions models this as `on:`:
+
+| Trigger | Typical purpose |
+|---------|-----------------|
+| `push` to main | Build, push image, deploy to staging |
+| `pull_request` | Build, run tests, post status checks; do *not* push image |
+| `push` of a tag (`v*`) | Build a release image, push to prod registry, deploy to prod |
+| `schedule` (cron) | Nightly security scans, dependency-update PRs |
+| `workflow_dispatch` (manual) | One-off operations: rollback, production hotfix, data migration |
+
+PR builds should be careful with secrets — anyone with write access to a fork can submit a PR with arbitrary code. GitHub Actions' default `pull_request` event does not expose secrets to PRs from forks. `pull_request_target` does, and is the source of many supply-chain incidents because users use it without realizing the security tradeoff.
 
 ### 2.1 Workflow Structure
 
@@ -437,6 +351,37 @@ jobs:
 ---
 
 ## 3. Docker Build Automation
+
+### Theory: Container Registry Authentication — From Tokens to OIDC
+
+Every container registry exchange runs a small OAuth2 token dance:
+
+1. Client (CI runner) attempts to push to `ghcr.io/myorg/myapp:1.0`.
+2. Registry responds `401 Unauthorized` with a `WWW-Authenticate: Bearer realm=...,service=...,scope=repository:myorg/myapp:push,pull`.
+3. Client takes its credentials (a username/password, a static token, or an OIDC ID token) to the auth realm.
+4. Auth realm validates and returns a short-lived bearer token scoped to that exact `(repository, action)` pair.
+5. Client retries the push with `Authorization: Bearer <token>`.
+6. Registry validates the token and accepts the push.
+
+The credential model determines the security posture:
+
+- **Username/password** — long-lived, often shared across pipelines. Easy to leak. Easy to compromise.
+- **Personal/Service Access Token** — long-lived, scoped to specific repos. Better, but still a static credential that has to be stored as a CI secret.
+- **OIDC federation (best practice)** — the CI provider (GitHub Actions, GitLab CI, CircleCI) issues a short-lived OIDC ID token at job runtime that proves "this run is from this repo, this branch, this workflow." The registry (or AWS, GCP, Azure) is configured to trust the CI provider's OIDC issuer for specific subject patterns. No long-lived secret ever exists in the CI configuration.
+
+The OIDC pattern is what powers `permissions: id-token: write` in GitHub Actions. The job receives a JWT signed by GitHub asserting the run's identity. AWS / GCP / Azure / Vault / your own registry exchange that JWT for cloud credentials, scoped exactly to what the workflow declared. Compromising the CI secret store yields nothing because there is nothing in it.
+
+### Theory: Build Caching in CI — The Layer-Cache Bandwidth Problem
+
+CI runners are usually fresh — every run starts with no Docker layer cache. A naive `docker build` re-runs every layer on every run, which means re-downloading all dependencies, re-compiling everything, every commit. That's why CI builds are notoriously slow.
+
+Three remediations, in increasing complexity:
+
+1. **`actions/cache`** for non-Docker artifacts: cache `~/.npm`, `~/.cache/pip`, `~/.cargo` between runs. Saves dependency-fetch time.
+2. **BuildKit's `--cache-from` / `--cache-to`** with a registry backend. The build pushes its layer cache to a registry alongside the image; the next run pulls that cache before building. `type=registry,ref=ghcr.io/myorg/myapp:buildcache` is the standard incantation.
+3. **`docker buildx` with `cache-to: type=gha`** specifically for GitHub Actions. Uses the Actions cache backend natively, no extra registry overhead.
+
+With caching configured, a CI build on an unchanged dependency tree takes seconds; without it, every build is a from-scratch download and recompile. The difference compounds with team size — 10 developers each running 5 builds per day at 10 minutes saved per build is 8+ hours of compute per day reclaimed.
 
 ### 3.1 Basic Docker Build
 
@@ -1227,6 +1172,25 @@ jobs:
 
 ## 6. GitOps
 
+### Theory: GitOps — The Declarative Deployment Model
+
+Traditional CD pushes from CI: the pipeline runs `kubectl apply` against the cluster. **GitOps** inverts this. A controller running *inside the cluster* watches a Git repository of manifests; when the repo changes, the controller reconciles the cluster to match.
+
+The flow is:
+
+1. CI builds the image, pushes to registry.
+2. CI updates the deployment manifest (in a separate Git repo, usually) with the new image digest.
+3. ArgoCD or Flux (the in-cluster controller) sees the manifest commit, pulls it, applies it.
+
+The advantages over push-based:
+
+- **No CI credentials in the cluster.** The cluster pulls; nothing pushes in. The CI doesn't need cluster admin access.
+- **Audit log = git log.** Every change to production is a commit, with author, timestamp, message, diff. Rollback = `git revert`.
+- **Drift detection.** The controller continuously compares cluster state to repo state. Any out-of-band change (a kubectl edit, a manual deletion) is detected and either reverted or alerted on.
+- **Multi-cluster scales naturally.** Five clusters each with their own GitOps controller pointing at the same repo — they all converge to the same state.
+
+ArgoCD and Flux are the two dominant implementations; both are CRD-based controllers (covered in lesson 08).
+
 ### 6.1 GitOps Overview
 
 ```
@@ -1375,6 +1339,26 @@ jobs:
 ---
 
 ## 7. Docker CI/CD Best Practices
+
+### Theory: Supply-Chain Security and SLSA
+
+Every dependency in your image is a potential attack vector: the base image, the OS packages, the language packages (npm, pip, gem, ...), the application code. The **supply-chain attack** model attacks the chain anywhere it is weakest:
+
+- Inject malicious code into a popular open-source library and wait for downstream builds to pull it.
+- Compromise the build infrastructure to silently insert payloads into otherwise-clean images.
+- Steal signing keys to publish malicious images under trusted names.
+- Substitute a different image at the registry layer.
+
+**SLSA (Supply-chain Levels for Software Artifacts)** is a framework formalizing defenses. Four levels:
+
+- **L1** — provenance exists. The build process is documented; you know who built what.
+- **L2** — provenance is signed by the build platform. You can verify the artifact came from a specific build.
+- **L3** — provenance is from a hardened build platform that prevents tampering. The build runs in an isolated environment; non-falsifiable provenance.
+- **L4** — two-party review of all changes, hermetic builds (no network access during build), reproducible builds (same source produces bit-identical output).
+
+In practice, getting to L2 or L3 with cloud CI and Sigstore (`cosign sign` for image signing, `cosign attest` for signed attestations) is achievable. **Image signing** + **admission policies** (`Connaisseur`, `Kyverno`, `OPA Gatekeeper`) that reject unsigned images at the cluster boundary close the deploy-side loop.
+
+`SBOM (Software Bill of Materials)` — generated at build time (`syft`, `trivy sbom`, `docker sbom`), signed and attached to the image — lets you answer "what's in this image?" without opening it. When the next Log4Shell-class CVE drops, you query SBOMs across your registry to find every affected image in minutes instead of days.
 
 This section consolidates practical patterns for building, testing, and shipping Docker images in CI/CD pipelines -- the "glue" between sections 3-6.
 

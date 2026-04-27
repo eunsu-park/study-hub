@@ -17,7 +17,6 @@
 
 ## 목차
 
-강화 체크리스트 전에 [**이론과 원리**](#이론과-원리) 섹션을 읽으세요. POSIX capability, seccomp 시스템 콜 필터링, AppArmor/SELinux 강제 접근 제어, 그리고 이를 결합한 루트리스(rootless) 컨테이너 모델을 다룹니다.
 
 1. [컨테이너 보안 개요](#1-컨테이너-보안-개요)
 2. [이미지 보안](#2-이미지-보안)
@@ -38,124 +37,24 @@
 
 ---
 
-## 이론과 원리
+## 1. 컨테이너 보안 개요
 
-컨테이너는 프로세스입니다. 컨테이너를 강화하기 위한 방어책은 어떤 리눅스 프로세스에든 적용되는 것과 동일하며, 데몬이 셋업하기 때문에 애플리케이션 개발자에게 보이지 않을 뿐입니다. 안전한 컨테이너 구성을 작성하려면 각 방어책이 커널 레벨에서 실제로 무엇을 하는지 알아야 합니다 — 어떤 위협을 막고, 어떤 위협을 *못 막고*, 어떤 트레이드오프가 있는지. 깊이 이해할 가치가 있는 다섯 방어책 — POSIX capability, seccomp, AppArmor/SELinux, 사용자 네임스페이스, 그리고 이들을 합성한 루트리스 모델.
+### 이론: 위협 모델 — 각 방어가 어디서 도움이 되는가
 
-### A. POSIX capability: root를 쪼개기
-
-전통 UNIX는 두 권한 클래스 — UID 0(root, 모든 것 가능)과 그 외 모두(권한 있는 일은 거의 못 함). 너무 거칠다 — 80번 포트에 바인드해야 하는 프로세스가 커널 모듈 로드나 시스템의 어떤 파일이든 읽기까지 할 수 있어선 안 됩니다.
-
-**POSIX capability**가 root의 권한을 ~40개 별도 권리로 쪼갭니다. 중요한 몇 가지 —
-
-| capability | 부여하는 권한 |
-|------------|----------------|
-| `CAP_NET_BIND_SERVICE` | 권한 포트(<1024) 바인드 |
-| `CAP_NET_ADMIN` | 네트워크 인터페이스, 라우팅, iptables 구성 |
-| `CAP_SYS_ADMIN` | 잡탕 — 마운트, syslog, 디스크 쿼터, 종종 "새 root"라 불림 |
-| `CAP_SYS_PTRACE` | 어떤 프로세스든 ptrace |
-| `CAP_SYS_MODULE` | 커널 모듈 로드/언로드 |
-| `CAP_DAC_OVERRIDE` | 임의 파일 권한 우회 |
-| `CAP_CHOWN` | 파일 소유자 변경 |
-| `CAP_KILL` | 다른 사용자 소유 프로세스에 시그널 전송 |
-| `CAP_SETUID`, `CAP_SETGID` | UID/GID 변경 |
-
-Docker는 기본적으로 대부분의 cap을 떨어뜨리고 작은 허용 목록(`CHOWN`, `DAC_OVERRIDE`, `FSETID`, `FOWNER`, `MKNOD`, `NET_RAW`, `SETGID`, `SETUID`, `SETFCAP`, `SETPCAP`, `NET_BIND_SERVICE`, `SYS_CHROOT`, `KILL`, `AUDIT_WRITE`)만 유지합니다. 대부분 앱에는 이마저도 너무 많습니다. 베스트 프랙티스 — ALL 드롭 후 필요한 것만 추가 —
-
-```bash
-docker run --cap-drop=ALL --cap-add=NET_BIND_SERVICE nginx
-```
-
-커널이 권한 시스템 콜마다 capability를 검사합니다. *capability가 0인* UID 0(`--user 0 --cap-drop=ALL`)으로 도는 프로세스는 권한이 필요한 어떤 일도 못 함 — 이름만 root. 앱이 UID 0을 고집하지만 실제 root 권한을 가져선 안 될 때 유용한 중간 상태.
-
-`--privileged`는 반대 — ALL capability 부여 + seccomp/AppArmor 비활성화. 보안상 "컨테이너 = 호스트"로 다루세요. 권한 도구를 빌드하는 것 외에는 거의 적절하지 않습니다.
-
-### B. seccomp: 시스템 콜 레벨 필터링
-
-capability는 어떤 권한 작업이 허용되는지를 검사. **seccomp**(secure computing mode)는 어떤 **시스템 콜**이 호출이라도 허용되는지를 검사. seccomp 프로필은 시스템 콜마다 규칙을 나열한 JSON 문서 —
-
-```json
-{
-  "defaultAction": "SCMP_ACT_ERRNO",
-  "syscalls": [
-    {"names": ["read", "write", "open", ...], "action": "SCMP_ACT_ALLOW"},
-    {"names": ["mount", "reboot", ...], "action": "SCMP_ACT_KILL_PROCESS"}
-  ]
-}
-```
-
-액션 — `ALLOW`(통과), `ERRNO`(실행 없이 에러 코드 반환), `KILL_PROCESS`(프로세스 종료), `LOG`(허용하지만 로그), `TRACE`(추적자에 알림), `TRAP`(SIGSYS 전달).
-
-Docker의 **기본 seccomp 프로필**은 애플리케이션이 거의 안 쓰면서 권한 상승 공격에서 흔한 ~50개 시스템 콜을 차단 — `mount`, `umount2`, `pivot_root`, `kexec_load`, `init_module`, 특정 네임스페이스 플래그가 있는 `clone3`, ... `--security-opt seccomp=unconfined`를 넘기지 않는 한 Docker가 자동 적용.
-
-고보안 워크로드라면, 앱이 실제로 쓰는 시스템 콜만 허용하는 커스텀 프로필을 작성. `strace`(관찰된 시스템 콜 기록)와 `oci-seccomp-bpf-hook`(샘플 실행에서 프로필 자동 생성) 같은 도구가 도움. 트레이드오프 — 너무 빡빡한 프로필은 엣지 케이스 시스템 콜(로케일 로딩, 프로파일링, GC 동작)에서 앱을 깨고, 너무 느슨하면 기본 대비 얻은 게 별로 없음.
-
-Kubernetes는 `securityContext.seccompProfile`로 seccomp 노출 — `RuntimeDefault`(런타임의 기본 프로필 사용), `Localhost`(`/var/lib/kubelet/seccomp/`의 프로필 사용), `Unconfined`. 명시적으로 옵트인하지 않으면 K8s 기본은 `Unconfined`이므로 설정하세요.
-
-### C. AppArmor와 SELinux: 강제 접근 제어
-
-DAC(임의 접근 제어)는 표준 "소유자가 누가 이 파일을 읽을지 결정" 모델. **MAC(강제 접근 제어)**은 DAC와 *무관하게* 커널이 강제하는 별도 계층 — 파일 권한이 접근을 허용해도 MAC 정책이 막을 수 있습니다.
-
-두 구현 —
-
-- **AppArmor**(Ubuntu, SUSE) — 경로 기반 프로필. 프로필이 "이 바이너리는 `/etc/nginx/`를 읽고, `/var/log/nginx/`에 쓰고, TCP 80에 바인드하고, `/home/`에 접근 못 한다"라고 명시. 프로필이 커널에 로드되어 모든 관련 시스템 콜에서 강제됨.
-- **SELinux**(RHEL, Fedora, OpenShift) — 타입 기반. 모든 파일, 프로세스, 자원이 *타입* 라벨을 가지고, 정책이 "타입 `httpd_t`의 프로세스는 타입 `httpd_log_t`의 파일에 쓸 수 있다"라고 명시. 더 표현력 있고 작성은 훨씬 복잡.
-
-Docker가 Ubuntu에서 기본 AppArmor 프로필(`docker-default`)을 자동 적용. 커스텀 프로필은 `--security-opt apparmor=my-profile`. SELinux 통합은 `--security-opt label=type:container_t`(RHEL 계열에선 기본).
-
-실무에서 배포판이 합리적 기본을 제공. 커스텀 프로필은 드물고 마찰이 큽니다. MAC의 가치는 *다중 방어*를 제공한다는 것 — 공격자가 capability와 seccomp를 우회해도 AppArmor/SELinux 프로필이 읽기/쓰기 가능 범위를 제약합니다.
-
-### D. 사용자 네임스페이스와 루트리스 모델
-
-**사용자 네임스페이스**는 네임스페이스 안의 UID/GID 범위를 바깥의 다른 범위로 매핑. 프로세스가 *안에서* UID 0이고 *바깥에서* UID 100000일 수 있음 — 컨테이너 안 root, 호스트 권한 없는 사용자.
-
-"루트리스"의 두 종류 —
-
-- **컨테이너가 비-root로 실행.** Dockerfile의 `USER nobody`, `docker run`의 `--user 1000:1000`, K8s의 `runAsNonRoot: true`. 컨테이너 프로세스가 평범한 권한 없는 사용자. 쉽고 필요한 베이스라인.
-- **엔진이 비-root로 실행**("rootless Docker", "rootless Podman"). Docker/Podman 데몬 자체가 root가 아닌 당신의 사용자로 실행. 데몬이 사용자 네임스페이스로 컨테이너에 겉보기 root를 부여(실제로는 당신의 권한 없는 UID로 매핑)하여 달성. 네트워킹은 브리지+iptables(root 필요) 대신 사용자 공간 스택(`slirp4netns`) 사용. 큰 장점 — 데몬 침해가 더 이상 호스트 root를 의미하지 않음.
-
-사용자 네임스페이스 + capability + seccomp + MAC의 결합은, 호스트 시각에서 완전히 강화된 컨테이너의 프로세스가 100000 같은 UID에 capability 0, 빡빡한 seccomp 필터, 자체 사설 파일시스템 외 어디든 접근을 막는 AppArmor 프로필을 가진 셈. 원격 코드 실행 익스플로잇조차 별로 얻지 못합니다.
-
-### E. 이미지 출처(provenance): 서명과 검증
-
-이미지가 공급망 공격 표면. 이미지 레벨의 두 방어 계층 —
-
-- **서명.** 이미지(정확히는 매니페스트 다이제스트)가 신뢰 키로 서명됨. 검증자가 실행 전 서명을 확인. **Sigstore / cosign**이 현대 표준 — `cosign sign --key cosign.key ghcr.io/myorg/myapp@sha256:abcd...`와 배포 시 `cosign verify --key cosign.pub ...`. 옛 Docker Content Trust는 Notary v1 사용(오늘날엔 덜 흔함).
-- **취약점 스캔.** `trivy`, `grype`, `snyk`, `clair`가 이미지의 설치된 패키지를 CVE 데이터베이스에 대해 분석하고 알려진 취약점 보고. CI 게이트로 실행 — HIGH/CRITICAL CVE가 있으면 빌드 실패.
-
-Kubernetes에서는 **어드미션 컨트롤러**(`Connaisseur`, `Kyverno`, `OPA Gatekeeper`, `Sigstore Policy Controller`)가 신뢰 키의 유효 서명이 없는 이미지의 Pod을 거부. 루프를 닫음 — 공격자가 레지스트리에 악성 이미지를 푸시해도 클러스터가 실행을 거부.
-
-### F. 위협 모델: 각 방어가 어디서 도움이 되는가
+컨테이너는 프로세스입니다. 컨테이너를 강화하는 데 사용 가능한 방어는 어떤 리눅스 프로세스에든 적용되는 같은 방어이며, 단지 데몬이 셋업해 주기 때문에 애플리케이션 개발자에게는 보통 보이지 않을 뿐입니다. 안전한 컨테이너 구성을 작성하려면 각 방어가 커널 수준에서 실제로 무엇을 하는지를 알아야 합니다 — 어떤 위협을 막고, 어떤 위협을 막지 *못하며*, 트레이드오프가 무엇인지.
 
 | 위협 | 완화하는 방어 |
 |------|---------------|
-| 악성 베이스 이미지 | 이미지 스캔, 서명, 신뢰 레지스트리 |
+| 악성 베이스 이미지 | 이미지 스캔, 서명, 신뢰받는 레지스트리 |
 | 취약한 의존성 | 이미지 스캔(SBOM), 의존성 핀 |
 | 커널 버그를 통한 컨테이너 탈출 | seccomp(공격 표면 제한), MAC(피해 제한), 커널 패치 유지 |
-| 컨테이너 안 권한 상승 | capability 드롭, 비-root 실행, 읽기 전용 rootfs |
-| 네트워크의 측면 이동 | NetworkPolicy, mTLS(서비스 메시), egress 방화벽 |
-| 파일시스템에서 자격 증명 도난 | 이미지에 시크릿 굽지 않음, tmpfs로 마운트, 시크릿 매니저 사용 |
+| 컨테이너 안 권한 상승 | capability 떨어뜨리기, 비-root 실행, 읽기 전용 rootfs |
+| 네트워크 측면 이동 | NetworkPolicy, mTLS(서비스 메시), egress 방화벽 |
+| 파일시스템에서 자격 증명 도난 | 이미지에 시크릿 굽지 말기, tmpfs로 마운트, 시크릿 매니저 사용 |
 | 침해된 CI가 악성 이미지 푸시 | OIDC 기반 레지스트리 인증(공유 키 없음), CI에서 이미지 서명, 배포 시 서명 검증 |
-| kubectl 접근권을 가진 내부자 | RBAC(cluster-admin 보유자 제한), 감사 로깅, GitOps(직접 kubectl 없음) |
+| kubectl 접근 가진 내부자 | RBAC(cluster-admin 가진 사람 제한), 감사 로그, GitOps(직접 kubectl 없음) |
 
-어떤 단일 통제도 모든 것을 커버하지 못합니다. 원칙은 *다중 방어* — 각 계층이 뚫릴 수 있다고 가정하고, 다음 계층이 공격 성공을 막을 것을 신뢰.
-
-### 이론에서 아래의 강화 체크리스트로
-
-- **`USER`, `--user`, `runAsNonRoot`, `runAsUser`** — §D의 비-root 베이스라인.
-- **`--cap-drop=ALL --cap-add=...`, `securityContext.capabilities`** — §A capability.
-- **`--security-opt seccomp=...`, `securityContext.seccompProfile`** — §B seccomp.
-- **`--security-opt apparmor=...`, K8s의 AppArmor 어노테이션** — §C MAC.
-- **`--read-only`와 `readOnlyRootFilesystem: true`** — 읽기 전용 이미지 레이어. 쓰기는 마운트된 emptyDir에만.
-- **`docker scan`, `trivy image`, `cosign`으로 서명된 이미지** — §E provenance.
-- **NetworkPolicy, 마운트 파일 또는 외부 매니저로 시크릿** — §F 측면 이동과 자격 증명 방어.
-- **Pod Security Standards(`baseline` / `restricted`) 라벨** — 위 항목들의 의견 있는 K8s 번들.
-
-남은 본문은 이 방어책들을 구체적 구성과 함께 둘러봅니다. "안전한" 컨테이너 구성을 쓸 때마다 어떤 위협을 막는지 자문하세요 — 목표는 계층이지 유행어 체크리스트가 아닙니다.
-
----
-
-## 1. 컨테이너 보안 개요
+어떤 단일 통제도 모든 것을 커버하지 못합니다. 원칙은 *다중 방어*입니다 — 각 계층이 뚫릴 수 있다고 가정하고 다음 계층이 공격 성공을 막아 주리라 의존하세요.
 
 ### 컨테이너 위협 모델(Container Threat Model)
 
@@ -253,6 +152,15 @@ Kubernetes에서는 **어드미션 컨트롤러**(`Connaisseur`, `Kyverno`, `OPA
 ---
 
 ## 2. 이미지 보안
+
+### 이론: 이미지 출처 — 서명과 검증
+
+이미지는 공급망 공격 표면입니다. 이미지 수준에서 두 방어 계층 —
+
+- **서명.** 이미지(또는 매니페스트 다이제스트)가 신뢰받는 키로 서명. 검증자가 실행 전에 서명을 확인. **Sigstore / cosign**이 현대 표준 — `cosign sign --key cosign.key ghcr.io/myorg/myapp@sha256:abcd...`와 배포 시 `cosign verify --key cosign.pub ...`. 옛 Docker Content Trust는 Notary v1 사용(오늘날 덜 흔함).
+- **취약점 스캔.** `trivy`, `grype`, `snyk`, `clair`가 이미지의 설치된 패키지를 CVE 데이터베이스 대비 분석하고 알려진 취약점을 보고. CI 게이트로 실행 — HIGH/CRITICAL CVE가 있으면 빌드 실패.
+
+Kubernetes의 경우, **어드미션 컨트롤러**(`Connaisseur`, `Kyverno`, `OPA Gatekeeper`, `Sigstore Policy Controller`)가 신뢰받는 키의 유효한 서명이 없는 이미지의 Pod을 거부. 이게 루프를 닫음 — 공격자가 레지스트리에 악성 이미지를 푸시해도 클러스터가 실행 안 함.
 
 ### 안전한 베이스 이미지 선택
 
@@ -606,6 +514,80 @@ ENTRYPOINT ["/app"]
 ---
 
 ## 4. 런타임 보안
+
+### 이론: POSIX capability — root 쪼개기
+
+전통 UNIX는 두 권한 클래스 — UID 0(root, 모든 것 가능)과 그 외 모두(거의 권한 있는 일을 못 함). 너무 거침 — 80 포트에 바인딩해야 하는 프로세스가 커널 모듈을 로드하거나 시스템의 어떤 파일이든 읽을 수 있어선 안 됨.
+
+**POSIX capability**가 root의 권한을 ~40개의 별도 권리로 쪼갭니다. 중요한 몇 가지 —
+
+| Capability | 부여하는 것 |
+|------------|-------------|
+| `CAP_NET_BIND_SERVICE` | 특권 포트(<1024) 바인딩 |
+| `CAP_NET_ADMIN` | 네트워크 인터페이스, 라우팅, iptables 구성 |
+| `CAP_SYS_ADMIN` | 잡종 — mount, syslog, disk-quota, 종종 "새 root"라 불림 |
+| `CAP_SYS_PTRACE` | 어떤 프로세스든 ptrace |
+| `CAP_SYS_MODULE` | 커널 모듈 로드/언로드 |
+| `CAP_DAC_OVERRIDE` | 임의 파일 권한 우회 |
+| `CAP_CHOWN` | 파일 소유권 변경 |
+| `CAP_KILL` | 다른 사용자 소유 프로세스에 시그널 전송 |
+| `CAP_SETUID`, `CAP_SETGID` | UID/GID 변경 |
+
+Docker 기본은 대부분 cap을 떨어뜨리고 작은 allowlist 유지(`CHOWN`, `DAC_OVERRIDE`, `FSETID`, `FOWNER`, `MKNOD`, `NET_RAW`, `SETGID`, `SETUID`, `SETFCAP`, `SETPCAP`, `NET_BIND_SERVICE`, `SYS_CHROOT`, `KILL`, `AUDIT_WRITE`). 대부분의 앱에 이마저 너무 많음. 베스트 프랙티스 — ALL 떨어뜨리고 필요한 것만 다시 추가 —
+
+```bash
+docker run --cap-drop=ALL --cap-add=NET_BIND_SERVICE nginx
+```
+
+커널이 각 특권 시스템 콜에서 capability를 검사. UID 0이지만 *capability가 없는* 프로세스(`--user 0 --cap-drop=ALL`)는 권한이 필요한 어떤 일도 못 함 — 이름뿐인 root. 앱이 UID 0을 고집하지만 실제 root 권한을 가져선 안 될 때 유용한 중간 상태.
+
+`--privileged`는 반대 — ALL capability 부여하고 seccomp/AppArmor 비활성화. 보안 목적상 "컨테이너 = 호스트"로 다루세요. 특권 도구를 빌드하는 것 외에 거의 적절하지 않음.
+
+### 이론: seccomp — 시스템 콜 수준 필터링
+
+capability는 어떤 특권 작업이 허용되는지 검사. **seccomp**(secure computing mode)는 어떤 **시스템 콜**이 호출 자체가 허용되는지 검사. seccomp 프로필은 각 시스템 콜의 규칙을 나열하는 JSON 문서 —
+
+```json
+{
+  "defaultAction": "SCMP_ACT_ERRNO",
+  "syscalls": [
+    {"names": ["read", "write", "open", ...], "action": "SCMP_ACT_ALLOW"},
+    {"names": ["mount", "reboot", ...], "action": "SCMP_ACT_KILL_PROCESS"}
+  ]
+}
+```
+
+행동 — `ALLOW`(통과), `ERRNO`(실행 없이 에러 코드 반환), `KILL_PROCESS`(프로세스 종료), `LOG`(허용하되 로그), `TRACE`(트레이서에 알림), `TRAP`(SIGSYS 전달).
+
+Docker의 **기본 seccomp 프로필**이 애플리케이션이 거의 안 쓰고 권한 상승 공격에 흔한 ~50개 시스템 콜을 차단 — `mount`, `umount2`, `pivot_root`, `kexec_load`, `init_module`, 특정 네임스페이스 플래그 있는 `clone3` 등. `--security-opt seccomp=unconfined`를 패스하지 않으면 Docker가 자동 적용.
+
+고보안 워크로드의 경우, 앱이 실제로 쓰는 시스템 콜만 허용하는 커스텀 프로필 작성. `strace`(관찰된 시스템 콜 기록)와 `oci-seccomp-bpf-hook`(샘플 실행에서 프로필 자동 생성) 같은 도구가 도움. 트레이드오프 — 너무 빡빡한 프로필은 엣지 케이스 시스템 콜에서 앱 깨뜨림(로케일 로딩, 프로파일링, GC 동작), 너무 느슨하면 기본 대비 별로 얻는 것이 없음.
+
+Kubernetes는 `securityContext.seccompProfile`로 seccomp 노출 — `RuntimeDefault`(런타임의 기본 프로필 사용), `Localhost`(`/var/lib/kubelet/seccomp/`의 프로필 사용), `Unconfined`. 설정하세요. K8s 기본은 명시적으로 옵트인하지 않으면 `Unconfined`.
+
+### 이론: AppArmor와 SELinux — 강제 접근 제어
+
+DAC(임의 접근 제어)는 표준 "소유자가 누가 이 파일을 읽을지 결정" 모델. **MAC(강제 접근 제어)**는 DAC와 *무관하게* 커널이 강제하는 별도 계층 — 파일 권한이 접근을 허용해도 MAC 정책이 차단 가능.
+
+두 구현 —
+
+- **AppArmor**(Ubuntu, SUSE) — 경로 기반 프로필. 프로필이 "이 바이너리는 `/etc/nginx/`를 읽고, `/var/log/nginx/`에 쓰고, TCP 80 포트 바인딩 가능, `/home/`은 접근 불가"라고 말함. 프로필이 커널에 로드되어 모든 관련 시스템 콜에서 강제됨.
+- **SELinux**(RHEL, Fedora, OpenShift) — 타입 기반. 모든 파일/프로세스/리소스가 *타입* 라벨, 정책이 "타입 `httpd_t` 프로세스가 타입 `httpd_log_t` 파일에 쓸 수 있다"라고 말함. 더 표현력 있음, 작성하기 훨씬 복잡.
+
+Docker가 Ubuntu에서 기본 AppArmor 프로필(`docker-default`)을 자동 적용. `--security-opt apparmor=my-profile`로 커스텀 프로필. `--security-opt label=type:container_t`로 SELinux 통합(RHEL 계열 기본).
+
+실제로 배포판이 합리적 기본을 배포하고, 커스텀 프로필은 드물고 마찰이 큽니다. MAC의 가치는 *다중 방어* 제공 — 공격자가 capability와 seccomp를 우회해도 AppArmor/SELinux 프로필이 무엇을 읽거나 쓸지 제약합니다.
+
+### 이론: 사용자 네임스페이스와 루트리스 모델
+
+**사용자 네임스페이스**가 네임스페이스의 UID/GID 범위를 바깥의 다른 범위로 매핑. 프로세스가 자기 네임스페이스 *안*에서는 UID 0이고 *바깥*에서는 UID 100000일 수 있음 — 컨테이너에서 root, 호스트에서 비특권 사용자.
+
+"루트리스" 두 종류 —
+
+- **컨테이너가 비-root로 실행.** Dockerfile의 `USER nobody`, `docker run`의 `--user 1000:1000`, K8s의 `runAsNonRoot: true`. 컨테이너 프로세스가 그저 일반 비특권 사용자. 쉽고 필수적인 베이스라인.
+- **엔진이 비-root로 실행**("rootless Docker", "rootless Podman"). Docker/Podman 데몬 자체가 root가 아닌 자기 사용자로 실행. 데몬이 사용자 네임스페이스를 사용해 컨테이너에 보이는 root를 자기 비특권 UID로 매핑. 네트워킹은 (root 필요한) bridge+iptables 대신 유저 공간 스택(`slirp4netns`) 사용. 큰 장점 — 데몬 침해가 더 이상 호스트 root를 의미하지 않음.
+
+사용자 네임스페이스 + capability + seccomp + MAC의 조합은 완전히 강화된 컨테이너 프로세스가 호스트 시각에서 capability 0, 빡빡한 seccomp 필터, 자기 사설 파일시스템 외 어떤 것에도 접근을 차단하는 AppArmor 프로필을 가진 100000 같은 UID라는 의미. 원격 코드 실행 익스플로잇조차 거의 얻을 게 없음.
 
 ### Capabilities 제거
 

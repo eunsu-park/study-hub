@@ -16,7 +16,6 @@
 
 ## 목차
 
-볼륨 레퍼런스 전에 [**이론과 원리**](#이론과-원리) 섹션을 읽으세요. 커널이 각 스토리지 타입(bind 마운트, 명명 볼륨, tmpfs)을 어떻게 마운트하는지, 볼륨 드라이버가 이를 네트워크/클라우드 백엔드로 어떻게 확장하는지, 그리고 Kubernetes의 PV/PVC/StorageClass 바인딩이 같은 기저 원시들에 어떻게 매핑되는지 다룹니다.
 
 1. [Docker 스토리지 개요](#1-docker-스토리지-개요)
 2. [볼륨 vs 바인드 마운트 vs tmpfs](#2-볼륨-vs-바인드-마운트-vs-tmpfs)
@@ -34,110 +33,6 @@
 ---
 
 컨테이너는 설계상 일시적(ephemeral)입니다. 컨테이너를 제거하면 쓰기 가능 레이어에 기록된 모든 데이터가 사라집니다. 영구 볼륨은 데이터를 컨테이너 라이프사이클에서 분리하여 이 근본적인 문제를 해결합니다. Docker의 스토리지 서브시스템을 이해하는 것은 데이터베이스, 메시지 큐, 파일 기반 애플리케이션과 같은 상태가 있는(stateful) 워크로드를 프로덕션에서 실행하는 데 필수적입니다.
-
----
-
-## 이론과 원리
-
-볼륨은 개념적으로는 단순해 보입니다 — "컨테이너보다 오래 사는 데이터" — 그러나 구현은 진짜 깊이가 있습니다. 각 스토리지 타입이 커널 마운트 기계를 다르게 사용하고, 드라이버 계층이 로컬과 원격 백엔드를 추상화하며, Kubernetes는 그 위에 또 다른 간접 단계(PV / PVC / StorageClass)를 더합니다. 상태 있는 컨테이너의 반복되는 이슈는 애플리케이션이 "파일시스템"에 기대하는 것에 의미가 맞는 스토리지 타입을 고르는 것입니다.
-
-### A. 세 마운트 타입과 리눅스 의미
-
-Docker는 컨테이너에 비휘발성 스토리지를 넣는 세 원시를 노출합니다.
-
-| 타입 | 실제 정체 | 데이터가 사는 곳 | `docker rm`을 견디는가? |
-|------|------------|------------------|--------------------------|
-| **bind 마운트** | 호스트 경로에서 컨테이너의 마운트 네임스페이스로 `mount --bind` | 호스트에서 지정한 어디든 | 예(Docker가 소유한 적 없음) |
-| **명명 볼륨** | `/var/lib/docker/volumes/<name>/_data` 아래의 디렉터리, bind-mount됨 | Docker 데이터 루트 안 | 예(Docker 소유, 명시적 `docker volume rm`으로 삭제) |
-| **tmpfs 마운트** | 인메모리 파일시스템의 `mount -t tmpfs` | RAM, 디스크에 안 감 | 아니오(컨테이너 종료 즉시 사라짐) |
-
-셋 다 컨테이너의 마운트 네임스페이스에 항목으로 들어가, 안에서 요청한 마운트 포인트의 평범한 디렉터리로 보입니다. 커널은 런타임에 셋을 구분하지 않습니다 — 그저 마운트일 뿐. 차이는 *기저 스토리지를 누가 관리하는가* — 당신(bind), Docker(볼륨), 커널 페이지 캐시(tmpfs).
-
-중요한 의미적 차이 —
-
-- **bind 마운트는 호스트 파일시스템 의미를 정확히 상속.** 호스트 파일시스템이 ext4면 ext4 의미, Docker Desktop의 macOS bind-mount-over-VirtioFS면 그 shim의 모든 별난 점(느린 stat, 깨진 파일 락, 가끔의 inotify 이상)을 가진 얇은 shim. macOS bind 마운트의 Postgres가 버그 공장인 이유.
-- **명명 볼륨은 항상 Docker 호스트의 네이티브 파일시스템에 산다.** Docker Desktop에서도 명명 볼륨은 macOS 호스트가 아닌 리눅스 VM 안에 위치. 성능과 POSIX 정확성이 진짜 리눅스 파일시스템과 일치. 데이터베이스에 명명 볼륨이 기본 권장인 이유.
-- **tmpfs는 빠르고 휘발성.** 읽기/쓰기가 RAM 적중, 지연시간 마이크로초, 한도는 `--tmpfs size=`와 호스트 RAM 중 작은 것. `/tmp`, 스크래치 공간, 디스크에 닿으면 안 되는 시크릿 자료에 유용.
-
-Kubernetes는 이 셋을 `hostPath`(= bind), `emptyDir`(= tmpfs 또는 Pod별 임시 디스크), `PersistentVolume`(= 명명 볼륨이지만 네트워크/클라우드 백엔드에 플러그인 가능)으로 거울처럼 반영.
-
-### B. 볼륨 드라이버: 로컬, 네트워크, 클라우드
-
-Docker 볼륨은 *드라이버*로 생성. 기본 드라이버는 `local` — 위에서 설명한 `/var/lib/docker/volumes/...` 아래 디렉터리. 드라이버 인터페이스는 플러그인 가능 — `docker volume create --driver <name>`이 등록된 플러그인을 호출해 스토리지를 프로비저닝.
-
-흔한 드라이버와 기반 —
-
-| 드라이버 | 기반 | 전형적 사용 |
-|---------|------|--------------|
-| `local` | Docker 루트 아래 로컬 파일시스템 | 기본, 단일 호스트 상태 있는 앱 |
-| `nfs`(옵션 있는 `local` 내장 또는 플러그인) | NFS 서버 | 다중 호스트 공유 파일시스템, 고전 엔터프라이즈 NAS |
-| `cifs` / `smb` | SMB 공유 | Windows 파일 공유 |
-| `rexray`, `convoy`, `flocker`(구) | 클라우드 블록 스토리지(EBS, GCE PD) 또는 Ceph 같은 스토리지 백엔드 | detach/reattach가 있는 다중 호스트 오케스트레이션 |
-| 클라우드 네이티브 CSI 드라이버 | EBS, EFS, Azure Disk, GCE PD, Cinder, ... | Kubernetes 관리 클라우드 스토리지 |
-
-플러그인 계약은 작음 — `Create`, `Remove`, `Mount`, `Unmount`, `Path`, `Get`, `List`, `Capabilities` — 데몬이 통신하는 Unix 소켓으로 구현. 그래서 Docker가 한 CLI로 수십 개 스토리지 백엔드와 통신할 수 있음.
-
-local 드라이버의 `nfs` 모드가 알 가치 있음 — `docker volume create --driver local --opt type=nfs --opt o=addr=10.0.0.5,rw --opt device=:/exports/data myvol`이 실제로 NFS 마운트인 "볼륨"을 만듦. 컨테이너는 평범한 디렉터리를 보고, 커널이 그 읽기/쓰기를 NFS 서버로 라우팅.
-
-### C. 파일시스템 의미와 그것이 무는 이유
-
-대부분 애플리케이션은 자기 파일시스템이 진짜 ext4나 xfs처럼 동작한다고 가정. 마운트된 스토리지가 일치하지 않으면 미묘하게 깨집니다.
-
-- **락(Locking).** SQLite, Postgres, MySQL 모두 `flock` / `fcntl` 권고적 락에 의존. NFS v3는 `lockd` 없이 올바르게 구현 안 함, SMB는 자체 락 모델, Docker Desktop의 macOS bind 마운트는 리눅스 VM의 VirtioFS 계층을 통해 락을 포워드(엣지 케이스 있음). "데이터베이스가 신비롭게 손상" 증상이 종종 기저 마운트의 깨진 락으로 추적됨.
-- **`fsync` 내구성.** 데이터베이스가 `fsync`를 호출해 쓰기가 안정 스토리지에 닿았는지 보장. tmpfs는 실제 내구성 없이 즉시 반환(데이터가 RAM에). 일부 네트워크 파일시스템은 빠르게 보이려고 fsync에 거짓말. tmpfs에 데이터베이스를 두면 빠르고 크래시 후 쓸모없음.
-- **원자적 rename.** 많은 애플리케이션이 `file.tmp`에 쓰고 원자적 교체를 위해 `rename(file.tmp, file)`. POSIX는 같은 파일시스템 안에서 이를 보장, 마운트 포인트를 가로질러서는 보장 *안 함*(rename이 EXDEV 실패). 컨테이너 트리 깊숙이 bind 마운트할 때 조심.
-- **inotify.** 파일 watching 도구(개발 핫 리로드, 로그 테일러)가 `inotify`로 변경 알림. NFS, FUSE, 일부 bind 마운트 계층이 inotify 이벤트를 올바르게 전파 안 함. 증상 — 개발 컨테이너가 저장을 알아채지 못함.
-- **권한.** bind 마운트된 호스트 디렉터리는 호스트 UID를 가짐. 컨테이너 프로세스가 다른 UID로 돌면 못 씀. 해결책 — 호스트 디렉터리를 world-writable로(나쁨), 컨테이너 UID로 `chown`(낫음), 또는 볼륨 사용(최선 — Docker가 권한 관리).
-
-### D. Kubernetes PV / PVC / StorageClass: 같은 아이디어, 분리
-
-Kubernetes는 클러스터 관리자와 애플리케이션 개발자 사이의 관심사 분리를 위해 스토리지를 세 리소스로 쪼갭니다.
-
-- **PersistentVolume(PV)** — 존재하는 실제 스토리지 덩어리. 특정 EBS 볼륨, NFS export, Ceph 이미지. 클러스터 스코프.
-- **PersistentVolumeClaim(PVC)** — 필요한 속성(크기, access mode, storage class)을 가진 스토리지 요청. 네임스페이스 스코프, 앱 개발자가 작성.
-- **StorageClass** — *동적 프로비저닝* 템플릿. PVC가 storage class `fast-ssd`를 요청하면, Kubernetes가 그 클래스에 등록된 스토리지 프로비저너를 호출해 적합한 PV를 즉시 생성.
-
-매칭 알고리즘 —
-
-1. PVC가 `requests: storage: 10Gi`와 `storageClassName: fast-ssd`로 생성됨.
-2. PV 컨트롤러가 매칭하는 기존 미클레임 PV 검색.
-3. 찾으면 PVC를 PV에 바인딩.
-4. 못 찾으면 StorageClass `fast-ssd`를 조회해 프로비저너(예: `ebs.csi.aws.com`) 찾고, 호출해 10Gi EBS 볼륨 생성, 대응하는 PV 등록 후 바인딩.
-5. PVC를 참조하는 Pod이 kubelet이 CSI 드라이버의 `NodeStageVolume`과 `NodePublishVolume` 훅을 호출해 볼륨을 마운트받음.
-
-`accessModes`가 PVC를 어떻게 사용할 수 있는지 제약 —
-
-- `ReadWriteOnce`(RWO) — 단일 노드 읽기-쓰기. 대부분의 클라우드 블록 스토리지. 단일 노드 Pod 배치 강제.
-- `ReadOnlyMany`(ROX) — 여러 노드 읽기 전용.
-- `ReadWriteMany`(RWX) — 여러 노드 읽기-쓰기. NFS, EFS, CephFS 등 필요.
-- `ReadWriteOncePod`(RWOP, 신규) — 단일 Pod(단일 노드가 아닌).
-
-**Reclaim policy**가 PVC 삭제 시 무엇이 일어날지 결정 — `Retain`(PV가 데이터 유지, 관리자가 정리), `Delete`(프로비저너가 PV와 기저 스토리지 삭제), `Recycle`(폐기됨).
-
-CSI(Container Storage Interface)가 표준 플러그인 API. 모든 클라우드와 스토리지 벤더가 CSI 드라이버 배포, K8s가 같은 인터페이스로 그들 모두와 통신, 스냅샷/복제/온라인 리사이즈는 드라이버가 지원할 수도 있고 아닐 수도 있는 CSI 기능.
-
-### E. 볼륨 공유와 동시성
-
-여러 컨테이너에 마운트된 볼륨은 *공유 파일시스템*. 진짜 공유 FS와 동일한 락과 동시성 규칙이 적용 —
-
-- **조정 없는 두 writer → 데이터 손상.** Docker가 풀 문제가 아닌 POSIX. `/data`를 `app-1`과 `app-2`에 마운트하고 락이나 분할 없이 같은 파일에 쓰면 손상을 예상.
-- **Reader/writer 패턴.** 한 컨테이너가 쓰고 다른 컨테이너들이 읽음. 로그 집계, 생성된 자산, 설정 배포에 흔함. 잘 동작.
-- **큐 있는 producer/consumer.** 공유 파일시스템 대신 진짜 큐(Redis, RabbitMQ) 사용. 파일시스템은 나쁜 메시지 큐.
-
-Kubernetes에서 RWX 볼륨은 자연스럽게 다중 Pod 공유 지원, RWO는 안 함(스케줄러가 다른 노드에 두 번째 Pod 배치 거부). `replicas: 3`과 RWO PVC가 있는 Deployment에서 세 Pod 모두 Pending에 갇히는 가장 흔한 이유 — 하나만 마운트 가능.
-
-### 이론에서 아래의 볼륨 CLI로
-
-- **`docker volume create`, `docker volume ls`, `docker volume rm`, `docker volume inspect`** — §A의 명명 볼륨 관리 인터페이스(드라이버 = local 기본).
-- **`-v /host:/container`, `--mount type=bind,source=/host,target=/container`** — §A의 bind 마운트 문법. `:ro` 읽기 전용, `:Z` / `:z` SELinux 레이블 변경.
-- **`-v vol-name:/container`, `--mount type=volume,source=vol-name,target=/container`** — 명명 볼륨 문법.
-- **`--mount type=tmpfs,destination=/tmp,tmpfs-size=64m`** — tmpfs 마운트.
-- **`docker volume create --driver nfs --opt ...`** — §B의 드라이버 매개 프로비저닝.
-- **`docker volume prune`** — 사용되지 않는(참조 없는) 볼륨 가비지 컬렉트. CI 변동으로 죽은 볼륨이 수십 개 남아있을 때 유용.
-- **Compose 최상위 `volumes:` + 서비스 `volumes:`** — 명명 볼륨 모델의 선언형.
-- **Kubernetes PV / PVC / StorageClass + Pod spec의 `volumeMounts`** — §D의 YAML 형태.
-
-남은 본문은 이 CLI 원시들을 둘러봅니다. 데이터베이스가 "데이터를 잃거나" 상태 있는 Pod이 스케줄을 거부할 때마다 §C(의미)와 §D(RWO vs RWX) 체크리스트로 거꾸로 작업한 뒤에 애플리케이션을 비난하세요.
 
 ---
 
@@ -193,6 +88,26 @@ Kubernetes에서 RWX 볼륨은 자연스럽게 다중 Pod 공유 지원, RWO는 
 ## 2. 볼륨 vs 바인드 마운트 vs tmpfs
 
 Docker는 데이터를 유지하기 위한 세 가지 메커니즘을 제공합니다:
+
+### 이론: 세 마운트 타입과 그 리눅스 의미
+
+볼륨은 개념적으로 단순해 보입니다 — "컨테이너보다 오래 사는 데이터" — 하지만 구현에는 진짜 깊이가 있습니다. 각 스토리지 타입이 커널의 마운트 기계를 다르게 사용합니다.
+
+| 타입 | 실제로 무엇인가 | 데이터가 어디 사는가 | `docker rm` 견디나? |
+|------|-----------------|---------------------|---------------------|
+| **bind mount** | 호스트 경로의 `mount --bind`를 컨테이너 마운트 네임스페이스로 | 호스트에 지정한 어디든 | 예(Docker가 소유한 적 없음) |
+| **named volume** | `/var/lib/docker/volumes/<name>/_data` 아래 디렉터리, 안으로 bind mount | Docker 데이터 root 안 | 예(Docker 소유, 명시적 `docker volume rm`로 삭제) |
+| **tmpfs mount** | 메모리 내 파일시스템의 `mount -t tmpfs` | RAM, 디스크에 안 감 | 아니오(컨테이너 종료 순간 사라짐) |
+
+세 가지 모두 컨테이너의 마운트 네임스페이스에 항목으로 들어가고, 안에서는 요청한 마운트 지점에 일반 디렉터리로 보입니다. 커널은 런타임에 그것들을 구별하지 않습니다 — 그저 마운트일 뿐. 차이는 *기저 스토리지를 누가 관리*하는가 — 당신(bind), Docker(volume), 커널 페이지 캐시(tmpfs).
+
+중요한 의미 차이 —
+
+- **bind mount는 호스트 파일시스템 의미를 정확히 상속.** 호스트 파일시스템이 ext4면 ext4 의미, Docker Desktop의 macOS bind-mount-over-VirtioFS면 그 shim의 모든 특이성(느린 stat, 깨진 파일 락, 가끔 inotify 이상)을 가진 얇은 shim. 이게 macOS bind mount의 Postgres가 버그 공장인 이유.
+- **named volume은 항상 Docker 호스트 네이티브 파일시스템에 산다.** Docker Desktop에서도 named volume은 macOS 호스트가 아닌 리눅스 VM 안에 있음. 성능과 POSIX 정확성이 진짜 리눅스 파일시스템과 매칭. 이게 named volume이 데이터베이스용 기본 권장인 이유.
+- **tmpfs는 빠르고 휘발성.** 읽기/쓰기가 RAM에 닿음, 지연시간 마이크로초, 상한은 `--tmpfs size=`와 호스트 RAM 중 작은 값. `/tmp`, 스크래치 공간, 디스크에 닿으면 안 되는 시크릿 자료에 유용.
+
+Kubernetes가 이 삼분법을 `hostPath`(= bind), `emptyDir`(= tmpfs 또는 Pod별 임시 디스크), `PersistentVolume`(= named volume이지만 네트워크/클라우드 백엔드에 플러그 가능)으로 미러링.
 
 ### 비교 표
 
@@ -346,6 +261,51 @@ docker volume ls --filter label=project=myapp
 ---
 
 ## 4. 볼륨 드라이버와 플러그인
+
+### 이론: 볼륨 드라이버 — 로컬, 네트워크, 클라우드
+
+Docker 볼륨은 *드라이버*로 생성됩니다. 기본 드라이버는 `local` — `/var/lib/docker/volumes/...` 아래 디렉터리. 드라이버 인터페이스는 플러그인 가능 — `docker volume create --driver <name>`이 등록된 플러그인을 호출해 스토리지 프로비저닝.
+
+흔한 드라이버와 substrate —
+
+| 드라이버 | 백엔드 | 일반 용도 |
+|----------|--------|-----------|
+| `local` | Docker root 아래 로컬 파일시스템 | 기본, 단일 호스트 상태 있는 앱 |
+| `nfs`(옵션과 함께 `local`에 내장 또는 플러그인으로) | NFS 서버 | 다중 호스트 공유 파일시스템, 고전 엔터프라이즈 NAS |
+| `cifs` / `smb` | SMB 공유 | Windows 파일 공유 |
+| `rexray`, `convoy`, `flocker`(옛날) | 클라우드 블록 스토리지(EBS, GCE PD) 또는 Ceph 같은 스토리지 백엔드 | detach/reattach가 있는 다중 호스트 오케스트레이션 |
+| 클라우드 네이티브 CSI 드라이버 | EBS, EFS, Azure Disk, GCE PD, Cinder, ... | Kubernetes 관리 클라우드 스토리지 |
+
+플러그인 계약은 작음 — `Create`, `Remove`, `Mount`, `Unmount`, `Path`, `Get`, `List`, `Capabilities` — 데몬이 통신하는 Unix 소켓으로 구현. 이래서 Docker가 한 CLI로 수십 스토리지 백엔드와 통신 가능.
+
+local 드라이버의 `nfs` 모드를 알아둘 가치 — `docker volume create --driver local --opt type=nfs --opt o=addr=10.0.0.5,rw --opt device=:/exports/data myvol`이 실제로는 NFS 마운트인 "볼륨"을 생성. 컨테이너가 일반 디렉터리를 보고, 커널이 읽기/쓰기를 NFS 서버로 라우팅.
+
+### 이론: Kubernetes PV / PVC / StorageClass — 같은 아이디어, 분리된
+
+Kubernetes는 클러스터 관리자와 애플리케이션 개발자 사이의 관심사를 분리하기 위해 스토리지를 세 리소스로 나눔.
+
+- **PersistentVolume(PV)** — 존재하는 실제 스토리지 한 조각. 특정 EBS 볼륨, NFS export, Ceph 이미지. 클러스터 스코프.
+- **PersistentVolumeClaim(PVC)** — 요구되는 속성(크기, 접근 모드, 스토리지 클래스)이 있는 스토리지 요청. 네임스페이스 스코프, 앱 개발자가 작성.
+- **StorageClass** — *동적 프로비저닝* 템플릿. PVC가 `fast-ssd` 스토리지 클래스를 요청하면 Kubernetes가 그 클래스에 등록된 스토리지 프로비저너를 호출해 적합한 PV를 필요할 때 생성.
+
+매칭 알고리즘 —
+
+1. PVC가 `requests: storage: 10Gi`와 `storageClassName: fast-ssd`로 생성됨.
+2. PV 컨트롤러가 매칭되는 미사용 PV를 찾음.
+3. 있으면 PVC를 PV에 바인딩.
+4. 없으면 StorageClass `fast-ssd` 조회, 그 프로비저너(예: `ebs.csi.aws.com`) 찾아 호출해 10Gi EBS 볼륨 생성, 대응하는 PV 등록, 그 다음 바인딩.
+5. PVC를 참조하는 Pod이 kubelet이 CSI 드라이버의 `NodeStageVolume`과 `NodePublishVolume` 훅을 호출해 볼륨 마운트.
+
+`accessModes`가 PVC가 사용될 수 있는 방식을 제약 —
+
+- `ReadWriteOnce`(RWO) — 단일 노드 읽기/쓰기. 대부분의 클라우드 블록 스토리지. 단일 노드 Pod 배치 강제.
+- `ReadOnlyMany`(ROX) — 다중 노드 읽기 전용.
+- `ReadWriteMany`(RWX) — 다중 노드 읽기/쓰기. NFS, EFS, CephFS 등 필요.
+- `ReadWriteOncePod`(RWOP, 더 새로움) — 단일 Pod(단일 노드뿐 아니라).
+
+**Reclaim policy**가 PVC 삭제 시 무엇이 일어날지 결정 — `Retain`(PV가 데이터 유지, 관리자가 정리해야 함), `Delete`(프로비저너가 PV와 그 기저 스토리지 삭제), `Recycle`(폐기됨).
+
+CSI(Container Storage Interface)가 표준 플러그인 API. 모든 클라우드/스토리지 벤더가 CSI 드라이버 배포, K8s가 같은 인터페이스로 모두와 통신, 스냅샷/클론/온라인 리사이즈는 드라이버가 지원할 수도 안 할 수도 있는 CSI 기능.
 
 ### 로컬 드라이버 옵션(Local Driver Options)
 
@@ -593,6 +553,16 @@ docker cp my_mongo:/tmp/backup.archive ./backup.archive
 
 ## 7. 컨테이너 간 볼륨 공유
 
+### 이론: 볼륨 공유와 동시성
+
+여러 컨테이너에 마운트된 볼륨은 *공유 파일시스템*입니다. 진짜 공유 FS와 같은 락킹과 동시성 규칙 적용 —
+
+- **조정 없는 두 작성자 → 데이터 손상.** Docker가 해결할 문제가 아님, POSIX임. `/data`를 `app-1`과 `app-2` 둘 다에 마운트하고 둘 다 락킹이나 분할 없이 같은 파일에 쓰면 손상 예상.
+- **Reader/writer 패턴.** 한 컨테이너가 쓰고 다른 것들이 읽음. 로그 집계, 생성된 자산, 설정 배포에 흔함. 잘 동작.
+- **큐가 있는 producer/consumer.** 공유 파일시스템 대신 진짜 큐(Redis, RabbitMQ) 사용. 파일시스템은 나쁜 메시지 큐.
+
+Kubernetes에서 RWX 볼륨이 자연스럽게 다중 Pod 공유를 지원. RWO는 안 함(스케줄러가 다른 노드에 두 번째 Pod 배치 거부). 이게 `replicas: 3`과 RWO PVC가 있는 Deployment의 세 Pod 모두가 Pending에 갇히는 가장 흔한 이유 — 하나만 마운트 가능.
+
 ### 공유 볼륨 패턴(Shared Volume Pattern)
 
 여러 컨테이너가 데이터 교환을 위해 동일한 볼륨을 마운트할 수 있습니다:
@@ -671,6 +641,16 @@ volumes:
 ---
 
 ## 8. 데이터베이스 스토리지 모범 사례
+
+### 이론: 파일시스템 의미와 그것이 무는 이유
+
+대부분의 애플리케이션은 자기 파일시스템이 진짜 ext4나 xfs처럼 동작하리라 가정합니다. 마운트된 스토리지가 일치하지 않으면 미묘한 방식으로 깨집니다.
+
+- **락킹.** SQLite, Postgres, MySQL이 모두 `flock` / `fcntl` advisory 락킹에 의존. NFS v3는 `lockd` 없이 정확히 구현하지 않음, SMB는 자체 락킹 모델, Docker Desktop의 macOS bind mount가 리눅스 VM의 VirtioFS 계층을 통해 락을 엣지 케이스와 함께 포워딩. "데이터베이스가 신비롭게 손상됨" 증상이 종종 기저 마운트의 깨진 락킹으로 추적됨.
+- **`fsync` 내구성.** 데이터베이스가 쓰기가 안정적 스토리지에 닿도록 `fsync` 호출. tmpfs는 실제 내구성 없이 즉시 반환(데이터가 RAM에). 일부 네트워크 파일시스템이 빠르게 보이려고 fsync에 대해 거짓말. tmpfs에 데이터베이스 두면 빠르고 크래시 후 쓸모없음.
+- **Atomic rename.** 많은 애플리케이션이 `file.tmp`에 쓰고 `rename(file.tmp, file)`으로 원자적 교체. POSIX는 파일시스템 안에서 이를 보장하지만, 마운트 포인트 가로질러서는 *보장하지 않음*(rename이 EXDEV 실패). 컨테이너 트리 깊숙이 bind mount할 때 주의.
+- **inotify.** 파일 감시 도구(개발 핫 리로드, 로그 tailer)가 변경 알림 받기 위해 `inotify` 사용. NFS, FUSE, 일부 bind mount 계층이 inotify 이벤트를 정확히 전파하지 않음. 증상 — 개발 컨테이너가 저장을 알아채지 못함.
+- **권한.** bind mount된 호스트 디렉터리는 호스트 UID를 가짐. 컨테이너 프로세스가 다른 UID로 실행하면 못 씀. 해결책 — 호스트 디렉터리를 모든 사용자 쓰기 가능으로(나쁨), 컨테이너 UID로 `chown`(더 나음), 볼륨 사용(최선 — Docker가 권한 관리).
 
 ### PostgreSQL
 

@@ -16,7 +16,6 @@
 
 ## 목차
 
-패턴 레퍼런스 전에 [**이론과 원리**](#이론과-원리) 섹션을 읽으세요. 모든 캐시 적중 결정을 좌우하는 레이어 캐시 키 알고리즘, 스테이지를 병렬화하고 사용되지 않는 출력을 스킵하는 BuildKit의 DAG 실행, 그리고 한 빌드를 매니페스트 리스트로 바꾸는 멀티 플랫폼 팬아웃을 다룹니다.
 
 1. [멀티 스테이지 빌드 기초](#1-멀티-스테이지-빌드-기초)
 2. [컴파일 언어를 위한 빌더 패턴](#2-컴파일-언어를-위한-빌더-패턴)
@@ -37,49 +36,47 @@
 
 ---
 
-## 이론과 원리
+## 1. 멀티 스테이지 빌드 기초
 
-멀티 스테이지 빌드와 BuildKit은 같은 질문에 대한 두 답변입니다 — "Dockerfile이 주어졌을 때, 옳은 아티팩트를 만드는 최소 작업량은 얼마인가?" "옳은 아티팩트" 부분은 작고 안전하며 멀티 아키텍처 가능한 이미지를 의미. "최소 작업" 부분은 스테이지와 명령의 그래프 위에서 도는 레이어 캐시 알고리즘이며, 가능한 것을 병렬화. 캐시 키(언제 레이어가 재사용되는가?), DAG 모델(무엇이 병렬로 도는가?), 멀티 플랫폼 팬아웃(어떻게 한 빌드가 arm64 + amd64를 만드는가?)을 이해하면 "왜 빌드가 느리고 / 뚱뚱하고 / 잘못된 아키텍처인가?" 질문에 명료한 답이 생깁니다.
+### 이론: 레이어 캐시 키 알고리즘 — 상세히
 
-### A. 레이어 캐시 키 알고리즘 — 상세
-
-Dockerfile은 명령의 시퀀스이며, 각각이 레이어를 만듭니다. 각 명령마다 BuildKit(과 레거시 빌더)이 **캐시 키**를 계산하고 로컬 스토어와 구성된 원격 캐시에서 그 키의 기존 레이어를 찾습니다.
+Dockerfile은 명령의 시퀀스로, 각각 레이어를 만듭니다. 각 명령에 대해 BuildKit(과 레거시 빌더)이 **캐시 키**를 계산하고 로컬 스토어와 구성된 원격 캐시에서 그 키를 가진 기존 레이어를 찾습니다.
 
 캐시 키는 다음의 해시 —
 
 | 명령 | 해시 입력 |
 |------|-----------|
-| `FROM image` | 해결된 이미지의 전체 다이제스트(`@sha256:...`). `node:20` 같은 태그는 먼저 다이제스트로 해결됨. |
-| `RUN command` | 명령 텍스트(축자) + 부모 레이어 다이제스트 + 관련 빌드 인자. |
-| `COPY src dst` | `.dockerignore` 필터 후 `src`의 모든 파일 내용 해시 + 대상 경로 + 부모 다이제스트. |
-| `ARG name` | 인자 이름(값은 `RUN`이 인자를 참조할 때만 중요). |
-| 메타데이터 전용(`ENV`, `LABEL`, `EXPOSE`, `WORKDIR`) | 명령 텍스트 + 부모 다이제스트. |
+| `FROM image` | 해결된 이미지의 전체 다이제스트(`@sha256:...`). `node:20` 같은 태그가 먼저 다이제스트로 해결됨. |
+| `RUN command` | 명령 텍스트(verbatim) + 부모 레이어 다이제스트 + 관련 빌드 args. |
+| `COPY src dst` | `.dockerignore` 필터링 후 `src`의 모든 파일 콘텐츠 해시 + 목적 경로 + 부모 다이제스트. |
+| `ARG name` | arg 이름(값은 `RUN`이 arg를 참조할 때만 중요). |
+| 메타데이터만(`ENV`, `LABEL`, `EXPOSE`, `WORKDIR`) | 명령 텍스트 + 부모 다이제스트. |
 
 핵심 두 결과 —
 
-1. **첫 미스에서 사슬이 깨진다.** 명령 N이 바뀌면(또는 입력이 바뀌면), N+1, N+2, ...도 모두 미스 — 각자 키에 이전 레이어 다이제스트를 담고 있으므로. "안정적 명령을 먼저"가 Dockerfile 최적화의 철칙인 이유.
-2. **`COPY`는 이름이 아니라 내용으로 해시.** `.gitignore` 편집은 `COPY package.json /app/`을 무효화 안 함. `package.json` 편집은 무효화. "의존성 매니페스트 복사"와 "소스 코드 복사"를 분리하는 것이 소스만 바뀔 때 의존성 설치 레이어를 캐시 유지하는 표준 방법.
+1. **첫 미스에서 사슬이 깨짐.** 명령 N이 바뀌면(또는 그 입력이 바뀌면) 명령 N+1, N+2, ...도 모두 미스. 각각이 키에 이전 레이어 다이제스트를 담기 때문. 이게 "안정적 명령을 먼저"가 Dockerfile 최적화의 철칙인 이유.
+2. **`COPY`는 콘텐츠 해시, 이름 해시 아님.** `.gitignore` 편집은 `COPY package.json /app/`을 무효화하지 않음. `package.json` 편집은 함. "의존성 매니페스트 복사"와 "소스 코드 복사"를 분리하는 게 소스만 바뀔 때 의존성 설치 레이어를 캐시 유지하는 표준 방법.
 
-`COPY` 분리는 명시적 예제를 받을 만큼 중요 —
+`COPY` 분할이 너무 중요해서 명시적 예시가 필요 —
 
 ```dockerfile
-# 나쁨: 어떤 소스 변경도 npm install을 깸
+# 나쁨 — 어떤 소스 변경도 npm install을 깸
 COPY . /app
 RUN npm ci
 
-# 좋음: package.json/package-lock.json 변경만 npm install을 깸
+# 좋음 — package.json/package-lock.json 변경만 npm install을 깸
 COPY package.json package-lock.json /app/
 RUN npm ci
 COPY . /app
 ```
 
-전자는 매 커밋마다 `node_modules`를 재빌드(느림). 후자는 의존성이 실제로 바뀔 때만 재빌드.
+첫 형식은 매 커밋마다 `node_modules`를 재빌드(느림). 두 번째 형식은 의존성이 실제로 바뀔 때만 재빌드.
 
-### B. BuildKit의 DAG 실행
+### 이론: BuildKit의 DAG 실행
 
-레거시 빌더는 명령을 순차적으로 — 명령 N이 N+1 시작 전에 완료되어야 함, 서로 의존하지 않더라도. **BuildKit**(Docker 23.0부터 기본)은 Dockerfile을 **방향 비순환 그래프(DAG)**로 파싱 — 각 명령이 노드, 간선이 데이터 의존성. 독립 노드가 동시 실행.
+레거시 빌더는 명령을 순차로 실행 — 명령 N+1이 시작되기 전에 명령 N이 완료되어야 함, 서로 의존하지 않아도. **BuildKit**(Docker 23.0부터 기본)이 Dockerfile을 **방향 비순환 그래프(DAG)**로 파싱 — 각 명령이 노드, 간선이 데이터 의존성 표현. 독립 노드가 동시에 실행.
 
-단일 스테이지 Dockerfile에는 거의 안 중요. 멀티 스테이지에는 매우 중요 —
+단일 스테이지 Dockerfile에는 거의 무관. 멀티 스테이지 Dockerfile에는 매우 중요 —
 
 ```dockerfile
 FROM node:20 AS frontend
@@ -102,82 +99,9 @@ COPY --from=backend /src/server /app/server
 ENTRYPOINT ["/app/server"]
 ```
 
-레거시 빌더는 `frontend` 완료 → `backend` 완료 → `final` 조립 — 순차. BuildKit은 `frontend`와 `backend` 사이에 간선이 없음을 보고 동시 실행. 멀티 코어 머신에서 벽시계 시간이 대략 절반.
+레거시 빌더가 `frontend`를 완료까지 돌리고, 그 다음 `backend`, 그 다음 `final` 조립 — 순차. BuildKit은 `frontend`와 `backend` 사이에 간선이 없음을 보고 둘을 동시에 돌립니다. 멀티코어 머신에서 wall time이 대략 절반.
 
-BuildKit은 **사용되지 않는 스테이지도 스킵**. `final`을 타깃하면 BuildKit이 `final`에서 거꾸로 걸어 `frontend`와 `backend`에 의존함을 찾고 그것들만 실행. final이 의존하지 않는 "test" 스테이지는 `docker build --target test .` 안 하면 빌드 안 됨.
-
-### C. BuildKit 마운트: cache, bind, secret
-
-BuildKit의 `RUN` 명령은 **마운트**에 옵트인할 수 있음 — 결과 레이어를 바꾸지 않고 명령이 보는 것을 바꿈.
-
-- **`--mount=type=cache,target=/root/.cache/pip`** — 빌드 *사이에 영속*하지만 결과 레이어에는 *들어가지 않는* 쓰기 가능 캐시 디렉터리. 다음 `pip install`이 이전에 다운로드한 wheel을 찾음. 결과 이미지는 여전히 그것들을 포함하지 않음. `~/.npm`, `~/.cargo/registry`, `/var/cache/apt`에 같은 아이디어. 반복 빌드의 가장 큰 단일 속도 향상.
-- **`--mount=type=bind,source=.,target=/src`** — 빌드 컨텍스트(또는 이전 스테이지)를 명령에 읽기 전용 bind. 레이어에 굽지 않음. 빌드 단계가 많은 소스를 *읽어야* 하지만 모두를 담은 레이어를 만들어선 안 될 때 유용.
-- **`--mount=type=secret,id=mytoken`** — `RUN` 동안 `/run/secrets/mytoken`에 파일이 나타남. 빌드 시 `--secret id=mytoken,src=./token.txt`에서 소스. 레이어에 결코 쓰이지 않음. npm 토큰, 사설 레지스트리 자격 증명 등에 안전.
-- **`--mount=type=ssh`** — 호스트의 SSH 에이전트를 `RUN`으로 포워드. SSH 키를 굽지 않고도 사설 레포에 `git clone git@github.com:...` 가능.
-
-이 마운트들이 "현대" Dockerfile이 "고전" Dockerfile과 다르게 보이는 가장 큰 이유. 잘 쓰면 빌드 시간이 무너지고 시크릿이 레이어에 들어가는 일이 없어짐.
-
-### D. 멀티 플랫폼 빌드: 한 빌드, 여러 아키텍처
-
-단일 `docker build`는 한 아키텍처(호스트)용 한 이미지를 만듦. AMD64 서버와 ARM64(애플 실리콘, AWS Graviton) 둘 다 돌아야 하는 이미지엔 두 빌드와 둘을 가리키는 매니페스트 리스트가 필요.
-
-`docker buildx`가 자동화 —
-
-```bash
-docker buildx build --platform linux/amd64,linux/arm64 \
-  -t myregistry/myapp:1.0 --push .
-```
-
-벌어지는 일 —
-
-1. BuildKit이 팬아웃 — 요청한 플랫폼당 한 빌드.
-2. 각 플랫폼 빌드가 대상 아키텍처를 (QEMU로) 에뮬레이트하거나 네이티브 빌더를 쓰는 격리된 환경에서 실행. amd64 호스트에서 arm64 빌드는 보통 QEMU 사용자 공간 에뮬레이션(느리지만 동작) 또는 원격 arm64 빌더(빠름) 사용.
-3. 각 빌드가 자체 매니페스트와 레이어를 가진 플랫폼별 이미지 생성.
-4. 모든 빌드 성공 후 buildx가 **매니페스트 리스트**(OCI 이미지 인덱스)를 레지스트리에 푸시. 리스트가 각 플랫폼별 매니페스트를 다이제스트로 가리킴.
-5. 사용자가 `docker pull myregistry/myapp:1.0` 시 클라이언트가 호스트 플랫폼에 매칭되는 매니페스트를 리스트에서 자동 선택.
-
-`docker buildx ls`가 빌더를 보여 줌. 기본 `docker-container` 드라이버는 BuildKit을 컨테이너에서 돌림. 네이티브 arm64 빌드를 위한 원격 빌더 구성도 가능.
-
-### E. 스테이지 타깃과 조건부 빌드
-
-`docker build --target <stage>`가 명명된 스테이지까지만 빌드하고 멈춤. 사용처 —
-
-- **테스트 스테이지.** `pytest`/`go test`/`npm test`를 돌리는 `test` 스테이지 정의. CI가 `docker build --target test .`로 테스트 실패 시 파이프라인 실패. 프로덕션 이미지는 `prod` 타깃, test 스테이지는 절대 빌드 안 함.
-- **린트 스테이지.** `eslint`, `golangci-lint` 등에 같은 아이디어.
-- **디버그 이미지.** `debug` 스테이지가 프로덕션 스테이지 위에 도구(`bash`, `curl`, `tcpdump`) 추가. 명시적으로 타깃할 때만 빌드.
-
-`ARG`와 조건 로직 결합으로 단일 Dockerfile이 `--target`과 `--build-arg` 변경으로 dev, test, prod, debug 이미지 생산 가능. 캐시는 그들 사이에 공유 — 공통 스테이지는 한 번 빌드, 갈라지는 스테이지만 필요한 만큼 빌드.
-
-### F. 이미지 베이스 재고: 다른 베이스가 얼마나 "작은가"
-
-런타임 스테이지의 베이스 이미지가 이미지 크기 하한과 공격 표면을 결정 —
-
-| 베이스 | 대략 크기 | 사용 가능 도구 | 적합 |
-|--------|------------|-----------------|------|
-| `ubuntu:22.04` | ~80 MB | 데비안 파생 전체 사용자 공간 | 개발, 디버깅, bash + apt가 정말 필요한 드문 케이스 |
-| `debian:bookworm-slim` | ~30 MB | 최소 데비안 | 일반 목적 |
-| `alpine:3.19` | ~7 MB | musl libc, busybox, apk | 언어 툴체인이 musl과 동작할 때(Go는 됨, Python은 가끔 안 됨) |
-| `gcr.io/distroless/python3` | ~50 MB | Python + glibc만 | 프로덕션 Python — 셸 없음, apt 없음, curl 없음 |
-| `gcr.io/distroless/static` | ~2 MB | glibc 없는 정적 바이너리만 | 프로덕션 Go / Rust / Zig 바이너리 |
-| `scratch` | 0 MB | 아무것도 없음 | 필요한 모든 것을 들고 오는 정적 바이너리 |
-
-distroless와 scratch가 매력적 끝점 — 프로덕션 이미지가 한 자릿수 MB로 측정, 익스플로잇할 셸 없음, 백도어 설치할 패키지 매니저 없음. 트레이드오프는 디버깅 — 셸이 없으니 `kubectl exec -it ... sh`이 안 됨. 현대 Kubernetes는 같은 Pod 네임스페이스에 디버그 이미지를 부착하는 **임시 디버그 컨테이너**(`kubectl debug`)를 추가해 격차를 메움.
-
-### 이론에서 아래의 패턴으로
-
-- **빌더 패턴**(§A, §B, §C) — 첫 스테이지가 컴파일, 마지막 스테이지가 실행. `COPY --from=builder /app/binary /`가 이음매.
-- **`COPY` 순서 정렬** — 매니페스트 후 코드(§A)가 의존성 레이어를 캐시 유지.
-- **`RUN --mount=type=cache,...`**(§C) — 레이어를 부풀리지 않고 빌드 사이 의존성 가져오기 캐시 유지.
-- **`RUN --mount=type=secret,...`**(§C) — 레이어에 남기지 않고 빌드 시 자격 증명.
-- **멀티 타깃 Dockerfile**(§E) — 한 파일, dev/test/prod/debug용 여러 `--target` 값.
-- **`docker buildx --platform linux/amd64,linux/arm64`**(§D) — 한 명령, 매니페스트 리스트 출력.
-- **distroless / scratch 최종 스테이지**(§F) — 최소 런타임 크기와 공격 표면.
-
-남은 본문은 이 패턴들을 둘러봅니다. 빌드가 느릴 때마다 `--progress=plain`으로 프로파일링하고 어떤 명령이 캐시 미스인지 확인하세요 — 답은 거의 항상 통증을 알아챈 곳보다 상류입니다.
-
----
-
-## 1. 멀티 스테이지 빌드 기초
+BuildKit은 또 **사용 안 하는 스테이지를 스킵**. `final`을 타깃하면 BuildKit이 `final`에서 거꾸로 걸어 `frontend`와 `backend`에 의존함을 발견하고 그것들만 돌림. final이 의존하지 않는 "test" 스테이지는 `docker build --target test .`을 명시하지 않으면 빌드되지 않음.
 
 ### 문제점: 비대한 이미지(Fat Images)
 
@@ -398,6 +322,17 @@ build
 
 ## 4. BuildKit 캐시 전략
 
+### 이론: BuildKit 마운트 — Cache, Bind, Secret
+
+BuildKit의 `RUN` 명령은 명령이 보는 것을 바꾸되 그것이 만드는 레이어는 바꾸지 않는 **마운트**를 옵트인할 수 있습니다.
+
+- **`--mount=type=cache,target=/root/.cache/pip`** — *빌드 사이에 영속하지만* 결과 레이어에 *남지 않는* 쓰기 가능 캐시 디렉터리. 다음 `pip install`이 이전 다운로드한 wheel을 찾음. 결과 이미지는 여전히 그것들을 포함하지 않음. `~/.npm`, `~/.cargo/registry`, `/var/cache/apt`도 같은 아이디어. 반복 빌드의 가장 큰 속도 향상.
+- **`--mount=type=bind,source=.,target=/src`** — 빌드 컨텍스트(또는 이전 스테이지)의 읽기 전용 bind를 명령에, 레이어에 굽지 않고. 빌드 단계가 많은 양의 소스를 *읽어야* 하지만 그 모든 것이 있는 레이어를 만들지 말아야 할 때 유용.
+- **`--mount=type=secret,id=mytoken`** — `RUN` 동안 `/run/secrets/mytoken`에 파일이 나타남, 빌드 시 `--secret id=mytoken,src=./token.txt`에서 소스. 레이어에 절대 쓰이지 않음, npm 토큰, 사설 레지스트리 자격 증명 등에 안전.
+- **`--mount=type=ssh`** — 호스트 SSH 에이전트를 `RUN`으로 포워딩. SSH 키를 굽지 않고 `git clone git@github.com:...`이 사설 레포에 동작.
+
+이 마운트가 "현대" Dockerfile이 "고전" Dockerfile과 다르게 보이는 가장 큰 이유. 잘 쓰면 빌드 시간이 무너지고 시크릿이 레이어에 남지 않음.
+
 ### 종속성 캐시 마운트(Dependency Cache Mounts)
 
 캐시 마운트는 빌드 간에 패키지 관리자 캐시를 유지하여 재빌드 속도를 크게 향상시킵니다:
@@ -460,6 +395,27 @@ docker build --secret id=pip_conf,src=./pip.conf .
 ---
 
 ## 5. BuildKit 기능 및 향상
+
+### 이론: 멀티 플랫폼 빌드 — 한 빌드, 여러 아키텍처
+
+단일 `docker build`는 한 아키텍처(호스트의)용 한 이미지를 만듭니다. AMD64 서버와 ARM64(Apple Silicon, AWS Graviton) 모두에서 돌아야 하는 이미지에는 두 빌드와 둘을 가리키는 매니페스트 리스트가 필요.
+
+`docker buildx`가 자동화 —
+
+```bash
+docker buildx build --platform linux/amd64,linux/arm64 \
+  -t myregistry/myapp:1.0 --push .
+```
+
+일어나는 일 —
+
+1. BuildKit 팬아웃 — 요청된 플랫폼당 한 빌드.
+2. 각 플랫폼 빌드가 타깃 아키텍처를 (QEMU로) 에뮬레이트하거나 네이티브 빌더를 사용하는 격리 환경에서 실행. amd64 호스트에서 arm64 빌드는 보통 QEMU 유저 공간 에뮬레이션(느리지만 동작)이나 원격 arm64 빌더(빠름) 사용.
+3. 각 빌드가 자기 매니페스트와 레이어를 가진 플랫폼별 이미지 생성.
+4. 모든 빌드 성공 후 buildx가 레지스트리에 **매니페스트 리스트**(OCI image index)를 푸시. 리스트가 다이제스트로 각 플랫폼별 매니페스트를 가리킴.
+5. 사용자가 `docker pull myregistry/myapp:1.0` 시 클라이언트가 호스트 플랫폼에 매칭되는 매니페스트를 리스트에서 자동 선택.
+
+`docker buildx ls`가 빌더를 보여 줌. 기본 `docker-container` 드라이버는 BuildKit을 컨테이너에서 실행. 네이티브 arm64 빌드용 원격 빌더도 구성 가능.
 
 ### BuildKit 활성화
 
@@ -534,6 +490,21 @@ docker buildx build --output type=local,dest=./output .
 
 ## 6. Distroless 및 Scratch 이미지
 
+### 이론: 이미지 베이스 재방문 — 다양한 베이스가 얼마나 "작은가"
+
+런타임 스테이지의 베이스 이미지가 이미지 크기 바닥과 공격 표면을 결정.
+
+| 베이스 | 대략 크기 | 사용 가능 도구 | 적합 |
+|--------|-----------|----------------|------|
+| `ubuntu:22.04` | ~80 MB | 전체 Debian 파생 유저 공간 | 개발, 디버깅, bash + apt가 진짜 필요한 드문 케이스 |
+| `debian:bookworm-slim` | ~30 MB | 최소 Debian | 일반 목적 |
+| `alpine:3.19` | ~7 MB | musl libc, busybox, apk | 언어 툴체인이 musl과 동작할 때(Go는 동작, Python은 가끔 안 됨) |
+| `gcr.io/distroless/python3` | ~50 MB | Python + glibc만 | 프로덕션 Python — 셸 없음, apt 없음, curl 없음 |
+| `gcr.io/distroless/static` | ~2 MB | glibc-free 정적 바이너리만 | 프로덕션 Go / Rust / Zig 바이너리 |
+| `scratch` | 0 MB | 아무것도 없음 | 필요한 모든 것을 가져오는 정적 바이너리 |
+
+Distroless와 scratch가 매혹적인 끝점 — 한 자리수 MB로 측정되는 프로덕션 이미지, 익스플로잇할 셸 없음, 백도어 설치할 패키지 매니저 없음. 트레이드오프는 디버깅 — `kubectl exec -it ... sh`이 셸이 없어서 동작 안 함. 현대 Kubernetes가 같은 Pod의 네임스페이스에 디버그 이미지를 부착하는 **임시 디버그 컨테이너**(`kubectl debug`)를 추가해 격차를 메움.
+
 ### scratch
 
 `scratch`는 특별한 빈 이미지입니다 -- 절대적으로 최소한의 베이스:
@@ -603,6 +574,16 @@ ENTRYPOINT ["/server"]
 ---
 
 ## 7. 빌드 인수와 타겟 스테이지
+
+### 이론: 스테이지 타겟팅과 조건부 빌드
+
+`docker build --target <stage>`이 명명된 스테이지까지만 빌드하고 멈춤. 사용 사례 —
+
+- **Test 스테이지.** `pytest`/`go test`/`npm test`를 돌리는 `test` 스테이지 정의. CI가 `docker build --target test .`로 테스트 실패 시 파이프라인 실패. 프로덕션 이미지는 `prod` 타깃, 테스트 스테이지는 절대 빌드 안 함.
+- **Lint 스테이지.** `eslint`, `golangci-lint` 등에 같은 아이디어.
+- **Debug 이미지.** 프로덕션 스테이지 위에 도구(`bash`, `curl`, `tcpdump`)를 추가하는 `debug` 스테이지. 명시적으로 타깃될 때만 빌드.
+
+`ARG`와 조건부 로직과 결합하면 단일 Dockerfile이 `--target`과 `--build-arg`를 다양화해 dev/test/prod/debug 이미지를 만들 수 있음. 캐시가 그것들 사이에 공유 — 공통 스테이지는 한 번 빌드, 분기 스테이지는 필요할 때만 빌드.
 
 ### 빌드 인수(Build Arguments)
 

@@ -16,7 +16,6 @@ After completing this lesson, you will be able to:
 
 ## Table of Contents
 
-Before the Podman / Buildah / Skopeo reference, read [**Theory & Principles**](#theory--principles) — the OCI image / runtime / distribution specifications, Podman's daemonless fork-exec model and how it changes the security posture, and the role of conmon as the per-container monitor process.
 
 1. [OCI Standards](#1-oci-standards)
 2. [Podman Architecture](#2-podman-architecture)
@@ -37,13 +36,11 @@ Docker popularized containers, but the ecosystem has evolved beyond any single t
 
 ---
 
-## Theory & Principles
+## 1. OCI Standards
 
-Podman is best understood not as "Docker without the daemon" but as a different point on the same design space. Both build on the OCI standards; both call runc (or crun) underneath. The interesting differences — daemonless architecture, rootless by default, Pod abstraction copied from Kubernetes, conmon monitor process, native systemd integration — are all consequences of one design choice: *do not run containers under a long-lived privileged daemon.* Once you understand the OCI specs that make this swap possible and the fork-exec model that replaces the daemon, the rest of Podman's ecosystem (Buildah, Skopeo, Podman Compose) follows from the same principles.
+### Theory: The Three OCI Specifications
 
-### A. The Three OCI Specifications
-
-The Open Container Initiative formed in 2015 to standardize what "a container" is. The standards split the problem into three pieces; together they let any compliant tool produce, distribute, and run images that any other compliant tool can consume.
+Podman is best understood not as "Docker without the daemon" but as a different point on the same design space. Both build on the OCI standards; both call runc (or crun) underneath. The Open Container Initiative formed in 2015 to standardize what "a container" is. The standards split the problem into three pieces; together they let any compliant tool produce, distribute, and run images that any other compliant tool can consume.
 
 **OCI Image Specification (image-spec).** Defines what an image *is* on disk and over the wire:
 
@@ -68,105 +65,6 @@ The Open Container Initiative formed in 2015 to standardize what "a container" i
 - Authentication via the OAuth2 token dance described in the CI/CD lesson.
 
 This three-layer split is what lets Podman talk to Docker Hub, Buildah produce images Docker reads, Skopeo copy images between registries, and Kubernetes use any of them as the runtime. The standards are the universal solvent.
-
-### B. Daemonless: Fork-Exec vs Long-Lived Daemon
-
-Docker's architecture has a privileged daemon (`dockerd`) that owns every container. The CLI is just an HTTP client. Implications:
-
-- The daemon runs as root. Compromising the daemon = root on the host.
-- The daemon owns every container's PID 1. Restart the daemon = every container restarts (or, with live-restore, keeps running but is briefly orphaned).
-- Anyone in the `docker` group has effective root via the daemon socket.
-
-Podman's architecture has no daemon. `podman run` is a normal process that:
-
-1. Forks itself.
-2. The child sets up namespaces, cgroups, mounts using libcontainer-equivalent libraries directly.
-3. The child execs `runc` (or `crun`).
-4. `runc` execs the container's entrypoint.
-5. The original `podman` process exits, leaving the container as a child of `conmon` (see §C).
-
-There is no central server. No daemon to compromise. No daemon to restart. Each `podman` invocation is short-lived; it sets things up and gets out of the way.
-
-The trade-off: there is no central component to coordinate state. State is stored in per-user files (`~/.local/share/containers/`). Talking to "all my containers" means listing all the state files. Podman does provide a system service (`podman.service`) that can be socket-activated and emulates the Docker API, but it is optional and short-lived per request.
-
-### C. conmon: The Per-Container Monitor
-
-When `runc` execs a container's entrypoint, somebody has to:
-
-- Hold the container's stdout/stderr file descriptors and route them somewhere persistable.
-- Wait for the container's exit and record the exit code.
-- Keep the TTY pseudo-terminal alive if `-it` was requested.
-
-Docker's daemon does this for every container. Podman, having no daemon, spawns one **`conmon`** (container monitor) process per container before it execs `runc`. `conmon`:
-
-1. Sets up logging — pipes container stdout/stderr to a log file (default location depends on the log driver).
-2. Sets up TTY proxying if requested.
-3. Forks `runc` to start the container.
-4. After `runc` returns (the container is running), `conmon` waits.
-5. When the container exits, `conmon` writes the exit code to a state file and exits itself.
-
-`conmon` is small and stateless per container. There can be hundreds of them on a host, one per running container. They do not coordinate; each one knows only about its own container.
-
-The same architecture is used by CRI-O (the Kubernetes runtime), so `conmon` is mature and shared across the ecosystem.
-
-### D. Rootless by Default: User Namespaces in Action
-
-Podman runs as your unprivileged user. That requires solving two problems that traditionally needed root:
-
-1. **Creating user namespaces with multiple UIDs.** A normal unprivileged process can create a user namespace, but only with a single UID/GID mapping (its own). To run a container that has multiple users (e.g., uid 0 root + uid 1000 app), you need a *range* of UIDs to map. Podman uses **`/etc/subuid`** and **`/etc/subgid`** — files maintained by `useradd` that grant each user a range like `100000-165535` of "sub-UIDs" they can use in user namespaces. Podman maps the container's UID 0..65535 to the user's sub-UID range.
-2. **Networking without root.** Bridging veths and writing iptables rules require root. Rootless Podman uses **slirp4netns** — a userspace TCP/IP stack that runs in the same namespace as the container and forwards traffic via the user's existing network capabilities. No root required, but with some performance overhead and a few feature gaps (no inbound connections by default, ICMP requires capability).
-
-The result: `podman run -d nginx` from a regular user account spawns a container that, on the host, looks like a process owned by your user with `runc` and `conmon` for parents. Even if the container is exploited, the attacker is limited to your user's privileges plus whatever sub-UID range Podman mapped.
-
-### E. Buildah and Skopeo: Decomposing the Docker CLI
-
-Docker bundles too many things in one CLI: image building, container running, registry interaction, image inspection. The Podman ecosystem decomposes them:
-
-- **`podman`** — run containers, list containers, inspect containers. The runtime side.
-- **`buildah`** — build images. Unbundled because building doesn't actually need a runtime; it just needs to lay out filesystem layers and write a manifest. Buildah can use a Dockerfile (`buildah bud`) or a script-driven imperative API (`buildah from`, `buildah copy`, `buildah commit`) for cases where you need more control than Dockerfile allows.
-- **`skopeo`** — work with images on registries without involving a daemon or runtime. Copy images between registries (`skopeo copy docker://src docker://dst`), inspect a registry image without pulling it (`skopeo inspect docker://nginx:1.27`), sign and verify images.
-
-The decomposition pays off in CI/CD and air-gapped scenarios. CI doesn't need to run containers — it builds (Buildah) and pushes (Skopeo). An air-gapped environment uses Skopeo to copy from an internet-side mirror to an internal registry without ever booting the daemon-side image.
-
-All three tools share the same image library (`containers/image`) and storage library (`containers/storage`), so they see the same local layer cache and the same registry credentials.
-
-### F. Pods: The Kubernetes Abstraction Brought Home
-
-Podman literally takes its name from "Pod manager" — it imports Kubernetes' Pod concept into single-host container management. A Podman pod is a group of containers sharing namespaces (network, IPC, sometimes PID) and a lifecycle:
-
-```bash
-podman pod create --name webpod -p 8080:80
-podman run -d --pod webpod nginx
-podman run -d --pod webpod fluentd
-```
-
-Both containers share the pod's network namespace; nginx publishes port 80, the pod publishes 8080:80 to the host, fluentd shares localhost. This matches Kubernetes Pod semantics exactly.
-
-Even better, `podman generate kube` outputs a Kubernetes Pod manifest from a running Podman pod, and `podman play kube` accepts a Kubernetes manifest and runs it locally. You develop locally with Podman pods, generate the K8s YAML, and ship it to the cluster — no impedance mismatch.
-
-### G. Systemd Integration: Containers as System Services
-
-Podman generates systemd unit files via `podman generate systemd` (legacy) or **Quadlet** (`*.container`, `*.pod`, `*.kube` files in `~/.config/containers/systemd/`, the modern way). Systemd then manages the container lifecycle — auto-start on boot, restart on failure, ordered dependencies, journal log integration.
-
-This is what makes Podman a viable choice for "production single-host services" without Kubernetes. A Quadlet `nginx.container` file is to systemd what a Compose service is to the Compose engine, except systemd is already running on every Linux server. No extra orchestrator, no extra daemon, just systemd doing what it already does.
-
-Docker's equivalent is `docker run --restart=always`, which is less flexible (can't express "start after this other unit", can't fall back to journald-native logging, can't be controlled by `systemctl`).
-
-### From Theory to the Tools Below
-
-- **OCI image-spec / runtime-spec / distribution-spec** (§A) — the lingua franca that makes Podman + Docker + Buildah + Kubernetes interoperable.
-- **Podman daemonless model + `conmon`** (§B, §C) — `podman run` is fork-exec, no central daemon, one monitor process per container.
-- **`/etc/subuid`, `/etc/subgid`, `slirp4netns`** (§D) — the rootless plumbing.
-- **`buildah bud` / `buildah from` / `buildah commit`** (§E) — daemonless image building, optionally without a Dockerfile.
-- **`skopeo copy` / `skopeo inspect`** (§E) — registry-to-registry image work without a runtime.
-- **`podman pod create`, `podman play kube`, `podman generate kube`** (§F) — Pod abstraction shared with Kubernetes.
-- **Quadlet `*.container` files + `systemctl --user`** (§G) — containers as systemd services.
-
-The remaining sections walk these tools. Whenever you wonder why Podman behaves differently from Docker in some edge case, the answer is usually rooted in one of these design choices: no daemon, rootless by default, OCI standards as the contract.
-
----
-
-## 1. OCI Standards
 
 ### What Is OCI?
 
@@ -234,6 +132,53 @@ podman push myapp docker.io/myuser/myapp:latest
 ---
 
 ## 2. Podman Architecture
+
+### Theory: Daemonless — Fork-Exec vs Long-Lived Daemon
+
+Docker's architecture has a privileged daemon (`dockerd`) that owns every container. The CLI is just an HTTP client. Implications:
+
+- The daemon runs as root. Compromising the daemon = root on the host.
+- The daemon owns every container's PID 1. Restart the daemon = every container restarts (or, with live-restore, keeps running but is briefly orphaned).
+- Anyone in the `docker` group has effective root via the daemon socket.
+
+Podman's architecture has no daemon. `podman run` is a normal process that:
+
+1. Forks itself.
+2. The child sets up namespaces, cgroups, mounts using libcontainer-equivalent libraries directly.
+3. The child execs `runc` (or `crun`).
+4. `runc` execs the container's entrypoint.
+5. The original `podman` process exits, leaving the container as a child of `conmon`.
+
+There is no central server. No daemon to compromise. No daemon to restart. Each `podman` invocation is short-lived; it sets things up and gets out of the way.
+
+The trade-off: there is no central component to coordinate state. State is stored in per-user files (`~/.local/share/containers/`). Talking to "all my containers" means listing all the state files. Podman does provide a system service (`podman.service`) that can be socket-activated and emulates the Docker API, but it is optional and short-lived per request.
+
+### Theory: conmon — The Per-Container Monitor
+
+When `runc` execs a container's entrypoint, somebody has to:
+
+- Hold the container's stdout/stderr file descriptors and route them somewhere persistable.
+- Wait for the container's exit and record the exit code.
+- Keep the TTY pseudo-terminal alive if `-it` was requested.
+
+Docker's daemon does this for every container. Podman, having no daemon, spawns one **`conmon`** (container monitor) process per container before it execs `runc`. `conmon`:
+
+1. Sets up logging — pipes container stdout/stderr to a log file (default location depends on the log driver).
+2. Sets up TTY proxying if requested.
+3. Forks `runc` to start the container.
+4. After `runc` returns (the container is running), `conmon` waits.
+5. When the container exits, `conmon` writes the exit code to a state file and exits itself.
+
+`conmon` is small and stateless per container. There can be hundreds of them on a host, one per running container. They do not coordinate; each one knows only about its own container. The same architecture is used by CRI-O (the Kubernetes runtime), so `conmon` is mature and shared across the ecosystem.
+
+### Theory: Rootless by Default — User Namespaces in Action
+
+Podman runs as your unprivileged user. That requires solving two problems that traditionally needed root:
+
+1. **Creating user namespaces with multiple UIDs.** A normal unprivileged process can create a user namespace, but only with a single UID/GID mapping (its own). To run a container that has multiple users (e.g., uid 0 root + uid 1000 app), you need a *range* of UIDs to map. Podman uses **`/etc/subuid`** and **`/etc/subgid`** — files maintained by `useradd` that grant each user a range like `100000-165535` of "sub-UIDs" they can use in user namespaces. Podman maps the container's UID 0..65535 to the user's sub-UID range.
+2. **Networking without root.** Bridging veths and writing iptables rules require root. Rootless Podman uses **slirp4netns** — a userspace TCP/IP stack that runs in the same namespace as the container and forwards traffic via the user's existing network capabilities. No root required, but with some performance overhead and a few feature gaps (no inbound connections by default, ICMP requires capability).
+
+The result: `podman run -d nginx` from a regular user account spawns a container that, on the host, looks like a process owned by your user with `runc` and `conmon` for parents. Even if the container is exploited, the attacker is limited to your user's privileges plus whatever sub-UID range Podman mapped.
 
 ### Docker vs Podman Architecture
 
@@ -396,6 +341,18 @@ unqualified-search-registries = ["docker.io", "quay.io", "ghcr.io"]
 
 ## 4. Buildah for Image Building
 
+### Theory: Buildah and Skopeo — Decomposing the Docker CLI
+
+Docker bundles too many things in one CLI: image building, container running, registry interaction, image inspection. The Podman ecosystem decomposes them:
+
+- **`podman`** — run containers, list containers, inspect containers. The runtime side.
+- **`buildah`** — build images. Unbundled because building doesn't actually need a runtime; it just needs to lay out filesystem layers and write a manifest. Buildah can use a Dockerfile (`buildah bud`) or a script-driven imperative API (`buildah from`, `buildah copy`, `buildah commit`) for cases where you need more control than Dockerfile allows.
+- **`skopeo`** — work with images on registries without involving a daemon or runtime. Copy images between registries (`skopeo copy docker://src docker://dst`), inspect a registry image without pulling it (`skopeo inspect docker://nginx:1.27`), sign and verify images.
+
+The decomposition pays off in CI/CD and air-gapped scenarios. CI doesn't need to run containers — it builds (Buildah) and pushes (Skopeo). An air-gapped environment uses Skopeo to copy from an internet-side mirror to an internal registry without ever booting the daemon-side image.
+
+All three tools share the same image library (`containers/image`) and storage library (`containers/storage`), so they see the same local layer cache and the same registry credentials.
+
 ### Why Buildah?
 
 Buildah is a specialized tool for building OCI images. It does not require a daemon and can build images without a Dockerfile.
@@ -544,6 +501,20 @@ skopeo delete docker://myregistry.example.com/myapp:old-tag
 
 ## 6. Podman Pods
 
+### Theory: Pods — The Kubernetes Abstraction Brought Home
+
+Podman literally takes its name from "Pod manager" — it imports Kubernetes' Pod concept into single-host container management. A Podman pod is a group of containers sharing namespaces (network, IPC, sometimes PID) and a lifecycle:
+
+```bash
+podman pod create --name webpod -p 8080:80
+podman run -d --pod webpod nginx
+podman run -d --pod webpod fluentd
+```
+
+Both containers share the pod's network namespace; nginx publishes port 80, the pod publishes 8080:80 to the host, fluentd shares localhost. This matches Kubernetes Pod semantics exactly.
+
+Even better, `podman generate kube` outputs a Kubernetes Pod manifest from a running Podman pod, and `podman play kube` accepts a Kubernetes manifest and runs it locally. You develop locally with Podman pods, generate the K8s YAML, and ship it to the cluster — no impedance mismatch.
+
 ### What Are Pods?
 
 A pod is a group of containers that share network, PID, and IPC namespaces -- the same concept as Kubernetes pods.
@@ -629,6 +600,14 @@ podman pod rm -f webapp
 ---
 
 ## 7. Systemd Integration
+
+### Theory: Containers as System Services
+
+Podman generates systemd unit files via `podman generate systemd` (legacy) or **Quadlet** (`*.container`, `*.pod`, `*.kube` files in `~/.config/containers/systemd/`, the modern way). Systemd then manages the container lifecycle — auto-start on boot, restart on failure, ordered dependencies, journal log integration.
+
+This is what makes Podman a viable choice for "production single-host services" without Kubernetes. A Quadlet `nginx.container` file is to systemd what a Compose service is to the Compose engine, except systemd is already running on every Linux server. No extra orchestrator, no extra daemon, just systemd doing what it already does.
+
+Docker's equivalent is `docker run --restart=always`, which is less flexible (can't express "start after this other unit", can't fall back to journald-native logging, can't be controlled by `systemctl`).
 
 ### Generating Systemd Units
 

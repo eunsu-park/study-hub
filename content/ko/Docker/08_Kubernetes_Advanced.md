@@ -20,7 +20,6 @@
 
 ## 목차
 
-리소스 레퍼런스 전에 [**이론과 원리**](#이론과-원리) 섹션을 읽으세요. 스케줄러의 필터+점수 알고리즘, 모든 컨트롤러(커스텀 오퍼레이터 포함)를 떠받치는 컨트롤러 패턴(informer + work queue), 그리고 CRD/오퍼레이터 확장 모델을 다룹니다.
 
 1. [Ingress](#1-ingress)
 2. [Gateway API](#2-gateway-api)
@@ -33,63 +32,11 @@
 
 ---
 
-## 이론과 원리
+## 1. Ingress
 
-Advanced 레슨은 대체로 Kubernetes를 *확장*하는 것에 관한 것입니다 — 새 리소스(CRD), 새 컨트롤러(오퍼레이터), 그리고 기존 스케줄러에게 실제로 원하는 바를 알리는 새 방법. 레슨 나머지의 거의 모든 것이 다음 세 깊은 아이디어 위에 있습니다 — **스케줄러의 두 단계 결정**, **컨트롤러 패턴**(informer + work queue + reconcile), **CRD/오퍼레이터 확장 모델**.
+### 이론: CRD와 오퍼레이터 — API 확장
 
-### A. 스케줄러 상세: 필터 + 점수
-
-스케줄러는 스케줄되지 않은 Pod 하나마다(`spec.nodeName == ""`) 한 번 돕니다. 결정은 두 단계 —
-
-**필터 단계(predicates).** 모든 노드에서 이 Pod을 못 돌리는 노드를 떨굼. 고전 predicate —
-
-- `PodFitsResources` — 노드에 `requests`를 만족할 만큼의 할당 가능 CPU/메모리가 남았는가?
-- `PodFitsHostPorts` — 요청한 호스트 포트가 비어 있는가?
-- `PodToleratesNodeTaints` — Pod이 노드의 `NoSchedule` taint를 toleration하는가?
-- `MatchNodeSelector` — 노드의 라벨이 `spec.nodeSelector`와 `nodeAffinity`에 매칭되는가?
-- `NoVolumeZoneConflict` — 상태 있는 Pod의 경우, 노드가 PVC 볼륨과 같은 클라우드 존에 있는가?
-- `MatchInterPodAffinity` — 이 노드가 `podAffinity`와 `podAntiAffinity`를 만족하는가?
-
-predicate 하나라도 실패한 노드는 후보에서 제외. 살아남은 노드가 0이면 Pod은 영원히 Pending(이벤트가 이유 설명).
-
-**점수 단계(priorities).** 살아남은 각 노드에 priority 함수의 가중 합으로 0~100 점수를 계산.
-
-- `BalancedResourceAllocation` — CPU와 메모리 사용률이 균형 잡힌 노드 선호(메모리는 10%인데 CPU만 90%로 채우지 않음).
-- `LeastRequestedPriority` — 자유 자원이 많은 노드 선호(부하 분산).
-- `NodeAffinityPriority` — 소프트 `nodeAffinity`가 *선호*하는 노드 선호.
-- `InterPodAffinityPriority` — 소프트 Pod 간 affinity에 같은 식.
-- `ImageLocalityPriority` — 이미지를 이미 캐시한 노드 선호(시작 빠름).
-- `TaintTolerationPriority` — 모든 `PreferNoSchedule` taint가 toleration된 노드 선호.
-
-가장 점수 높은 노드 선택, 동률은 무작위. 선택된 노드가 `spec.nodeName`에 쓰이고, 그 노드의 kubelet이 Pod을 가져가 런타임 시작.
-
-스케줄러는 **플러그인 가능**합니다 — 자체 predicate와 priority를 작성하고 *두 번째 스케줄러*를 기본 옆에서 돌릴 수 있습니다. Pod은 `spec.schedulerName: my-scheduler`로 스케줄러를 선택. 이상한 하드웨어를 가진 팀(다양한 세대 GPU, FPGA, 특수 NIC)이 기본을 포크하지 않고 스케줄링을 확장하는 방법.
-
-**Taint와 toleration**이 가장 유용한 수동 스케줄링 도구 — 노드를 `gpu=true:NoSchedule`로 taint하면 매칭 toleration 없는 것은 모두 못 들어옴. Pod의 toleration은 taint된 노드에 들어갈 *허락*이지 *요구사항*이 아님("여기서 반드시 돌아라"는 `nodeSelector`/`nodeAffinity` 사용). 조합 — 노드 전용으로 taint, 요구/선호로 affinity — 이 실세계 토폴로지 대부분을 커버.
-
-### B. 컨트롤러 패턴: Informer + Work Queue + Reconcile
-
-모든 K8s 컨트롤러(내장이든 커스텀이든)는 같은 내부 아키텍처를 따릅니다 — **컨트롤러 패턴(controller pattern)**. 호출하는 프레임워크가 아니라, API 서버 설계가 밀어 넣는 구조입니다.
-
-**Informer.** API 서버에 대한 장수 watch + 로컬 인메모리 캐시. informer는 —
-
-1. 시작 시 watch 대상 타입의 모든 객체를 list해 캐시에 저장.
-2. watch(`?watch=true&resourceVersion=...`) 수립, 스트리밍 Add/Update/Delete 이벤트 수신.
-3. 로컬 캐시 갱신, 등록된 이벤트 핸들러 발화.
-
-캐시 덕분에 컨트롤러가 API 서버를 read로 두드리지 않고, watch 덕분에 변경을 밀리초 단위로 들음.
-
-**Work queue.** 이벤트 핸들러는 직접 작업을 *하지 않습니다*. 영향받은 객체의 *키*(`namespace/name`)를 중복 제거, 레이트 제한 work queue에 넣습니다. 같은 키에 대한 여러 이벤트는 하나의 work item으로 합쳐집니다. 조정 실패 시 지수 백오프로 재큐.
-
-**Reconcile 루프.** 워커 고루틴이 큐에서 키를 빼고, informer 캐시로 그 객체의 현재 상태를 조회하고, spec에서 원하는 상태를 계산하고, 차이를 좁히는 행동(자식 생성, status 갱신, 고아 삭제)을 취합니다. *무엇이 바뀌었는지 들은 게 아니라* 매번 새로 차이를 계산합니다. 이게 reconcile 함수를 **멱등**하고 **상태 기반(state-driven)**(이벤트 기반이 아닌)으로 만듭니다.
-
-이 패턴 전체가 `controller-runtime`(오퍼레이터를 빌드하는 Go 라이브러리)에 담겨 있습니다. 같은 모양이 Deployment 컨트롤러, ReplicaSet 컨트롤러, kube-controller-manager 번들, 그리고 당신이 쓰는 모든 CRD 오퍼레이터의 바닥에 있습니다.
-
-규율 — **이벤트를 절대 신뢰하지 말고, 항상 상태를 다시 읽어라.** 큐가 지연되면 세상은 이미 움직였고, 방금 받은 이벤트가 아니라 캐시에 대해 조정하는 것이 stale-event 버그를 방어합니다.
-
-### C. CRD와 오퍼레이터: API 확장
-
-Kubernetes는 처음부터 확장 가능하도록 설계되었습니다. 메커니즘은 **CRD(Custom Resource Definition)** — 새 리소스 타입을 API 서버에 등록하는 YAML 객체.
+Kubernetes는 처음부터 확장 가능하게 설계되었습니다. 메커니즘은 **Custom Resource Definition(CRD)** — API 서버에 새 리소스 타입을 등록하는 YAML 객체입니다.
 
 ```yaml
 apiVersion: apiextensions.k8s.io/v1
@@ -108,55 +55,13 @@ spec:
         openAPIV3Schema: {...}
 ```
 
-이걸 적용하면 API 서버가 `kubectl get postgresqls`를 서빙할 줄 알게 됩니다. 사용자가 이제 `PostgreSQL` 객체를 만들 수 있고 다른 내장 리소스처럼 etcd에 영속됩니다 — 그러나 컨트롤러가 watch할 때까지 *아무 일도 안 일어납니다*.
+이걸 적용하면 API 서버가 `kubectl get postgresqls`를 서빙하는 법을 배웁니다. 사용자는 이제 `PostgreSQL` 객체를 만들 수 있고 그것은 내장 리소스처럼 etcd에 영속됩니다 — 하지만 *컨트롤러가 그것들을 watch할 때까지는 아무 일도 일어나지 않습니다*.
 
-그 컨트롤러가 **오퍼레이터(operator)**입니다. CRD를 watch하고 spec을 실제 리소스로 조정하는 컨트롤러 패턴(§B) 프로세스에 불과합니다 — Postgres pod용 StatefulSet, 클라이언트용 Service, 자격 증명용 Secret, 정기 백업, failover 로직. 오퍼레이터가 운영 지식 — "PostgreSQL을 고가용으로 만들려면 X, Y, Z를 해야 한다" — 을 계속 도는 코드로 인코딩합니다.
+그 컨트롤러가 **오퍼레이터(operator)**입니다. CRD를 watch하고 그 spec을 실제 리소스로 조정하는 컨트롤러 패턴 프로세스에 불과합니다 — Postgres pod용 StatefulSet, 클라이언트용 Service, 자격 증명용 Secret, 정기 백업, 페일오버 로직. 오퍼레이터는 운영 지식("PostgreSQL을 고가용으로 만들려면 X, Y, Z를 해야 한다")을 끊임없이 도는 코드로 인코딩합니다.
 
-이 패턴이 동작하는 이유 — CRD가 도메인 전문가에게 고수준 리소스(`PostgreSQL`)를 정의하게 하고, 그것을 운영할 줄 아는 컨트롤러를 함께 배포할 수 있기 때문. 사용자는 `kubectl apply -f postgres.yaml`을 보고, 오퍼레이터가 그 아래에서 StatefulSet/PVC/복제를 다룹니다. 예시 — cert-manager(`Certificate`, `Issuer`), Prometheus 오퍼레이터(`Prometheus`, `ServiceMonitor`), Argo CD(`Application`), Strimzi(`Kafka`).
+이 패턴이 동작하는 이유 — CRD가 도메인 전문가에게 고수준 리소스(`PostgreSQL`)를 정의하게 해 주고, 그것을 운영하는 법을 아는 컨트롤러를 배포하게 해 주기 때문입니다. 사용자는 `kubectl apply -f postgres.yaml`을 보고, 오퍼레이터가 아래에서 StatefulSet/PVC/복제를 처리합니다. 예 — cert-manager(`Certificate`, `Issuer`), Prometheus 오퍼레이터(`Prometheus`, `ServiceMonitor`), Argo CD(`Application`), Strimzi(`Kafka`).
 
-Operator Framework / OperatorSDK / kubebuilder는 Go(또는 controller-runtime 포트가 있는 다른 언어)로 오퍼레이터를 작성하기 위한 스캐폴딩 도구들. Helm 차트도 오퍼레이터 모델을 쓸 수 있습니다 — helm-operator가 차트를 감싸 CRD 인스턴스로 배포되게 함.
-
-### D. StatefulSet과 "안정적 정체성" 문제
-
-Deployment는 Pod을 교환 가능한 복제로 다룹니다 — 같은 이미지, 같은 설정, 정체성 없음. 데이터베이스와 합의 시스템(Postgres 복제, ZooKeeper ensemble, Cassandra ring)에는 틀린 모델입니다. 이들은 다음을 필요로 합니다.
-
-- **안정적 네트워크 정체성.** Pod 0은 재시작 후에도 항상 `db-0.db-service.namespace.svc.cluster.local`이어야 함.
-- **안정적 스토리지.** Pod 0의 PVC가 재스케줄에도 Pod 0을 따라가야 함 — 새 빈 볼륨이 아님.
-- **순서 있는 롤아웃.** 업데이트 중 Pod N이 healthy가 된 후에만 Pod N-1 교체. 스케일 다운은 역순.
-
-`StatefulSet`이 셋 다 제공 — Pod 이름이 `<name>-0`, `<name>-1`, ..., `headless Service`(clusterIP=None)가 각 Pod에 자체 DNS 이름 부여, `volumeClaimTemplates`가 pod 삭제에도 살아남는 복제당 PVC 하나씩 생성.
-
-대가는 운영. StatefulSet 업데이트는 더 느림(한 번에 한 Pod, 순서대로). 스케일 다운은 PVC를 유지(다시 스케일 업하면 재부착 — 정말 없애려면 수동 정리). 그리고 애플리케이션 자체가 정체성을 알아야 함("나는 복제 0, 나는 primary").
-
-### E. 영구 스토리지: PV, PVC, StorageClass
-
-K8s의 스토리지는 개발자와 클러스터 관리자를 분리하기 위해 세 리소스로 쪼개집니다.
-
-- **PersistentVolume(PV)** — *존재하는* 스토리지 덩어리(실제 EBS 볼륨, 실제 NFS export, 실제 Ceph 이미지)를 나타내는 클러스터 스코프 리소스. 관리자가 만들거나 동적 프로비저너가 만듦.
-- **PersistentVolumeClaim(PVC)** — 네임스페이스 스코프 스토리지 요청 — "10Gi의 `fast-ssd` 스토리지가 ReadWriteOnce로 필요하다." 애플리케이션 개발자가 만듦.
-- **StorageClass** — 동적 프로비저닝의 템플릿 — "PVC가 이 클래스를 참조하면, 이 매개변수로 PV를 할당하기 위해 *이* CSI 드라이버를 돌려라." 클러스터 관리자가 한 번 만듦.
-
-매칭 로직 — 새 PVC가 적합한 기존 PV(크기 + 클래스 + access mode)에 바인딩되거나, 없으면 StorageClass의 프로비저너를 트리거해 생성. 바인딩되면 Pod의 `volumes` 필드가 PVC를 이름으로 참조, kubelet이 기저 볼륨을 컨테이너에 마운트.
-
-`accessModes`가 중요 — `ReadWriteOnce`(단일 노드, EBS 같은 블록 디바이스에 적합), `ReadWriteMany`(다중 노드, NFS류 백엔드 필요), `ReadOnlyMany`. 대부분의 클라우드 블록 스토리지는 RWO이고, 상태 있는 워크로드를 단일 노드 배치로 강제.
-
-CSI(Container Storage Interface)가 표준 플러그인 API — 모든 클라우드와 스토리지 벤더가 CSI 드라이버를 배포, K8s는 같은 인터페이스로 그들 모두와 통신. 스냅샷, 복제, 리사이징은 스토리지 백엔드가 지원할 수도 있고 아닐 수도 있는 CSI 기능.
-
-### 이론에서 아래의 리소스로
-
-- **Ingress / Gateway API** — `Ingress`/`HTTPRoute` 리소스(CRD 패턴 §C)를 watch하고 nginx/Envoy/Istio 설정으로 조정하는 컨트롤러.
-- **StatefulSet** — §D의 YAML 형태. headless Service + volumeClaimTemplates를 엮어 안정적 정체성 + 스토리지.
-- **PV / PVC / StorageClass** — §E. 기저 디스크를 명명하지 않고도 "영구 스토리지가 필요하다"를 의미 있게 만드는 스토리지 분리.
-- **DaemonSet** — reconcile 규칙이 "이 셀렉터에 매칭되는 노드마다 복제 하나"인 컨트롤러(§B). 로그 시퍼, 노드 모니터링, CNI 에이전트에 사용.
-- **Job / CronJob** — "이 Pod을 N번 완료까지 실행"(Job)이나 "이 스케줄에 Job 생성"(CronJob)을 조정하는 컨트롤러.
-- **Affinity / antiAffinity / taint / toleration** — §A. 스케줄러 결정을 편향시키기 위해 쓰는 어휘.
-- **커스텀 컨트롤러 / 오퍼레이터** — §B + §C 결합. 대부분의 프로덕션 K8s가 결국 여러 개를 돌리게 됨.
-
-남은 섹션은 이 리소스들을 둘러봅니다. 리소스가 신비롭게 느껴질 때마다, 어느 컨트롤러가 그것을 소유하고 무엇을 watch하는지 식별하세요. 조정 패턴이 나머지를 설명합니다.
-
----
-
-## 1. Ingress
+Operator Framework / OperatorSDK / kubebuilder는 Go(또는 controller-runtime 포팅이 있는 어떤 언어)로 오퍼레이터를 작성하는 스캐폴딩 도구입니다. Helm 차트도 오퍼레이터 모델을 쓸 수 있습니다 — helm-operator가 차트를 감싸 CRD 인스턴스로 배포할 수 있게 합니다. Ingress 자체가 이 패턴의 초기 예입니다 — `Ingress`는 내장 리소스이지만 *컨트롤러*(nginx-ingress, Traefik, Istio Gateway)는 별도로 설치해야 하는 컴포넌트입니다.
 
 ### 1.1 Ingress 개념
 
@@ -558,6 +463,18 @@ spec:
 
 ## 3. StatefulSet
 
+### 이론: "안정적 정체성" 문제
+
+Deployment는 Pod을 교체 가능한 복제로 다룹니다 — 같은 이미지, 같은 설정, 정체성 없음. 데이터베이스와 합의 시스템(Postgres 복제, ZooKeeper 앙상블, Cassandra 링)에는 그게 틀립니다. 그들에게 필요한 것 —
+
+- **안정적 네트워크 정체성.** Pod 0은 재시작 후에도 항상 `db-0.db-service.namespace.svc.cluster.local`이어야 함.
+- **안정적 스토리지.** Pod 0의 PVC가 재스케줄을 가로질러 Pod 0을 따라감 — 빈 새 볼륨이 아님.
+- **순서 있는 롤아웃.** 업데이트 시 Pod N이 healthy가 된 뒤에야 Pod N-1을 교체. 스케일 다운은 역순.
+
+`StatefulSet`이 셋 다 제공합니다 — Pod 이름이 `<name>-0`, `<name>-1`, ..., `headless Service`(clusterIP=None)가 각 Pod에 자체 DNS 이름을 주고, `volumeClaimTemplates`가 pod 삭제를 견디는 복제당 PVC 하나를 만듭니다.
+
+트레이드오프는 운영입니다. StatefulSet 업데이트가 더 느림(한 번에 하나씩, 순서대로). 스케일 다운이 PVC를 남김(그래서 다시 스케일 업하면 재부착 — 하지만 정말 없애려면 수동 정리해야 함). 그리고 애플리케이션 자체가 자기 정체성을 알아야 함("나는 복제 0이다, 나는 primary다").
+
 ### 2.1 StatefulSet 개념
 
 ```
@@ -818,6 +735,20 @@ kubectl delete pvc -l app=web  # Delete PVCs
 ---
 
 ## 4. 영구 스토리지
+
+### 이론: PV, PVC, StorageClass
+
+K8s의 스토리지는 개발자와 클러스터 관리자를 분리하기 위해 세 리소스로 쪼개집니다.
+
+- **PersistentVolume(PV)** — *존재하는* 스토리지 한 조각(실제 EBS 볼륨, 실제 NFS export, 실제 Ceph 이미지)을 표현하는 클러스터 스코프 리소스. 관리자나 동적 프로비저너가 생성.
+- **PersistentVolumeClaim(PVC)** — 스토리지 요청의 네임스페이스 스코프 — "10Gi의 `fast-ssd` 스토리지, ReadWriteOnce 필요". 애플리케이션 개발자가 생성.
+- **StorageClass** — 동적 프로비저닝 템플릿 — "PVC가 이 클래스를 참조하면 *이* CSI 드라이버를 돌려 이 파라미터로 PV 할당". 클러스터 관리자가 한 번 생성.
+
+매칭 로직 — 새 PVC가 적합한 기존 PV에 바인딩(크기 + 클래스 + 접근 모드), 아니면(없으면) StorageClass의 프로비저너가 만들도록 트리거. 한번 바인딩되면 Pod의 `volumes` 필드가 PVC를 이름으로 참조하고, kubelet이 기저 볼륨을 컨테이너에 마운트합니다.
+
+`accessModes`가 중요 — `ReadWriteOnce`(단일 노드, EBS 같은 블록 디바이스에 적합), `ReadWriteMany`(다중 노드, NFS류 백엔드 필요), `ReadOnlyMany`. 대부분의 클라우드 블록 스토리지는 RWO이며, 상태 있는 워크로드의 단일 노드 배치를 강제합니다.
+
+CSI(Container Storage Interface)는 표준 플러그인 API입니다 — 모든 클라우드와 스토리지 벤더가 CSI 드라이버를 배포하고, K8s는 같은 인터페이스로 모두와 대화합니다. 스냅샷, 클론, 리사이즈는 스토리지 백엔드가 지원할 수도 안 할 수도 있는 CSI 기능입니다.
 
 ### 3.1 스토리지 계층 구조
 
@@ -1203,6 +1134,26 @@ spec:
 
 ## 6. DaemonSet과 Job
 
+### 이론: 컨트롤러 패턴 — Informer + Work Queue + Reconcile
+
+모든 K8s 컨트롤러(내장이든 커스텀이든)는 **컨트롤러 패턴**이라 불리는 같은 내부 아키텍처를 따릅니다. 호출하는 프레임워크가 아니라, API 서버 설계가 채택하도록 밀어붙이는 구조입니다.
+
+**Informer.** API 서버에 대한 장수명 watch와 로컬 메모리 내 캐시. Informer는 —
+
+1. 시작 시 watch하는 타입의 모든 객체를 list하고 캐시에 저장.
+2. watch(`?watch=true&resourceVersion=...`)를 수립하고 스트리밍 Add/Update/Delete 이벤트 수신.
+3. 로컬 캐시 갱신, 등록된 이벤트 핸들러 발화.
+
+캐시 덕분에 컨트롤러가 API 서버를 읽기로 두드리지 않고, watch 덕분에 변경을 밀리초 안에 듣습니다.
+
+**Work queue.** 이벤트 핸들러는 일을 *직접* 하지 *않습니다*. 영향받은 객체의 *키*(`namespace/name`)를 중복 제거되고 속도 제한된 work queue에 넣습니다. 같은 키의 여러 이벤트가 하나의 work item으로 접힙니다. 조정이 실패하면 지수 백오프로 재큐.
+
+**Reconcile loop.** 워커 고루틴이 큐에서 키를 꺼내 informer 캐시로 그 객체의 현재 상태를 조회하고, spec에서 원하는 상태를 계산하고, diff를 좁히는 어떤 행동이든 취합니다(자식 생성, status 갱신, 고아 삭제). 무엇이 바뀌었는지 *듣지 않습니다* — 매번 fresh하게 diff를 계산합니다. 이게 reconcile 함수를 **멱등하고 상태 주도(state-driven)**로 만듭니다, 이벤트 주도가 아니라.
+
+전체 패턴이 `controller-runtime`(오퍼레이터를 빌드하는 Go 라이브러리)에 잡혀 있습니다. 같은 모양이 Deployment 컨트롤러, ReplicaSet 컨트롤러, kube-controller-manager 묶음, 그리고 작성하는 모든 CRD 오퍼레이터의 기저에 있습니다 — 아래의 DaemonSet과 Job 컨트롤러도 포함.
+
+규율 — **이벤트를 믿지 말고 항상 상태를 다시 읽어라.** 큐가 지연되면 세상이 움직였습니다. 방금 받은 이벤트가 아닌 캐시에 대해 조정하면 stale 이벤트 버그를 방어합니다.
+
 ### 5.1 DaemonSet
 
 ```yaml
@@ -1383,6 +1334,36 @@ spec:
 ---
 
 ## 7. 고급 스케줄링
+
+### 이론: 스케줄러 상세 — 필터 + 점수
+
+스케줄러는 스케줄되지 않은 Pod(`spec.nodeName == ""`)마다 한 번 돕니다. 결정은 두 단계입니다.
+
+**필터 단계(predicates).** 모든 노드에서 이 Pod을 돌릴 수 없는 것을 떨어뜨립니다. 고전 predicates —
+
+- `PodFitsResources` — 노드에 `requests`를 만족할 할당 가능한 CPU/메모리가 충분한가?
+- `PodFitsHostPorts` — 요청된 호스트 포트가 비었는가?
+- `PodToleratesNodeTaints` — Pod이 노드의 `NoSchedule` taint를 toleration하는가?
+- `MatchNodeSelector` — 노드 라벨이 `spec.nodeSelector`와 `nodeAffinity`에 매칭되는가?
+- `NoVolumeZoneConflict` — 상태 있는 Pod의 경우, 노드가 PVC 볼륨과 같은 클라우드 존인가?
+- `MatchInterPodAffinity` — 이 노드가 `podAffinity`와 `podAntiAffinity`를 만족하는가?
+
+어떤 predicate라도 실패한 노드는 고려에서 제거됩니다. 살아남는 노드가 0이면 Pod은 영원히 Pending(이벤트가 이유 설명).
+
+**점수 단계(priorities).** 살아남은 각 노드에 대해 priority 함수의 가중합으로 0~100 점수 계산.
+
+- `BalancedResourceAllocation` — CPU와 메모리 사용률이 균형 잡힌 노드 선호(CPU를 90%로 채우면서 메모리는 10%로 두지 않음).
+- `LeastRequestedPriority` — 자유 자원이 더 많은 노드 선호(부하 분산).
+- `NodeAffinityPriority` — *선호하는*(soft `nodeAffinity`) 매칭 노드 선호.
+- `InterPodAffinityPriority` — soft inter-pod affinity에 대해 같음.
+- `ImageLocalityPriority` — 이미지를 이미 캐시한 노드 선호(빠른 시작).
+- `TaintTolerationPriority` — `PreferNoSchedule` taint가 모두 toleration된 노드 선호.
+
+가장 높은 점수가 이김. 동률은 무작위. 선택된 노드가 `spec.nodeName`에 쓰이고, 그 노드의 kubelet이 Pod을 집어 들고 런타임이 시작.
+
+스케줄러는 **플러그인 가능**합니다 — 자체 predicate와 priority를 작성하고 기본과 함께 *두 번째 스케줄러*를 돌릴 수 있습니다. Pod은 `spec.schedulerName: my-scheduler`로 스케줄러 선택. 이상한 하드웨어(다양한 세대의 GPU, FPGA, 특수 NIC)가 있는 팀이 기본을 포크하지 않고 스케줄링을 확장하는 방법.
+
+**Taint와 toleration**이 가장 유용한 수동 스케줄링 도구 — 노드를 `gpu=true:NoSchedule`로 taint하면 매칭 toleration 없는 어떤 것도 그 위에 못 올라갑니다. Pod의 toleration은 taint된 노드에 *내려앉을 권한*, *요구*가 아님("여기서 반드시 돌아라"는 `nodeSelector`/`nodeAffinity`). 조합 — taint로 노드 전용화, affinity로 요구/선호 — 가 대부분의 실제 토폴로지를 커버합니다.
 
 ### 6.1 Node Affinity
 

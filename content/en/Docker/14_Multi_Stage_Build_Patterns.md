@@ -16,7 +16,6 @@ After completing this lesson, you will be able to:
 
 ## Table of Contents
 
-Before the patterns reference, read [**Theory & Principles**](#theory--principles) — the layer-cache key algorithm that drives every cache hit decision, BuildKit's DAG execution that parallelizes stages and skips unused outputs, and the multi-platform fan-out that turns one build into a manifest list.
 
 1. [Multi-Stage Build Fundamentals](#1-multi-stage-build-fundamentals)
 2. [Builder Pattern for Compiled Languages](#2-builder-pattern-for-compiled-languages)
@@ -37,11 +36,9 @@ Before multi-stage builds, developers faced a dilemma: either ship large images 
 
 ---
 
-## Theory & Principles
+## 1. Multi-Stage Build Fundamentals
 
-Multi-stage builds and BuildKit are two answers to the same question: "given a Dockerfile, what is the minimum amount of work that produces the right artifact?" The "right artifact" part means a small, secure, multi-architecture-capable image. The "minimum work" part is the layer-cache algorithm running over a graph of stages and instructions, parallelizing what it can. Once you understand cache keys (when does a layer get reused?), the DAG model (what runs in parallel?), and the multi-platform fan-out (how does one build produce arm64 + amd64?), every "why is my build slow / fat / wrong arch?" question has a tractable answer.
-
-### A. The Layer Cache Key Algorithm — In Detail
+### Theory: The Layer Cache Key Algorithm — In Detail
 
 A Dockerfile is a sequence of instructions, each producing a layer. For each instruction, BuildKit (and the legacy builder) computes a **cache key** and looks for an existing layer with that key in the local store and any configured remote caches.
 
@@ -75,7 +72,7 @@ COPY . /app
 
 The first form rebuilds `node_modules` (slow) on every commit. The second form only rebuilds it when dependencies actually change.
 
-### B. BuildKit's DAG Execution
+### Theory: BuildKit's DAG Execution
 
 The legacy builder runs instructions sequentially: instruction N must complete before instruction N+1 begins, even if they don't depend on each other. **BuildKit** (the default since Docker 23.0) parses the Dockerfile into a **directed acyclic graph (DAG)** where each instruction is a node and edges express data dependencies. Independent nodes run concurrently.
 
@@ -105,79 +102,6 @@ ENTRYPOINT ["/app/server"]
 The legacy builder runs `frontend` to completion, then `backend`, then assembles `final` — sequential. BuildKit sees that `frontend` and `backend` have no edges between them and runs both concurrently. On a multi-core machine the wall time roughly halves.
 
 BuildKit also **skips unused stages**. If you target `final`, BuildKit walks back from `final`, finds it depends on `frontend` and `backend`, and runs only those. A "test" stage that final does not depend on is not built unless you `docker build --target test .`.
-
-### C. BuildKit Mounts: Cache, Bind, and Secret
-
-A `RUN` instruction in BuildKit can opt into **mounts** that change what the command sees without changing the layer it produces:
-
-- **`--mount=type=cache,target=/root/.cache/pip`** — a writable cache directory that *persists between builds* but does *not* end up in the resulting layer. The next `pip install` finds previously downloaded wheels; the resulting image still does not contain them. Same idea for `~/.npm`, `~/.cargo/registry`, `/var/cache/apt`. The single biggest speed-up for repeated builds.
-- **`--mount=type=bind,source=.,target=/src`** — read-only bind of the build context (or a previous stage) into the command, without baking it into a layer. Useful when a build step needs to *read* large amounts of source but should not produce a layer with all of it.
-- **`--mount=type=secret,id=mytoken`** — file appears at `/run/secrets/mytoken` for the duration of the `RUN`, sourced from `--secret id=mytoken,src=./token.txt` at build time. Never written to a layer; safe for npm tokens, private-registry credentials, etc.
-- **`--mount=type=ssh`** — forwards the host's SSH agent into the `RUN`. Lets `git clone git@github.com:...` work for private repos without baking SSH keys.
-
-These mounts are the single biggest reason "modern" Dockerfiles look different from "classic" Dockerfiles. Used well, build times collapse and secrets stop ending up in layers.
-
-### D. Multi-Platform Builds: One Build, Many Architectures
-
-A single `docker build` produces one image for one architecture (the host's). For an image that must run on both AMD64 servers and ARM64 (Apple Silicon, AWS Graviton) you need two builds, then a manifest list pointing at both.
-
-`docker buildx` automates this:
-
-```bash
-docker buildx build --platform linux/amd64,linux/arm64 \
-  -t myregistry/myapp:1.0 --push .
-```
-
-What happens:
-
-1. BuildKit fans out: one build per requested platform.
-2. Each platform build runs in an isolated environment that emulates (via QEMU) or uses a native builder for the target architecture. Building arm64 from an amd64 host typically uses QEMU userspace emulation (slow but works) or remote arm64 builders (fast).
-3. Each build produces a per-platform image with its own manifest and layers.
-4. After all builds succeed, buildx pushes a **manifest list** (OCI image index) to the registry. The list points at each per-platform manifest by digest.
-5. When users `docker pull myregistry/myapp:1.0`, the client picks the manifest matching the host platform from the list automatically.
-
-`docker buildx ls` shows your builders. The default `docker-container` driver runs BuildKit in a container; you can also configure remote builders for native arm64 builds.
-
-### E. Stage Targeting and Conditional Builds
-
-`docker build --target <stage>` builds only up to the named stage and stops. Used for:
-
-- **Test stages.** Define a `test` stage that runs `pytest`/`go test`/`npm test`. CI runs `docker build --target test .` to fail the pipeline on test failure. Production images target `prod` and never build the test stage.
-- **Lint stages.** Same idea for `eslint`, `golangci-lint`, etc.
-- **Debug images.** A `debug` stage adds tools (`bash`, `curl`, `tcpdump`) on top of the production stage. Built only when explicitly targeted.
-
-Combined with `ARG` and conditional logic, a single Dockerfile can produce dev, test, prod, and debug images by varying `--target` and `--build-arg`. The cache is shared across them — common stages built once, divergent stages built only as needed.
-
-### F. Image Bases Revisited: How "Small" Different Bases Are
-
-The runtime stage's base image determines the floor of image size and the surface area of attack:
-
-| Base | Approx size | Tools available | Best for |
-|------|-------------|-----------------|----------|
-| `ubuntu:22.04` | ~80 MB | Full Debian-derived userspace | Dev, debugging, rare cases that genuinely need bash + apt |
-| `debian:bookworm-slim` | ~30 MB | Minimal Debian | General purpose |
-| `alpine:3.19` | ~7 MB | musl libc, busybox, apk | When the language toolchain works with musl (Go does, Python sometimes doesn't) |
-| `gcr.io/distroless/python3` | ~50 MB | Just Python + glibc | Production Python — no shell, no apt, no curl |
-| `gcr.io/distroless/static` | ~2 MB | Just glibc-free static binaries | Production Go / Rust / Zig binaries |
-| `scratch` | 0 MB | Nothing | Static binaries that bring everything they need |
-
-Distroless and scratch are the compelling endpoints — production images measured in single-digit MB, with no shell to be exploited, no package manager to install backdoors with. The trade-off is debugging: `kubectl exec -it ... sh` does not work because there's no shell. Modern Kubernetes adds **ephemeral debug containers** (`kubectl debug`) that attach a debug image to the same Pod's namespaces, which closes the gap.
-
-### From Theory to the Patterns Below
-
-- **Builder pattern** (§A, §B, §C) — first stage compiles, last stage runs. `COPY --from=builder /app/binary /` is the seam.
-- **`COPY` ordering** — manifests then code (§A) keeps dependency layers cached.
-- **`RUN --mount=type=cache,...`** (§C) — keep dependency-fetch caches between builds without bloating layers.
-- **`RUN --mount=type=secret,...`** (§C) — credentials at build time without leaving them in a layer.
-- **Multi-target Dockerfile** (§E) — one file, multiple `--target` values for dev/test/prod/debug.
-- **`docker buildx --platform linux/amd64,linux/arm64`** (§D) — one command, manifest list output.
-- **Distroless / scratch final stages** (§F) — minimum runtime size and attack surface.
-
-The remaining sections walk these patterns. Whenever a build runs slowly, profile with `--progress=plain` and check which instructions cache-miss; the answer is almost always upstream of where you noticed the pain.
-
----
-
-## 1. Multi-Stage Build Fundamentals
 
 ### The Problem: Fat Images
 
@@ -398,6 +322,17 @@ build
 
 ## 4. BuildKit Cache Strategies
 
+### Theory: BuildKit Mounts — Cache, Bind, and Secret
+
+A `RUN` instruction in BuildKit can opt into **mounts** that change what the command sees without changing the layer it produces:
+
+- **`--mount=type=cache,target=/root/.cache/pip`** — a writable cache directory that *persists between builds* but does *not* end up in the resulting layer. The next `pip install` finds previously downloaded wheels; the resulting image still does not contain them. Same idea for `~/.npm`, `~/.cargo/registry`, `/var/cache/apt`. The single biggest speed-up for repeated builds.
+- **`--mount=type=bind,source=.,target=/src`** — read-only bind of the build context (or a previous stage) into the command, without baking it into a layer. Useful when a build step needs to *read* large amounts of source but should not produce a layer with all of it.
+- **`--mount=type=secret,id=mytoken`** — file appears at `/run/secrets/mytoken` for the duration of the `RUN`, sourced from `--secret id=mytoken,src=./token.txt` at build time. Never written to a layer; safe for npm tokens, private-registry credentials, etc.
+- **`--mount=type=ssh`** — forwards the host's SSH agent into the `RUN`. Lets `git clone git@github.com:...` work for private repos without baking SSH keys.
+
+These mounts are the single biggest reason "modern" Dockerfiles look different from "classic" Dockerfiles. Used well, build times collapse and secrets stop ending up in layers.
+
 ### Dependency Cache Mounts
 
 Cache mounts preserve package manager caches across builds, dramatically speeding up rebuilds:
@@ -460,6 +395,27 @@ docker build --secret id=pip_conf,src=./pip.conf .
 ---
 
 ## 5. BuildKit Features and Enhancements
+
+### Theory: Multi-Platform Builds — One Build, Many Architectures
+
+A single `docker build` produces one image for one architecture (the host's). For an image that must run on both AMD64 servers and ARM64 (Apple Silicon, AWS Graviton) you need two builds, then a manifest list pointing at both.
+
+`docker buildx` automates this:
+
+```bash
+docker buildx build --platform linux/amd64,linux/arm64 \
+  -t myregistry/myapp:1.0 --push .
+```
+
+What happens:
+
+1. BuildKit fans out: one build per requested platform.
+2. Each platform build runs in an isolated environment that emulates (via QEMU) or uses a native builder for the target architecture. Building arm64 from an amd64 host typically uses QEMU userspace emulation (slow but works) or remote arm64 builders (fast).
+3. Each build produces a per-platform image with its own manifest and layers.
+4. After all builds succeed, buildx pushes a **manifest list** (OCI image index) to the registry. The list points at each per-platform manifest by digest.
+5. When users `docker pull myregistry/myapp:1.0`, the client picks the manifest matching the host platform from the list automatically.
+
+`docker buildx ls` shows your builders. The default `docker-container` driver runs BuildKit in a container; you can also configure remote builders for native arm64 builds.
 
 ### Enabling BuildKit
 
@@ -534,6 +490,21 @@ docker buildx build --output type=local,dest=./output .
 
 ## 6. Distroless and Scratch Images
 
+### Theory: Image Bases Revisited — How "Small" Different Bases Are
+
+The runtime stage's base image determines the floor of image size and the surface area of attack:
+
+| Base | Approx size | Tools available | Best for |
+|------|-------------|-----------------|----------|
+| `ubuntu:22.04` | ~80 MB | Full Debian-derived userspace | Dev, debugging, rare cases that genuinely need bash + apt |
+| `debian:bookworm-slim` | ~30 MB | Minimal Debian | General purpose |
+| `alpine:3.19` | ~7 MB | musl libc, busybox, apk | When the language toolchain works with musl (Go does, Python sometimes doesn't) |
+| `gcr.io/distroless/python3` | ~50 MB | Just Python + glibc | Production Python — no shell, no apt, no curl |
+| `gcr.io/distroless/static` | ~2 MB | Just glibc-free static binaries | Production Go / Rust / Zig binaries |
+| `scratch` | 0 MB | Nothing | Static binaries that bring everything they need |
+
+Distroless and scratch are the compelling endpoints — production images measured in single-digit MB, with no shell to be exploited, no package manager to install backdoors with. The trade-off is debugging: `kubectl exec -it ... sh` does not work because there's no shell. Modern Kubernetes adds **ephemeral debug containers** (`kubectl debug`) that attach a debug image to the same Pod's namespaces, which closes the gap.
+
 ### scratch
 
 `scratch` is a special empty image -- the absolute minimal base:
@@ -603,6 +574,16 @@ ENTRYPOINT ["/server"]
 ---
 
 ## 7. Build Arguments and Target Stages
+
+### Theory: Stage Targeting and Conditional Builds
+
+`docker build --target <stage>` builds only up to the named stage and stops. Used for:
+
+- **Test stages.** Define a `test` stage that runs `pytest`/`go test`/`npm test`. CI runs `docker build --target test .` to fail the pipeline on test failure. Production images target `prod` and never build the test stage.
+- **Lint stages.** Same idea for `eslint`, `golangci-lint`, etc.
+- **Debug images.** A `debug` stage adds tools (`bash`, `curl`, `tcpdump`) on top of the production stage. Built only when explicitly targeted.
+
+Combined with `ARG` and conditional logic, a single Dockerfile can produce dev, test, prod, and debug images by varying `--target` and `--build-arg`. The cache is shared across them — common stages built once, divergent stages built only as needed.
 
 ### Build Arguments
 

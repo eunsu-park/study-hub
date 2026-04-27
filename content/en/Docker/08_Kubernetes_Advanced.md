@@ -20,8 +20,6 @@ The basic Kubernetes primitives -- Pods, Deployments, and Services -- cover many
 
 ## Table of Contents
 
-Before the resource reference, read [**Theory & Principles**](#theory--principles) — the scheduler's filter+score algorithm, the controller pattern (informer + work queue) that powers every controller including custom operators, and the CRD/operator extension model.
-
 1. [Ingress](#1-ingress)
 2. [Gateway API](#2-gateway-api)
 3. [StatefulSet](#3-statefulset)
@@ -33,61 +31,9 @@ Before the resource reference, read [**Theory & Principles**](#theory--principle
 
 ---
 
-## Theory & Principles
+## 1. Ingress
 
-The advanced lesson is mostly about *extending* Kubernetes — new resources (CRDs), new controllers (operators), and new ways of telling the existing scheduler what you actually want. Three deep ideas underlie almost everything in the rest of the lesson: the **scheduler's two-phase decision**, the **controller pattern** (informer + work queue + reconcile), and the **CRD/operator extension model**.
-
-### A. The Scheduler in Detail: Filter + Score
-
-The scheduler runs once per unscheduled Pod (`spec.nodeName == ""`). Its decision is two phases:
-
-**Filter phase (predicates).** From all nodes, drop any that cannot run this Pod. The classic predicates:
-
-- `PodFitsResources` — does the node have enough allocatable CPU/memory left to satisfy `requests`?
-- `PodFitsHostPorts` — are the requested host ports free?
-- `PodToleratesNodeTaints` — does the Pod tolerate the node's `NoSchedule` taints?
-- `MatchNodeSelector` — does the node's labels match `spec.nodeSelector` and `nodeAffinity`?
-- `NoVolumeZoneConflict` — for stateful Pods, is the node in the same cloud zone as the PVC's volume?
-- `MatchInterPodAffinity` — does this node satisfy `podAffinity` and `podAntiAffinity`?
-
-A node that fails any predicate is removed from consideration. If zero nodes survive, the Pod stays Pending forever (events explain why).
-
-**Score phase (priorities).** For each surviving node, compute a 0–100 score from a weighted sum of priority functions:
-
-- `BalancedResourceAllocation` — prefer nodes whose CPU and memory utilization are balanced (don't fill CPU to 90% while memory sits at 10%).
-- `LeastRequestedPriority` — prefer nodes with more free resources (spreads load).
-- `NodeAffinityPriority` — prefer nodes that *prefer* (soft `nodeAffinity`) match.
-- `InterPodAffinityPriority` — same for soft inter-pod affinity.
-- `ImageLocalityPriority` — prefer nodes that already have the image cached (faster start).
-- `TaintTolerationPriority` — prefer nodes whose `PreferNoSchedule` taints are all tolerated.
-
-Highest score wins; ties broken randomly. The selected node is written to `spec.nodeName`, the kubelet on that node picks the Pod up, and runtime starts.
-
-The scheduler is **pluggable**: you can write your own predicates and priorities and run a *second scheduler* alongside the default. Pods choose the scheduler with `spec.schedulerName: my-scheduler`. This is how teams with weird hardware (GPUs of varying generations, FPGAs, special NICs) extend scheduling without forking the default.
-
-**Taints and tolerations** are the most useful manual scheduling tool: tainting a node with `gpu=true:NoSchedule` keeps anything without the matching toleration off it. The Pod's toleration is *permission* to land on the tainted node, not a *requirement* (use `nodeSelector`/`nodeAffinity` for "must run here"). The combination — taints to dedicate nodes, affinity to require/prefer them — covers most real-world topology.
-
-### B. The Controller Pattern: Informer + Work Queue + Reconcile
-
-Every K8s controller (built-in or custom) follows the same internal architecture, called the **controller pattern**. It is not a framework you call; it is a structure you adopt because the API server's design pushes you toward it.
-
-**Informer.** A long-lived watch on the API server, with a local in-memory cache. The informer:
-
-1. On startup, lists every object of its watched type and stores them in cache.
-2. Establishes a watch (`?watch=true&resourceVersion=...`) and receives streaming Add/Update/Delete events.
-3. Updates the local cache and fires registered event handlers.
-
-The cache means controllers do not hammer the API server with reads; the watch means they hear about changes within milliseconds.
-
-**Work queue.** Event handlers do *not* do work directly. They enqueue the *key* of the affected object (`namespace/name`) into a deduplicating, rate-limited work queue. Multiple events for the same key collapse into one work item. If reconciliation fails, the item is requeued with exponential backoff.
-
-**Reconcile loop.** A worker goroutine pulls a key off the queue, looks up the current state of that object via the informer cache, computes the desired state from the spec, and takes whatever action narrows the diff (create children, update status, delete orphans). It is *not* told what changed — it computes the diff fresh every time. This makes the reconcile function **idempotent** and **state-driven** rather than event-driven.
-
-The whole pattern is captured in `controller-runtime` (the Go library that builds operators). The same shape underlies the Deployment controller, ReplicaSet controller, kube-controller-manager bundles, and every CRD operator you write.
-
-The discipline: **never trust the event; always re-read state.** If the queue is delayed, the world has moved on; reconciling against the cache instead of the event you just received protects against stale-event bugs.
-
-### C. CRDs and Operators: Extending the API
+### Theory: CRDs and Operators — Extending the API
 
 Kubernetes was designed from the start to be extensible. The mechanism is the **Custom Resource Definition (CRD)** — a YAML object that registers a new resource type with the API server.
 
@@ -110,53 +56,11 @@ spec:
 
 Apply this and the API server learns to serve `kubectl get postgresqls`. Users can now create `PostgreSQL` objects and they get persisted to etcd like any built-in resource — but *nothing happens* until a controller watches them.
 
-That controller is the **operator**. It is just a controller-pattern process (§B) that watches the CRD and reconciles its spec into actual resources: a StatefulSet for the Postgres pods, a Service for clients, Secrets for credentials, regular backups, failover logic. The operator encodes the operational knowledge — "to make a PostgreSQL highly available, you need to do X, Y, Z" — as code that runs continuously.
+That controller is the **operator**. It is just a controller-pattern process that watches the CRD and reconciles its spec into actual resources: a StatefulSet for the Postgres pods, a Service for clients, Secrets for credentials, regular backups, failover logic. The operator encodes the operational knowledge — "to make a PostgreSQL highly available, you need to do X, Y, Z" — as code that runs continuously.
 
 The pattern works because CRDs let domain experts define a high-level resource (`PostgreSQL`) and ship a controller that knows how to operate it. Users see `kubectl apply -f postgres.yaml`; the operator does the StatefulSet/PVC/replication wrangling underneath. Examples: cert-manager (`Certificate`, `Issuer`), Prometheus operator (`Prometheus`, `ServiceMonitor`), Argo CD (`Application`), Strimzi (`Kafka`).
 
-The Operator Framework / OperatorSDK / kubebuilder are scaffolding tools to write operators in Go (or any language with a controller-runtime port). Helm charts can also use the operator model: helm-operator wraps a chart so it can be deployed via a CRD instance.
-
-### D. StatefulSet and the "Stable Identity" Problem
-
-A Deployment treats Pods as interchangeable replicas — same image, same config, no identity. For databases and consensus systems (Postgres replicas, ZooKeeper ensembles, Cassandra rings) that's wrong. They need:
-
-- **Stable network identity.** Pod 0 should always be `db-0.db-service.namespace.svc.cluster.local`, even after restart.
-- **Stable storage.** Pod 0's PVC follows Pod 0 across reschedules — not a fresh empty volume.
-- **Ordered rollout.** During an update, replace Pod N-1 only after Pod N is healthy. Reverse for scale-down.
-
-`StatefulSet` provides all three: Pods are named `<name>-0`, `<name>-1`, ..., a `headless Service` (clusterIP=None) gives each Pod its own DNS name, and `volumeClaimTemplates` creates one PVC per replica that survives pod deletion.
-
-The trade-off is operations. Updating a StatefulSet is slower (one Pod at a time, in order). Scale-down keeps PVCs around (so re-scaling-up reattaches them — but you must clean them manually if you really want them gone). And the application itself has to know it has identity ("I am replica 0, I am the primary").
-
-### E. Persistent Storage: PV, PVC, StorageClass
-
-Storage in K8s is split into three resources to decouple developers from cluster admins:
-
-- **PersistentVolume (PV)** — a cluster-scoped resource representing a chunk of storage that *exists* (a real EBS volume, a real NFS export, a real Ceph image). Created by an admin or by a dynamic provisioner.
-- **PersistentVolumeClaim (PVC)** — a namespaced request for storage: "I need 10Gi of `fast-ssd` storage, ReadWriteOnce." Created by the application developer.
-- **StorageClass** — a template for dynamic provisioning: "when a PVC references this class, run *this* CSI driver to allocate a PV with these parameters." Created by the cluster admin once.
-
-The matchmaking logic: a new PVC binds to a fitting existing PV (size + class + access mode), or — if none exists — triggers the StorageClass's provisioner to create one. Once bound, the Pod's `volumes` field references the PVC by name and the kubelet mounts the underlying volume into the container.
-
-`accessModes` matter: `ReadWriteOnce` (single node, fits block devices like EBS), `ReadWriteMany` (multi-node, requires NFS-like backends), `ReadOnlyMany`. Most cloud block storage is RWO and forces single-node placement of stateful workloads.
-
-CSI (Container Storage Interface) is the standard plugin API — every cloud and storage vendor ships a CSI driver, and K8s talks to all of them through the same interface. Snapshots, clones, and resizing are CSI features your storage backend may or may not support.
-
-### From Theory to the Resources Below
-
-- **Ingress / Gateway API** — controllers that watch `Ingress` / `HTTPRoute` resources (CRD pattern §C) and reconcile them into nginx/Envoy/Istio configuration.
-- **StatefulSet** — §D in YAML form. Wires headless Service + volumeClaimTemplates for stable identity + storage.
-- **PV / PVC / StorageClass** — §E. The storage decoupling that makes "I need persistent storage" meaningful without naming the underlying disk.
-- **DaemonSet** — a controller (§B) whose reconcile rule is "one replica per node matching this selector." Used for log shippers, node monitoring, CNI agents.
-- **Job / CronJob** — controllers reconciling "run this Pod to completion N times" (Job) or "create a Job on this schedule" (CronJob).
-- **Affinity / antiAffinity / taints / tolerations** — §A. The vocabulary you write to bias the scheduler's decision.
-- **Custom controllers / operators** — §B + §C combined. Most production K8s ends up running several of these.
-
-The remaining sections walk these resources. Whenever a resource feels mysterious, identify which controller owns it and what it watches; the reconciliation pattern explains the rest.
-
----
-
-## 1. Ingress
+The Operator Framework / OperatorSDK / kubebuilder are scaffolding tools to write operators in Go (or any language with a controller-runtime port). Helm charts can also use the operator model: helm-operator wraps a chart so it can be deployed via a CRD instance. Ingress is itself an early example of this pattern — `Ingress` is a built-in resource, but the *controller* (nginx-ingress, Traefik, Istio Gateway) is a separate component you install.
 
 ### 1.1 Ingress Concepts
 
@@ -558,6 +462,18 @@ spec:
 
 ## 3. StatefulSet
 
+### Theory: The "Stable Identity" Problem
+
+A Deployment treats Pods as interchangeable replicas — same image, same config, no identity. For databases and consensus systems (Postgres replicas, ZooKeeper ensembles, Cassandra rings) that's wrong. They need:
+
+- **Stable network identity.** Pod 0 should always be `db-0.db-service.namespace.svc.cluster.local`, even after restart.
+- **Stable storage.** Pod 0's PVC follows Pod 0 across reschedules — not a fresh empty volume.
+- **Ordered rollout.** During an update, replace Pod N-1 only after Pod N is healthy. Reverse for scale-down.
+
+`StatefulSet` provides all three: Pods are named `<name>-0`, `<name>-1`, ..., a `headless Service` (clusterIP=None) gives each Pod its own DNS name, and `volumeClaimTemplates` creates one PVC per replica that survives pod deletion.
+
+The trade-off is operations. Updating a StatefulSet is slower (one Pod at a time, in order). Scale-down keeps PVCs around (so re-scaling-up reattaches them — but you must clean them manually if you really want them gone). And the application itself has to know it has identity ("I am replica 0, I am the primary").
+
 ### 2.1 StatefulSet Concepts
 
 ```
@@ -818,6 +734,20 @@ kubectl delete pvc -l app=web  # Delete PVCs
 ---
 
 ## 4. Persistent Storage
+
+### Theory: PV, PVC, StorageClass
+
+Storage in K8s is split into three resources to decouple developers from cluster admins:
+
+- **PersistentVolume (PV)** — a cluster-scoped resource representing a chunk of storage that *exists* (a real EBS volume, a real NFS export, a real Ceph image). Created by an admin or by a dynamic provisioner.
+- **PersistentVolumeClaim (PVC)** — a namespaced request for storage: "I need 10Gi of `fast-ssd` storage, ReadWriteOnce." Created by the application developer.
+- **StorageClass** — a template for dynamic provisioning: "when a PVC references this class, run *this* CSI driver to allocate a PV with these parameters." Created by the cluster admin once.
+
+The matchmaking logic: a new PVC binds to a fitting existing PV (size + class + access mode), or — if none exists — triggers the StorageClass's provisioner to create one. Once bound, the Pod's `volumes` field references the PVC by name and the kubelet mounts the underlying volume into the container.
+
+`accessModes` matter: `ReadWriteOnce` (single node, fits block devices like EBS), `ReadWriteMany` (multi-node, requires NFS-like backends), `ReadOnlyMany`. Most cloud block storage is RWO and forces single-node placement of stateful workloads.
+
+CSI (Container Storage Interface) is the standard plugin API — every cloud and storage vendor ships a CSI driver, and K8s talks to all of them through the same interface. Snapshots, clones, and resizing are CSI features your storage backend may or may not support.
 
 ### 3.1 Storage Hierarchy
 
@@ -1203,6 +1133,26 @@ spec:
 
 ## 6. DaemonSet and Job
 
+### Theory: The Controller Pattern — Informer + Work Queue + Reconcile
+
+Every K8s controller (built-in or custom) follows the same internal architecture, called the **controller pattern**. It is not a framework you call; it is a structure you adopt because the API server's design pushes you toward it.
+
+**Informer.** A long-lived watch on the API server, with a local in-memory cache. The informer:
+
+1. On startup, lists every object of its watched type and stores them in cache.
+2. Establishes a watch (`?watch=true&resourceVersion=...`) and receives streaming Add/Update/Delete events.
+3. Updates the local cache and fires registered event handlers.
+
+The cache means controllers do not hammer the API server with reads; the watch means they hear about changes within milliseconds.
+
+**Work queue.** Event handlers do *not* do work directly. They enqueue the *key* of the affected object (`namespace/name`) into a deduplicating, rate-limited work queue. Multiple events for the same key collapse into one work item. If reconciliation fails, the item is requeued with exponential backoff.
+
+**Reconcile loop.** A worker goroutine pulls a key off the queue, looks up the current state of that object via the informer cache, computes the desired state from the spec, and takes whatever action narrows the diff (create children, update status, delete orphans). It is *not* told what changed — it computes the diff fresh every time. This makes the reconcile function **idempotent** and **state-driven** rather than event-driven.
+
+The whole pattern is captured in `controller-runtime` (the Go library that builds operators). The same shape underlies the Deployment controller, ReplicaSet controller, kube-controller-manager bundles, and every CRD operator you write — including the DaemonSet and Job controllers below.
+
+The discipline: **never trust the event; always re-read state.** If the queue is delayed, the world has moved on; reconciling against the cache instead of the event you just received protects against stale-event bugs.
+
 ### 5.1 DaemonSet
 
 ```yaml
@@ -1383,6 +1333,36 @@ spec:
 ---
 
 ## 7. Advanced Scheduling
+
+### Theory: The Scheduler in Detail — Filter + Score
+
+The scheduler runs once per unscheduled Pod (`spec.nodeName == ""`). Its decision is two phases:
+
+**Filter phase (predicates).** From all nodes, drop any that cannot run this Pod. The classic predicates:
+
+- `PodFitsResources` — does the node have enough allocatable CPU/memory left to satisfy `requests`?
+- `PodFitsHostPorts` — are the requested host ports free?
+- `PodToleratesNodeTaints` — does the Pod tolerate the node's `NoSchedule` taints?
+- `MatchNodeSelector` — does the node's labels match `spec.nodeSelector` and `nodeAffinity`?
+- `NoVolumeZoneConflict` — for stateful Pods, is the node in the same cloud zone as the PVC's volume?
+- `MatchInterPodAffinity` — does this node satisfy `podAffinity` and `podAntiAffinity`?
+
+A node that fails any predicate is removed from consideration. If zero nodes survive, the Pod stays Pending forever (events explain why).
+
+**Score phase (priorities).** For each surviving node, compute a 0–100 score from a weighted sum of priority functions:
+
+- `BalancedResourceAllocation` — prefer nodes whose CPU and memory utilization are balanced (don't fill CPU to 90% while memory sits at 10%).
+- `LeastRequestedPriority` — prefer nodes with more free resources (spreads load).
+- `NodeAffinityPriority` — prefer nodes that *prefer* (soft `nodeAffinity`) match.
+- `InterPodAffinityPriority` — same for soft inter-pod affinity.
+- `ImageLocalityPriority` — prefer nodes that already have the image cached (faster start).
+- `TaintTolerationPriority` — prefer nodes whose `PreferNoSchedule` taints are all tolerated.
+
+Highest score wins; ties broken randomly. The selected node is written to `spec.nodeName`, the kubelet on that node picks the Pod up, and runtime starts.
+
+The scheduler is **pluggable**: you can write your own predicates and priorities and run a *second scheduler* alongside the default. Pods choose the scheduler with `spec.schedulerName: my-scheduler`. This is how teams with weird hardware (GPUs of varying generations, FPGAs, special NICs) extend scheduling without forking the default.
+
+**Taints and tolerations** are the most useful manual scheduling tool: tainting a node with `gpu=true:NoSchedule` keeps anything without the matching toleration off it. The Pod's toleration is *permission* to land on the tainted node, not a *requirement* (use `nodeSelector`/`nodeAffinity` for "must run here"). The combination — taints to dedicate nodes, affinity to require/prefer them — covers most real-world topology.
 
 ### 6.1 Node Affinity
 

@@ -16,7 +16,6 @@
 
 ## 목차
 
-드라이버 레퍼런스 전에 [**이론과 원리**](#이론과-원리) 섹션을 읽으세요. 각 드라이버 뒤의 리눅스 커널 메커니즘(네트워크 네임스페이스, veth 페어, 브리지, iptables NAT, VXLAN 캡슐화), 그리고 Kubernetes 같은 오케스트레이터가 그것들을 호출할 때 쓰는 CNI 플러그인 인터페이스를 다룹니다.
 
 1. [Docker 네트워크 드라이버](#1-docker-네트워크-드라이버)
 2. [브리지 네트워크 심화](#2-브리지-네트워크-심화)
@@ -37,133 +36,29 @@
 
 ---
 
-## 이론과 원리
-
-컨테이너 네트워킹은 각 네트워크 드라이버가 수십 년간 존재한 리눅스 커널 기능들의 작은 조합임을 깨닫기 전까지는 마법처럼 보입니다. `docker network create -d bridge`의 "네트워킹"은 **네트워크 네임스페이스** + **veth 페어** + **리눅스 브리지** + **iptables NAT 규칙**입니다. 오버레이 네트워킹은 **VXLAN 캡슐화**를 더합니다. macvlan은 **가상 MAC 서브 인터페이스**를 더합니다. 커널 조각의 이름을 댈 수 있게 되면 모든 Docker 네트워크 동작이 추적 가능해집니다.
-
-### A. 네트워크 네임스페이스: 컨테이너별 네트워크 스택
-
-커널의 **네트워크 네임스페이스**는 네트워크 관련 모든 것을 격리합니다 — 인터페이스, 라우팅 테이블, iptables 규칙, 소켓, 포트 할당. 네트워크 네임스페이스 안의 프로세스는 그 네임스페이스에 든 인터페이스와 경로만 봅니다.
-
-Docker가 컨테이너를 시작하면 `runc`에게 `clone(CLONE_NEWNET)` 호출을 요청하고, 새 프로세스는 새롭고 빈 네트워크 네임스페이스에 들어갑니다. 그 네임스페이스에는 `lo`(loopback) 인터페이스만 있고, 경로도 없고, 어디에도 닿을 수 없습니다. 컨테이너가 가진 모든 연결성은 Docker(또는 `runc`의 셋업 훅)가 컨테이너의 메인 프로세스 `exec` 전에 그 네임스페이스에 손을 넣어 구성한 결과입니다.
-
-`lsns -t net`으로 네임스페이스 나열, `nsenter -t <pid> -n <command>`로 진입, `ip netns add foo`로 수동 생성이 가능합니다. Docker가 네트워크 측면에서 하는 모든 것은 `ip` 명령으로 손수 재현 가능 — Docker는 그저 자동화할 뿐.
-
-### B. veth 페어: 네임스페이스 사이의 케이블
-
-**veth(virtual Ethernet) 페어**는 서로 연결된 두 가상 인터페이스. 한 끝으로 보낸 것은 정확히 물리 케이블처럼 다른 끝으로 나옵니다. 두 인터페이스는 서로 다른 네임스페이스에 살 수 있어, veth 페어가 호스트 네트워크 네임스페이스와 컨테이너 네트워크 네임스페이스를 *연결*하는 표준 방법입니다.
-
-기본 브리지의 컨테이너에 대해 Docker는 —
-
-1. 호스트에 `vethXXXX` 생성(한 끝).
-2. 컨테이너 netns 안에 `eth0` 생성(다른 끝).
-3. `vethXXXX`를 호스트 네트워크 네임스페이스로 이동(거기 부착된 채 머무름).
-4. `eth0`를 컨테이너 netns로 이동, `docker0`의 서브넷에서 IP 구성(예: `172.17.0.2/16`).
-5. `vethXXXX`를 `docker0` 리눅스 브리지의 멤버로 추가.
-
-이제 컨테이너의 `eth0`에서 보낸 패킷이 호스트의 `vethXXXX`를 빠져나와 `docker0` 브리지로 들어가고, 거기서 브리지에 부착된 다른 어떤 veth로든 — 즉, 같은 네트워크의 다른 어떤 컨테이너로든 — 포워드될 수 있습니다.
-
-### C. 리눅스 브리지: veth 엔드포인트용 소프트웨어 스위치
-
-`docker0`는 **리눅스 브리지** — 커널에 구현된 소프트웨어 L2 스위치. 하드웨어 스위치처럼 MAC 주소 테이블을 가지고, 부착된 인터페이스 사이에 목적지 MAC으로 이더넷 프레임을 포워드합니다.
-
-사용자 정의 브리지 네트워크(`docker network create my-net`)를 만들면, Docker가 새 리눅스 브리지(`br-XXXXXXXXXXXX`)를 만들고 컨테이너 veth들을 `docker0` 대신 거기 붙입니다. `docker0` 대비 두 핵심 차이 —
-
-- **DNS 기반 서비스 디스커버리 활성화.** Docker가 임베디드 DNS 서버(컨테이너에서 `127.0.0.11`로 닿음)를 돌려 사용자 정의 브리지의 모든 컨테이너 이름을 압니다. 컨테이너가 서로를 컨테이너 이름으로 리졸브 가능. 기본 `docker0` 브리지는 이게 *없으며*, 같은 효과를 위해 `--link`(폐기됨)가 필요했습니다.
-- **컨테이너 간 트래픽 기본 허용.** 둘 다 동일하지만, 사용자 정의 브리지는 `--internal`(외부 연결 전무)과 `--icc=false`(컨테이너 간 트래픽 차단) 플래그를 가질 수 있습니다.
-
-비자명한 셋업의 권장 원시는 사용자 정의 브리지입니다.
-
-### D. iptables NAT: 컨테이너가 인터넷에 어떻게 닿는가, 호스트가 컨테이너에 어떻게 닿는가
-
-`docker0`의 컨테이너는 호스트의 외부 네트워크에서 라우팅되지 않는 사설 IP(`172.17.0.X`)를 가집니다. 아웃바운드 트래픽을 위해 Docker는 **MASQUERADE** 규칙을 설치합니다.
-
-```
-iptables -t nat -A POSTROUTING -s 172.17.0.0/16 ! -o docker0 -j MASQUERADE
-```
-
-번역 — 브리지 서브넷에서 발신되어 `docker0` 자체가 아닌 어떤 인터페이스로 나가는 패킷은 출발 IP가 호스트의 아웃바운드 인터페이스 IP로 재작성됨. 커널이 연결을 추적하고 응답이 돌아올 때 재작성 해제. 컨테이너는 인터넷 접근, 외부는 호스트 IP를 봄.
-
-`docker run -p 8080:80`로 인바운드 트래픽을 위해 Docker가 **DNAT** 규칙을 설치합니다.
-
-```
-iptables -t nat -A DOCKER -p tcp --dport 8080 -j DNAT --to-destination 172.17.0.2:80
-```
-
-거기에 hairpin과 특정 엣지 케이스용 폴백으로 `docker-proxy` 사용자 공간 프로세스. DNAT가 들어오는 패킷의 목적지 IP/포트를 재작성해 컨테이너로 포워드되게 함. 컨테이너가 응답하고 커널이 응답을 역재작성.
-
-호스트의 `iptables -t nat -L -n -v`가 Docker가 설치한 모든 게시 포트와 아웃바운드 규칙을 보여 줍니다. `docker run -p`가 안 될 때 살필 곳입니다.
-
-### E. 오버레이 네트워크와 VXLAN 캡슐화
-
-다중 호스트 네트워킹(Swarm, 오버레이 CNI를 가진 Kubernetes)을 위해, 다른 호스트의 컨테이너들이 같은 L2 세그먼트에 있는 듯 통신해야 합니다. 표준 메커니즘은 **VXLAN(Virtual eXtensible LAN) 캡슐화**.
-
-흐름 —
-
-1. 호스트 1의 컨테이너 A가 호스트 2의 컨테이너 B로 이더넷 프레임 전송.
-2. 프레임이 호스트 1의 오버레이 브리지에 도착, 컨테이너 B가 호스트 2 "뒤에" 있음을 앎.
-3. 호스트 1의 VXLAN 드라이버가 전체 이더넷 프레임을 호스트 2 주소의 UDP 데이터그램(VXLAN 헤더 + 외부 IP/UDP)으로 감쌈.
-4. UDP 패킷이 underlay 네트워크(실제 LAN/VPC) 위로 이동.
-5. 호스트 2가 UDP를 받고, 내부 이더넷 프레임을 캡슐 해제, 컨테이너 B의 veth로 전달.
-
-"L2 세그먼트"는 가상이며, 물리적으로는 그저 4789 포트의 UDP 트래픽. VXLAN은 24비트 **VNI(Virtual Network Identifier)**를 할당해 여러 오버레이 네트워크가 같은 underlay를 공유하게 합니다. 컨트롤 플레인(어느 호스트에 어느 컨테이너, 어느 VNI에)은 오케스트레이터가 유지 — Swarm은 gossip, Kubernetes 오버레이 CNI(Flannel, Weave, Calico VXLAN)는 다양한 메커니즘.
-
-대가 — 패킷당 오버헤드(헤더 ~50바이트), MTU 튜닝 골치(외부에 자리를 남기려면 내부 MTU가 외부보다 작아야 함), 디버깅 어려움(`tcpdump`가 VXLAN으로 감싼 트래픽을 보여줌, `tcpdump -v vxlan`이나 컨테이너 netns 안에서 캡처 필요).
-
-### F. macvlan과 ipvlan: 브리지 건너뛰기
-
-macvlan은 부모 물리 인터페이스를 공유하는 **자체 MAC 주소를 가진 가상 서브 인터페이스**를 만듭니다. 컨테이너가 호스트의 L2 네트워크에 직접 IP를 가짐 — NAT, 브리지, 포트 매핑 없음. 네트워크 나머지의 시각에서 각 컨테이너는 자체 MAC과 IP를 가진 일급 호스트.
-
-사용 사례 — 자체 IP로 회사 LAN에 있어야 하는 레거시 애플리케이션, MAC 기반 ACL을 모니터링하는 애플리케이션. 트레이드오프 — 대부분의 클라우드 공급자가 macvlan에 필요한 "promiscuous" 모드를 차단(AWS / GCP / Azure VM에서 기본적으로 못 씀), 일부 스위치가 포트당 MAC 수를 제한.
-
-ipvlan은 비슷하지만 서브 인터페이스가 부모 MAC을 공유하고 IP만 다름. 클라우드 호환성 더 좋음, 그러나 L3 전용(서브 인터페이스 사이에 broadcast/multicast 없음).
-
-### G. CNI: Kubernetes가 쓰는 플러그인 인터페이스
-
-Kubernetes는 내장 네트워크 드라이버가 없습니다. **CNI(Container Network Interface)** 명세를 정의 — "이 네트워크 네임스페이스와 이 매개변수에 대해 컨테이너 네트워킹을 셋업해라"의 JSON 스키마. kubelet이 stdin에 JSON 설정을 주고 `/opt/cni/bin/<plugin> ADD/DEL`을 호출. 플러그인이 veth, IP 할당, 경로 등을 셋업하고 한 일을 기술하는 JSON 반환.
-
-표준 CNI 플러그인 —
-
-- `bridge` — Docker 기본 브리지와 같은 아이디어.
-- `host-local` — 디스크에 저장된 정적 범위에서 할당하는 IPAM(IP Address Management).
-- `flannel` — 단순 컨트롤 플레인의 VXLAN 오버레이.
-- `calico` — BGP 라우팅(기본적으로 VXLAN 없음), NetworkPolicy 구현.
-- `cilium` — eBPF 기반 데이터플레인, iptables 대신 eBPF에서 NetworkPolicy + Service 로드 밸런싱.
-- `weave` — 암호화된 VXLAN 유사 오버레이.
-
-CNI 명세는 오케스트레이터가 특정 네트워킹 구현에 의존하지 않게 함 — 클러스터 네트워킹 동작을 바꾸려면 CNI 플러그인을 교체. Docker 엔진은 CNI 이전에 자체 libnetwork 플러그인 시스템이 있음. Kubernetes에서는 kubelet이 찾는 CNI 바이너리만 중요.
-
-### H. DNS 기반 서비스 디스커버리
-
-Docker 데몬은 사용자 정의 브리지 네트워크 안 `127.0.0.11`에 임베디드 DNS 서버를 돌립니다. 컨테이너가 `web`을 쿼리하면 리졸버는 —
-
-1. `/etc/hosts` 확인(Docker가 `127.0.0.11 ndots:0` 리졸버 힌트와 컨테이너 자체 이름을 씀).
-2. 쿼리를 `127.0.0.11`로 포워드.
-3. Docker DNS가 로컬 네트워크의 이름 테이블에서 `web` 조회 — 모든 컨테이너의 `--name`(과 별칭)이 등록됨.
-4. 컨테이너 IP 반환.
-
-외부 이름(`google.com`)에 대해 Docker DNS는 호스트의 상류 리졸버(보통 호스트의 `/etc/resolv.conf`)로 포워드. `docker run`의 `--dns`나 compose의 `dns:`로 오버라이드 가능.
-
-Kubernetes에서는 Pod으로 도는 **CoreDNS**가 같은 역할이며, Service IP가 모든 Pod의 `/etc/resolv.conf`에 `nameserver`로 주입됩니다. `my-svc.my-ns.svc.cluster.local` 같은 서비스 이름이 ClusterIP로 리졸브.
-
-### 이론에서 아래의 드라이버로
-
-- **bridge 드라이버** — netns + veth + 리눅스 브리지 + iptables MASQUERADE/DNAT(§A–D). 사용자 정의 브리지에 임베디드 DNS 추가(§H).
-- **host 드라이버** — 네트워크 네임스페이스 통째로 스킵. 컨테이너가 호스트 네트워크 스택 공유. 격리 없음, NAT 없음, 가장 빠름. 고처리량 사이드카와 로드 밸런서에 유용.
-- **none 드라이버** — `lo`만 있는 새 netns. 컨테이너가 자기 자신과 통신 가능, 그 외엔 안 됨. 네트워킹을 대역 외로 부착받는 보안 민감 워크로드에 유용.
-- **overlay 드라이버** — 호스트 사이의 리눅스 브리지 + VXLAN 터널(§E). Docker Swarm과 많은 Kubernetes CNI의 기반.
-- **macvlan / ipvlan 드라이버** — 호스트의 L2 네트워크에 자체 MAC/IP를 가진 서브 인터페이스(§F). "컨테이너가 일급 네트워크 시민"인 요구사항용.
-- **iptables / 방화벽 규칙** — 모든 게시 포트(§D), 모든 컨테이너-호스트 우회, K8s의 모든 NetworkPolicy가 여기 안착. `iptables -L -t nat -n -v`가 보편적 디버거.
-- **CNI 플러그인** — 위 모든 것에 대한 오케스트레이터 인터페이스(§G).
-- **DNS 리졸루션** — Docker는 `127.0.0.11`의 임베디드 서버, K8s는 CoreDNS(§H).
-
-남은 섹션은 이 드라이버들과 관리 CLI를 둘러봅니다. 연결성 문제가 막힐 때마다 `nsenter -t <pid> -n ip route show && iptables -t nat -L -n`으로 떨어져 위 커널 계층을 통해 패킷 경로를 추적하세요.
-
----
-
 ## 1. Docker 네트워크 드라이버
 
 Docker는 다양한 사용 사례를 위한 여러 네트워크 드라이버를 제공합니다.
+
+### 이론: 네트워크 네임스페이스 — 컨테이너별 네트워크 스택
+
+컨테이너 네트워킹은 각 네트워크 드라이버가 리눅스 커널 기능들의 작은 합성임을 깨닫기 전까지는 마법처럼 보입니다. `docker network create -d bridge`의 "네트워킹"은 **네트워크 네임스페이스** + **veth 페어** + **리눅스 브리지** + **iptables NAT 규칙**입니다. 오버레이 네트워킹이 **VXLAN 캡슐화**를 추가합니다. Macvlan이 **가상 MAC 서브 인터페이스**를 추가합니다.
+
+커널의 **네트워크 네임스페이스**는 네트워크 관련 모든 것을 격리합니다 — 인터페이스, 라우팅 테이블, iptables 규칙, 소켓, 포트 할당. 네트워크 네임스페이스 안의 프로세스는 그 네임스페이스가 담은 인터페이스와 라우트만 봅니다.
+
+Docker가 컨테이너를 시작하면 `runc`에 `clone(CLONE_NEWNET)` 호출을 요청해 새 프로세스를 신선한 빈 네트워크 네임스페이스에 둡니다. 그 네임스페이스에는 `lo`(loopback) 인터페이스만 있고, 라우트 없고, 어디에도 닿을 수 없습니다. 컨테이너가 결국 갖는 어떤 연결성이든 Docker(또는 `runc`의 셋업 훅)가 컨테이너의 메인 프로세스가 `exec`되기 전에 그 네임스페이스에 들어가 구성한 결과입니다.
+
+`lsns -t net`으로 네임스페이스 목록, `nsenter -t <pid> -n <command>`로 진입, `ip netns add foo`로 수동 생성. Docker가 네트워크적으로 하는 모든 것은 `ip` 명령으로 손수 재현 가능 — Docker는 그것을 자동화할 뿐.
+
+### 이론: macvlan, ipvlan, CNI
+
+**Macvlan**은 부모 물리 인터페이스를 공유하면서 자체 MAC 주소를 가진 가상 서브 인터페이스를 생성합니다. 컨테이너가 호스트의 L2 네트워크에 직접 IP를 가짐 — NAT 없음, 브리지 없음, 포트 매핑 없음. 네트워크의 다른 시각에서 각 컨테이너가 자체 MAC과 IP를 가진 1급 호스트. 사용 사례 — 자체 IP로 회사 LAN에 있어야 하는 레거시 애플리케이션, 또는 MAC 기반 ACL을 모니터링하는 애플리케이션. 트레이드오프 — 대부분의 클라우드 공급자가 macvlan에 필요한 "promiscuous" 모드를 차단(AWS / GCP / Azure VM에서 기본적으로 사용 불가), 일부 스위치가 포트당 MAC을 제한.
+
+**Ipvlan**은 비슷하지만 서브 인터페이스가 부모의 MAC을 공유하고 IP만 다릅니다. 클라우드 호환성 더 좋지만 L3 전용(서브 인터페이스 사이 broadcast/multicast 없음).
+
+Kubernetes는 내장 네트워크 드라이버가 없습니다. **CNI(Container Network Interface)** 명세를 정의 — "이 네트워크 네임스페이스와 이 파라미터로 컨테이너의 네트워킹을 셋업"의 JSON 스키마. kubelet이 stdin의 JSON 설정으로 `/opt/cni/bin/<plugin> ADD/DEL`을 호출, 플러그인이 veth, IP 할당, 라우트 등을 셋업하고 한 일을 기술하는 JSON을 반환. 표준 CNI 플러그인 — `bridge`(Docker 기본 브리지와 같은 아이디어), `host-local`(정적 범위에서 할당하는 IPAM), `flannel`(단순 컨트롤 플레인의 VXLAN 오버레이), `calico`(BGP 라우팅, NetworkPolicy 구현), `cilium`(eBPF 데이터플레인, iptables 대신 eBPF의 NetworkPolicy + Service 로드 밸런싱), `weave`(암호화된 VXLAN류 오버레이).
+
+CNI 명세 덕분에 오케스트레이터가 특정 네트워킹 구현에 의존하지 않습니다. CNI 플러그인을 교체해 클러스터 네트워킹 동작을 바꿉니다. Docker 엔진은 CNI를 앞서는 자체 libnetwork 플러그인 시스템을 가집니다. Kubernetes에서는 kubelet이 찾는 CNI 바이너리만 중요합니다.
 
 ### 네트워크 드라이버 개요
 
@@ -237,6 +132,31 @@ docker network inspect bridge
 ---
 
 ## 2. 브리지 네트워크 심화
+
+### 이론: veth 페어 — 네임스페이스 사이의 케이블
+
+**veth(virtual Ethernet) 페어**는 서로 연결된 두 가상 인터페이스. 한 끝으로 보낸 것은 다른 끝으로 정확히 물리 케이블처럼 나옵니다. 인터페이스가 다른 네임스페이스에 살 수 있어, veth 페어가 호스트 네트워크 네임스페이스와 컨테이너 네트워크 네임스페이스를 *연결*하는 표준 방법.
+
+기본 브리지의 컨테이너에 대해 Docker는 —
+
+1. 호스트에 `vethXXXX` 생성(한 끝).
+2. 컨테이너 netns 안에 `eth0` 생성(다른 끝).
+3. `vethXXXX`를 호스트 네트워크 네임스페이스로 이동(거기에 부착된 채로).
+4. `eth0`을 컨테이너 netns로 이동하고 `docker0`의 서브넷에서 IP(예: `172.17.0.2/16`)로 구성.
+5. `vethXXXX`를 `docker0` 리눅스 브리지의 멤버로 추가.
+
+이제 컨테이너의 `eth0` 안에서 보낸 패킷이 호스트의 `vethXXXX`로 나와 `docker0` 브리지로 들어가고, 거기서 브리지에 부착된 다른 어떤 veth(즉, 같은 네트워크의 다른 컨테이너)로든 포워딩될 수 있습니다.
+
+### 이론: 리눅스 브리지 — veth 엔드포인트용 소프트웨어 스위치
+
+`docker0`은 **리눅스 브리지** — 커널에 구현된 소프트웨어 L2 스위치. 하드웨어 스위치처럼 MAC 주소 테이블을 갖고, 목적지 MAC으로 부착된 인터페이스 사이에 이더넷 프레임을 포워딩.
+
+사용자 정의 브리지 네트워크(`docker network create my-net`)를 만들면 Docker가 새 리눅스 브리지(`br-XXXXXXXXXXXX`)를 만들고 `docker0` 대신 거기에 컨테이너 veth를 부착. `docker0` 대비 두 핵심 차이 —
+
+- **DNS 기반 서비스 디스커버리 활성화.** Docker가 사용자 정의 브리지의 모든 컨테이너 이름을 아는 임베디드 DNS 서버(각 컨테이너에서 닿는 `127.0.0.11`)를 돌립니다. 컨테이너가 컨테이너 이름으로 서로 리졸브 가능. 기본 `docker0` 브리지에는 이게 *없음* — 같은 효과를 위해 `--link`(폐기됨) 필요.
+- **컨테이너 간 트래픽이 기본 허용.** 둘 다 같지만, 사용자 정의 브리지는 `--internal`(외부 연결성 전혀 없음)와 `--icc=false`(컨테이너 간 트래픽 차단) 플래그 가능.
+
+사용자 정의 브리지는 사소하지 않은 어떤 셋업에도 권장 원시.
 
 브리지 네트워크(Bridge Network)는 컨테이너에 가장 일반적인 네트워크 유형입니다.
 
@@ -459,6 +379,22 @@ docker exec isolated ip addr
 
 ## 4. 오버레이 네트워크
 
+### 이론: 오버레이 네트워크와 VXLAN 캡슐화
+
+다중 호스트 네트워킹(Swarm, 오버레이 CNI 있는 Kubernetes)에서 다른 호스트의 컨테이너들이 같은 L2 세그먼트에 있는 것처럼 통신해야 합니다. 표준 메커니즘은 **VXLAN(Virtual eXtensible LAN) 캡슐화**입니다.
+
+흐름 —
+
+1. Host 1의 Container A가 Host 2의 Container B로 이더넷 프레임 전송.
+2. 프레임이 Host 1의 오버레이 브리지에 도착, 브리지가 Container B는 Host 2 "뒤"에 있다고 앎.
+3. Host 1의 VXLAN 드라이버가 전체 이더넷 프레임을 Host 2 주소의 UDP 데이터그램(VXLAN 헤더 + 외부 IP/UDP)으로 감쌈.
+4. UDP 패킷이 underlay 네트워크(실제 LAN/VPC)를 가로질러 이동.
+5. Host 2가 UDP를 받아 내부 이더넷 프레임을 디캡슐화하고 Container B의 veth로 전달.
+
+"L2 세그먼트"는 가상이고, 물리적으로는 그저 4789 포트의 UDP 트래픽. VXLAN이 24비트 **VNI(Virtual Network Identifier)**를 할당해 여러 오버레이 네트워크가 같은 underlay를 공유 가능. 컨트롤 플레인(어느 호스트에 어느 컨테이너가 있고, 어느 VNI에)은 오케스트레이터가 유지 — Swarm은 gossip 사용, Kubernetes 오버레이 CNI(Flannel, Weave, Calico VXLAN)는 다양한 메커니즘 사용.
+
+비용은 패킷당 오버헤드(~50바이트 헤더), MTU 튜닝 두통(내부 MTU가 외부보다 작아야 공간 확보), 더 어려운 디버깅(`tcpdump`가 VXLAN 감싼 트래픽을 보여줌. `tcpdump -v vxlan`이나 컨테이너 netns 내부에서 캡처 필요).
+
 오버레이 네트워크(Overlay Network)는 Docker Swarm에서 다중 호스트 컨테이너 통신을 가능하게 합니다.
 
 ### 오버레이 네트워크 아키텍처
@@ -676,6 +612,19 @@ docker network create \
 
 ## 6. DNS와 서비스 디스커버리
 
+### 이론: DNS 기반 서비스 디스커버리
+
+Docker 데몬은 각 사용자 정의 브리지 네트워크 안에서 `127.0.0.11`에 임베디드 DNS 서버를 돌립니다. 컨테이너가 `web`을 질의하면 리졸버가 —
+
+1. `/etc/hosts` 확인(Docker가 `127.0.0.11 ndots:0` 리졸버 힌트와 컨테이너 자체 이름을 씀).
+2. 질의를 `127.0.0.11`로 포워드.
+3. Docker DNS가 로컬 네트워크의 이름 테이블에서 `web` 조회 — 모든 컨테이너의 `--name`(과 모든 alias)이 등록됨.
+4. 컨테이너의 IP 반환.
+
+외부 이름(`google.com`)에 대해서는 Docker DNS가 호스트의 상류 리졸버(보통 호스트의 `/etc/resolv.conf`)로 포워드. `docker run`의 `--dns`나 compose의 `dns:`로 덮어쓰기 가능.
+
+Kubernetes의 동등물은 Pod으로 도는 **CoreDNS** + 모든 Pod의 `/etc/resolv.conf`에 `nameserver`로 주입된 Service IP. `my-svc.my-ns.svc.cluster.local` 같은 서비스 이름이 ClusterIP로 리졸브.
+
 ### 임베디드 DNS 서버
 
 Docker는 컨테이너 이름에 대한 자동 DNS 해석을 제공합니다.
@@ -794,6 +743,26 @@ docker run --rm --network my-net alpine nslookup api
 ---
 
 ## 7. 고급 포트 매핑
+
+### 이론: iptables NAT — 컨테이너가 인터넷에 닿는 법, 호스트가 컨테이너에 닿는 법
+
+`docker0`의 컨테이너는 호스트 외부 네트워크에서 라우팅 안 되는 사설 IP(`172.17.0.X`)를 갖습니다. outbound 트래픽을 위해 Docker가 **MASQUERADE** 규칙 설치 —
+
+```
+iptables -t nat -A POSTROUTING -s 172.17.0.0/16 ! -o docker0 -j MASQUERADE
+```
+
+번역 — 브리지 서브넷 출처의 어떤 패킷이든 `docker0` 자체가 아닌 어떤 인터페이스로 나가면 출처 IP를 호스트의 outbound 인터페이스 IP로 재작성. 커널이 연결을 추적하고 응답이 돌아올 때 재작성. 컨테이너가 인터넷 접근을 갖고, 외부 세계는 호스트 IP를 봄.
+
+`docker run -p 8080:80`을 통한 inbound 트래픽을 위해 Docker가 **DNAT** 규칙 설치 —
+
+```
+iptables -t nat -A DOCKER -p tcp --dport 8080 -j DNAT --to-destination 172.17.0.2:80
+```
+
+추가로 헤어핀과 특정 엣지 케이스용 폴백으로 `docker-proxy` 유저 공간 프로세스. DNAT가 들어오는 패킷의 목적지 IP/포트를 재작성해 컨테이너로 포워드, 컨테이너가 응답하면 커널이 응답을 역재작성.
+
+호스트의 `iptables -t nat -L -n -v`가 Docker가 설치한 모든 게시 포트와 outbound 규칙을 보여 줍니다. `docker run -p`가 동작 안 할 때 여기를 봐야 합니다.
 
 ### 포트 퍼블리싱 모드
 

@@ -15,125 +15,7 @@
 
 ---
 
-문법 투어 전에 [**이론과 원리**](#이론과-원리) 섹션을 읽으세요. 빌드 컨텍스트가 데몬으로 어떻게 전송되는지, 각 명령이 어떻게 레이어로 변하는지, 그리고 BuildKit의 그래프 기반 실행이 캐시 적중과 병렬화를 어떻게 결정하는지 다룹니다.
-
 Docker Hub에서 사전 빌드된 이미지를 받아 사용하는 것은 편리하지만, 실제 프로젝트에서는 특정 애플리케이션과 의존성에 맞춤화된 커스텀 이미지가 필요합니다. Dockerfile은 이러한 커스텀 이미지를 코드로 정의하는 표준 메커니즘(mechanism)입니다. Dockerfile 문법과 멀티 스테이지 빌드 및 레이어 최적화와 같은 베스트 프랙티스를 익히면 애플리케이션 패키징을 완전히 제어하고, 일관되고 안전하며 효율적인 컨테이너 이미지를 보장할 수 있습니다.
-
----
-
-## 이론과 원리
-
-Dockerfile은 그저 텍스트 파일입니다. 흥미로운 기계 장치는 `docker build`를 실행했을 때 무엇이 벌어지는가에 있습니다 — **빌드 컨텍스트(build context)**가 엔진으로 전송되고, 각 **명령(instruction)**이 새 이미지 레이어를 만드는 변환으로 해석되며, **캐시(cache)**가 어떤 변환을 스킵할 수 있는지 결정하고, **BuildKit**이 선형 명령 목록을 병렬 방향 그래프로 바꿉니다. 이 네 조각을 이해하는 것이 5초 만에 끝나는 빌드와 5분 걸리는 빌드를 가르는 차이입니다.
-
-### A. 빌드 컨텍스트: 데몬으로 무엇이 전송되는가
-
-`docker build .`는 작업 디렉터리를 마법처럼 다루지 않습니다. 다음을 합니다.
-
-1. CLI가 빌드 컨텍스트로 넘긴 디렉터리(끝의 `.`)를 순회합니다.
-2. `.dockerignore`를 읽어 매칭되는 경로를 제외합니다.
-3. 남은 모든 것을 tarball로 묶어 데몬 소켓으로 스트리밍합니다.
-4. 데몬(다른 머신에 있을 수도 있음)이 그 tarball에서 빌드를 시작합니다.
-
-여기서 두 가지 결과가 즉시 따라옵니다.
-
-- **컨텍스트 바깥의 어떤 것도 보이지 않는다.** `COPY ../config /etc`는 문법 오류입니다 — `..`는 tarball에 없습니다. 빌드는 CLI가 묶지 않은 파일을 닿을 수 없습니다.
-- **컨텍스트가 클수록 빌드가 느리다.** 2 GB짜리 `node_modules`는 어떤 명령이 실행되기도 전에 업로드만 수 초가 걸립니다. `.dockerignore`는 "있으면 좋은" 게 아니라, 10 MB 컨텍스트와 2 GB 컨텍스트의 차이를 결정합니다.
-
-`.dockerignore` 문법은 `.gitignore`와 같습니다 — 글롭 패턴, 부정 `!`, 레포 상대 경로용 선두 `/`. 흔한 항목 — `node_modules`, `.git`, `*.log`, `dist/`, 빌드 산출물, IDE 설정, 환경 파일. 이 중 다수는 보안상도 중요합니다 — 컨텍스트의 `.env` 파일이 이미지 레이어로 새어 들어가 자격 증명을 유출할 수 있습니다.
-
-### B. 명령 = 파일시스템 변환
-
-모든 Dockerfile 명령은 이미지 파일시스템을 수정하거나(새 레이어 생성), 메타데이터를 수정합니다(파일시스템 변경 없는 레이어이지만 이미지 config JSON은 갱신).
-
-| 명령 | 파일시스템에 미치는 영향 | config에 미치는 영향 |
-|------|--------------------------|----------------------|
-| `FROM` | 베이스 이미지 레이어로 초기화 | 베이스 config 상속 |
-| `RUN` | 명령 실행, 레이어 = 파일시스템 diff | 없음 |
-| `COPY`/`ADD` | 컨텍스트(또는 ADD의 경우 URL)에서 파일 추가, 레이어 = 추가된 파일 | 없음 |
-| `WORKDIR` | 디렉터리가 없으면 생성 | 작업 디렉터리 설정 |
-| `ENV`, `ARG`, `LABEL`, `EXPOSE`, `USER`, `VOLUME`, `STOPSIGNAL` | 없음 | config 필드 갱신 |
-| `CMD`, `ENTRYPOINT`, `HEALTHCHECK` | 없음 | 런타임 기본값 설정 |
-
-`RUN`마다 정확히 하나의 레이어가 생깁니다. 그래서 `RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*`는 curl이 설치되고 apt 캐시가 제거된 한 레이어입니다. 세 개의 `RUN`으로 쪼개면 세 레이어가 되고, 중간 레이어에 apt 캐시가 남습니다(나중 레이어에서 삭제해도 이전 레이어의 바이트는 해제되지 않으므로 최종 이미지에 그대로 남습니다).
-
-`COPY`는 항상 빌드 컨텍스트에서 읽어 이미지에 씁니다. `ADD`는 같은 일을 하면서 두 가지를 더 합니다 — URL 가져오기(권장 안 함, 캐싱 보장 없고 기본적으로 체크섬 검증 없음)와 로컬 tar 아카이브 자동 추출. 커뮤니티 합의 — `ADD`만의 기능이 정말 필요한 게 아니라면 명료성을 위해 `COPY`를 쓰세요.
-
-`CMD`와 `ENTRYPOINT`가 함께 컨테이너 시작 시 무엇이 실행될지 정의합니다. 멘탈 모델 —
-
-- `ENTRYPOINT`는 프로그램, `CMD`는 기본 인자.
-- `ENTRYPOINT ["python", "app.py"]` + `CMD ["--port", "8080"]` → `python app.py --port 8080`. `docker run image --port 9090`은 `CMD`만 `--port 9090`로 덮어쓰고 엔트리포인트는 유지.
-- **shell form**(`arg1 arg2`)보다 **exec form**(`["arg1", "arg2"]`)을 쓰세요. shell form은 명령을 `/bin/sh -c "..."`로 감싸는데, 이러면 `docker stop`의 SIGTERM이 셸에게 가고 프로세스에는 가지 않습니다. 프로세스는 시그널을 받지 못한 채 10초 후 SIGKILL됩니다.
-
-### C. 레이어 캐싱: 빌드 시간을 결정하는 알고리즘
-
-`docker build`는 명령을 순서대로 따라갑니다. 각 명령마다 캐시 키를 계산합니다. 캐시 키가 로컬 스토어의 기존 레이어와 일치하면 그 레이어를 재사용하고 명령을 스킵합니다. 일치하지 않으면 명령이 실행되어 새 레이어를 만들고, 그 시점부터 모든 후속 명령도 캐시 미스가 됩니다(부모 레이어 다이제스트가 다음 키의 일부이므로).
-
-캐시 키 입력은 다음과 같습니다.
-
-| 명령 | 캐시 키 구성 |
-|------|--------------|
-| `FROM` | 베이스 이미지 다이제스트 |
-| `RUN` | 명령 텍스트 + 부모 레이어 다이제스트 |
-| `COPY`/`ADD`(로컬) | 복사되는 파일 내용의 해시 + 부모 레이어 다이제스트 |
-| `ARG`, `ENV` 등 | 명령 텍스트 + 부모 레이어 다이제스트 |
-
-핵심 두 가지 시사점 —
-
-1. **변동이 적은 것부터 큰 것 순서로 배치하라.** 가장 느리고 가장 안정적인 명령(`apt-get install`, `pip install -r requirements.txt`)을 먼저, 가장 잘 바뀌는 명령(`COPY . /app`)을 마지막에. 이러면 소스 코드 편집이 의존성 설치 캐시를 깨뜨리지 않고 마지막 레이어만 무효화합니다.
-2. **의존성 매니페스트를 따로 복사하라.** `COPY package.json package-lock.json ./` 후 `RUN npm ci`는 `COPY . . && RUN npm ci`와 다릅니다. 전자는 그 두 파일이 바뀔 때만 `npm ci`를 무효화하고, 후자는 *어떤 파일* 변경에도 무효화합니다.
-
-`docker build --no-cache`는 캐시를 완전히 끕니다(모든 명령이 재실행). `docker build --cache-from <image>`는 CI가 이전 빌드의 레이어를 레지스트리에서 받아 캐시로 쓰게 해, 새 러너에서도 CI 빌드가 빠르게 돌게 만듭니다.
-
-### D. BuildKit: 그래프 실행과 캐시 마운트
-
-고전 빌더는 순차적이고 무상태입니다. **BuildKit**(Docker 23.0부터 기본, 이전 버전은 `DOCKER_BUILDKIT=1`로 활성화)은 다음을 하는 완전히 다시 쓰인 엔진입니다.
-
-1. **Dockerfile을 DAG(방향 비순환 그래프)로 파싱.** 각 명령이 노드, 간선은 의존성(명령 N은 명령 N-1이 만든 레이어에 의존).
-2. **독립적 노드를 병렬 실행.** 서로 무관한 두 빌드 스테이지가 있는 멀티 스테이지 Dockerfile에서 BuildKit은 둘을 동시에 돌립니다. 사용되지 않는 스테이지의 출력은 빌드되지 않습니다.
-3. **사용되지 않는 출력 스킵.** `docker build --target prod`로 최종 스테이지만 타깃하면, `prod`로 흘러가지 않는 스테이지는 실행되지 않습니다.
-4. **캐시 마운트 추가.** `RUN --mount=type=cache,target=/root/.cache/pip pip install -r requirements.txt`는 레이어 시스템 *바깥에서* 빌드 사이에 살아남는 쓰기 가능 캐시 디렉터리를 노출합니다. 다운로드한 wheel은 살아남고, 결과 레이어는 그것들을 포함하지 않습니다.
-5. **bind 마운트와 secret 마운트.** `RUN --mount=type=bind,source=.,target=/src ...`와 `RUN --mount=type=secret,id=mytoken cat /run/secrets/mytoken`으로 컨텍스트 파일이나 일회성 시크릿을 레이어에 굽지 않고 읽을 수 있습니다.
-6. **멀티 플랫폼 빌드.** `docker buildx build --platform linux/amd64,linux/arm64 .`로 각 타깃 아키텍처 빌드를 병렬로 돌리고, 레지스트리가 알맞은 플랫폼에 자동 서빙하는 매니페스트 리스트를 생성합니다.
-
-프런트엔드도 플러그인입니다. 기본 프런트엔드 `dockerfile.v0`이 Dockerfile 문법을 말합니다. 다른 프런트엔드(`buildpacks`, `Earthly`, 커스텀 HCL 프런트엔드)는 BuildKit이 실행하는 같은 LLB(Low-Level Build) 중간 표현을 내보내므로, DAG/캐시 기계 전체를 재사용합니다.
-
-### E. 멀티 스테이지 빌드: 한 번 컴파일, 가볍게 배포
-
-많은 언어가 무거운 컴파일 단계(`go build`, `npm run build`, `mvn package`)를 거쳐 작은 바이너리나 산출물을 만듭니다. 컴파일러, 중간 오브젝트 파일, `node_modules`를 최종 이미지에 두고 싶지는 않을 겁니다 — 이미지를 부풀리고 공격 표면을 넓힙니다.
-
-멀티 스테이지 Dockerfile은 여러 `FROM`으로 이미지를 체이닝합니다. 전형적 패턴 —
-
-```dockerfile
-# Stage 1: builder
-FROM node:20 AS builder
-WORKDIR /app
-COPY package*.json ./
-RUN npm ci
-COPY . .
-RUN npm run build
-
-# Stage 2: runtime
-FROM nginx:alpine
-COPY --from=builder /app/dist /usr/share/nginx/html
-```
-
-최종 이미지는 nginx 레이어들과 작은 `dist` 디렉터리만 포함합니다. 모든 빌드 도구를 가진 `node:20` 스테이지는 버려집니다 — 그 레이어들은 BuildKit 로컬 캐시에 다음을 위해 남지만 푸시되지는 않습니다.
-
-원하는 만큼 스테이지를 둘 수 있고, `AS <name>`으로 이름을 붙이고, `COPY --from=<name>`로 어떤 이전 스테이지에서든 복사하며, `docker build --target <name>`로 거기까지만 빌드할 수 있습니다(CI에서 돌리지만 배포는 안 하는 "test"나 "lint" 스테이지에 유용).
-
-### 이론에서 아래의 명령으로
-
-- `FROM <image>` — 베이스 레이어 다이제스트를 설정. 이게 모든 하위 캐시 키의 뿌리.
-- `WORKDIR /app` — config만 변경, 내용 있는 레이어 없음.
-- `COPY package.json /app/` — 컨텍스트 tarball 조회, 파일 내용 해시가 캐싱을 좌우.
-- `RUN apt-get install -y ...` — 텍스트 + 부모 다이제스트 = 캐시 키, 결과 파일시스템 diff = 그 레이어.
-- `ENV NODE_ENV=production` — config 메타데이터, 이후 모든 `RUN` 자식이 이 환경 변수를 봄.
-- `EXPOSE 8080` — config의 순수한 문서, 실제로 포트를 열지는 않음.
-- `CMD ["node", "server.js"]` — config 메타데이터, `docker run`에 명령이 안 주어졌을 때 `runc`가 `execve`할 대상.
-- `docker build -t myapp:1.0 .` — 컨텍스트 패킹(`.dockerignore` 준수), 데몬으로 스트리밍, 명령 순회, 각 명령마다 캐시 적중 또는 미스, 결과 이미지를 `myapp:1.0` 태그로 로컬 스토어에 푸시.
-- `docker buildx build --platform linux/amd64,linux/arm64 -t myapp:1.0 --push .` — BuildKit 팬아웃, 두 아키텍처 빌드 병렬, 결과 매니페스트 리스트의 레지스트리 푸시.
-
-이어지는 섹션은 각 명령을 둘러봅니다. "이게 다 다시 빌드되는 거야?"가 궁금할 때마다 위 캐시 키 입력을 짚어 보세요.
 
 ---
 
@@ -181,6 +63,45 @@ INSTRUCTION argument
 ---
 
 ## 3. 명령어 상세 설명
+
+### 이론: 빌드 컨텍스트 — 데몬으로 무엇이 전송되는가
+
+`docker build .`는 작업 디렉터리를 마법처럼 다루지 않습니다. 다음을 합니다.
+
+1. CLI가 빌드 컨텍스트로 넘긴 디렉터리(끝의 `.`)를 순회합니다.
+2. `.dockerignore`를 읽어 매칭되는 경로를 제외합니다.
+3. 남은 모든 것을 tarball로 묶어 데몬 소켓으로 스트리밍합니다.
+4. 데몬(다른 머신에 있을 수도 있음)이 그 tarball에서 빌드를 시작합니다.
+
+여기서 두 가지 결과가 즉시 따라옵니다.
+
+- **컨텍스트 바깥의 어떤 것도 보이지 않는다.** `COPY ../config /etc`는 문법 오류입니다 — `..`는 tarball에 없습니다. 빌드는 CLI가 묶지 않은 파일을 닿을 수 없습니다.
+- **컨텍스트가 클수록 빌드가 느리다.** 2 GB짜리 `node_modules`는 어떤 명령이 실행되기도 전에 업로드만 수 초가 걸립니다. `.dockerignore`는 "있으면 좋은" 게 아니라, 10 MB 컨텍스트와 2 GB 컨텍스트의 차이를 결정합니다.
+
+`.dockerignore` 문법은 `.gitignore`와 같습니다 — 글롭 패턴, 부정 `!`, 레포 상대 경로용 선두 `/`. 흔한 항목 — `node_modules`, `.git`, `*.log`, `dist/`, 빌드 산출물, IDE 설정, 환경 파일. 이 중 다수는 보안상도 중요합니다 — 컨텍스트의 `.env` 파일이 이미지 레이어로 새어 들어가 자격 증명을 유출할 수 있습니다.
+
+### 이론: 명령 = 파일시스템 변환
+
+모든 Dockerfile 명령은 이미지 파일시스템을 수정하거나(새 레이어 생성), 메타데이터를 수정합니다(파일시스템 변경 없는 레이어이지만 이미지 config JSON은 갱신).
+
+| 명령 | 파일시스템에 미치는 영향 | config에 미치는 영향 |
+|------|--------------------------|----------------------|
+| `FROM` | 베이스 이미지 레이어로 초기화 | 베이스 config 상속 |
+| `RUN` | 명령 실행, 레이어 = 파일시스템 diff | 없음 |
+| `COPY`/`ADD` | 컨텍스트(또는 ADD의 경우 URL)에서 파일 추가, 레이어 = 추가된 파일 | 없음 |
+| `WORKDIR` | 디렉터리가 없으면 생성 | 작업 디렉터리 설정 |
+| `ENV`, `ARG`, `LABEL`, `EXPOSE`, `USER`, `VOLUME`, `STOPSIGNAL` | 없음 | config 필드 갱신 |
+| `CMD`, `ENTRYPOINT`, `HEALTHCHECK` | 없음 | 런타임 기본값 설정 |
+
+`RUN`마다 정확히 하나의 레이어가 생깁니다. 그래서 `RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*`는 curl이 설치되고 apt 캐시가 제거된 한 레이어입니다. 세 개의 `RUN`으로 쪼개면 세 레이어가 되고, 중간 레이어에 apt 캐시가 남습니다(나중 레이어에서 삭제해도 이전 레이어의 바이트는 해제되지 않으므로 최종 이미지에 그대로 남습니다).
+
+`COPY`는 항상 빌드 컨텍스트에서 읽어 이미지에 씁니다. `ADD`는 같은 일을 하면서 두 가지를 더 합니다 — URL 가져오기(권장 안 함, 캐싱 보장 없고 기본적으로 체크섬 검증 없음)와 로컬 tar 아카이브 자동 추출. 커뮤니티 합의 — `ADD`만의 기능이 정말 필요한 게 아니라면 명료성을 위해 `COPY`를 쓰세요.
+
+`CMD`와 `ENTRYPOINT`가 함께 컨테이너 시작 시 무엇이 실행될지 정의합니다. 멘탈 모델 —
+
+- `ENTRYPOINT`는 프로그램, `CMD`는 기본 인자.
+- `ENTRYPOINT ["python", "app.py"]` + `CMD ["--port", "8080"]` → `python app.py --port 8080`. `docker run image --port 9090`은 `CMD`만 `--port 9090`로 덮어쓰고 엔트리포인트는 유지.
+- **shell form**(`arg1 arg2`)보다 **exec form**(`["arg1", "arg2"]`)을 쓰세요. shell form은 명령을 `/bin/sh -c "..."`로 감싸는데, 이러면 `docker stop`의 SIGTERM이 셸에게 가고 프로세스에는 가지 않습니다. 프로세스는 시그널을 받지 못한 채 10초 후 SIGKILL됩니다.
 
 ### FROM - 베이스 이미지
 
@@ -510,6 +431,30 @@ CMD ["nginx", "-g", "daemon off;"]
 
 빌드 환경과 실행 환경을 분리하여 이미지 크기를 줄입니다.
 
+### 이론: 한 번 컴파일, 가볍게 배포
+
+많은 언어가 무거운 컴파일 단계(`go build`, `npm run build`, `mvn package`)를 거쳐 작은 바이너리나 산출물을 만듭니다. 컴파일러, 중간 오브젝트 파일, `node_modules`를 최종 이미지에 두고 싶지는 않을 겁니다 — 이미지를 부풀리고 공격 표면을 넓힙니다.
+
+멀티 스테이지 Dockerfile은 여러 `FROM`으로 이미지를 체이닝합니다. 전형적 패턴 —
+
+```dockerfile
+# Stage 1: builder
+FROM node:20 AS builder
+WORKDIR /app
+COPY package*.json ./
+RUN npm ci
+COPY . .
+RUN npm run build
+
+# Stage 2: runtime
+FROM nginx:alpine
+COPY --from=builder /app/dist /usr/share/nginx/html
+```
+
+최종 이미지는 nginx 레이어들과 작은 `dist` 디렉터리만 포함합니다. 모든 빌드 도구를 가진 `node:20` 스테이지는 버려집니다 — 그 레이어들은 BuildKit 로컬 캐시에 다음을 위해 남지만 푸시되지는 않습니다.
+
+원하는 만큼 스테이지를 둘 수 있고, `AS <name>`으로 이름을 붙이고, `COPY --from=<name>`로 어떤 이전 스테이지에서든 복사하며, `docker build --target <name>`로 거기까지만 빌드할 수 있습니다(CI에서 돌리지만 배포는 안 하는 "test"나 "lint" 스테이지에 유용).
+
 ### React 앱 예시
 
 ```dockerfile
@@ -579,6 +524,26 @@ Dockerfile
 .dockerignore
 ```
 
+### 이론: 레이어 캐싱 — 빌드 시간을 결정하는 알고리즘
+
+`docker build`는 명령을 순서대로 따라갑니다. 각 명령마다 캐시 키를 계산합니다. 캐시 키가 로컬 스토어의 기존 레이어와 일치하면 그 레이어를 재사용하고 명령을 스킵합니다. 일치하지 않으면 명령이 실행되어 새 레이어를 만들고, 그 시점부터 모든 후속 명령도 캐시 미스가 됩니다(부모 레이어 다이제스트가 다음 키의 일부이므로).
+
+캐시 키 입력은 다음과 같습니다.
+
+| 명령 | 캐시 키 구성 |
+|------|--------------|
+| `FROM` | 베이스 이미지 다이제스트 |
+| `RUN` | 명령 텍스트 + 부모 레이어 다이제스트 |
+| `COPY`/`ADD`(로컬) | 복사되는 파일 내용의 해시 + 부모 레이어 다이제스트 |
+| `ARG`, `ENV` 등 | 명령 텍스트 + 부모 레이어 다이제스트 |
+
+핵심 두 가지 시사점 —
+
+1. **변동이 적은 것부터 큰 것 순서로 배치하라.** 가장 느리고 가장 안정적인 명령(`apt-get install`, `pip install -r requirements.txt`)을 먼저, 가장 잘 바뀌는 명령(`COPY . /app`)을 마지막에. 이러면 소스 코드 편집이 의존성 설치 캐시를 깨뜨리지 않고 마지막 레이어만 무효화합니다.
+2. **의존성 매니페스트를 따로 복사하라.** `COPY package.json package-lock.json ./` 후 `RUN npm ci`는 `COPY . . && RUN npm ci`와 다릅니다. 전자는 그 두 파일이 바뀔 때만 `npm ci`를 무효화하고, 후자는 *어떤 파일* 변경에도 무효화합니다.
+
+`docker build --no-cache`는 캐시를 완전히 끕니다(모든 명령이 재실행). `docker build --cache-from <image>`는 CI가 이전 빌드의 레이어를 레지스트리에서 받아 캐시로 쓰게 해, 새 러너에서도 CI 빌드가 빠르게 돌게 만듭니다.
+
 ### 레이어 최적화
 
 ```dockerfile
@@ -622,6 +587,19 @@ COPY --chown=appuser:appgroup . .  # --chown ensures the non-root user can read 
 ---
 
 ## 7. 이미지 빌드 명령어
+
+### 이론: BuildKit — 그래프 실행과 캐시 마운트
+
+고전 빌더는 순차적이고 무상태입니다. **BuildKit**(Docker 23.0부터 기본, 이전 버전은 `DOCKER_BUILDKIT=1`로 활성화)은 다음을 하는 완전히 다시 쓰인 엔진입니다.
+
+1. **Dockerfile을 DAG(방향 비순환 그래프)로 파싱.** 각 명령이 노드, 간선은 의존성(명령 N은 명령 N-1이 만든 레이어에 의존).
+2. **독립적 노드를 병렬 실행.** 서로 무관한 두 빌드 스테이지가 있는 멀티 스테이지 Dockerfile에서 BuildKit은 둘을 동시에 돌립니다. 사용되지 않는 스테이지의 출력은 빌드되지 않습니다.
+3. **사용되지 않는 출력 스킵.** `docker build --target prod`로 최종 스테이지만 타깃하면, `prod`로 흘러가지 않는 스테이지는 실행되지 않습니다.
+4. **캐시 마운트 추가.** `RUN --mount=type=cache,target=/root/.cache/pip pip install -r requirements.txt`는 레이어 시스템 *바깥에서* 빌드 사이에 살아남는 쓰기 가능 캐시 디렉터리를 노출합니다. 다운로드한 wheel은 살아남고, 결과 레이어는 그것들을 포함하지 않습니다.
+5. **bind 마운트와 secret 마운트.** `RUN --mount=type=bind,source=.,target=/src ...`와 `RUN --mount=type=secret,id=mytoken cat /run/secrets/mytoken`으로 컨텍스트 파일이나 일회성 시크릿을 레이어에 굽지 않고 읽을 수 있습니다.
+6. **멀티 플랫폼 빌드.** `docker buildx build --platform linux/amd64,linux/arm64 .`로 각 타깃 아키텍처 빌드를 병렬로 돌리고, 레지스트리가 알맞은 플랫폼에 자동 서빙하는 매니페스트 리스트를 생성합니다.
+
+프런트엔드도 플러그인입니다. 기본 프런트엔드 `dockerfile.v0`이 Dockerfile 문법을 말합니다. 다른 프런트엔드(`buildpacks`, `Earthly`, 커스텀 HCL 프런트엔드)는 BuildKit이 실행하는 같은 LLB(Low-Level Build) 중간 표현을 내보내므로, DAG/캐시 기계 전체를 재사용합니다. 그래서 `docker build -t myapp:1.0 .`는 컨텍스트를 패킹(`.dockerignore` 준수)해 데몬으로 스트리밍하고, 명령을 순회하며 각 명령마다 캐시 적중/미스를 판정한 뒤 결과 이미지를 `myapp:1.0` 태그로 로컬 스토어에 푸시합니다. `docker buildx build --platform linux/amd64,linux/arm64 -t myapp:1.0 --push .`는 BuildKit 팬아웃 — 두 아키텍처 빌드 병렬, 결과 매니페스트 리스트의 레지스트리 푸시.
 
 ```bash
 # Basic build

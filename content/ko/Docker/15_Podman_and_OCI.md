@@ -16,7 +16,6 @@
 
 ## 목차
 
-Podman / Buildah / Skopeo 레퍼런스 전에 [**이론과 원리**](#이론과-원리) 섹션을 읽으세요. OCI 이미지 / 런타임 / 배포 명세, Podman의 데몬리스 fork-exec 모델과 그것이 보안 자세를 어떻게 바꾸는지, 그리고 컨테이너별 모니터 프로세스인 conmon의 역할을 다룹니다.
 
 1. [OCI 표준](#1-oci-표준)
 2. [Podman 아키텍처](#2-podman-아키텍처)
@@ -37,136 +36,35 @@ Docker가 컨테이너를 대중화했지만, 생태계는 단일 도구를 넘�
 
 ---
 
-## 이론과 원리
+## 1. OCI 표준
 
-Podman은 "데몬 없는 Docker"가 아니라 같은 설계 공간의 다른 점으로 이해하는 게 가장 좋습니다. 둘 다 OCI 표준 위에 빌드되고, 둘 다 그 아래 runc(또는 crun)를 호출합니다. 흥미로운 차이 — 데몬리스 아키텍처, 기본 루트리스, Kubernetes에서 가져온 Pod 추상화, conmon 모니터 프로세스, 네이티브 systemd 통합 — 은 모두 한 설계 결정의 결과 — *컨테이너를 장수하는 권한 데몬 아래서 돌리지 말라.* 이 교체를 가능하게 만드는 OCI 명세와 데몬을 대체하는 fork-exec 모델을 이해하면, Podman 생태계의 나머지(Buildah, Skopeo, Podman Compose)는 같은 원칙에서 따라 나옵니다.
+### 이론: 세 OCI 명세
 
-### A. 세 가지 OCI 명세
+Podman은 "데몬 없는 Docker"가 아니라 같은 설계 공간의 다른 점으로 이해하는 게 좋습니다. 둘 다 OCI 표준 위에 빌드, 둘 다 아래에서 runc(또는 crun) 호출. OCI(Open Container Initiative)는 2015년에 "컨테이너"가 무엇인지 표준화하기 위해 결성. 표준이 문제를 세 조각으로 나눔. 그 셋이 함께 어떤 호환 도구도 만든 이미지를 어떤 다른 호환 도구가 소비할 수 있게 합니다.
 
-Open Container Initiative는 2015년에 "컨테이너"가 무엇인지 표준화하기 위해 결성되었습니다. 표준은 문제를 세 조각으로 쪼갭니다 — 함께 사용하면 어떤 호환 도구가 만든 이미지든 다른 호환 도구가 생산/배포/실행할 수 있습니다.
+**OCI Image Specification(image-spec).** 디스크와 와이어상의 이미지가 *무엇인지* 정의 —
 
-**OCI 이미지 명세(image-spec).** 이미지가 디스크와 와이어에서 *무엇인지*를 정의 —
+- **매니페스트** — config blob 다이제스트와 레이어 blob 다이제스트의 순서 있는 목록(크기와 미디어 타입 포함)을 나열하는 JSON 문서.
+- **Image Index(매니페스트 리스트)** — 멀티 플랫폼 이미지용 JSON 문서, `(os, architecture, variant)`마다 한 매니페스트를 가리킴.
+- **Config** — `Cmd`, `Entrypoint`, `Env`, `WorkingDir`, 노출 포트, 빌드 명령 히스토리, `rootfs.diff_ids`가 있는 JSON 문서.
+- **레이어** — gzip 압축된 파일시스템 변경(추가, 수정, whiteout 파일) tarball.
+- **미디어 타입** — `application/vnd.oci.image.manifest.v1+json` 같은 엄격한 콘텐츠 타입, HTTP와 레지스트리 계층이 조각을 정확히 식별 가능.
 
-- **매니페스트** — config 블롭 다이제스트와 레이어 블롭 다이제스트의 순서 있는 목록(크기, 미디어 타입 포함)을 나열한 JSON.
-- **이미지 인덱스(매니페스트 리스트)** — 멀티 플랫폼 이미지용 JSON. `(os, architecture, variant)`마다 한 매니페스트를 가리킴.
-- **Config** — `Cmd`, `Entrypoint`, `Env`, `WorkingDir`, 노출 포트, 빌드 명령 히스토리, `rootfs.diff_ids`를 가진 JSON.
-- **레이어** — 파일시스템 변경(추가, 수정, whiteout)의 gzip 압축 tarball.
-- **미디어 타입** — `application/vnd.oci.image.manifest.v1+json` 같은 엄격한 콘텐츠 타입. HTTP와 레지스트리 계층이 조각을 올바르게 식별.
+**OCI Runtime Specification(runtime-spec).** 저수준 런타임이 받아들이고 해야 하는 것을 정의 —
 
-**OCI 런타임 명세(runtime-spec).** 저수준 런타임이 받아들이고 해야 할 일을 정의 —
+- **OCI 번들**은 `rootfs/`(언팩된 레이어) + `config.json`(런타임 spec)가 있는 디렉터리.
+- `config.json`이 선언 — 실행할 프로세스, 만들 네임스페이스, cgroup 제한, 마운트, 유지할 capability, seccomp 프로필, 훅(pre-create, post-start, pre-stop), 사용자 네임스페이스 매핑.
+- 런타임(`runc`, `crun`, `youki`, `kata-runtime`)이 `config.json`을 읽고 모든 것을 셋업하고 프로세스 exec.
 
-- **OCI 번들**은 `rootfs/`(언팩된 레이어들) + `config.json`(런타임 명세)을 가진 디렉터리.
-- `config.json`이 선언 — 실행할 프로세스, 만들 네임스페이스, cgroup 한도, 마운트, 유지할 capability, seccomp 프로필, 훅(pre-create, post-start, pre-stop), 사용자 네임스페이스 매핑.
-- 런타임(`runc`, `crun`, `youki`, `kata-runtime`)이 `config.json`을 읽고, 모든 것을 셋업하고, 프로세스를 exec.
-
-**OCI 배포 명세(distribution-spec).** 레지스트리 HTTP API를 정의 —
+**OCI Distribution Specification(distribution-spec).** 레지스트리 HTTP API 정의 —
 
 - `GET /v2/<name>/manifests/<reference>` — 태그나 다이제스트로 매니페스트 가져오기.
-- `GET /v2/<name>/blobs/<digest>` — 다이제스트로 블롭 가져오기.
-- `PUT /v2/<name>/blobs/uploads/...` — 블롭 푸시.
+- `GET /v2/<name>/blobs/<digest>` — 다이제스트로 blob 가져오기.
+- `PUT /v2/<name>/blobs/uploads/...` — blob 푸시.
 - `PUT /v2/<name>/manifests/<reference>` — 매니페스트 푸시, 이미지 업로드 완료.
-- CI/CD 레슨에서 설명한 OAuth2 토큰 춤으로 인증.
+- CI/CD 레슨에서 설명한 OAuth2 토큰 춤을 통한 인증.
 
-이 3계층 분리가 Podman이 Docker Hub와 통신, Buildah가 Docker가 읽는 이미지 생산, Skopeo가 레지스트리 사이에 이미지 복사, Kubernetes가 그들 중 어떤 것이든 런타임으로 사용하게 합니다. 표준이 보편적 용매.
-
-### B. 데몬리스: Fork-Exec vs 장수 데몬
-
-Docker 아키텍처는 모든 컨테이너를 소유한 권한 데몬(`dockerd`)을 가짐. CLI는 그저 HTTP 클라이언트. 함의 —
-
-- 데몬이 root로 실행. 데몬 침해 = 호스트 root.
-- 데몬이 모든 컨테이너의 PID 1 소유. 데몬 재시작 = 모든 컨테이너 재시작(또는 live-restore로 계속 돌지만 잠시 고아).
-- `docker` 그룹의 누구나 데몬 소켓을 통해 사실상 root.
-
-Podman 아키텍처는 데몬이 없음. `podman run`은 다음을 하는 평범한 프로세스 —
-
-1. 자신을 fork.
-2. 자식이 libcontainer 등가 라이브러리로 네임스페이스, cgroup, 마운트를 직접 셋업.
-3. 자식이 `runc`(또는 `crun`)을 exec.
-4. `runc`가 컨테이너의 엔트리포인트를 exec.
-5. 원래 `podman` 프로세스는 종료. 컨테이너는 `conmon`의 자식으로 남음(§C 참조).
-
-중앙 서버 없음. 침해할 데몬 없음. 재시작할 데몬 없음. 각 `podman` 호출이 단명 — 셋업하고 비킴.
-
-트레이드오프 — 상태를 조정할 중앙 컴포넌트가 없음. 상태는 사용자별 파일(`~/.local/share/containers/`)에 저장. "내 모든 컨테이너에게 말하기"는 모든 상태 파일을 나열하는 것을 의미. Podman은 소켓 활성화될 수 있고 Docker API를 에뮬레이트하는 시스템 서비스(`podman.service`)를 제공하지만, 선택 사항이고 요청당 단명.
-
-### C. conmon: 컨테이너별 모니터
-
-`runc`가 컨테이너의 엔트리포인트를 exec할 때 누군가는 다음을 해야 함 —
-
-- 컨테이너의 stdout/stderr 파일 디스크립터를 잡고 영속할 수 있는 곳으로 라우팅.
-- 컨테이너의 종료를 기다리고 종료 코드 기록.
-- `-it`이 요청되었으면 TTY 가상 터미널을 살아 있게 유지.
-
-Docker 데몬은 모든 컨테이너에 대해 이를 함. 데몬이 없는 Podman은 `runc` exec 전에 컨테이너당 하나의 **`conmon`**(container monitor) 프로세스를 spawn. `conmon`이 —
-
-1. 로깅 셋업 — 컨테이너 stdout/stderr를 로그 파일로 파이프(기본 위치는 로그 드라이버에 의존).
-2. 요청되었으면 TTY 프록시 셋업.
-3. `runc`를 fork해 컨테이너 시작.
-4. `runc`가 반환된 후(컨테이너 실행 중) `conmon`이 wait.
-5. 컨테이너 종료 시 `conmon`이 종료 코드를 상태 파일에 쓰고 자기도 종료.
-
-`conmon`은 컨테이너당 작고 무상태. 호스트에 수백 개가 있을 수 있음(실행 중 컨테이너 하나당 하나). 조정하지 않음. 각각이 자기 컨테이너만 앎.
-
-같은 아키텍처를 CRI-O(Kubernetes 런타임)도 사용하므로 `conmon`이 성숙하고 생태계에서 공유.
-
-### D. 기본 루트리스: 사용자 네임스페이스의 실전
-
-Podman은 권한 없는 사용자로 실행. 전통적으로 root가 필요했던 두 문제를 풀어야 함 —
-
-1. **여러 UID로 사용자 네임스페이스 만들기.** 평범한 권한 없는 프로세스가 사용자 네임스페이스를 만들 수 있지만, 단일 UID/GID 매핑(자기 자신)으로만. 여러 사용자(예: uid 0 root + uid 1000 app)를 가진 컨테이너를 돌리려면 매핑할 UID *범위*가 필요. Podman은 **`/etc/subuid`**와 **`/etc/subgid`** — `useradd`가 유지하는 파일로 각 사용자에게 `100000-165535` 같은 범위의 "sub-UID"를 부여 — 를 사용. Podman이 컨테이너의 UID 0..65535를 사용자의 sub-UID 범위로 매핑.
-2. **root 없는 네트워킹.** veth를 브리징하고 iptables 규칙을 쓰는 것은 root 필요. 루트리스 Podman은 **slirp4netns** — 컨테이너와 같은 네임스페이스에서 도는 사용자 공간 TCP/IP 스택. 사용자의 기존 네트워크 capability로 트래픽 포워드. root 불필요, 그러나 약간의 성능 오버헤드와 몇 가지 기능 격차(기본적으로 인바운드 연결 없음, ICMP는 capability 필요).
-
-결과 — 평범한 사용자 계정에서 `podman run -d nginx`가 호스트에서 보면 `runc`와 `conmon`이 부모인 당신의 사용자 소유 프로세스로 보이는 컨테이너를 spawn. 컨테이너가 익스플로잇되어도 공격자는 당신의 사용자 권한과 Podman이 매핑한 sub-UID 범위로 제한.
-
-### E. Buildah와 Skopeo: Docker CLI 분해
-
-Docker는 한 CLI에 너무 많은 것을 묶음 — 이미지 빌드, 컨테이너 실행, 레지스트리 상호작용, 이미지 검사. Podman 생태계가 분해 —
-
-- **`podman`** — 컨테이너 실행, 컨테이너 나열, 컨테이너 검사. 런타임 측.
-- **`buildah`** — 이미지 빌드. 빌드는 사실 런타임이 필요 없으므로 분리 — 그저 파일시스템 레이어를 깔고 매니페스트를 쓰면 됨. Buildah는 Dockerfile(`buildah bud`)을 쓰거나, Dockerfile이 허용하는 것보다 더 많은 통제가 필요한 경우를 위한 스크립트 주도 명령형 API(`buildah from`, `buildah copy`, `buildah commit`)를 쓸 수 있음.
-- **`skopeo`** — 데몬이나 런타임을 끌어들이지 않고 레지스트리의 이미지를 다룸. 레지스트리 사이에 이미지 복사(`skopeo copy docker://src docker://dst`), 풀하지 않고 레지스트리 이미지 검사(`skopeo inspect docker://nginx:1.27`), 이미지 서명과 검증.
-
-분해는 CI/CD와 에어갭 시나리오에서 보상 받음. CI는 컨테이너를 돌릴 필요 없음 — 빌드(Buildah)와 푸시(Skopeo). 에어갭 환경은 인터넷 측 미러에서 내부 레지스트리로 데몬 측 이미지를 부팅하지 않고 복사하는 데 Skopeo 사용.
-
-세 도구 모두 같은 이미지 라이브러리(`containers/image`)와 스토리지 라이브러리(`containers/storage`)를 공유 — 같은 로컬 레이어 캐시와 같은 레지스트리 자격 증명을 봄.
-
-### F. Pod: Kubernetes 추상화를 가져오다
-
-Podman은 이름이 문자 그대로 "Pod manager"에서 옴 — Kubernetes의 Pod 개념을 단일 호스트 컨테이너 관리에 가져옴. Podman pod는 네임스페이스(네트워크, IPC, 가끔 PID)와 라이프사이클을 공유하는 컨테이너 그룹 —
-
-```bash
-podman pod create --name webpod -p 8080:80
-podman run -d --pod webpod nginx
-podman run -d --pod webpod fluentd
-```
-
-두 컨테이너 모두 pod의 네트워크 네임스페이스 공유. nginx가 80 포트 게시, pod이 8080:80을 호스트에 게시, fluentd는 localhost 공유. Kubernetes Pod 의미와 정확히 일치.
-
-더 좋은 점 — `podman generate kube`가 실행 중인 Podman pod에서 Kubernetes Pod 매니페스트를 출력, `podman play kube`가 Kubernetes 매니페스트를 받아 로컬에서 실행. Podman pod로 로컬 개발하고, K8s YAML 생성하고, 클러스터로 배포 — 임피던스 불일치 없음.
-
-### G. Systemd 통합: 시스템 서비스로서의 컨테이너
-
-Podman은 `podman generate systemd`(레거시)나 **Quadlet**(`~/.config/containers/systemd/`의 `*.container`, `*.pod`, `*.kube` 파일, 현대 방식)으로 systemd 유닛 파일 생성. 그 후 systemd가 컨테이너 라이프사이클 관리 — 부팅 시 자동 시작, 실패 시 재시작, 순서 있는 의존성, journal 로그 통합.
-
-이게 Podman을 Kubernetes 없이 "프로덕션 단일 호스트 서비스"의 실행 가능한 선택지로 만드는 것. Quadlet `nginx.container` 파일이 systemd에 대해 가지는 관계는 Compose 서비스가 Compose 엔진에 대해 가지는 관계와 같음 — 단 systemd는 모든 리눅스 서버에서 이미 돌고 있음. 추가 오케스트레이터 없음, 추가 데몬 없음, 그저 systemd가 이미 하던 일을 함.
-
-Docker의 등가물은 `docker run --restart=always`인데 덜 유연함(다른 유닛 후 시작 표현 못 함, journald 네이티브 로깅으로 폴백 못 함, `systemctl`로 제어 못 함).
-
-### 이론에서 아래의 도구로
-
-- **OCI image-spec / runtime-spec / distribution-spec**(§A) — Podman + Docker + Buildah + Kubernetes 상호 운용을 가능하게 하는 공용어.
-- **Podman 데몬리스 모델 + `conmon`**(§B, §C) — `podman run`은 fork-exec, 중앙 데몬 없음, 컨테이너당 모니터 프로세스 하나.
-- **`/etc/subuid`, `/etc/subgid`, `slirp4netns`**(§D) — 루트리스 배관.
-- **`buildah bud` / `buildah from` / `buildah commit`**(§E) — 데몬리스 이미지 빌드. Dockerfile 없이도 가능.
-- **`skopeo copy` / `skopeo inspect`**(§E) — 런타임 없는 레지스트리 간 이미지 작업.
-- **`podman pod create`, `podman play kube`, `podman generate kube`**(§F) — Kubernetes와 공유하는 Pod 추상화.
-- **Quadlet `*.container` 파일 + `systemctl --user`**(§G) — systemd 서비스로서의 컨테이너.
-
-남은 본문은 이 도구들을 둘러봅니다. Podman이 어떤 엣지 케이스에서 Docker와 다르게 동작하는 이유가 궁금할 때, 답은 보통 이 설계 결정 중 하나에 뿌리를 둡니다 — 데몬 없음, 기본 루트리스, 계약으로서의 OCI 표준.
-
----
-
-## 1. OCI 표준
+이 3계층 분리가 Podman이 Docker Hub와 통신, Buildah가 Docker가 읽는 이미지 생성, Skopeo가 레지스트리 사이에 이미지 복사, Kubernetes가 그것들 중 어떤 것을 런타임으로 사용 가능하게 만듭니다. 표준이 보편적 용매입니다.
 
 ### OCI란 무엇인가?
 
@@ -234,6 +132,53 @@ podman push myapp docker.io/myuser/myapp:latest
 ---
 
 ## 2. Podman 아키텍처
+
+### 이론: 데몬리스 — fork-exec vs 장수명 데몬
+
+Docker 아키텍처에는 모든 컨테이너를 소유하는 특권 데몬(`dockerd`)이 있음. CLI는 그저 HTTP 클라이언트. 함의 —
+
+- 데몬이 root로 실행. 데몬 침해 = 호스트의 root.
+- 데몬이 모든 컨테이너의 PID 1을 소유. 데몬 재시작 = 모든 컨테이너 재시작(또는 live-restore로 계속 실행되지만 잠시 고아).
+- `docker` 그룹의 누구든 데몬 소켓을 통해 효과적 root.
+
+Podman 아키텍처에는 데몬이 없음. `podman run`이 일반 프로세스로 —
+
+1. 자신을 fork.
+2. 자식이 libcontainer 동등 라이브러리를 직접 사용해 네임스페이스, cgroup, 마운트 셋업.
+3. 자식이 `runc`(또는 `crun`) exec.
+4. `runc`이 컨테이너 엔트리포인트 exec.
+5. 원래 `podman` 프로세스 종료, 컨테이너를 `conmon`의 자식으로 둠.
+
+중앙 서버 없음. 침해할 데몬 없음. 재시작할 데몬 없음. 각 `podman` 호출이 단명 — 셋업하고 비켜남.
+
+트레이드오프 — 상태 조정할 중앙 컴포넌트 없음. 상태가 사용자별 파일(`~/.local/share/containers/`)에 저장. "내 모든 컨테이너"와 통신하려면 모든 상태 파일 나열. Podman은 소켓 활성화 가능하고 Docker API를 에뮬레이트하는 시스템 서비스(`podman.service`)를 제공하지만 선택적이고 요청당 단명.
+
+### 이론: conmon — 컨테이너별 모니터
+
+`runc`이 컨테이너 엔트리포인트를 exec하면 누군가가 —
+
+- 컨테이너 stdout/stderr 파일 디스크립터를 보유하고 영속 가능한 어딘가로 라우팅해야 함.
+- 컨테이너 종료를 기다리고 종료 코드 기록.
+- `-it`이 요청되면 TTY 의사 터미널 살아 있게 유지.
+
+Docker 데몬이 모든 컨테이너에 대해 이를 함. Podman은 데몬이 없어 `runc` exec 전에 컨테이너당 한 **`conmon`**(컨테이너 모니터) 프로세스를 생성. `conmon`이 —
+
+1. 로깅 셋업 — 컨테이너 stdout/stderr를 로그 파일로 파이프(기본 위치는 로그 드라이버에 따라).
+2. 요청되면 TTY 프록싱 셋업.
+3. `runc` fork해 컨테이너 시작.
+4. `runc` 반환 후(컨테이너 실행 중) `conmon` 대기.
+5. 컨테이너 종료 시 `conmon`이 종료 코드를 상태 파일에 쓰고 자신도 종료.
+
+`conmon`은 작고 컨테이너별 무상태. 호스트에 실행 중인 컨테이너당 하나씩 수백 개 존재 가능. 조정 안 함, 각각 자기 컨테이너만 앎. 같은 아키텍처가 CRI-O(Kubernetes 런타임)에 사용되어 `conmon`이 성숙하고 생태계에 공유됨.
+
+### 이론: 기본 루트리스 — 사용자 네임스페이스 작동
+
+Podman이 비특권 사용자로 실행. 전통적으로 root가 필요했던 두 문제 해결 필요 —
+
+1. **여러 UID로 사용자 네임스페이스 생성.** 보통 비특권 프로세스가 사용자 네임스페이스를 만들 수 있지만 단일 UID/GID 매핑(자기 것)만. 여러 사용자를 가진 컨테이너(예: uid 0 root + uid 1000 app)를 돌리려면 매핑할 UID *범위*가 필요. Podman이 **`/etc/subuid`**와 **`/etc/subgid`** 사용 — `useradd`가 유지하는 파일로 각 사용자에게 사용자 네임스페이스에서 쓸 수 있는 `100000-165535` 같은 "sub-UID" 범위 부여. Podman이 컨테이너의 UID 0..65535를 사용자의 sub-UID 범위로 매핑.
+2. **root 없이 네트워킹.** veth 브리징과 iptables 규칙 작성에 root 필요. 루트리스 Podman은 **slirp4netns** 사용 — 컨테이너와 같은 네임스페이스에서 도는 유저 공간 TCP/IP 스택, 사용자의 기존 네트워크 capability를 통해 트래픽 포워딩. root 불필요, 약간의 성능 오버헤드와 몇 기능 격차(기본적으로 inbound 연결 없음, ICMP는 capability 필요).
+
+결과 — 일반 사용자 계정에서 `podman run -d nginx`이 호스트에서 자기 사용자 소유의 프로세스 + 부모 `runc`과 `conmon`로 보이는 컨테이너 생성. 컨테이너가 익스플로잇되어도 공격자는 자기 사용자 권한 + Podman이 매핑한 sub-UID 범위로 제한.
 
 ### Docker vs Podman 아키텍처
 
@@ -396,6 +341,18 @@ unqualified-search-registries = ["docker.io", "quay.io", "ghcr.io"]
 
 ## 4. Buildah를 사용한 이미지 빌드
 
+### 이론: Buildah와 Skopeo — Docker CLI 분해
+
+Docker는 한 CLI에 너무 많은 것을 묶음 — 이미지 빌드, 컨테이너 실행, 레지스트리 상호작용, 이미지 검사. Podman 생태계가 분해 —
+
+- **`podman`** — 컨테이너 실행, 컨테이너 나열, 컨테이너 검사. 런타임 측.
+- **`buildah`** — 이미지 빌드. 빌드는 실제로 런타임이 필요 없어 분리, 그저 파일시스템 레이어를 배치하고 매니페스트를 쓰면 됨. Buildah는 Dockerfile(`buildah bud`)이나 Dockerfile이 허용하는 것보다 더 제어가 필요한 경우 스크립트 주도 명령형 API(`buildah from`, `buildah copy`, `buildah commit`) 사용 가능.
+- **`skopeo`** — 데몬이나 런타임 없이 레지스트리의 이미지 작업. 레지스트리 사이 이미지 복사(`skopeo copy docker://src docker://dst`), 풀 없이 레지스트리 이미지 검사(`skopeo inspect docker://nginx:1.27`), 이미지 서명/검증.
+
+분해는 CI/CD와 air-gapped 시나리오에서 빛납니다. CI는 컨테이너를 돌릴 필요 없음 — 빌드(Buildah)하고 푸시(Skopeo). air-gapped 환경은 Skopeo로 인터넷 측 미러에서 내부 레지스트리로 데몬 측 이미지를 부팅하지 않고 복사.
+
+세 도구 모두 같은 이미지 라이브러리(`containers/image`)와 스토리지 라이브러리(`containers/storage`) 공유, 같은 로컬 레이어 캐시와 같은 레지스트리 자격 증명을 봄.
+
 ### Buildah를 사용하는 이유
 
 Buildah는 OCI 이미지를 빌드하기 위한 전문 도구입니다. 데몬이 필요 없으며 Dockerfile 없이 이미지를 빌드할 수 있습니다.
@@ -544,6 +501,20 @@ skopeo delete docker://myregistry.example.com/myapp:old-tag
 
 ## 6. Podman 파드
 
+### 이론: 파드 — Kubernetes 추상화의 귀환
+
+Podman은 글자 그대로 "Pod manager"에서 이름을 따옴 — Kubernetes의 Pod 개념을 단일 호스트 컨테이너 관리에 들여옴. Podman 파드는 네임스페이스(network, IPC, 가끔 PID)와 라이프사이클을 공유하는 컨테이너 그룹 —
+
+```bash
+podman pod create --name webpod -p 8080:80
+podman run -d --pod webpod nginx
+podman run -d --pod webpod fluentd
+```
+
+두 컨테이너가 파드의 네트워크 네임스페이스 공유. nginx가 80 포트 게시, 파드가 호스트에 8080:80 게시, fluentd가 localhost 공유. 이게 Kubernetes Pod 의미와 정확히 매칭.
+
+더 좋게, `podman generate kube`가 실행 중인 Podman 파드에서 Kubernetes Pod 매니페스트 출력, `podman play kube`가 Kubernetes 매니페스트를 받아 로컬에서 실행. Podman 파드로 로컬 개발, K8s YAML 생성, 클러스터로 배포 — 임피던스 부정합 없음.
+
 ### 파드란 무엇인가?
 
 파드(Pod)는 네트워크, PID, IPC 네임스페이스를 공유하는 컨테이너 그룹입니다 -- Kubernetes 파드와 동일한 개념입니다.
@@ -629,6 +600,14 @@ podman pod rm -f webapp
 ---
 
 ## 7. Systemd 통합
+
+### 이론: 시스템 서비스로서의 컨테이너
+
+Podman이 `podman generate systemd`(레거시) 또는 **Quadlet**(`~/.config/containers/systemd/`의 `*.container`, `*.pod`, `*.kube` 파일, 현대적 방법)으로 systemd 유닛 파일 생성. systemd가 컨테이너 라이프사이클 관리 — 부팅 시 자동 시작, 실패 시 재시작, 순서 의존성, 저널 로그 통합.
+
+이게 Podman을 Kubernetes 없이 "프로덕션 단일 호스트 서비스"로 가능하게 만드는 것. Quadlet `nginx.container` 파일은 systemd에 Compose 서비스가 Compose 엔진에 같은 것이지만, systemd는 모든 리눅스 서버에서 이미 실행 중. 추가 오케스트레이터 없음, 추가 데몬 없음, systemd가 이미 하는 일을 그대로.
+
+Docker의 동등물은 `docker run --restart=always`이며 덜 유연(다른 유닛 후 시작 표현 못 함, 저널 네이티브 로깅으로 폴백 못 함, `systemctl`로 제어 못 함).
 
 ### Systemd 유닛 생성
 
