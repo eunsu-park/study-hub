@@ -18,8 +18,6 @@ After completing this lesson, you will be able to:
 
 ## Table of Contents
 
-Before the reference, read [**Theory & Principles**](#theory--principles) — segmentation as per-pixel classification, the FCN → U-Net → DeepLab architectural progression, the receptive-field problem, and the IoU / Dice loss formulations.
-
 1. [Segmentation Overview](#1-segmentation-overview)
 2. [Fully Convolutional Networks (FCN)](#2-fully-convolutional-networks-fcn)
 3. [U-Net Architecture](#3-u-net-architecture)
@@ -31,134 +29,15 @@ Before the reference, read [**Theory & Principles**](#theory--principles) — se
 
 ---
 
-## Theory & Principles
+## 1. Segmentation Overview
 
-Semantic segmentation assigns **every pixel** in an image to one of a fixed set of classes. No bounding boxes, no object instances — just "every pixel of the road is the road class, every pixel of the sky is the sky class". It is the pixel-level extreme of classification: instead of one label per image, one label per pixel.
-
-This section covers:
-
-- **(A) The per-pixel classification framing** — what makes segmentation fundamentally different from detection.
-- **(B) Why FCN was the breakthrough** — using a CNN for dense prediction instead of classification.
-- **(C) The receptive-field problem and skip connections** — U-Net's architectural answer.
-- **(D) Dilated / atrous convolution** — DeepLab's answer to the same problem.
-- **(E) Loss functions** — cross-entropy, dice loss, focal loss, and when each is right.
-- **(F) Evaluation metrics** — IoU and mIoU, pixel accuracy, and why accuracy is misleading.
-
-### A. Per-Pixel Classification
+### Theory: Per-Pixel Classification
 
 Semantic segmentation output shape: `(H, W, K)` logits, where `K` is the number of classes. Apply softmax along the `K` axis to get per-pixel class probabilities. The network structurally **looks like a classifier applied at every pixel** — hence "per-pixel classification".
 
 This framing immediately suggests a problem: classification networks are designed to output one prediction per image, not one per pixel. They aggressively downsample (max-pool, strided conv) throughout the network, reducing a `224×224` image to a `1×1` feature vector at the end. For segmentation we need the output to be the same resolution as the input.
 
 The entire architectural history of segmentation is about how to keep spatial resolution high enough to localize pixel labels while still aggregating enough global context to classify them correctly.
-
-### B. FCN: the Breakthrough
-
-Long, Shelhamer & Darrell (2015) introduced the Fully Convolutional Network. Two ideas:
-
-1. **Remove the fully-connected classifier head** and replace it with a 1×1 convolution that produces `K` channels. The network now outputs a low-resolution class-probability map instead of a single vector.
-2. **Upsample** the output back to input resolution via transposed convolution (or bilinear interpolation + convolution).
-
-The architecture: take a pretrained classification network (VGG), strip the FC layers, replace with conv layers, train on segmentation data. The network now does what the human eye expects: dense pixel-wise class predictions.
-
-The problem with vanilla FCN: by the time features reach the final classifier, spatial resolution is 32× lower than the input. Upsampling that 32× back to original resolution produces blurry segmentations without fine detail — exactly where you need it (boundaries).
-
-### C. U-Net: Skip Connections for Resolution
-
-U-Net (Ronneberger et al., 2015, originally for biomedical images) solves FCN's resolution loss with **symmetric encoder-decoder structure and skip connections**:
-
-```
-Input (572×572)
-  │
-  │  encoder (downsampling path): 4 levels of conv + pool
-  │
-  ▼    ─────────► skip connection ─────────┐
-Level 1 (64 ch)                             │
-  │                                         │
-  │                                         ▼  decoder output (64 ch)
-  ▼    ─────────► skip connection ──────┐    ▲
-Level 2 (128 ch)                        │    │ upsample
-  │                                     │    │
-  │                                     ▼    │
-  ▼    ─────────► skip connection ──┐   ... (same pattern at each level)
-Level 3 (256 ch)                    │
-  │                                 │
-  │                                 │
-  ▼                                 │
-Bottleneck (1024 ch, 32×32)         │
-```
-
-The key insight: the encoder throws away spatial information as it goes deeper; the skip connections route that spatial information **directly** to the decoder, where it is concatenated with the upsampled features. The decoder thus has both **semantic information** (from the bottleneck, which saw the whole image) and **spatial information** (from the skip connections, which preserve fine detail).
-
-U-Net became the template for medical imaging, satellite imagery, and many other segmentation tasks. Variants (nnU-Net, TransUNet) all share the skip-connection idea.
-
-### D. DeepLab: Atrous Convolution Without Downsampling
-
-DeepLab (Chen et al., 2015-2018) takes a different approach. Instead of downsampling and upsampling (U-Net style), it keeps the feature map at higher resolution and uses **atrous (dilated) convolution** to grow the receptive field:
-
-- A regular 3×3 conv with dilation rate 1 sees a 3×3 region.
-- A 3×3 conv with dilation rate 2 sees a 5×5 region but only samples 9 points (every other one).
-- A 3×3 conv with dilation rate 4 sees a 9×9 region with the same 9 parameters.
-
-By stacking atrous convs with increasing rates, you get a large effective receptive field without downsampling. The **Atrous Spatial Pyramid Pooling (ASPP)** module in DeepLab v3+ applies multiple parallel atrous convs with different dilation rates, then concatenates, capturing multi-scale context.
-
-DeepLab v3+ adds a small decoder with skip connections on top of the atrous backbone, combining both approaches.
-
-### E. Loss Functions
-
-#### E.1 Cross-entropy
-
-The default: per-pixel categorical cross-entropy. Same as classification, just applied at every pixel. Problem: **class imbalance**. In a driving scene, 60% of pixels might be road and 0.5% might be traffic signs. Cross-entropy treats every pixel equally, so the network becomes very good at road and barely learns signs.
-
-#### E.2 Dice / IoU loss
-
-Dice loss directly optimizes the overlap between predicted and ground-truth masks:
-
-```
-Dice(A, B) = 2 · |A ∩ B| / (|A| + |B|)
-Loss = 1 - Dice
-```
-
-For binary masks: `Dice = 2 · Σ(p · g) / (Σp + Σg)` where `p`, `g` are predicted and ground-truth probabilities. Insensitive to class imbalance because it only cares about the foreground overlap, not the background. Popular in medical imaging where the class of interest (tumor) is small relative to the background.
-
-#### E.3 Focal loss
-
-Cross-entropy with an extra `(1 - p)^γ` factor that **downweights well-classified easy pixels**, focusing training on hard pixels. Another way to combat class imbalance, introduced by RetinaNet and popular in segmentation too.
-
-Typical practice: combine cross-entropy with dice loss (sum or weighted average). Cross-entropy provides stable gradient; dice provides direct optimization of the metric.
-
-### F. Evaluation Metrics
-
-#### F.1 Pixel accuracy
-
-Simplest: fraction of pixels correctly classified. Misleading because of class imbalance — on a driving-scene dataset you might get 95% pixel accuracy by just predicting "road everywhere" for half the classes.
-
-#### F.2 Intersection-over-Union (IoU)
-
-Per-class IoU:
-
-```
-IoU_c = |pred_c ∩ true_c| / |pred_c ∪ true_c|
-```
-
-For class `c`: the fraction of the union of predicted and true `c`-pixels that are in both. IoU of 1 means perfect, 0 means no overlap.
-
-#### F.3 Mean IoU (mIoU)
-
-Average IoU across all `K` classes, with each class weighted equally regardless of its pixel count. **This is the standard segmentation metric** on Cityscapes, ADE20K, Pascal VOC, and every benchmark. Robust to class imbalance because rare classes are weighted the same as common classes.
-
-Fringe benefit: if mIoU improves but pixel accuracy drops, you are getting better at segmenting rare classes at the slight expense of the dominant ones — usually the right trade-off.
-
-### From Theory to the Functions Below
-
-- Modern libraries (PyTorch: `torchvision.models.segmentation`, `segmentation_models_pytorch`) provide pretrained FCN, U-Net, DeepLab models with one-line loading.
-- OpenCV's DNN module can run exported ONNX segmentation models; the inference pipeline follows §19.
-- Key hyperparameters: input size (larger = more context but slower), backbone (ResNet, EfficientNet), loss function combination (CE + Dice).
-- Post-processing: argmax along class axis for final label map, optional CRF (conditional random field) for edge refinement.
-
----
-
-## 1. Segmentation Overview
 
 ### 1.1 Types of Segmentation
 
@@ -209,6 +88,17 @@ Augmented Reality:
 ---
 
 ## 2. Fully Convolutional Networks (FCN)
+
+### Theory: FCN: the Breakthrough
+
+Long, Shelhamer & Darrell (2015) introduced the Fully Convolutional Network. Two ideas:
+
+1. **Remove the fully-connected classifier head** and replace it with a 1×1 convolution that produces `K` channels. The network now outputs a low-resolution class-probability map instead of a single vector.
+2. **Upsample** the output back to input resolution via transposed convolution (or bilinear interpolation + convolution).
+
+The architecture: take a pretrained classification network (VGG), strip the FC layers, replace with conv layers, train on segmentation data. The network now does what the human eye expects: dense pixel-wise class predictions.
+
+The problem with vanilla FCN: by the time features reach the final classifier, spatial resolution is 32× lower than the input. Upsampling that 32× back to original resolution produces blurry segmentations without fine detail — exactly where you need it (boundaries).
 
 ### 2.1 From Classification to Segmentation
 
@@ -306,6 +196,35 @@ class FCN8s(nn.Module):
 ---
 
 ## 3. U-Net Architecture
+
+### Theory: U-Net: Skip Connections for Resolution
+
+U-Net (Ronneberger et al., 2015, originally for biomedical images) solves FCN's resolution loss with **symmetric encoder-decoder structure and skip connections**:
+
+```
+Input (572×572)
+  │
+  │  encoder (downsampling path): 4 levels of conv + pool
+  │
+  ▼    ─────────► skip connection ─────────┐
+Level 1 (64 ch)                             │
+  │                                         │
+  │                                         ▼  decoder output (64 ch)
+  ▼    ─────────► skip connection ──────┐    ▲
+Level 2 (128 ch)                        │    │ upsample
+  │                                     │    │
+  │                                     ▼    │
+  ▼    ─────────► skip connection ──┐   ... (same pattern at each level)
+Level 3 (256 ch)                    │
+  │                                 │
+  │                                 │
+  ▼                                 │
+Bottleneck (1024 ch, 32×32)         │
+```
+
+The key insight: the encoder throws away spatial information as it goes deeper; the skip connections route that spatial information **directly** to the decoder, where it is concatenated with the upsampled features. The decoder thus has both **semantic information** (from the bottleneck, which saw the whole image) and **spatial information** (from the skip connections, which preserve fine detail).
+
+U-Net became the template for medical imaging, satellite imagery, and many other segmentation tasks. Variants (nnU-Net, TransUNet) all share the skip-connection idea.
 
 ### 3.1 U-Net Design
 
@@ -406,6 +325,18 @@ class UNet(nn.Module):
 
 ## 4. DeepLab v3+
 
+### Theory: DeepLab: Atrous Convolution Without Downsampling
+
+DeepLab (Chen et al., 2015-2018) takes a different approach. Instead of downsampling and upsampling (U-Net style), it keeps the feature map at higher resolution and uses **atrous (dilated) convolution** to grow the receptive field:
+
+- A regular 3×3 conv with dilation rate 1 sees a 3×3 region.
+- A 3×3 conv with dilation rate 2 sees a 5×5 region but only samples 9 points (every other one).
+- A 3×3 conv with dilation rate 4 sees a 9×9 region with the same 9 parameters.
+
+By stacking atrous convs with increasing rates, you get a large effective receptive field without downsampling. The **Atrous Spatial Pyramid Pooling (ASPP)** module in DeepLab v3+ applies multiple parallel atrous convs with different dilation rates, then concatenates, capturing multi-scale context.
+
+DeepLab v3+ adds a small decoder with skip connections on top of the atrous backbone, combining both approaches.
+
 ### 4.1 Atrous (Dilated) Convolution
 
 ```
@@ -486,6 +417,29 @@ class ASPP(nn.Module):
 
 ## 5. Loss Functions for Segmentation
 
+### Theory: Loss Functions
+
+#### E.1 Cross-entropy
+
+The default: per-pixel categorical cross-entropy. Same as classification, just applied at every pixel. Problem: **class imbalance**. In a driving scene, 60% of pixels might be road and 0.5% might be traffic signs. Cross-entropy treats every pixel equally, so the network becomes very good at road and barely learns signs.
+
+#### E.2 Dice / IoU loss
+
+Dice loss directly optimizes the overlap between predicted and ground-truth masks:
+
+```
+Dice(A, B) = 2 · |A ∩ B| / (|A| + |B|)
+Loss = 1 - Dice
+```
+
+For binary masks: `Dice = 2 · Σ(p · g) / (Σp + Σg)` where `p`, `g` are predicted and ground-truth probabilities. Insensitive to class imbalance because it only cares about the foreground overlap, not the background. Popular in medical imaging where the class of interest (tumor) is small relative to the background.
+
+#### E.3 Focal loss
+
+Cross-entropy with an extra `(1 - p)^γ` factor that **downweights well-classified easy pixels**, focusing training on hard pixels. Another way to combat class imbalance, introduced by RetinaNet and popular in segmentation too.
+
+Typical practice: combine cross-entropy with dice loss (sum or weighted average). Cross-entropy provides stable gradient; dice provides direct optimization of the metric.
+
 ### 5.1 Common Loss Functions
 
 ```python
@@ -538,6 +492,28 @@ class CombinedLoss(nn.Module):
 ---
 
 ## 6. Evaluation Metrics
+
+### Theory: Evaluation Metrics
+
+#### F.1 Pixel accuracy
+
+Simplest: fraction of pixels correctly classified. Misleading because of class imbalance — on a driving-scene dataset you might get 95% pixel accuracy by just predicting "road everywhere" for half the classes.
+
+#### F.2 Intersection-over-Union (IoU)
+
+Per-class IoU:
+
+```
+IoU_c = |pred_c ∩ true_c| / |pred_c ∪ true_c|
+```
+
+For class `c`: the fraction of the union of predicted and true `c`-pixels that are in both. IoU of 1 means perfect, 0 means no overlap.
+
+#### F.3 Mean IoU (mIoU)
+
+Average IoU across all `K` classes, with each class weighted equally regardless of its pixel count. **This is the standard segmentation metric** on Cityscapes, ADE20K, Pascal VOC, and every benchmark. Robust to class imbalance because rare classes are weighted the same as common classes.
+
+Fringe benefit: if mIoU improves but pixel accuracy drops, you are getting better at segmenting rare classes at the slight expense of the dominant ones — usually the right trade-off.
 
 ### 6.1 Segmentation Metrics
 

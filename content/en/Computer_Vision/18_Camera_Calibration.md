@@ -24,8 +24,6 @@ Camera calibration is the process of measuring a camera's internal parameters an
 
 ## Table of Contents
 
-Before the OpenCV reference, read [**Theory & Principles**](#theory--principles) — the pinhole projection model, the intrinsic/extrinsic decomposition, the radial and tangential distortion polynomials, and the idea behind Zhang's planar-pattern calibration.
-
 1. [Camera Intrinsic Parameters](#1-camera-intrinsic-parameters)
 2. [Lens Distortion](#2-lens-distortion)
 3. [findChessboardCorners()](#3-findchessboardcorners)
@@ -36,24 +34,9 @@ Before the OpenCV reference, read [**Theory & Principles**](#theory--principles)
 
 ---
 
-## Theory & Principles
+## 1. Camera Intrinsic Parameters
 
-Camera calibration is the process of estimating the mathematical model that describes how a real camera maps 3D world points into 2D image pixels. Once you know this model you can:
-
-- Correct lens distortion to get a geometrically clean image.
-- Triangulate 3D points from multiple views.
-- Compute real-world distances from image measurements.
-- Build augmented reality, structure-from-motion, SLAM, and robot vision systems.
-
-The theory has three layers: **the ideal pinhole projection** (pure geometry), **the lens distortion model** (corrections for real optics), and **the calibration algorithm** (estimating all the parameters from images of a known target). This section covers:
-
-- **(A) The pinhole camera model** — the ideal projection equation and its intrinsic/extrinsic decomposition.
-- **(B) The camera matrix K** — what focal length, principal point, and skew mean in pixels.
-- **(C) Lens distortion** — radial and tangential models and why even cheap polynomials are enough.
-- **(D) Zhang's method** — the 1999 algorithm behind every OpenCV calibration, reducing the problem to multiple views of a planar pattern.
-- **(E) Reprojection error** — the metric that tells you whether your calibration actually worked.
-
-### A. The Pinhole Camera Model
+### Theory: The Pinhole Camera Model
 
 #### A.1 The ideal projection
 
@@ -92,7 +75,7 @@ The right side splits into two meaningful pieces:
 - **`[R | t]`** (extrinsic matrix). A 3×4 matrix encoding the camera's **pose** in the world: rotation `R` and translation `t`. Changes when the camera moves.
 - **`K`** (intrinsic matrix). A 3×3 matrix encoding **which camera it is**: focal length, principal point, pixel geometry. Does not change when the camera moves.
 
-### B. The Camera Matrix K
+### Theory: The Camera Matrix K
 
 The full intrinsic matrix is:
 
@@ -109,103 +92,6 @@ Parameters:
 - **`s`**: skew. Non-zero if the sensor's horizontal and vertical axes are not perpendicular. For digital cameras this is essentially always zero; OpenCV fixes `s = 0` by default.
 
 Knowing `K` lets you convert between pixel coordinates and the **normalized image coordinates** `(x_n, y_n) = ((u - c_x)/f_x, (v - c_y)/f_y)` — the ideal pinhole projection that does not depend on sensor resolution.
-
-### C. Lens Distortion
-
-Real lenses are not ideal pinholes. Even well-corrected optics produce:
-
-#### C.1 Radial distortion
-
-Light bends slightly differently at the edge of a lens than at the center, producing:
-
-- **Barrel distortion**: edges push outward, straight lines near the border curve outward. Common in wide-angle lenses.
-- **Pincushion distortion**: edges pull inward. Common in telephoto lenses.
-
-Modeled as a polynomial in the squared distance from the principal point:
-
-```
-x_d = x_n · (1 + k₁·r² + k₂·r⁴ + k₃·r⁶)
-y_d = y_n · (1 + k₁·r² + k₂·r⁴ + k₃·r⁶)
-
-where r² = x_n² + y_n²
-```
-
-Three coefficients `k₁`, `k₂`, `k₃` suffice for most lenses. Fisheye lenses need a different model (§E in OpenCV's `fisheye` namespace).
-
-#### C.2 Tangential distortion
-
-If the lens and sensor are not perfectly parallel, points get displaced in a way that isn't purely radial:
-
-```
-x_d = x_n + 2·p₁·x_n·y_n + p₂·(r² + 2·x_n²)
-y_d = y_n + p₁·(r² + 2·y_n²) + 2·p₂·x_n·y_n
-```
-
-Two coefficients `p₁`, `p₂`. Usually small; sometimes fixed to zero in the calibration model.
-
-#### C.3 The full distortion vector
-
-OpenCV stores `dist = [k₁, k₂, p₁, p₂, k₃]` (5 parameters, in that order) by default, with optional extensions for thin-prism distortion and high-distortion wide-angle lenses.
-
-The **undistortion** operation applies the inverse of this polynomial to each pixel — computed by iterative refinement, since the polynomial is not analytically invertible. This is what `cv2.undistort` does internally.
-
-### D. Zhang's Method: Calibration from Planar Patterns
-
-#### D.1 The problem
-
-We want to estimate `K`, `dist`, and the per-view `[R | t]` from images of a known object. Before Zhang's breakthrough, calibration required a precisely manufactured 3D rig (expensive, fragile). Zhang (1999) showed that **multiple images of a flat planar pattern** at different orientations are enough.
-
-#### D.2 The key observation
-
-A planar calibration pattern — a checkerboard — has all `Z = 0` in its own coordinate frame. Substituting into the projection equation with `Z = 0` reduces the `3×4` matrix `[R | t]` to a `3×3` matrix that maps `(X, Y)` planar coordinates to `(u, v)` image coordinates. That 3×3 matrix is a **homography** (same object as §04 perspective transforms).
-
-Each image of the checkerboard gives you a homography, recoverable from the detected corner correspondences. Zhang showed that multiple homographies from multiple orientations are enough to algebraically separate `K` (shared across all views) from `[R | t]` (different per view).
-
-#### D.3 The algorithm
-
-1. **Detect corners** in each checkerboard image (`findChessboardCorners`).
-2. **Solve for the homography** `H_i` mapping pattern plane to image for each view `i`. Linear least-squares from ≥ 4 corner correspondences.
-3. **Extract `K`** by imposing that the columns of `K⁻¹ · H` must be orthonormal (rotation matrix columns) — this gives 2 constraints per view, enough to solve for the 5 intrinsic parameters with ≥ 3 views.
-4. **Extract `[R_i | t_i]`** for each view from `K⁻¹ · H_i`.
-5. **Bundle adjustment**: nonlinear refinement using the **reprojection error** as objective (§E). Distortion parameters are included in this step since they cannot be handled linearly.
-
-OpenCV's `cv2.calibrateCamera` runs all five steps and returns `K`, `dist`, and the per-view poses.
-
-#### D.4 Practical requirements
-
-- At least 3 views are mathematically required; ~10–20 views in practice for stable results.
-- **Vary orientation** — multiple images of the pattern tilted at different angles, not just translated. Translations do not add new algebraic constraints on `K`.
-- The pattern should cover most of the image in at least some views — corners near the image edge constrain distortion parameters, which only activate in the periphery.
-
-### E. Reprojection Error: the Calibration Quality Metric
-
-After calibrating, project every known 3D pattern corner through the estimated `K`, `dist`, and `[R_i | t_i]` back into each image plane. Compare to the detected corner locations:
-
-```
-reproj_error = mean over all images, all corners  of  ‖ detected_pixel - projected_pixel ‖
-```
-
-This is in pixels, directly interpretable:
-
-- **< 0.5 px**: excellent calibration, usable for high-precision metrology.
-- **0.5 – 1.0 px**: good, suitable for most AR/robotics tasks.
-- **1.0 – 3.0 px**: acceptable for visualization or coarse tracking, but precision applications will struggle.
-- **> 3.0 px**: something is wrong — bad corner detections, too few views, mis-ordered pattern, etc.
-
-Reprojection error is the final sanity check: low error means your model predicts the data accurately everywhere it was tested.
-
-### From Theory to the Functions Below
-
-- `cv2.findChessboardCorners(img, patternSize)` — step 1 of §D.3, detect corners of a checkerboard in subpixel accuracy.
-- `cv2.calibrateCamera(objectPoints, imagePoints, imageSize)` — full Zhang pipeline (§D), returns `(retval, K, dist, rvecs, tvecs)`.
-- `cv2.undistort(img, K, dist)` — apply the inverse distortion polynomial of §C to rectify an image.
-- `cv2.initUndistortRectifyMap` / `cv2.remap` — factor §C undistortion into a precomputed per-pixel map, useful when undistorting many frames at video rate.
-- `cv2.projectPoints(objectPoints, rvec, tvec, K, dist)` — the forward projection of §A, used to compute reprojection error (§E).
-- `cv2.solvePnP(objectPoints, imagePoints, K, dist)` — given a known intrinsic calibration and 2D-3D correspondences, solve for `[R | t]`. The inverse of the extrinsic part.
-
----
-
-## 1. Camera Intrinsic Parameters
 
 ### Pinhole Camera Model
 
@@ -314,6 +200,45 @@ s *  │ u │   =   │ fx   0   cx │ * │ R | t │ * │ X │
 ---
 
 ## 2. Lens Distortion
+
+### Theory: Lens Distortion
+
+Real lenses are not ideal pinholes. Even well-corrected optics produce:
+
+#### C.1 Radial distortion
+
+Light bends slightly differently at the edge of a lens than at the center, producing:
+
+- **Barrel distortion**: edges push outward, straight lines near the border curve outward. Common in wide-angle lenses.
+- **Pincushion distortion**: edges pull inward. Common in telephoto lenses.
+
+Modeled as a polynomial in the squared distance from the principal point:
+
+```
+x_d = x_n · (1 + k₁·r² + k₂·r⁴ + k₃·r⁶)
+y_d = y_n · (1 + k₁·r² + k₂·r⁴ + k₃·r⁶)
+
+where r² = x_n² + y_n²
+```
+
+Three coefficients `k₁`, `k₂`, `k₃` suffice for most lenses. Fisheye lenses need a different model (§E in OpenCV's `fisheye` namespace).
+
+#### C.2 Tangential distortion
+
+If the lens and sensor are not perfectly parallel, points get displaced in a way that isn't purely radial:
+
+```
+x_d = x_n + 2·p₁·x_n·y_n + p₂·(r² + 2·x_n²)
+y_d = y_n + p₁·(r² + 2·y_n²) + 2·p₂·x_n·y_n
+```
+
+Two coefficients `p₁`, `p₂`. Usually small; sometimes fixed to zero in the calibration model.
+
+#### C.3 The full distortion vector
+
+OpenCV stores `dist = [k₁, k₂, p₁, p₂, k₃]` (5 parameters, in that order) by default, with optional extensions for thin-prism distortion and high-distortion wide-angle lenses.
+
+The **undistortion** operation applies the inverse of this polynomial to each pixel — computed by iterative refinement, since the polynomial is not analytically invertible. This is what `cv2.undistort` does internally.
 
 ### Types of Distortion
 
@@ -585,6 +510,34 @@ obj_points, img_points, img_size = collect_calibration_points(
 ---
 
 ## 4. calibrateCamera()
+
+### Theory: Zhang's Method: Calibration from Planar Patterns
+
+#### D.1 The problem
+
+We want to estimate `K`, `dist`, and the per-view `[R | t]` from images of a known object. Before Zhang's breakthrough, calibration required a precisely manufactured 3D rig (expensive, fragile). Zhang (1999) showed that **multiple images of a flat planar pattern** at different orientations are enough.
+
+#### D.2 The key observation
+
+A planar calibration pattern — a checkerboard — has all `Z = 0` in its own coordinate frame. Substituting into the projection equation with `Z = 0` reduces the `3×4` matrix `[R | t]` to a `3×3` matrix that maps `(X, Y)` planar coordinates to `(u, v)` image coordinates. That 3×3 matrix is a **homography** (same object as §04 perspective transforms).
+
+Each image of the checkerboard gives you a homography, recoverable from the detected corner correspondences. Zhang showed that multiple homographies from multiple orientations are enough to algebraically separate `K` (shared across all views) from `[R | t]` (different per view).
+
+#### D.3 The algorithm
+
+1. **Detect corners** in each checkerboard image (`findChessboardCorners`).
+2. **Solve for the homography** `H_i` mapping pattern plane to image for each view `i`. Linear least-squares from ≥ 4 corner correspondences.
+3. **Extract `K`** by imposing that the columns of `K⁻¹ · H` must be orthonormal (rotation matrix columns) — this gives 2 constraints per view, enough to solve for the 5 intrinsic parameters with ≥ 3 views.
+4. **Extract `[R_i | t_i]`** for each view from `K⁻¹ · H_i`.
+5. **Bundle adjustment**: nonlinear refinement using the **reprojection error** as objective (§E). Distortion parameters are included in this step since they cannot be handled linearly.
+
+OpenCV's `cv2.calibrateCamera` runs all five steps and returns `K`, `dist`, and the per-view poses.
+
+#### D.4 Practical requirements
+
+- At least 3 views are mathematically required; ~10–20 views in practice for stable results.
+- **Vary orientation** — multiple images of the pattern tilted at different angles, not just translated. Translations do not add new algebraic constraints on `K`.
+- The pattern should cover most of the image in at least some views — corners near the image edge constrain distortion parameters, which only activate in the periphery.
 
 ### Performing Camera Calibration
 
@@ -925,6 +878,23 @@ undistorted = visualize_undistortion(img, camera_matrix, dist_coeffs)
 ---
 
 ## 6. Reprojection Error
+
+### Theory: Reprojection Error: the Calibration Quality Metric
+
+After calibrating, project every known 3D pattern corner through the estimated `K`, `dist`, and `[R_i | t_i]` back into each image plane. Compare to the detected corner locations:
+
+```
+reproj_error = mean over all images, all corners  of  ‖ detected_pixel - projected_pixel ‖
+```
+
+This is in pixels, directly interpretable:
+
+- **< 0.5 px**: excellent calibration, usable for high-precision metrology.
+- **0.5 – 1.0 px**: good, suitable for most AR/robotics tasks.
+- **1.0 – 3.0 px**: acceptable for visualization or coarse tracking, but precision applications will struggle.
+- **> 3.0 px**: something is wrong — bad corner detections, too few views, mis-ordered pattern, etc.
+
+Reprojection error is the final sanity check: low error means your model predicts the data accurately everywhere it was tested.
 
 ### Calculating Reprojection Error
 

@@ -21,8 +21,6 @@ After completing this lesson, you will be able to:
 
 ## Table of Contents
 
-Before the OpenCV reference, read [**Theory & Principles**](#theory--principles) — thresholding as a 1D classification problem, how Otsu's method picks the threshold automatically by minimizing intra-class variance, and why adaptive methods are necessary when illumination is non-uniform.
-
 1. [Binarization Overview](#1-binarization-overview)
 2. [Global Thresholding - threshold()](#2-global-thresholding---threshold)
 3. [OTSU Automatic Threshold](#3-otsu-automatic-threshold)
@@ -36,19 +34,9 @@ Before the OpenCV reference, read [**Theory & Principles**](#theory--principles)
 
 ---
 
-## Theory & Principles
+## 1. Binarization Overview
 
-Thresholding is the simplest possible classifier: each pixel is assigned to "foreground" or "background" based on whether its intensity is above or below a cutoff value. Despite its simplicity, thresholding is the first step in huge numbers of computer vision pipelines — OCR, industrial inspection, medical imaging — because if it works for your image, no fancier segmentation method is needed.
-
-The questions the theory answers:
-
-- **(A) Thresholding as classification** — what the threshold actually is, and when a single global threshold is justified.
-- **(B) Otsu's method** — the automatic threshold selection algorithm, derived from first principles as minimizing intra-class variance.
-- **(C) Why global thresholding fails** — the uneven illumination problem.
-- **(D) Adaptive thresholding** — computing a local threshold per pixel, and how the two window statistics (mean, Gaussian) differ.
-- **(E) Multi-level and color thresholding** — extensions beyond simple binary on grayscale.
-
-### A. Thresholding as a Classification Problem
+### Theory: Thresholding as a Classification Problem
 
 Given a grayscale image `I(x, y)` and a threshold `T`, global thresholding produces a binary image:
 
@@ -63,100 +51,6 @@ This is classification with a one-dimensional feature (pixel intensity) and a de
 2. Those intensities are **spatially consistent** — the foreground has the same intensity range everywhere in the image, and so does the background.
 
 When both hold, the image histogram will be **bimodal** — two separated peaks, one per class — and the ideal threshold sits in the valley between them. The methods in this lesson differ mostly in how they locate that valley.
-
-### B. Otsu's Method: Automatic Threshold Selection
-
-Otsu's method (1979) picks the threshold `T*` that best separates the two classes, *using only the histogram*. It is parameter-free and, under the bimodal-histogram assumption above, gives near-optimal results.
-
-#### B.1 The objective function
-
-For any candidate threshold `t`, partition the pixels into two classes `C₀ = { p : I(p) ≤ t }` and `C₁ = { p : I(p) > t }`. Let:
-
-- `ω₀(t)`, `ω₁(t)` = fraction of pixels in each class (so `ω₀ + ω₁ = 1`).
-- `μ₀(t)`, `μ₁(t)` = mean intensity of each class.
-- `σ₀²(t)`, `σ₁²(t)` = variance of each class.
-
-Otsu defines the **intra-class variance** (within-class spread):
-
-```
-σ_W²(t) = ω₀(t) · σ₀²(t) + ω₁(t) · σ₁²(t)
-```
-
-A good threshold makes each class tight — small variance within each group. Otsu picks `T* = argmin_t σ_W²(t)`.
-
-#### B.2 The inter-class variance shortcut
-
-Computing `σ_W²` at every `t` is expensive because both variances must be recalculated. A key identity decomposes the total variance `σ²` (constant for the image) into:
-
-```
-σ² = σ_W²(t) + σ_B²(t)
-```
-
-where `σ_B²(t) = ω₀(t) · ω₁(t) · (μ₁(t) - μ₀(t))²` is the **inter-class variance**. Since `σ²` is constant, **minimizing `σ_W²` is equivalent to maximizing `σ_B²`**. And `σ_B²` needs only the class fractions and means, which can be updated incrementally as `t` sweeps from 0 to 255 — one pass over the 256-bin histogram is enough.
-
-#### B.3 When Otsu fails
-
-The derivation assumes the histogram is bimodal. If it is not — a purely foreground image with no background, a noisy gradient with no clear peaks, a three-modal scene — Otsu still returns *some* threshold, but it may be meaningless. Good practice: plot the histogram and visually verify bimodality before trusting the automatic choice.
-
-### C. Why a Single Global Threshold Fails: Non-Uniform Illumination
-
-Consider a document photographed under uneven lighting — the left side is bright from a window, the right side is shadowed. The *same ink pixels* on the left may be brighter than the *blank paper pixels* on the right. A single global threshold either:
-
-- Classifies bright-ink regions correctly but shadows-paper as ink (threshold too low), or
-- Classifies shadowed-paper regions correctly but washed-out ink as paper (threshold too high).
-
-The histogram becomes a blurred single blob instead of two separate peaks, breaking the bimodal assumption. The fix is to **let the threshold vary across the image**.
-
-### D. Adaptive Thresholding
-
-Adaptive thresholding picks a **different threshold for each pixel** based on the statistics of a small surrounding window:
-
-```
-T(x, y) = f({ I(x', y') : (x', y') ∈ window around (x, y) }) - C
-B(x, y) = 1  if I(x, y) > T(x, y)
-```
-
-The statistic `f` and the constant `C` control the behavior.
-
-#### D.1 Mean adaptive (`ADAPTIVE_THRESH_MEAN_C`)
-
-`f` is the arithmetic mean of the window. Local threshold = local mean minus `C`. This is the computationally cheapest option — uses a box filter (§05) internally.
-
-Effect: the threshold tracks the local background brightness. A dark region has a low threshold; a bright region has a high threshold. Ink that is "darker than its surroundings" by at least `C` becomes foreground, regardless of absolute intensity. This works even when global illumination varies wildly.
-
-#### D.2 Gaussian adaptive (`ADAPTIVE_THRESH_GAUSSIAN_C`)
-
-`f` is a Gaussian-weighted mean — nearby pixels count more than distant ones. Uses Gaussian blur internally. More accurate than the flat-mean version because the weighting reduces edge artifacts where the window overlaps both bright and dark regions, but slightly more expensive.
-
-#### D.3 Choosing window size and `C`
-
-- **Window size** should be larger than the foreground features you want to detect, but smaller than the scale of illumination variation. For text, a window a few times the character height works. Too small a window makes the threshold track the foreground itself (everything becomes gray); too large a window collapses back to global thresholding.
-- **`C`** is a bias that moves the threshold away from the local mean toward "a little bit darker". Larger `C` → only strongly darker-than-background pixels classify as foreground (cleaner but may lose faint features). Typical values: 2–15 for 8-bit images.
-
-### E. Beyond Binary Global Thresholding
-
-#### E.1 Multi-level thresholding
-
-Some scenes are naturally three-or-more classed (e.g. sky, foliage, building). Multi-Otsu generalizes §B to partition the histogram into `k` classes by maximizing the sum of pairwise inter-class variances. OpenCV doesn't include it directly; `skimage.filters.threshold_multiotsu` does.
-
-#### E.2 Color thresholding with `inRange`
-
-When the discriminating feature isn't intensity but color, `cv2.inRange(img, lower, upper)` thresholds each channel independently and ANDs the results — keeping pixels whose values fall inside a box in color space. In HSV (§03), this box becomes a "hue slab at sufficient saturation and brightness", which is how color-based object segmentation typically works.
-
-#### E.3 Hysteresis thresholding
-
-A single threshold forces every pixel into a hard classification; pixels right at `T` are arbitrary. Hysteresis uses *two* thresholds `T_low < T_high`: a pixel above `T_high` is certainly foreground; a pixel below `T_low` is certainly background; pixels in between are foreground only if connected to a sure-foreground pixel. This is how Canny (§08) handles the final edge linking step, and it generalizes to thresholding in any domain where the decision at the middle values should depend on neighbors.
-
-### From Theory to the Functions Below
-
-- `cv2.threshold(img, T, max, type)` — global thresholding (§A). `type` flags select the output encoding (binary, binary inverse, truncate, to-zero, to-zero inverse).
-- `cv2.threshold(img, 0, 255, THRESH_BINARY + THRESH_OTSU)` — Otsu's method (§B). The explicit `0` is ignored; Otsu computes `T*` internally and returns it as the first return value.
-- `cv2.adaptiveThreshold(img, max, method, type, blockSize, C)` — adaptive thresholding (§D). `method` picks mean (§D.1) or Gaussian (§D.2); `blockSize` is the window size; `C` is the bias.
-- `cv2.inRange(img, lower, upper)` — color thresholding (§E.2). Typically applied after `cv2.cvtColor(img, COLOR_BGR2HSV)`.
-
----
-
-## 1. Binarization Overview
 
 ### What is Binarization?
 
@@ -361,6 +255,40 @@ find_optimal_threshold(img)
 
 Choosing a threshold manually requires inspecting each image, which is impractical for batch processing. Otsu's method solves this by treating threshold selection as an optimization problem: find the value that best separates the histogram into two compact, well-separated clusters. The result is a data-driven threshold that works consistently across images with varying exposure.
 
+### Theory: Otsu's Method: Automatic Threshold Selection
+
+Otsu's method (1979) picks the threshold `T*` that best separates the two classes, *using only the histogram*. It is parameter-free and, under the bimodal-histogram assumption above, gives near-optimal results.
+
+#### B.1 The objective function
+
+For any candidate threshold `t`, partition the pixels into two classes `C₀ = { p : I(p) ≤ t }` and `C₁ = { p : I(p) > t }`. Let:
+
+- `ω₀(t)`, `ω₁(t)` = fraction of pixels in each class (so `ω₀ + ω₁ = 1`).
+- `μ₀(t)`, `μ₁(t)` = mean intensity of each class.
+- `σ₀²(t)`, `σ₁²(t)` = variance of each class.
+
+Otsu defines the **intra-class variance** (within-class spread):
+
+```
+σ_W²(t) = ω₀(t) · σ₀²(t) + ω₁(t) · σ₁²(t)
+```
+
+A good threshold makes each class tight — small variance within each group. Otsu picks `T* = argmin_t σ_W²(t)`.
+
+#### B.2 The inter-class variance shortcut
+
+Computing `σ_W²` at every `t` is expensive because both variances must be recalculated. A key identity decomposes the total variance `σ²` (constant for the image) into:
+
+```
+σ² = σ_W²(t) + σ_B²(t)
+```
+
+where `σ_B²(t) = ω₀(t) · ω₁(t) · (μ₁(t) - μ₀(t))²` is the **inter-class variance**. Since `σ²` is constant, **minimizing `σ_W²` is equivalent to maximizing `σ_B²`**. And `σ_B²` needs only the class fractions and means, which can be updated incrementally as `t` sweeps from 0 to 255 — one pass over the 256-bin histogram is enough.
+
+#### B.3 When Otsu fails
+
+The derivation assumes the histogram is bimodal. If it is not — a purely foreground image with no background, a noisy gradient with no clear peaks, a three-modal scene — Otsu still returns *some* threshold, but it may be meaningless. Good practice: plot the histogram and visually verify bimodality before trusting the automatic choice.
+
 ### OTSU Algorithm
 
 ```
@@ -473,6 +401,41 @@ cv2.destroyAllWindows()
 ## 4. Adaptive Thresholding - adaptiveThreshold()
 
 Global thresholding (including Otsu) uses one threshold for the entire image, which fails when illumination is uneven — the shadow side of a document may be darker than the brightest foreground pixels on the bright side. Adaptive thresholding computes a separate threshold for each pixel based on its local neighborhood, making it robust to gradients in lighting and the standard choice for document scanning.
+
+### Theory: Why a Single Global Threshold Fails: Non-Uniform Illumination
+
+Consider a document photographed under uneven lighting — the left side is bright from a window, the right side is shadowed. The *same ink pixels* on the left may be brighter than the *blank paper pixels* on the right. A single global threshold either:
+
+- Classifies bright-ink regions correctly but shadows-paper as ink (threshold too low), or
+- Classifies shadowed-paper regions correctly but washed-out ink as paper (threshold too high).
+
+The histogram becomes a blurred single blob instead of two separate peaks, breaking the bimodal assumption. The fix is to **let the threshold vary across the image**.
+
+### Theory: Adaptive Thresholding
+
+Adaptive thresholding picks a **different threshold for each pixel** based on the statistics of a small surrounding window:
+
+```
+T(x, y) = f({ I(x', y') : (x', y') ∈ window around (x, y) }) - C
+B(x, y) = 1  if I(x, y) > T(x, y)
+```
+
+The statistic `f` and the constant `C` control the behavior.
+
+#### D.1 Mean adaptive (`ADAPTIVE_THRESH_MEAN_C`)
+
+`f` is the arithmetic mean of the window. Local threshold = local mean minus `C`. This is the computationally cheapest option — uses a box filter (§05) internally.
+
+Effect: the threshold tracks the local background brightness. A dark region has a low threshold; a bright region has a high threshold. Ink that is "darker than its surroundings" by at least `C` becomes foreground, regardless of absolute intensity. This works even when global illumination varies wildly.
+
+#### D.2 Gaussian adaptive (`ADAPTIVE_THRESH_GAUSSIAN_C`)
+
+`f` is a Gaussian-weighted mean — nearby pixels count more than distant ones. Uses Gaussian blur internally. More accurate than the flat-mean version because the weighting reduces edge artifacts where the window overlaps both bright and dark regions, but slightly more expensive.
+
+#### D.3 Choosing window size and `C`
+
+- **Window size** should be larger than the foreground features you want to detect, but smaller than the scale of illumination variation. For text, a window a few times the character height works. Too small a window makes the threshold track the foreground itself (everything becomes gray); too large a window collapses back to global thresholding.
+- **`C`** is a bias that moves the threshold away from the local mean toward "a little bit darker". Larger `C` → only strongly darker-than-background pixels classify as foreground (cleaner but may lose faint features). Typical values: 2–15 for 8-bit images.
 
 ### What is Adaptive Thresholding?
 
@@ -657,6 +620,20 @@ plt.show()
 ---
 
 ## 5. Multi-level Thresholding
+
+### Theory: Beyond Binary Global Thresholding
+
+#### E.1 Multi-level thresholding
+
+Some scenes are naturally three-or-more classed (e.g. sky, foliage, building). Multi-Otsu generalizes §B to partition the histogram into `k` classes by maximizing the sum of pairwise inter-class variances. OpenCV doesn't include it directly; `skimage.filters.threshold_multiotsu` does.
+
+#### E.2 Color thresholding with `inRange`
+
+When the discriminating feature isn't intensity but color, `cv2.inRange(img, lower, upper)` thresholds each channel independently and ANDs the results — keeping pixels whose values fall inside a box in color space. In HSV (§03), this box becomes a "hue slab at sufficient saturation and brightness", which is how color-based object segmentation typically works.
+
+#### E.3 Hysteresis thresholding
+
+A single threshold forces every pixel into a hard classification; pixels right at `T` are arbitrary. Hysteresis uses *two* thresholds `T_low < T_high`: a pixel above `T_high` is certainly foreground; a pixel below `T_low` is certainly background; pixels in between are foreground only if connected to a sure-foreground pixel. This is how Canny (§08) handles the final edge linking step, and it generalizes to thresholding in any domain where the decision at the middle values should depend on neighbors.
 
 ### Multi-level Thresholding
 

@@ -20,8 +20,6 @@ After completing this lesson, you will be able to:
 
 ## Table of Contents
 
-Before the OpenCV reference, read [**Theory & Principles**](#theory--principles) — what a "color space" actually is, why HSV separates hue from brightness while RGB does not, and what the CIE LAB model corrects for.
-
 1. [BGR vs RGB](#1-bgr-vs-rgb)
 2. [cv2.cvtColor() and Color Conversion Constants](#2-cv2cvtcolor-and-color-conversion-constants)
 3. [HSV Color Space](#3-hsv-color-space)
@@ -35,20 +33,9 @@ Before the OpenCV reference, read [**Theory & Principles**](#theory--principles)
 
 ---
 
-## Theory & Principles
+## 1. BGR vs RGB
 
-"Color" is a perceptual phenomenon — a property of human vision, not of light itself. A **color space** is a mathematical parameterization that turns a perceived color into a tuple of numbers. Different applications need different parameterizations: RGB is the natural choice for display hardware, HSV separates the properties artists and segmentation algorithms care about, and CIE LAB is designed so that numerical distance between tuples matches perceived color difference.
-
-This section covers:
-
-- **(A) Why there are many color spaces** — the core fact that the human visual system responds to light of different wavelengths via three cone types.
-- **(B) RGB** — the additive model and its limits (not perceptually uniform, channels not independent).
-- **(C) HSV** — the cylindrical reparametrization that separates hue from brightness, with the formulas for the conversion.
-- **(D) CIE LAB** — the perceptually uniform space that makes color difference a distance.
-- **(E) Grayscale conversion** — the luminance weights and where they come from.
-- **(F) Gamma encoding** — the hidden non-linearity in every 8-bit sRGB image that affects most color math.
-
-### A. Why There Are Many Color Spaces
+### Theory: Why There Are Many Color Spaces
 
 The human retina contains three types of cones — S, M, L — roughly sensitive to short, medium, and long wavelengths. The brain only knows the response of each cone type; it never sees the incoming spectrum directly. This is why color vision is fundamentally **three-dimensional** and why any two light spectra producing the same S/M/L responses look identical (a phenomenon called *metamerism*).
 
@@ -64,7 +51,7 @@ Given this, you can parametrize color using any three-dimensional coordinate sys
 
 Converting between spaces is **lossy only at the edges** — inside the intersection of their gamuts, the conversion is invertible up to floating-point precision. `cv2.cvtColor` is the operational tool, but knowing which target space is right for your task matters more than knowing the function signature.
 
-### B. RGB: Additive Primaries
+### Theory: RGB: Additive Primaries
 
 RGB places color at point `(R, G, B) ∈ [0, 1]³` in a cube whose axes correspond to the intensities of a red, green, and blue primary light. Black is `(0, 0, 0)`, white is `(1, 1, 1)`, and the gray diagonal runs from black to white.
 
@@ -76,84 +63,7 @@ Reasons RGB is a poor analysis space:
 2. **Channels are highly correlated.** Most natural images have `R`, `G`, `B` values that vary together — brighten the scene and all three channels go up. Operations that want to isolate "color" from "brightness" cannot do so cleanly in RGB.
 3. **Brightness is entangled.** "Is this pixel red?" needs a lighting-invariant answer, but a shadowed red ball has smaller `R, G, B` than a bright red ball. No RGB threshold reliably separates red from non-red across lighting conditions.
 
-### C. HSV: Decoupling Color from Brightness
-
-HSV (Hue, Saturation, Value) reparametrizes the RGB cube into a cylinder that mirrors how humans describe color:
-
-- **Hue H** (angle 0°–360°) — which color it is. Red at 0°, green at 120°, blue at 240°, wrapping back.
-- **Saturation S** (fraction 0–1) — how pure vs washed-out. 0 = gray, 1 = fully vivid.
-- **Value V** (fraction 0–1) — how bright. 0 = black, 1 = full brightness for that hue.
-
-#### C.1 The conversion
-
-Let `R, G, B ∈ [0, 1]` and `M = max(R, G, B)`, `m = min(R, G, B)`, `Δ = M - m`. Then
-
-```
-V = M
-
-      ⎧  0                           if Δ = 0     (no color, S = 0)
-S = ⎨
-      ⎩  Δ / M                       otherwise
-
-      ⎧  undefined                   if Δ = 0
-      ⎪  60° · ((G - B) / Δ) mod 6   if M = R
-H = ⎨
-      ⎪  60° · ((B - R) / Δ + 2)     if M = G
-      ⎩  60° · ((R - G) / Δ + 4)     if M = B
-```
-
-The `max - min` quantity `Δ` measures how "off-diagonal" the RGB point is — zero if `R = G = B` (a gray, with hue undefined), larger as the color becomes more saturated. The hue formula picks the sector based on which channel is dominant and interpolates between the two flanking primaries.
-
-#### C.2 Why this matters for computer vision
-
-In HSV, brightness is isolated in `V`. A red object photographed in shadow and in sunlight has similar `H` (red is still red) and similar `S` (the object is still saturated), but very different `V`. A filter that selects pixels by `H` and `S` only — ignoring `V` — becomes robust to lighting variation, which is the textbook recipe for color-based segmentation:
-
-```python
-hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
-mask = cv2.inRange(hsv, (100, 150, 50), (130, 255, 255))   # blue-ish, any brightness
-```
-
-#### C.3 The OpenCV `uint8` scaling
-
-OpenCV stores HSV in `uint8`, which has only 256 levels. Hue in degrees would need ≥ 360 levels, so OpenCV halves it: **H ∈ [0, 180], not [0, 360]**. Saturation and Value are scaled to `[0, 255]`. A common bug: copying HSV ranges from a tutorial that used `[0, 360]` for hue and getting results shifted by a factor of two. When reasoning about the range, double every angle in OpenCV.
-
-### D. CIE LAB: Perceptually Uniform Color
-
-The CIE LAB space (also called CIELAB or L*a*b*) was designed in 1976 to make numerical distance match perceived color difference. Its axes:
-
-- **L*** — perceptual lightness, `[0, 100]`. 0 = black, 100 = diffuse white.
-- **a*** — green–red axis. Negative = green, positive = red.
-- **b*** — blue–yellow axis. Negative = blue, positive = yellow.
-
-The key guarantee is that the Euclidean distance
-
-```
-ΔE = √((L₁ - L₂)² + (a₁ - a₂)² + (b₁ - b₂)²)
-```
-
-is approximately constant for colors perceived as equally different, across the entire gamut. A `ΔE` of about 2.3 is the average just-noticeable difference; `ΔE = 10` is a clearly different color.
-
-This is the space to use when you need to:
-
-- Match or rank colors by perceptual similarity (palette quantization, color search).
-- Compute a "color only" gradient that ignores lighting (a-b plane distances).
-- Build a printing or rendering pipeline that must preserve color fidelity.
-
-The conversion from sRGB to CIE LAB is non-linear (it goes through the CIE XYZ tristimulus space and a cube-root function). OpenCV hides this behind `cv2.cvtColor(img, cv2.COLOR_BGR2LAB)`, and stores `L ∈ [0, 100]` scaled to `[0, 255]` for `uint8` images (`a, b` are offset by 128 so their zero point is at value 128).
-
-### E. Grayscale: Luminance-Weighted Conversion
-
-Converting a color image to grayscale is *not* a simple average of `R`, `G`, `B` — the three channels contribute different amounts to perceived brightness because the eye is most sensitive to green light and least to blue. The standard ITU-R BT.601 formula (which OpenCV's `cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)` uses) is:
-
-```
-Y = 0.299 · R + 0.587 · G + 0.114 · B
-```
-
-A straight mean `(R + G + B) / 3` looks noticeably "wrong" — green leaves become too dark and blue sky becomes too bright — because the weights are all the same regardless of how much each channel contributes to perceived brightness.
-
-BT.709 (HDTV) uses slightly different weights: `Y = 0.2126 R + 0.7152 G + 0.0722 B`. The numerical difference matters for broadcast-quality work; for general computer-vision tasks either is fine.
-
-### F. Gamma Encoding: The Hidden Non-linearity
+### Theory: Gamma Encoding: The Hidden Non-linearity
 
 The 8-bit `R, G, B` values stored in a typical JPEG or PNG are *not* linear intensities. They are **gamma-encoded** — passed through a roughly `x^(1/2.2)` curve before quantization. This was originally a compensation for CRT electron-gun non-linearity, but it survives because it also happens to match human brightness sensitivity: the human eye is roughly logarithmic, so a gamma-encoded 8-bit channel uses its 256 levels efficiently (more levels where they are needed, in the dark regions).
 
@@ -173,17 +83,6 @@ Why this matters:
 - Anti-aliasing, alpha compositing, and physically-based rendering pipelines all require linear-space math to look right.
 
 For the typical computer-vision task (segmentation, detection, recognition) the gamma curve is usually ignored — it is a small systematic distortion that the algorithms learn to accommodate. For color science, HDR, or photometric work, handling gamma correctly is essential.
-
-### From Theory to the Functions Below
-
-- `cv2.cvtColor(img, flag)` — the unified API for every space-to-space transform in this lesson. The flag picks the source and target space (e.g. `COLOR_BGR2HSV`, `COLOR_BGR2LAB`, `COLOR_BGR2GRAY`).
-- `cv2.split(img)` / `cv2.merge(channels)` — break a multi-channel image into its per-channel arrays and reassemble. Essential when operating on a single channel (§D: operating on `a, b` but not `L*`).
-- `cv2.inRange(hsv, lower, upper)` — color segmentation in HSV, leveraging §C.2.
-- **BGR vs RGB** — the historical accident from §D.2 of lesson 02, still affecting the top of this lesson.
-
----
-
-## 1. BGR vs RGB
 
 ### OpenCV's Default Color Order
 
@@ -359,6 +258,47 @@ plt.show()
 
 RGB and BGR mix color and brightness together, making it hard to isolate a specific color under varying lighting. HSV separates these concerns: the Hue channel alone describes the color, so you can detect "a red object" with a simple range threshold regardless of whether the scene is bright or shadowy.
 
+### Theory: HSV: Decoupling Color from Brightness
+
+HSV (Hue, Saturation, Value) reparametrizes the RGB cube into a cylinder that mirrors how humans describe color:
+
+- **Hue H** (angle 0°–360°) — which color it is. Red at 0°, green at 120°, blue at 240°, wrapping back.
+- **Saturation S** (fraction 0–1) — how pure vs washed-out. 0 = gray, 1 = fully vivid.
+- **Value V** (fraction 0–1) — how bright. 0 = black, 1 = full brightness for that hue.
+
+#### C.1 The conversion
+
+Let `R, G, B ∈ [0, 1]` and `M = max(R, G, B)`, `m = min(R, G, B)`, `Δ = M - m`. Then
+
+```
+V = M
+
+      ⎧  0                           if Δ = 0     (no color, S = 0)
+S = ⎨
+      ⎩  Δ / M                       otherwise
+
+      ⎧  undefined                   if Δ = 0
+      ⎪  60° · ((G - B) / Δ) mod 6   if M = R
+H = ⎨
+      ⎪  60° · ((B - R) / Δ + 2)     if M = G
+      ⎩  60° · ((R - G) / Δ + 4)     if M = B
+```
+
+The `max - min` quantity `Δ` measures how "off-diagonal" the RGB point is — zero if `R = G = B` (a gray, with hue undefined), larger as the color becomes more saturated. The hue formula picks the sector based on which channel is dominant and interpolates between the two flanking primaries.
+
+#### C.2 Why this matters for computer vision
+
+In HSV, brightness is isolated in `V`. A red object photographed in shadow and in sunlight has similar `H` (red is still red) and similar `S` (the object is still saturated), but very different `V`. A filter that selects pixels by `H` and `S` only — ignoring `V` — becomes robust to lighting variation, which is the textbook recipe for color-based segmentation:
+
+```python
+hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
+mask = cv2.inRange(hsv, (100, 150, 50), (130, 255, 255))   # blue-ish, any brightness
+```
+
+#### C.3 The OpenCV `uint8` scaling
+
+OpenCV stores HSV in `uint8`, which has only 256 levels. Hue in degrees would need ≥ 360 levels, so OpenCV halves it: **H ∈ [0, 180], not [0, 360]**. Saturation and Value are scaled to `[0, 255]`. A common bug: copying HSV ranges from a tutorial that used `[0, 360]` for hue and getting results shifted by a factor of two. When reasoning about the range, double every angle in OpenCV.
+
 ### What is HSV?
 
 HSV represents colors using Hue, Saturation, and Value.
@@ -507,6 +447,30 @@ cv2.destroyAllWindows()
 
 LAB solves a problem that RGB and HSV both share: equal numerical differences do not correspond to equal perceived differences. In LAB, the Euclidean distance between two color vectors closely matches how different those colors look to a human eye — making it the go-to space for perceptual color comparison and professional color correction.
 
+### Theory: CIE LAB: Perceptually Uniform Color
+
+The CIE LAB space (also called CIELAB or L*a*b*) was designed in 1976 to make numerical distance match perceived color difference. Its axes:
+
+- **L*** — perceptual lightness, `[0, 100]`. 0 = black, 100 = diffuse white.
+- **a*** — green–red axis. Negative = green, positive = red.
+- **b*** — blue–yellow axis. Negative = blue, positive = yellow.
+
+The key guarantee is that the Euclidean distance
+
+```
+ΔE = √((L₁ - L₂)² + (a₁ - a₂)² + (b₁ - b₂)²)
+```
+
+is approximately constant for colors perceived as equally different, across the entire gamut. A `ΔE` of about 2.3 is the average just-noticeable difference; `ΔE = 10` is a clearly different color.
+
+This is the space to use when you need to:
+
+- Match or rank colors by perceptual similarity (palette quantization, color search).
+- Compute a "color only" gradient that ignores lighting (a-b plane distances).
+- Build a printing or rendering pipeline that must preserve color fidelity.
+
+The conversion from sRGB to CIE LAB is non-linear (it goes through the CIE XYZ tristimulus space and a cube-root function). OpenCV hides this behind `cv2.cvtColor(img, cv2.COLOR_BGR2LAB)`, and stores `L ∈ [0, 100]` scaled to `[0, 255]` for `uint8` images (`a, b` are offset by 128 so their zero point is at value 128).
+
 ### What is LAB?
 
 LAB (or CIELAB) is a color space based on human color perception.
@@ -629,6 +593,18 @@ cv2.destroyAllWindows()
 ---
 
 ## 5. Grayscale Conversion
+
+### Theory: Grayscale: Luminance-Weighted Conversion
+
+Converting a color image to grayscale is *not* a simple average of `R`, `G`, `B` — the three channels contribute different amounts to perceived brightness because the eye is most sensitive to green light and least to blue. The standard ITU-R BT.601 formula (which OpenCV's `cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)` uses) is:
+
+```
+Y = 0.299 · R + 0.587 · G + 0.114 · B
+```
+
+A straight mean `(R + G + B) / 3` looks noticeably "wrong" — green leaves become too dark and blue sky becomes too bright — because the weights are all the same regardless of how much each channel contributes to perceived brightness.
+
+BT.709 (HDTV) uses slightly different weights: `Y = 0.2126 R + 0.7152 G + 0.0722 B`. The numerical difference matters for broadcast-quality work; for general computer-vision tasks either is fine.
 
 ### Conversion Principle
 

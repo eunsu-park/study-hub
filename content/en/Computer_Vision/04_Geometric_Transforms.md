@@ -20,8 +20,6 @@ After completing this lesson, you will be able to:
 
 ## Table of Contents
 
-Before the OpenCV reference, read [**Theory & Principles**](#theory--principles) for the mathematical foundation — coordinate transformations, interpolation, and forward vs inverse mapping.
-
 1. [Image Resizing - resize()](#1-image-resizing---resize)
 2. [Flipping and Rotation - flip(), rotate()](#2-flipping-and-rotation---flip-rotate)
 3. [Affine Transformation - warpAffine()](#3-affine-transformation---warpaffine)
@@ -33,88 +31,9 @@ Before the OpenCV reference, read [**Theory & Principles**](#theory--principles)
 
 ---
 
-## Theory & Principles
+## 1. Image Resizing - resize()
 
-Before jumping into the OpenCV functions, it helps to separate what a geometric transform actually is into three independent pieces:
-
-- **(A) Coordinate mapping** — a rule that sends `(x, y)` to `(x', y')`.
-- **(B) Interpolation** — how to produce a value at a non-integer coordinate, since pixel values only exist at integer locations.
-- **(C) Mapping direction** — whether the computation runs forward (source → destination) or inverse (destination → source).
-
-Every OpenCV function in the rest of this lesson is one concrete piece of this framework.
-
-### A. Coordinate Transformations: a Hierarchy by Degrees of Freedom
-
-Geometric transformations form a strict hierarchy. Each level generalizes the previous one by releasing a constraint and adding degrees of freedom:
-
-| Level | DoF | Matrix | What is preserved |
-|-------|-----|--------|-------------------|
-| Translation | 2 | 2×3 `(I, t)` | length, angle, parallelism, straight lines |
-| Rigid (Euclidean) | 3 | 2×3 `(R, t)` | length, angle, parallelism, straight lines |
-| Similarity | 4 | 2×3 `(s·R, t)` | angle, parallelism, straight lines |
-| Affine | 6 | 2×3 | parallelism, straight lines |
-| Projective (homography) | 8 | 3×3 | straight lines only |
-
-`cv2.resize` is a similarity with `R = I`. `cv2.getRotationMatrix2D` builds a similarity. `cv2.getAffineTransform` builds a full affine. `cv2.getPerspectiveTransform` builds a projective. Knowing which rung of the ladder a function sits on tells you exactly which geometric properties it can and cannot change.
-
-#### A.1 Linear vs affine: why the extra column
-
-In 2D, a *linear* transform sends the origin to itself: `[x'; y'] = A · [x; y]` with a 2×2 matrix `A`. Rotation, scaling, and shear are all linear. Translation is not — it moves the origin — so it cannot be written as a 2×2 matrix multiplication.
-
-The standard fix is **homogeneous coordinates**: represent `(x, y)` as `(x, y, 1)`. Translation now fits into a single matrix product:
-
-```
-[x']   [a  b  tx]   [x]
-[y'] = [c  d  ty] × [y]
-                    [1]
-```
-
-The 2×3 matrix is just a 3×3 matrix with the implicit last row `[0 0 1]` dropped. This is why `cv2.warpAffine` takes a 2×3 matrix: the third row never varies, so it is never stored.
-
-A practical consequence: composing several affine transforms is just matrix multiplication. Build each step as its own 3×3 matrix (restoring the implicit row), multiply, and drop the last row — the result is a single `warpAffine` call. No accuracy loss from applying steps one by one.
-
-#### A.2 The rotation matrix, derived
-
-Rotating counter-clockwise by angle `θ` around the origin sends the basis vector `(1, 0)` to `(cos θ, sin θ)` and `(0, 1)` to `(-sin θ, cos θ)`. Stacking these as the columns of a matrix gives
-
-```
-R(θ) = [cos θ  -sin θ]
-       [sin θ   cos θ]
-```
-
-Rotating around an arbitrary center `c = (cx, cy)` is *not* a single linear operation — it is the composition `translate(-c) → rotate → translate(+c)`. Carrying this through, the 2×3 matrix returned by `cv2.getRotationMatrix2D(c, θ, α)` (with scale `α`) is
-
-```
-[α·cos θ   -α·sin θ    (1-α·cos θ)·cx + α·sin θ·cy]
-[α·sin θ    α·cos θ    -α·sin θ·cx + (1-α·cos θ)·cy]
-```
-
-The right column is not "just translation" — it is the correction that puts the rotation center back where it started after the linear part moved it.
-
-#### A.3 Affine = 6 DoF, so 3 point correspondences suffice
-
-An affine matrix has 6 unknowns: `a, b, c, d, tx, ty`. One point correspondence `(x, y) → (x', y')` gives 2 equations. Three non-collinear points give 6 equations — exactly enough for a unique solution. That is why `cv2.getAffineTransform` takes exactly 3 point pairs. With fewer pairs you are underdetermined; with more (and noisy data) you would need a least-squares estimate, which is what `cv2.estimateAffine2D` provides.
-
-#### A.4 Why affine cannot model perspective — and how projective fixes it
-
-An affine transform preserves parallelism: two parallel input lines always come out parallel. Photographs of the real world do the opposite — the two rails of a railway track converge at a vanishing point. No amount of rotation, scale, shear, or translation can model that.
-
-The fix is to move to a 3×3 matrix and introduce a **perspective division**:
-
-```
-[x'·w']   [h11 h12 h13]   [x]
-[y'·w'] = [h21 h22 h23] × [y]
-[w']      [h31 h32 h33]   [1]
-
-x' = (h11·x + h12·y + h13) / (h31·x + h32·y + h33)
-y' = (h21·x + h22·y + h23) / (h31·x + h32·y + h33)
-```
-
-Because the denominator `(h31·x + h32·y + h33)` depends on `(x, y)`, points in different parts of the image get scaled differently — producing the converging-line effect. Straight lines still map to straight lines (that is the defining property), but parallelism, angle, and length are all sacrificed.
-
-The matrix has 9 entries, but multiplying `H` by any nonzero constant produces an equivalent mapping (the same `x'`, `y'` after the division), so one degree of freedom is absorbed by scale. That leaves 8 free parameters. Two equations per point pair, so `cv2.getPerspectiveTransform` needs exactly 4 point correspondences.
-
-### B. Interpolation: Reconstructing Values at Non-Integer Coordinates
+### Theory: Interpolation: Reconstructing Values at Non-Integer Coordinates
 
 Given a coordinate map, for every output pixel you end up asking: "what is the value of the source image at some fractional coordinate `(x, y)`?" Pixel values only exist on the integer grid, so you must estimate a continuous function `f̂(x, y)` that agrees with the samples you have, then read `f̂` at the query point. That estimation *is* interpolation.
 
@@ -178,40 +97,6 @@ Shrinking an image throws information away. If you just sample with `INTER_NEARE
 
 - **Shrinking**: `INTER_AREA` (aliasing is the dominant risk).
 - **Enlarging**: `INTER_CUBIC` or `INTER_LANCZOS4` (no aliasing risk, so sharper higher-order kernels win).
-
-### C. Forward vs Inverse Mapping
-
-The coordinate map is fixed; the interpolation method is chosen. One question remains: in which direction does the pixel loop run?
-
-#### C.1 Forward mapping — and why it fails
-
-The naïve approach: loop over each source pixel `(x, y)`, apply `T` to get `(x', y') = T(x, y)`, and write the source value at the output position. Two things go wrong:
-
-1. **Holes.** If `T` enlarges the image, some output integer coordinates never get hit — no source pixel maps onto them exactly. Visible as scattered missing pixels.
-2. **Collisions.** If `T` shrinks, many source pixels map to the same output pixel and overwrite each other. The final value depends on loop order; anti-aliasing becomes impossible to do correctly.
-
-#### C.2 Inverse mapping — what OpenCV actually does
-
-Loop over each *output* pixel `(x', y')`, apply the inverse `T⁻¹` to get the corresponding source coordinate `(x, y)`, and interpolate the source at that (generally fractional) coordinate using one of the kernels in §B. Two things go right:
-
-1. **Every output pixel is written exactly once.** No holes, no collisions.
-2. **Interpolation becomes a clean subproblem.** For each output pixel, you reconstruct `f̂` locally and read it at one point.
-
-Every `cv2.warpAffine`, `cv2.warpPerspective`, and `cv2.resize` call runs this loop. That is why OpenCV internally needs the inverse of your transform — and why affine inverses are cheap (a 2×2 matrix inversion plus a translation correction).
-
-### From Theory to the Functions Below
-
-Each of the following sections is this framework made concrete:
-
-- `cv2.resize(..., interpolation=...)` — a pure scaling similarity (§A) with the interpolation kernel from §B as a parameter.
-- `cv2.getRotationMatrix2D(center, angle, scale)` — builds the 2×3 matrix of §A.2.
-- `cv2.getAffineTransform(src_pts, dst_pts)` — solves the 6-DoF system of §A.3 from 3 point pairs.
-- `cv2.getPerspectiveTransform(src_pts, dst_pts)` — solves the 8-DoF system of §A.4 from 4 point pairs.
-- `cv2.warpAffine` / `cv2.warpPerspective` — run the inverse-mapping loop of §C.2, calling the interpolation from §B at each step.
-
----
-
-## 1. Image Resizing - resize()
 
 ### Basic Usage
 
@@ -473,6 +358,97 @@ rotated_45_full = rotate_image_full(img, 45)  # 45° rotation (fully preserved)
 ## 3. Affine Transformation - warpAffine()
 
 Affine transformations are the building block for correcting camera tilt, aligning images before stitching, and normalizing object poses. The key insight is that any combination of rotation, scaling, translation, and shear can be expressed as a single 2×3 matrix multiplication — so composing multiple transforms is just matrix multiplication, with no accuracy loss from applying them one-by-one.
+
+### Theory: Coordinate Transformations: a Hierarchy by Degrees of Freedom
+
+Geometric transformations form a strict hierarchy. Each level generalizes the previous one by releasing a constraint and adding degrees of freedom:
+
+| Level | DoF | Matrix | What is preserved |
+|-------|-----|--------|-------------------|
+| Translation | 2 | 2×3 `(I, t)` | length, angle, parallelism, straight lines |
+| Rigid (Euclidean) | 3 | 2×3 `(R, t)` | length, angle, parallelism, straight lines |
+| Similarity | 4 | 2×3 `(s·R, t)` | angle, parallelism, straight lines |
+| Affine | 6 | 2×3 | parallelism, straight lines |
+| Projective (homography) | 8 | 3×3 | straight lines only |
+
+`cv2.resize` is a similarity with `R = I`. `cv2.getRotationMatrix2D` builds a similarity. `cv2.getAffineTransform` builds a full affine. `cv2.getPerspectiveTransform` builds a projective. Knowing which rung of the ladder a function sits on tells you exactly which geometric properties it can and cannot change.
+
+#### A.1 Linear vs affine: why the extra column
+
+In 2D, a *linear* transform sends the origin to itself: `[x'; y'] = A · [x; y]` with a 2×2 matrix `A`. Rotation, scaling, and shear are all linear. Translation is not — it moves the origin — so it cannot be written as a 2×2 matrix multiplication.
+
+The standard fix is **homogeneous coordinates**: represent `(x, y)` as `(x, y, 1)`. Translation now fits into a single matrix product:
+
+```
+[x']   [a  b  tx]   [x]
+[y'] = [c  d  ty] × [y]
+                    [1]
+```
+
+The 2×3 matrix is just a 3×3 matrix with the implicit last row `[0 0 1]` dropped. This is why `cv2.warpAffine` takes a 2×3 matrix: the third row never varies, so it is never stored.
+
+A practical consequence: composing several affine transforms is just matrix multiplication. Build each step as its own 3×3 matrix (restoring the implicit row), multiply, and drop the last row — the result is a single `warpAffine` call. No accuracy loss from applying steps one by one.
+
+#### A.2 The rotation matrix, derived
+
+Rotating counter-clockwise by angle `θ` around the origin sends the basis vector `(1, 0)` to `(cos θ, sin θ)` and `(0, 1)` to `(-sin θ, cos θ)`. Stacking these as the columns of a matrix gives
+
+```
+R(θ) = [cos θ  -sin θ]
+       [sin θ   cos θ]
+```
+
+Rotating around an arbitrary center `c = (cx, cy)` is *not* a single linear operation — it is the composition `translate(-c) → rotate → translate(+c)`. Carrying this through, the 2×3 matrix returned by `cv2.getRotationMatrix2D(c, θ, α)` (with scale `α`) is
+
+```
+[α·cos θ   -α·sin θ    (1-α·cos θ)·cx + α·sin θ·cy]
+[α·sin θ    α·cos θ    -α·sin θ·cx + (1-α·cos θ)·cy]
+```
+
+The right column is not "just translation" — it is the correction that puts the rotation center back where it started after the linear part moved it.
+
+#### A.3 Affine = 6 DoF, so 3 point correspondences suffice
+
+An affine matrix has 6 unknowns: `a, b, c, d, tx, ty`. One point correspondence `(x, y) → (x', y')` gives 2 equations. Three non-collinear points give 6 equations — exactly enough for a unique solution. That is why `cv2.getAffineTransform` takes exactly 3 point pairs. With fewer pairs you are underdetermined; with more (and noisy data) you would need a least-squares estimate, which is what `cv2.estimateAffine2D` provides.
+
+#### A.4 Why affine cannot model perspective — and how projective fixes it
+
+An affine transform preserves parallelism: two parallel input lines always come out parallel. Photographs of the real world do the opposite — the two rails of a railway track converge at a vanishing point. No amount of rotation, scale, shear, or translation can model that.
+
+The fix is to move to a 3×3 matrix and introduce a **perspective division**:
+
+```
+[x'·w']   [h11 h12 h13]   [x]
+[y'·w'] = [h21 h22 h23] × [y]
+[w']      [h31 h32 h33]   [1]
+
+x' = (h11·x + h12·y + h13) / (h31·x + h32·y + h33)
+y' = (h21·x + h22·y + h23) / (h31·x + h32·y + h33)
+```
+
+Because the denominator `(h31·x + h32·y + h33)` depends on `(x, y)`, points in different parts of the image get scaled differently — producing the converging-line effect. Straight lines still map to straight lines (that is the defining property), but parallelism, angle, and length are all sacrificed.
+
+The matrix has 9 entries, but multiplying `H` by any nonzero constant produces an equivalent mapping (the same `x'`, `y'` after the division), so one degree of freedom is absorbed by scale. That leaves 8 free parameters. Two equations per point pair, so `cv2.getPerspectiveTransform` needs exactly 4 point correspondences.
+
+### Theory: Forward vs Inverse Mapping
+
+The coordinate map is fixed; the interpolation method is chosen. One question remains: in which direction does the pixel loop run?
+
+#### C.1 Forward mapping — and why it fails
+
+The naïve approach: loop over each source pixel `(x, y)`, apply `T` to get `(x', y') = T(x, y)`, and write the source value at the output position. Two things go wrong:
+
+1. **Holes.** If `T` enlarges the image, some output integer coordinates never get hit — no source pixel maps onto them exactly. Visible as scattered missing pixels.
+2. **Collisions.** If `T` shrinks, many source pixels map to the same output pixel and overwrite each other. The final value depends on loop order; anti-aliasing becomes impossible to do correctly.
+
+#### C.2 Inverse mapping — what OpenCV actually does
+
+Loop over each *output* pixel `(x', y')`, apply the inverse `T⁻¹` to get the corresponding source coordinate `(x, y)`, and interpolate the source at that (generally fractional) coordinate using one of the kernels in §B. Two things go right:
+
+1. **Every output pixel is written exactly once.** No holes, no collisions.
+2. **Interpolation becomes a clean subproblem.** For each output pixel, you reconstruct `f̂` locally and read it at one point.
+
+Every `cv2.warpAffine`, `cv2.warpPerspective`, and `cv2.resize` call runs this loop. That is why OpenCV internally needs the inverse of your transform — and why affine inverses are cheap (a 2×2 matrix inversion plus a translation correction).
 
 ### What is Affine Transformation?
 

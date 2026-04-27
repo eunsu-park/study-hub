@@ -21,8 +21,6 @@ Features are unique and repeatable points that can be detected in an image. Thes
 
 ## Table of Contents
 
-Before the OpenCV reference, read [**Theory & Principles**](#theory--principles) — what makes a "good" feature point, the structure tensor behind Harris corner detection, scale-space and the DoG pyramid behind SIFT, and the binary-descriptor trade-offs that produce ORB.
-
 1. [Feature Point Fundamentals](#1-feature-point-fundamentals)
 2. [Corner Detection - Harris](#2-corner-detection---harris)
 3. [Good Features to Track](#3-good-features-to-track)
@@ -34,19 +32,9 @@ Before the OpenCV reference, read [**Theory & Principles**](#theory--principles)
 
 ---
 
-## Theory & Principles
+## 1. Feature Point Fundamentals
 
-A feature point (also called a *keypoint* or *interest point*) is a location in an image that is **distinctive enough to be found again** after the image is translated, rotated, scaled, or blurred. The field has produced many detectors — Harris, FAST, SIFT, SURF, ORB, BRISK, AKAZE — that differ in what they search for and what properties they are invariant to.
-
-This section covers:
-
-- **(A) What makes a good keypoint** — the three criteria every detector tries to satisfy.
-- **(B) The structure tensor** — the mathematical object behind Harris, Shi-Tomasi, and most corner detectors.
-- **(C) Harris corner response** — the specific scalar derived from the structure tensor that ranks pixels as corners.
-- **(D) Scale-space and DoG** — why SIFT searches a pyramid of blurred images, and how the DoG pyramid approximates Laplacian-of-Gaussian.
-- **(E) Descriptors** — the vector that travels with each keypoint to enable matching; histogram-of-gradients (SIFT) vs binary (ORB/BRIEF) trade-offs.
-
-### A. What Makes a Good Keypoint
+### Theory: What Makes a Good Keypoint
 
 A useful keypoint must satisfy three properties — they are in tension, and every detector trades them off differently.
 
@@ -67,130 +55,6 @@ The three detectors covered in this lesson trade these off:
 - **Harris** focuses on repeatability and distinctiveness for corners but has no scale invariance.
 - **SIFT** adds scale and rotation invariance, at much higher computational cost.
 - **FAST/ORB** drop some repeatability for a huge speedup, enabling real-time use.
-
-### B. The Structure Tensor
-
-#### B.1 The central idea
-
-A corner is a point where intensity changes rapidly **in more than one direction**. Shifting a small window slightly in any direction should produce a large change in its contents. Formally, consider shifting a window by `(u, v)` around pixel `(x, y)` and measuring the sum-of-squared-differences:
-
-```
-E(u, v) = Σ_{(x',y') ∈ W}  [ I(x' + u, y' + v) - I(x', y') ]²
-```
-
-A first-order Taylor expansion of `I(x' + u, y' + v)` around `(x', y')` gives:
-
-```
-I(x' + u, y' + v) ≈ I(x', y') + u · I_x(x', y') + v · I_y(x', y')
-```
-
-Substituting into `E(u, v)`:
-
-```
-E(u, v) ≈ Σ [ u · I_x + v · I_y ]²
-
-        = [u v] · M · [u; v]            where M = Σ [ I_x²     I_x·I_y ]
-                                                 [ I_x·I_y  I_y²    ]
-```
-
-The 2×2 matrix `M` is the **structure tensor** (also called the second-moment matrix or autocorrelation matrix). It encodes how image intensity varies in the neighborhood and is the foundation of almost every corner detector.
-
-#### B.2 Reading the eigenvalues
-
-The eigenvalues `λ₁ ≥ λ₂` of `M` measure how fast `E` grows along the principal directions of the window:
-
-| `λ₁`, `λ₂` | Shape of `E` | Interpretation |
-|------------|--------------|----------------|
-| Both small | Flat | Uniform region — no structure |
-| One large, one small | Ridge | Edge — intensity changes in one direction only |
-| Both large | Bowl | Corner — intensity changes in both directions |
-
-So **corner detection reduces to finding pixels where both eigenvalues are large**. Different scalar combinations of `λ₁`, `λ₂` give different detectors.
-
-#### B.3 Computational detail
-
-In practice `M` is computed with Sobel for `I_x`, `I_y`, with a Gaussian-weighted window for the sum. The Gaussian weighting (as opposed to uniform) gives smoother response and makes the detector less sensitive to the exact window size.
-
-### C. Harris Corner Response
-
-Computing eigenvalues is expensive. Harris (1988) proposed a scalar that responds like `min(λ₁, λ₂)` but uses only determinant and trace:
-
-```
-R = det(M) - k · trace(M)²  =  λ₁·λ₂ - k·(λ₁ + λ₂)²
-```
-
-where `k ≈ 0.04–0.06` is an empirical constant. The behavior:
-
-- Flat (`λ₁, λ₂` both small): `R` is small and can be positive or negative.
-- Edge (one `λ` much larger): `det(M)` ≈ 0 but `trace(M)²` large, so `R` is strongly negative.
-- Corner (both `λ` large): `det(M)` is large, `R` is strongly positive.
-
-Threshold `R` above some value `R_thresh` and keep local maxima. Pixels passing both conditions are Harris corners.
-
-**Shi-Tomasi** (1994) observed that the simpler scalar `R = min(λ₁, λ₂)` works slightly better in practice — you just need the smaller eigenvalue to exceed a threshold. This is what `goodFeaturesToTrack` uses. The difference relative to Harris is usually small but consistently favors Shi-Tomasi.
-
-### D. Scale-Space and DoG: Making Keypoints Scale-Invariant
-
-Harris corners respond to corners **at the scale implied by the Sobel derivative window**. Zoom into the image and the "corner" might no longer look like a corner at the fixed window size — the same scene at different scales produces different detector outputs. This is a fatal problem if you want to match photos taken at different distances.
-
-#### D.1 The scale-space idea
-
-Represent the image as a **continuous 3D stack** `L(x, y, σ)` — the original image convolved with Gaussian kernels of increasing `σ`. A keypoint is a location `(x, y, σ)` in this stack where some scale-characteristic response is maximized. The `σ` at the peak becomes the keypoint's **intrinsic scale** — how big the feature actually is in the image.
-
-#### D.2 Why Laplacian-of-Gaussian
-
-Lindeberg showed that extrema of `σ²·∇²L(x, y, σ)` (the normalized LoG) correspond to the natural scales of blob-like structures. If you take a dark blob in a bright background and increase `σ`, the LoG response peaks exactly when `σ` matches the blob's size — giving you both location *and* scale.
-
-#### D.3 Why DoG in practice
-
-LoG is expensive to compute directly. As derived in §08.C.3, the **Difference-of-Gaussians** approximates scaled LoG:
-
-```
-DoG(x, y; σ) = L(x, y; k·σ) - L(x, y; σ)  ≈  (k-1) · σ² · ∇²L(x, y, σ)
-```
-
-SIFT (Lowe, 2004) builds a **pyramid** of Gaussian-blurred images at different scales, takes DoG between adjacent scales, and finds local extrema in the 3D (x, y, σ) space. Each extremum becomes a SIFT keypoint with a position and scale.
-
-SIFT also computes a dominant gradient orientation in the neighborhood and attaches it to the keypoint, which gives rotation invariance. The descriptor (below) is computed relative to this orientation, so rotating the image rotates the descriptor in a predictable way.
-
-### E. Descriptors: Matching Keypoints Across Images
-
-Detecting a keypoint is half the problem — the other half is attaching a vector to it that makes it identifiable in another image. This is the **descriptor**. Two families dominate:
-
-#### E.1 Histogram-of-gradients descriptors (SIFT, SURF, HOG)
-
-Around each keypoint, compute gradient magnitude and orientation in a fixed-size patch (e.g. 16×16). Divide the patch into sub-cells (e.g. 4×4 grid of 4×4 pixel cells). In each sub-cell, build a histogram of gradient orientations weighted by magnitude, binned into e.g. 8 angular bins. Concatenate: `4×4×8 = 128` numbers. This is the SIFT descriptor.
-
-Properties:
-
-- **Distinctive**: 128 dimensions gives enough room to distinguish millions of different local appearances.
-- **Robust to small misalignments**: the histogram is insensitive to which exact pixel a gradient falls on, only which bin.
-- **Slow**: 128 `float32` values per keypoint, matched with Euclidean distance — expensive at scale.
-
-#### E.2 Binary descriptors (BRIEF, ORB, BRISK)
-
-Around each keypoint, pre-select a set of pixel pairs (e.g. 256 pairs). For each pair `(p₁, p₂)`, the descriptor bit is `1 if I(p₁) < I(p₂) else 0`. Concatenate 256 bits into a 32-byte string.
-
-Properties:
-
-- **Compact**: 256 bits (32 bytes) vs 512 bytes for SIFT.
-- **Fast to match**: Hamming distance (bit XOR + popcount) is ~100× faster than Euclidean distance on floats.
-- **Less robust**: binary comparisons are more sensitive to noise and illumination changes than histogram aggregation. ORB mitigates this with an oriented sampling pattern learned from training data.
-
-ORB (Oriented FAST and Rotated BRIEF) = FAST keypoints + a rotated, learned BRIEF descriptor + multi-scale pyramid. It is the patent-free alternative to SIFT, about the same quality as SIFT for many applications, and 10–100× faster.
-
-### From Theory to the Functions Below
-
-- `cv2.cornerHarris(img, blockSize, ksize, k)` — direct Harris response map (§C). Threshold and find local maxima for corners.
-- `cv2.goodFeaturesToTrack(img, maxCorners, qualityLevel, minDistance)` — Shi-Tomasi variant (§C). Returns a deduplicated corner list directly.
-- `cv2.FastFeatureDetector_create(threshold, nonmaxSuppression, type)` — FAST corners (§A speed case). Detection only, no descriptor.
-- `cv2.SIFT_create(nfeatures, nOctaveLayers, contrastThreshold, edgeThreshold, sigma)` — full SIFT pipeline (§D + §E.1). Parameters control the pyramid and the response thresholds.
-- `cv2.ORB_create(nfeatures, scaleFactor, nlevels, ...)` — full ORB pipeline (FAST detection + oriented BRIEF descriptor, §E.2).
-- `detector.detectAndCompute(img, mask)` — combined detection + descriptor extraction; returns keypoint list and `(N, D)` descriptor matrix.
-
----
-
-## 1. Feature Point Fundamentals
 
 ### What are Feature Points?
 
@@ -254,6 +118,67 @@ Types of Features:
 ---
 
 ## 2. Corner Detection - Harris
+
+### Theory: The Structure Tensor
+
+#### B.1 The central idea
+
+A corner is a point where intensity changes rapidly **in more than one direction**. Shifting a small window slightly in any direction should produce a large change in its contents. Formally, consider shifting a window by `(u, v)` around pixel `(x, y)` and measuring the sum-of-squared-differences:
+
+```
+E(u, v) = Σ_{(x',y') ∈ W}  [ I(x' + u, y' + v) - I(x', y') ]²
+```
+
+A first-order Taylor expansion of `I(x' + u, y' + v)` around `(x', y')` gives:
+
+```
+I(x' + u, y' + v) ≈ I(x', y') + u · I_x(x', y') + v · I_y(x', y')
+```
+
+Substituting into `E(u, v)`:
+
+```
+E(u, v) ≈ Σ [ u · I_x + v · I_y ]²
+
+        = [u v] · M · [u; v]            where M = Σ [ I_x²     I_x·I_y ]
+                                                 [ I_x·I_y  I_y²    ]
+```
+
+The 2×2 matrix `M` is the **structure tensor** (also called the second-moment matrix or autocorrelation matrix). It encodes how image intensity varies in the neighborhood and is the foundation of almost every corner detector.
+
+#### B.2 Reading the eigenvalues
+
+The eigenvalues `λ₁ ≥ λ₂` of `M` measure how fast `E` grows along the principal directions of the window:
+
+| `λ₁`, `λ₂` | Shape of `E` | Interpretation |
+|------------|--------------|----------------|
+| Both small | Flat | Uniform region — no structure |
+| One large, one small | Ridge | Edge — intensity changes in one direction only |
+| Both large | Bowl | Corner — intensity changes in both directions |
+
+So **corner detection reduces to finding pixels where both eigenvalues are large**. Different scalar combinations of `λ₁`, `λ₂` give different detectors.
+
+#### B.3 Computational detail
+
+In practice `M` is computed with Sobel for `I_x`, `I_y`, with a Gaussian-weighted window for the sum. The Gaussian weighting (as opposed to uniform) gives smoother response and makes the detector less sensitive to the exact window size.
+
+### Theory: Harris Corner Response
+
+Computing eigenvalues is expensive. Harris (1988) proposed a scalar that responds like `min(λ₁, λ₂)` but uses only determinant and trace:
+
+```
+R = det(M) - k · trace(M)²  =  λ₁·λ₂ - k·(λ₁ + λ₂)²
+```
+
+where `k ≈ 0.04–0.06` is an empirical constant. The behavior:
+
+- Flat (`λ₁, λ₂` both small): `R` is small and can be positive or negative.
+- Edge (one `λ` much larger): `det(M)` ≈ 0 but `trace(M)²` large, so `R` is strongly negative.
+- Corner (both `λ` large): `det(M)` is large, `R` is strongly positive.
+
+Threshold `R` above some value `R_thresh` and keep local maxima. Pixels passing both conditions are Harris corners.
+
+**Shi-Tomasi** (1994) observed that the simpler scalar `R = min(λ₁, λ₂)` works slightly better in practice — you just need the smaller eigenvalue to exceed a threshold. This is what `goodFeaturesToTrack` uses. The difference relative to Harris is usually small but consistently favors Shi-Tomasi.
 
 ### Concept
 
@@ -578,6 +503,30 @@ compare_fast_thresholds('building.jpg')
 
 ## 5. SIFT Detector
 
+### Theory: Scale-Space and DoG: Making Keypoints Scale-Invariant
+
+Harris corners respond to corners **at the scale implied by the Sobel derivative window**. Zoom into the image and the "corner" might no longer look like a corner at the fixed window size — the same scene at different scales produces different detector outputs. This is a fatal problem if you want to match photos taken at different distances.
+
+#### D.1 The scale-space idea
+
+Represent the image as a **continuous 3D stack** `L(x, y, σ)` — the original image convolved with Gaussian kernels of increasing `σ`. A keypoint is a location `(x, y, σ)` in this stack where some scale-characteristic response is maximized. The `σ` at the peak becomes the keypoint's **intrinsic scale** — how big the feature actually is in the image.
+
+#### D.2 Why Laplacian-of-Gaussian
+
+Lindeberg showed that extrema of `σ²·∇²L(x, y, σ)` (the normalized LoG) correspond to the natural scales of blob-like structures. If you take a dark blob in a bright background and increase `σ`, the LoG response peaks exactly when `σ` matches the blob's size — giving you both location *and* scale.
+
+#### D.3 Why DoG in practice
+
+LoG is expensive to compute directly. As derived in §08.C.3, the **Difference-of-Gaussians** approximates scaled LoG:
+
+```
+DoG(x, y; σ) = L(x, y; k·σ) - L(x, y; σ)  ≈  (k-1) · σ² · ∇²L(x, y, σ)
+```
+
+SIFT (Lowe, 2004) builds a **pyramid** of Gaussian-blurred images at different scales, takes DoG between adjacent scales, and finds local extrema in the 3D (x, y, σ) space. Each extremum becomes a SIFT keypoint with a position and scale.
+
+SIFT also computes a dominant gradient orientation in the neighborhood and attaches it to the keypoint, which gives rotation invariance. The descriptor (below) is computed relative to this orientation, so rotating the image rotates the descriptor in a predictable way.
+
 ### Concept
 
 ```
@@ -838,6 +787,32 @@ compare_sift_orb('object.jpg')
 ---
 
 ## 7. Keypoints and Descriptors
+
+### Theory: Descriptors: Matching Keypoints Across Images
+
+Detecting a keypoint is half the problem — the other half is attaching a vector to it that makes it identifiable in another image. This is the **descriptor**. Two families dominate:
+
+#### E.1 Histogram-of-gradients descriptors (SIFT, SURF, HOG)
+
+Around each keypoint, compute gradient magnitude and orientation in a fixed-size patch (e.g. 16×16). Divide the patch into sub-cells (e.g. 4×4 grid of 4×4 pixel cells). In each sub-cell, build a histogram of gradient orientations weighted by magnitude, binned into e.g. 8 angular bins. Concatenate: `4×4×8 = 128` numbers. This is the SIFT descriptor.
+
+Properties:
+
+- **Distinctive**: 128 dimensions gives enough room to distinguish millions of different local appearances.
+- **Robust to small misalignments**: the histogram is insensitive to which exact pixel a gradient falls on, only which bin.
+- **Slow**: 128 `float32` values per keypoint, matched with Euclidean distance — expensive at scale.
+
+#### E.2 Binary descriptors (BRIEF, ORB, BRISK)
+
+Around each keypoint, pre-select a set of pixel pairs (e.g. 256 pairs). For each pair `(p₁, p₂)`, the descriptor bit is `1 if I(p₁) < I(p₂) else 0`. Concatenate 256 bits into a 32-byte string.
+
+Properties:
+
+- **Compact**: 256 bits (32 bytes) vs 512 bytes for SIFT.
+- **Fast to match**: Hamming distance (bit XOR + popcount) is ~100× faster than Euclidean distance on floats.
+- **Less robust**: binary comparisons are more sensitive to noise and illumination changes than histogram aggregation. ORB mitigates this with an oriented sampling pattern learned from training data.
+
+ORB (Oriented FAST and Rotated BRIEF) = FAST keypoints + a rotated, learned BRIEF descriptor + multi-scale pyramid. It is the patent-free alternative to SIFT, about the same quality as SIFT for many applications, and 10–100× faster.
 
 ### KeyPoint Structure
 

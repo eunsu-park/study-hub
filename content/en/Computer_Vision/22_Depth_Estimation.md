@@ -24,8 +24,6 @@ Monocular depth estimation is the technology for estimating per-pixel depth info
 
 ## Table of Contents
 
-Before the OpenCV reference, read [**Theory & Principles**](#theory--principles) — why monocular depth is ill-posed without learned priors, the relative-vs-metric depth distinction, and how MiDaS, DPT, and multi-view SfM each break the ambiguity.
-
 1. [Monocular Depth Estimation Overview](#1-monocular-depth-estimation-overview)
 2. [MiDaS Model](#2-midas-model)
 3. [DPT (Dense Prediction Transformer)](#3-dpt-dense-prediction-transformer)
@@ -35,20 +33,11 @@ Before the OpenCV reference, read [**Theory & Principles**](#theory--principles)
 
 ---
 
-## Theory & Principles
+## 1. Monocular Depth Estimation Overview
 
-**Monocular depth estimation** is inferring per-pixel depth `Z(u, v)` from a single RGB image — a problem that lesson 21 just showed to be fundamentally ambiguous. How can a model possibly solve it? Not by mathematics alone. By learning a **prior** over what depth usually looks like for real-world scenes, from massive amounts of RGBD training data.
+Depth is the missing dimension in 2D images — every pixel carries color and intensity, but not how far it is from the camera. Recovering per-pixel depth turns a flat image into a metric understanding of the scene, enabling downstream tasks like 3D reconstruction, object avoidance, and augmented reality without the hardware overhead of stereo rigs or LiDAR.
 
-This section covers:
-
-- **(A) The ill-posedness of monocular depth** — the small scaling ambiguity that geometry cannot resolve.
-- **(B) Cues humans use** — texture gradients, occlusion, shading, perspective — and how CNN/Transformer depth models learn them.
-- **(C) Relative vs metric depth** — why most monocular models output relative depth, and what "up to scale and shift" means.
-- **(D) MiDaS and cross-dataset training** — the scale-and-shift-invariant loss that enables training across heterogeneous depth data.
-- **(E) DPT and transformer architectures** — why attention helps dense prediction.
-- **(F) Structure-from-Motion as the "real" solution** — how using multiple monocular images recovers metric depth geometrically.
-
-### A. The Ill-Posedness
+### Theory: The Ill-Posedness
 
 Two scenes can produce identical pixel arrays:
 
@@ -59,7 +48,7 @@ No purely geometric argument distinguishes them. The projective geometry is iden
 
 But humans estimate monocular depth effortlessly. A photograph of a bedroom doesn't look 2D to us — we automatically perceive the bed as closer than the window. The reason is that we have strong **priors** about scene structure: rooms have typical sizes, objects have familiar scales, perspective lines behave in predictable ways. Neural depth models learn the same priors from data.
 
-### B. The Cues
+### Theory: The Cues
 
 Monocular depth cues that both humans and neural networks exploit:
 
@@ -72,7 +61,7 @@ Monocular depth cues that both humans and neural networks exploit:
 
 A learned depth model doesn't need these stated explicitly — training with enough RGBD pairs implicitly encodes all of them into the network weights.
 
-### C. Relative vs Metric Depth
+### Theory: Relative vs Metric Depth
 
 Because of the scale ambiguity (§A), monocular models fundamentally cannot output metric depth (distances in meters). What they can output:
 
@@ -81,59 +70,6 @@ Because of the scale ambiguity (§A), monocular models fundamentally cannot outp
 - **Scale-and-shift-invariant depth**: output `d = a·(1/Z) + b` for any scalars `a` and `b`. This is what MiDaS outputs.
 
 Converting relative to metric depth requires **additional information**: a ground-truth depth at one pixel, a known object size, IMU/GPS readings, or fusing with a calibrated stereo / LiDAR system at test time.
-
-### D. MiDaS: Scale-and-Shift-Invariant Training
-
-MiDaS (Ranftl et al., 2020) solved a practical problem: depth datasets come in incompatible units (meters, millimeters, arbitrary-unit disparity) and ranges. Training a single network on all of them requires a loss that is **invariant to per-image scale and shift**.
-
-MiDaS's loss:
-
-```
-L(d_pred, d_true) = median_of_pixels  | aligned(d_pred) - aligned(d_true) |
-```
-
-where `aligned(d) = (d - shift(d)) / scale(d)` subtracts the per-image median and divides by the per-image mean absolute deviation. This aligns both the prediction and the target before computing the loss, absorbing the scale/shift ambiguity.
-
-The result: MiDaS can train on ~10 datasets simultaneously (KITTI, NYU, WSVD, ReDWeb, ...) despite their incompatibility, and the resulting network generalizes across domains far better than a network trained on any single dataset. Predicting relative depth is in some sense easier than metric depth because you don't need to calibrate output units.
-
-### E. DPT: Dense Prediction Transformers
-
-The DPT architecture (Ranftl et al., 2021) replaces the CNN backbone with a Vision Transformer (ViT). Why this helps for depth:
-
-- **Global context**: each image patch attends to every other patch from the start. A CNN builds context only gradually through stacked layers; a transformer sees the whole image at once. For depth, this helps because identifying the ground plane, horizon, and scene layout benefits from global reasoning.
-- **Multi-scale feature fusion**: DPT uses features from multiple transformer layers (shallow + deep) and fuses them to produce the final dense prediction. This is analogous to the U-Net skip connections that segmentation networks use (§25).
-
-DPT is the architecture behind MiDaS v3 and Marigold (the diffusion-based depth estimator). For applications today, DPT-style models are the default choice.
-
-### F. Structure-from-Motion: Recovering Metric Depth from Multiple Monocular Images
-
-If you have **multiple views of the same scene** — e.g. frames from a moving camera — you can recover metric depth geometrically, using the same epipolar geometry as stereo (§21.B). The difference: the baseline isn't fixed and must be estimated from the images themselves.
-
-The basic SfM pipeline:
-
-1. Detect and match features across all image pairs (§13, §14).
-2. Estimate relative camera poses via essential matrix (§21.B.2).
-3. Triangulate matched points (§21.D) to get a sparse 3D reconstruction.
-4. Bundle adjustment: jointly refine all camera poses and 3D points.
-5. Optionally, dense reconstruction using MVS (Multi-View Stereo) to fill in depth at every pixel.
-
-The output is **up-to-scale** (like monocular depth), but the scale can be resolved using a known object size, a single GPS-tagged frame, or calibration markers. Commercial products (Structure from Motion in Photoshop, Apple ARKit, Google ARCore) all build on this pipeline.
-
-For video-based monocular depth, the distinction between "learned monocular" and "geometric multi-view" blurs — DUSt3R (2024) and MASt3R are models that take two RGB images and directly output 3D point clouds, combining both priors and geometry in one network.
-
-### From Theory to the Functions Below
-
-- `cv2.dnn.readNetFromONNX('midas.onnx')` — load MiDaS or DPT (§D / §E) via the DNN module (§19).
-- Preprocessing: MiDaS expects 384×384 input (or larger), normalized to `[0, 1]` with ImageNet mean/std.
-- `net.forward()` output: single-channel inverse-depth map in arbitrary units, resize back to original image size with bilinear interpolation.
-- For SfM: `cv2.findEssentialMat`, `cv2.recoverPose`, `cv2.triangulatePoints` (§21). For large-scale SfM, use COLMAP or OpenSfM as separate tools.
-- Calibrating relative-to-metric: multiply predicted inverse depth by a scalar chosen so the median matches a known reference.
-
----
-
-## 1. Monocular Depth Estimation Overview
-
-Depth is the missing dimension in 2D images — every pixel carries color and intensity, but not how far it is from the camera. Recovering per-pixel depth turns a flat image into a metric understanding of the scene, enabling downstream tasks like 3D reconstruction, object avoidance, and augmented reality without the hardware overhead of stereo rigs or LiDAR.
 
 ### Why Monocular Depth Estimation?
 
@@ -229,6 +165,20 @@ Depth Estimation Approaches:
 ---
 
 ## 2. MiDaS Model
+
+### Theory: MiDaS: Scale-and-Shift-Invariant Training
+
+MiDaS (Ranftl et al., 2020) solved a practical problem: depth datasets come in incompatible units (meters, millimeters, arbitrary-unit disparity) and ranges. Training a single network on all of them requires a loss that is **invariant to per-image scale and shift**.
+
+MiDaS's loss:
+
+```
+L(d_pred, d_true) = median_of_pixels  | aligned(d_pred) - aligned(d_true) |
+```
+
+where `aligned(d) = (d - shift(d)) / scale(d)` subtracts the per-image median and divides by the per-image mean absolute deviation. This aligns both the prediction and the target before computing the loss, absorbing the scale/shift ambiguity.
+
+The result: MiDaS can train on ~10 datasets simultaneously (KITTI, NYU, WSVD, ReDWeb, ...) despite their incompatibility, and the resulting network generalizes across domains far better than a network trained on any single dataset. Predicting relative depth is in some sense easier than metric depth because you don't need to calibrate output units.
 
 ### MiDaS Overview
 
@@ -448,6 +398,15 @@ cv2.waitKey(0)
 
 ## 3. DPT (Dense Prediction Transformer)
 
+### Theory: DPT: Dense Prediction Transformers
+
+The DPT architecture (Ranftl et al., 2021) replaces the CNN backbone with a Vision Transformer (ViT). Why this helps for depth:
+
+- **Global context**: each image patch attends to every other patch from the start. A CNN builds context only gradually through stacked layers; a transformer sees the whole image at once. For depth, this helps because identifying the ground plane, horizon, and scene layout benefits from global reasoning.
+- **Multi-scale feature fusion**: DPT uses features from multiple transformer layers (shallow + deep) and fuses them to produce the final dense prediction. This is analogous to the U-Net skip connections that segmentation networks use (§25).
+
+DPT is the architecture behind MiDaS v3 and Marigold (the diffusion-based depth estimator). For applications today, DPT-style models are the default choice.
+
 ### DPT Architecture
 
 ```
@@ -638,6 +597,22 @@ class DepthAnythingEstimator:
 ---
 
 ## 4. Structure from Motion (SfM)
+
+### Theory: Structure-from-Motion: Recovering Metric Depth from Multiple Monocular Images
+
+If you have **multiple views of the same scene** — e.g. frames from a moving camera — you can recover metric depth geometrically, using the same epipolar geometry as stereo (§21.B). The difference: the baseline isn't fixed and must be estimated from the images themselves.
+
+The basic SfM pipeline:
+
+1. Detect and match features across all image pairs (§13, §14).
+2. Estimate relative camera poses via essential matrix (§21.B.2).
+3. Triangulate matched points (§21.D) to get a sparse 3D reconstruction.
+4. Bundle adjustment: jointly refine all camera poses and 3D points.
+5. Optionally, dense reconstruction using MVS (Multi-View Stereo) to fill in depth at every pixel.
+
+The output is **up-to-scale** (like monocular depth), but the scale can be resolved using a known object size, a single GPS-tagged frame, or calibration markers. Commercial products (Structure from Motion in Photoshop, Apple ARKit, Google ARCore) all build on this pipeline.
+
+For video-based monocular depth, the distinction between "learned monocular" and "geometric multi-view" blurs — DUSt3R (2024) and MASt3R are models that take two RGB images and directly output 3D point clouds, combining both priors and geometry in one network.
 
 ### SfM Overview
 

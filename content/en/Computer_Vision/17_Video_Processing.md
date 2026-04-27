@@ -26,8 +26,6 @@ Unlike single-image processing, video introduces a temporal dimension: each fram
 
 ## Table of Contents
 
-Before the OpenCV reference, read [**Theory & Principles**](#theory--principles) — the video abstraction, codec / container separation, background modeling as per-pixel density estimation, and the tracking vs detection trade-off.
-
 1. [VideoCapture: Files and Cameras](#1-videocapture-files-and-cameras)
 2. [VideoWriter: Saving Video](#2-videowriter-saving-video)
 3. [Frame-by-frame Processing](#3-frame-by-frame-processing)
@@ -39,19 +37,9 @@ Before the OpenCV reference, read [**Theory & Principles**](#theory--principles)
 
 ---
 
-## Theory & Principles
+## 1. VideoCapture: Files and Cameras
 
-A video is a sequence `I_1, I_2, ..., I_T` of images captured at roughly regular time intervals. The mathematical additions compared to single-image processing are small — just a time index — but they unlock a qualitatively different class of algorithms: **motion estimation**, **background modeling**, **tracking**, and **temporal consistency enforcement**. All are built on the same underlying assumption: consecutive frames are highly correlated.
-
-This section covers:
-
-- **(A) The video abstraction** — what a video file actually contains, and the codec/container distinction.
-- **(B) FPS, timestamps, and synchronization** — why "30 fps" is often approximate, and how to process video at arbitrary speeds.
-- **(C) Background subtraction** — per-pixel density modeling as foreground detection.
-- **(D) Object tracking** — the detection-plus-association paradigm and why tracking is hard.
-- **(E) Temporal consistency and flicker avoidance** — why applying a single-image algorithm frame-by-frame often looks wrong.
-
-### A. The Video Abstraction
+### Theory: The Video Abstraction
 
 A video file (`.mp4`, `.avi`, `.mkv`) is structured as a **container** holding one or more **tracks** (video, audio, subtitle), each encoded with a specific **codec**.
 
@@ -67,107 +55,6 @@ Key properties you can query (`cap.get(cv2.CAP_PROP_*)`):
 - `CAP_PROP_FRAME_COUNT` — total frame count (may be 0 for streams or inaccurate for variable-frame-rate video).
 - `CAP_PROP_POS_FRAMES`, `CAP_PROP_POS_MSEC` — current read position.
 - `CAP_PROP_FOURCC` — 4-character codec identifier.
-
-### B. Frame Rates, Timestamps, and Synchronization
-
-"30 FPS" is almost always an approximation. Real video has **variable frame rate (VFR)** — frames are timestamped individually, and the interval between them varies. Cameras, screen recorders, and modern codecs all emit VFR video.
-
-Two consequences:
-
-- **FPS from `CAP_PROP_FPS`** is the average or nominal rate; don't compute "how many seconds have passed" by `frame_count / fps`. Use `CAP_PROP_POS_MSEC` for actual timing.
-- **Processing at real time** means ensuring your loop's wall-clock matches the video's presentation time. If you process faster, you need to throttle (`time.sleep`). If you process slower, you either drop frames or lag.
-
-Measuring your pipeline's FPS: record wall-clock time before and after processing one frame, compute `1 / elapsed`. For a rolling average that doesn't spike on single-frame hiccups, average over the last 10–30 frames.
-
-### C. Background Subtraction: Per-Pixel Density Modeling
-
-**Problem**: given a stationary camera and a scene with occasional moving objects (people, cars), separate each frame into foreground (moving) and background (static) pixels.
-
-**Idea**: build a **per-pixel probability distribution** over colors. For each pixel position `(x, y)`, observe the color over many frames and model its distribution. A new observation is **foreground** if it is unlikely under this distribution.
-
-Over time the background can change slowly (shadows moving, lighting drifts), so the model must update. This is the core algorithm that `cv2.createBackgroundSubtractorMOG2` implements:
-
-#### C.1 MOG2: Mixture of Gaussians
-
-For each pixel, maintain a **Gaussian mixture model** with several (typically 3–5) components. Each component has a mean color, covariance, and a weight indicating how often that color has been observed at this pixel.
-
-- A new observation is foreground if it doesn't fit any high-weight component (i.e. its squared Mahalanobis distance exceeds a threshold in all components).
-- Otherwise, update the matched component's mean, covariance, and weight with exponential moving average (learning rate `α`).
-
-**Why a mixture**: a pixel may legitimately take multiple "background" colors — a swaying tree leaf oscillates between green and the sky behind it, and a single Gaussian cannot capture both. The mixture grows and shrinks components to match the actual color distribution observed.
-
-MOG2 also supports **shadow detection**: a pixel that is a darker version of a background component (lower brightness, same chromaticity) is marked as shadow (gray in the mask, `127`) rather than foreground (`255`).
-
-#### C.2 KNN Background Subtractor
-
-K-nearest-neighbor-based alternative. For each pixel, maintain a history of recent observations. A new pixel is foreground if fewer than `K` of the last `N` observations are close to it. Conceptually simpler than MOG2, empirically often comparable, slightly more memory.
-
-#### C.3 Limitations
-
-Both algorithms assume a stationary camera. If the camera moves (handheld, panning), every pixel looks like foreground and the method fails. For moving cameras, use optical flow (§31), feature tracking, or stabilization first.
-
-### D. Object Tracking
-
-**Tracking** is the task of maintaining the identity of an object over time: given its location at frame `t`, find it at frame `t+1`. This differs from detection (which finds objects independently per frame) in that tracking enforces **temporal identity**: detection might find the same object in two frames but doesn't tell you they are the same object.
-
-#### D.1 The tracking-by-detection paradigm
-
-Modern practice: **run a detector on every frame, then associate detections across frames**. Association uses motion predictions (the detected position should be near where we predicted) and appearance features (the detected object's descriptor should match the tracked object's descriptor).
-
-SORT (Simple Online and Realtime Tracking) and DeepSORT are the canonical implementations: Kalman-filter motion prediction plus Hungarian algorithm for detection-to-track association, with DeepSORT adding appearance embeddings to help when objects briefly disappear.
-
-#### D.2 Online trackers (single object)
-
-For the simpler case of tracking one pre-specified object: **correlation-filter trackers** (KCF, CSRT, MOSSE) learn a filter that produces a peak response at the object's location, then scan the next frame for that peak.
-
-- **KCF** (Kernelized Correlation Filter): fast, accurate for short sequences, struggles with scale changes.
-- **CSRT** (Channel and Spatial Reliability Tracker): more accurate than KCF, slower, handles scale changes and partial occlusion better.
-- **MOSSE** (Minimum Output Sum of Squared Error): fastest, least accurate.
-- **MedianFlow**: tracks forward and backward to detect failure.
-- **GOTURN / DaSiamRPN / SiamRPN**: deep-learning-based Siamese trackers, top accuracy but require GPU.
-
-None of these detect the object initially — you specify a bounding box in the first frame, and the tracker follows it.
-
-#### D.3 Why tracking is fundamentally hard
-
-Tracking must handle:
-
-- **Appearance change**: the object rotates, deforms, its lighting changes.
-- **Occlusion**: the object is briefly hidden behind something; when it reappears, is it the same object?
-- **Scale and pose variation**: the object grows/shrinks as it approaches/recedes, rotates in 3D.
-- **Drift**: small per-frame errors accumulate, eventually losing the object.
-- **Identity switches**: two objects cross; which is which after?
-
-These are why tracking gets its own research field rather than being "just detection per frame". Modern systems use a combination of detection, tracking, and re-identification (Re-ID features matching across long time gaps).
-
-### E. Temporal Consistency and Flicker
-
-Applying a per-frame algorithm independently often produces **flicker** — the output jitters because small frame-to-frame noise in the input produces large changes in the output. Sources of flicker:
-
-- A segmentation model produces slightly different masks per frame.
-- A color-adjustment algorithm's behavior depends on global statistics that change per frame.
-- A detector's bounding box jitters by a few pixels even on a stationary object.
-
-Mitigations:
-
-- **Exponential moving average** on outputs: `result_smooth(t) = α · result_raw(t) + (1-α) · result_smooth(t-1)` with `α = 0.3–0.5`.
-- **Track and stabilize** bounding boxes across frames rather than re-detecting independently.
-- **Temporal filtering** in model architecture: use 3D convolutions (§30) or recurrent components that share state across frames.
-
-Watch out for temporal filtering at the cost of latency: a perfect smoother requires seeing future frames. For real-time video, you can only smooth backward in time.
-
-### From Theory to the Functions Below
-
-- `cv2.VideoCapture(source)` — file/camera/RTSP stream reader (§A). `source` = path, integer (camera index), or URL.
-- `cv2.VideoWriter(path, fourcc, fps, size)` — encoded video writer. `fourcc` codec code picks compression.
-- `cv2.createBackgroundSubtractorMOG2(history, varThreshold, detectShadows)` — §C.1 MOG2.
-- `cv2.createBackgroundSubtractorKNN(history, dist2Threshold, detectShadows)` — §C.2 KNN.
-- `cv2.TrackerKCF_create()`, `cv2.TrackerCSRT_create()`, `cv2.legacy.TrackerMOSSE_create()` — §D.2 single-object trackers.
-- `cv2.calcOpticalFlowPyrLK` / `cv2.calcOpticalFlowFarneback` — lesson 31 optical flow for motion analysis.
-
----
-
-## 1. VideoCapture: Files and Cameras
 
 ### Understanding Video Structure
 
@@ -455,6 +342,22 @@ process_and_save_video('input.mp4', 'edges.mp4', edge_detection)
 
 ## 3. Frame-by-frame Processing
 
+### Theory: Temporal Consistency and Flicker
+
+Applying a per-frame algorithm independently often produces **flicker** — the output jitters because small frame-to-frame noise in the input produces large changes in the output. Sources of flicker:
+
+- A segmentation model produces slightly different masks per frame.
+- A color-adjustment algorithm's behavior depends on global statistics that change per frame.
+- A detector's bounding box jitters by a few pixels even on a stationary object.
+
+Mitigations:
+
+- **Exponential moving average** on outputs: `result_smooth(t) = α · result_raw(t) + (1-α) · result_smooth(t-1)` with `α = 0.3–0.5`.
+- **Track and stabilize** bounding boxes across frames rather than re-detecting independently.
+- **Temporal filtering** in model architecture: use 3D convolutions (§30) or recurrent components that share state across frames.
+
+Watch out for temporal filtering at the cost of latency: a perfect smoother requires seeing future frames. For real-time video, you can only smooth backward in time.
+
 ### Frame Processing Pipeline
 
 ```
@@ -620,6 +523,17 @@ def buffered_reading(video_path, buffer_size=10):
 
 ## 4. FPS Calculation
 
+### Theory: Frame Rates, Timestamps, and Synchronization
+
+"30 FPS" is almost always an approximation. Real video has **variable frame rate (VFR)** — frames are timestamped individually, and the interval between them varies. Cameras, screen recorders, and modern codecs all emit VFR video.
+
+Two consequences:
+
+- **FPS from `CAP_PROP_FPS`** is the average or nominal rate; don't compute "how many seconds have passed" by `frame_count / fps`. Use `CAP_PROP_POS_MSEC` for actual timing.
+- **Processing at real time** means ensuring your loop's wall-clock matches the video's presentation time. If you process faster, you need to throttle (`time.sleep`). If you process slower, you either drop frames or lag.
+
+Measuring your pipeline's FPS: record wall-clock time before and after processing one frame, compute `1 / elapsed`. For a rolling average that doesn't spike on single-frame hiccups, average over the last 10–30 frames.
+
 ### FPS Measurement Method
 
 ```python
@@ -759,6 +673,33 @@ cap.release()
 ---
 
 ## 5. Background Subtraction (MOG2, KNN)
+
+### Theory: Background Subtraction: Per-Pixel Density Modeling
+
+**Problem**: given a stationary camera and a scene with occasional moving objects (people, cars), separate each frame into foreground (moving) and background (static) pixels.
+
+**Idea**: build a **per-pixel probability distribution** over colors. For each pixel position `(x, y)`, observe the color over many frames and model its distribution. A new observation is **foreground** if it is unlikely under this distribution.
+
+Over time the background can change slowly (shadows moving, lighting drifts), so the model must update. This is the core algorithm that `cv2.createBackgroundSubtractorMOG2` implements:
+
+#### C.1 MOG2: Mixture of Gaussians
+
+For each pixel, maintain a **Gaussian mixture model** with several (typically 3–5) components. Each component has a mean color, covariance, and a weight indicating how often that color has been observed at this pixel.
+
+- A new observation is foreground if it doesn't fit any high-weight component (i.e. its squared Mahalanobis distance exceeds a threshold in all components).
+- Otherwise, update the matched component's mean, covariance, and weight with exponential moving average (learning rate `α`).
+
+**Why a mixture**: a pixel may legitimately take multiple "background" colors — a swaying tree leaf oscillates between green and the sky behind it, and a single Gaussian cannot capture both. The mixture grows and shrinks components to match the actual color distribution observed.
+
+MOG2 also supports **shadow detection**: a pixel that is a darker version of a background component (lower brightness, same chromaticity) is marked as shadow (gray in the mask, `127`) rather than foreground (`255`).
+
+#### C.2 KNN Background Subtractor
+
+K-nearest-neighbor-based alternative. For each pixel, maintain a history of recent observations. A new pixel is foreground if fewer than `K` of the last `N` observations are close to it. Conceptually simpler than MOG2, empirically often comparable, slightly more memory.
+
+#### C.3 Limitations
+
+Both algorithms assume a stationary camera. If the camera moves (handheld, panning), every pixel looks like foreground and the method fails. For moving cameras, use optical flow (§31), feature tracking, or stabilization first.
 
 ### Background Subtraction Principle
 
@@ -1104,6 +1045,40 @@ cv2.destroyAllWindows()
 ---
 
 ## 7. Object Tracking
+
+### Theory: Object Tracking
+
+**Tracking** is the task of maintaining the identity of an object over time: given its location at frame `t`, find it at frame `t+1`. This differs from detection (which finds objects independently per frame) in that tracking enforces **temporal identity**: detection might find the same object in two frames but doesn't tell you they are the same object.
+
+#### D.1 The tracking-by-detection paradigm
+
+Modern practice: **run a detector on every frame, then associate detections across frames**. Association uses motion predictions (the detected position should be near where we predicted) and appearance features (the detected object's descriptor should match the tracked object's descriptor).
+
+SORT (Simple Online and Realtime Tracking) and DeepSORT are the canonical implementations: Kalman-filter motion prediction plus Hungarian algorithm for detection-to-track association, with DeepSORT adding appearance embeddings to help when objects briefly disappear.
+
+#### D.2 Online trackers (single object)
+
+For the simpler case of tracking one pre-specified object: **correlation-filter trackers** (KCF, CSRT, MOSSE) learn a filter that produces a peak response at the object's location, then scan the next frame for that peak.
+
+- **KCF** (Kernelized Correlation Filter): fast, accurate for short sequences, struggles with scale changes.
+- **CSRT** (Channel and Spatial Reliability Tracker): more accurate than KCF, slower, handles scale changes and partial occlusion better.
+- **MOSSE** (Minimum Output Sum of Squared Error): fastest, least accurate.
+- **MedianFlow**: tracks forward and backward to detect failure.
+- **GOTURN / DaSiamRPN / SiamRPN**: deep-learning-based Siamese trackers, top accuracy but require GPU.
+
+None of these detect the object initially — you specify a bounding box in the first frame, and the tracker follows it.
+
+#### D.3 Why tracking is fundamentally hard
+
+Tracking must handle:
+
+- **Appearance change**: the object rotates, deforms, its lighting changes.
+- **Occlusion**: the object is briefly hidden behind something; when it reappears, is it the same object?
+- **Scale and pose variation**: the object grows/shrinks as it approaches/recedes, rotates in 3D.
+- **Drift**: small per-frame errors accumulate, eventually losing the object.
+- **Identity switches**: two objects cross; which is which after?
+
+These are why tracking gets its own research field rather than being "just detection per frame". Modern systems use a combination of detection, tracking, and re-identification (Re-ID features matching across long time gaps).
 
 ### OpenCV Built-in Trackers
 

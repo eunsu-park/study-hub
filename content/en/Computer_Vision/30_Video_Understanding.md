@@ -18,8 +18,6 @@ After completing this lesson, you will be able to:
 
 ## Table of Contents
 
-Before the reference, read [**Theory & Principles**](#theory--principles) — the temporal-modeling problem, the architectural progression from two-stream to 3D conv to video transformers, and the spatial-temporal trade-offs each makes.
-
 1. [Video Understanding Overview](#1-video-understanding-overview)
 2. [Temporal Modeling Approaches](#2-temporal-modeling-approaches)
 3. [3D Convolutions (C3D, I3D)](#3-3d-convolutions-c3d-i3d)
@@ -31,22 +29,9 @@ Before the reference, read [**Theory & Principles**](#theory--principles) — th
 
 ---
 
-## Theory & Principles
+## 1. Video Understanding Overview
 
-Video understanding extends image-level vision tasks (classification, detection, segmentation) to **sequences of frames**. The core challenge: how do you incorporate the **temporal dimension** so that the model recognizes actions, not just frames?
-
-A single frame of a "diving" video looks like an arbitrary pose; you can't tell from one frame whether someone is diving, jumping, or stretching. The temporal pattern — the sequence of poses over time — is what defines the action. Video understanding architectures differ in how they model this temporal structure.
-
-This section covers:
-
-- **(A) Why per-frame classification isn't enough** — the temporal information that gets lost.
-- **(B) Two-stream networks** — separating motion from appearance.
-- **(C) 3D convolutions** — extending spatial conv to spatiotemporal.
-- **(D) SlowFast** — multi-rate temporal modeling.
-- **(E) Video transformers** — attention over space and time.
-- **(F) Temporal localization** — finding when actions start and end.
-
-### A. Why Per-Frame Classification Fails
+### Theory: Why Per-Frame Classification Fails
 
 The naïve approach to video classification: classify each frame independently with an image model, then average the predictions. This loses critical information:
 
@@ -55,87 +40,6 @@ The naïve approach to video classification: classify each frame independently w
 - **Inter-frame coherence**: motion smoothness vs jerkiness contains information.
 
 A video model must aggregate information **across time** in a way that preserves these temporal cues.
-
-### B. Two-Stream Networks: Appearance + Motion
-
-Two-stream networks (Simonyan & Zisserman, 2014) take an early approach: explicitly compute optical flow (§31) between adjacent frames, treat the flow field as a separate input, and run two parallel networks:
-
-- **Spatial stream**: classifies a single (random) RGB frame from the clip — captures *what* objects/scene appears.
-- **Temporal stream**: takes a stack of optical flow fields (typically 10 frames worth) — captures *how* things move.
-
-Final prediction: average the two streams' softmax outputs (or learn a fusion). The flow field encodes motion explicitly, which the spatial stream can't capture from a single frame.
-
-This was the dominant action recognition approach for several years. Its key weakness: optical flow must be computed in advance, which is slow and adds engineering complexity.
-
-### C. 3D Convolutions: Convolving Across Space AND Time
-
-A 2D conv slides a `k × k` filter over `H × W`. A **3D conv** slides a `k × k × k` filter over `T × H × W` — the time axis is treated as a third spatial dimension.
-
-C3D (Tran et al., 2015) was the first deep network built entirely from 3D convs. I3D (Carreira & Zisserman, 2017) showed how to **inflate** a 2D ImageNet-pretrained backbone to 3D: replicate each 2D filter `k` times along the new time dimension and divide by `k`. This trick lets you initialize 3D networks from 2D pretraining, dramatically reducing data requirements.
-
-Trade-offs:
-
-- **Parameters scale**: a 3×3 conv has 9 weights per channel; a 3×3×3 conv has 27.
-- **Compute scales linearly with `T`**.
-- **Captures local space-time patterns** (a hand moving across a few frames) directly without separate optical flow.
-
-Modern variants:
-
-- **R(2+1)D**: factor a 3D conv into a spatial 2D conv followed by a temporal 1D conv. Same expressive power, fewer parameters, easier optimization.
-- **CSN (Channel-Separated Networks)**: 3D depthwise convs for further efficiency.
-
-### D. SlowFast: Multi-Rate Temporal Modeling
-
-SlowFast (Feichtenhofer et al., 2019) observed that the **rate** at which different visual content matters varies:
-
-- **Spatial content** (objects, scenes): consistent across frames; doesn't need many frames per second.
-- **Temporal/motion content** (gestures, movements): needs high frame rate to capture fast actions.
-
-SlowFast addresses this with **two pathways**:
-
-- **Slow pathway**: low frame rate (e.g. 4 frames per clip), heavyweight network with many channels. Captures scene/objects.
-- **Fast pathway**: high frame rate (e.g. 32 frames per clip), lightweight network with few channels. Captures motion.
-- **Lateral connections**: at multiple stages, the fast pathway feeds into the slow pathway, fusing motion cues into the deeper representation.
-
-The architecture trades temporal resolution against channel capacity per pathway. SlowFast achieved state-of-the-art on action recognition benchmarks for several years.
-
-### E. Video Transformers
-
-Vision transformers (ViT) replaced CNNs in image classification, and the same shift happened in video. **TimeSformer**, **ViViT**, and **Video Swin Transformer** apply attention over space and time:
-
-- **Tokens**: split each frame into patches, treat all patches across all frames as a token sequence.
-- **Spatial attention**: attend among patches in the same frame.
-- **Temporal attention**: attend among patches at the same spatial location across frames.
-- **Joint attention**: attend over all space-time tokens simultaneously (more expensive but more flexible).
-
-The factored variants (separate spatial and temporal attention layers) are computationally cheaper than fully joint attention, with similar performance.
-
-The state-of-the-art today: **Video MAE (Masked Autoencoder)** for self-supervised pretraining + transformer fine-tuning. Mask out 90%+ of patches and train to reconstruct them. The strong pretext task gives massive video models good representations even with limited labeled data.
-
-### F. Temporal Action Detection
-
-Beyond classification ("what action is happening?"), video understanding also includes **temporal localization** ("when does it start and end?"). This is the temporal analog of object detection — instead of bounding boxes in `(x, y)`, you output bounding intervals in time.
-
-Approaches mirror image detection:
-
-- **Two-stage**: propose temporal segments, then classify each (analogous to Faster R-CNN).
-- **One-stage**: directly regress action class + start + end at each time step (analogous to YOLO).
-- **Anchor-free**: predict per-frame action class plus offsets to action boundaries.
-
-Evaluation: temporal IoU + AP, computed analogously to image-level detection but in 1D instead of 2D.
-
-### From Theory to the Tools
-
-- **MMAction2** (PyTorch, MMLab): comprehensive video understanding toolkit. Implements SlowFast, I3D, TSN, TimeSformer, Video Swin, etc.
-- **PyTorchVideo** (Meta): video-specific model zoo and dataloaders.
-- **HuggingFace transformers**: provides pretrained TimeSformer, VideoMAE, ViViT.
-- **Decord** (faster than OpenCV for batch video reading): when training on millions of clips, avoid OpenCV's per-frame decoding overhead.
-
-For OpenCV inference: many video models export to ONNX and can be loaded via `cv2.dnn`, but the multi-frame input shape needs careful preprocessing (often using `blobFromImages` for batch construction).
-
----
-
-## 1. Video Understanding Overview
 
 ### 1.1 Tasks in Video Understanding
 
@@ -164,6 +68,17 @@ Video Question Answering:
 ---
 
 ## 2. Temporal Modeling Approaches
+
+### Theory: Two-Stream Networks: Appearance + Motion
+
+Two-stream networks (Simonyan & Zisserman, 2014) take an early approach: explicitly compute optical flow (§31) between adjacent frames, treat the flow field as a separate input, and run two parallel networks:
+
+- **Spatial stream**: classifies a single (random) RGB frame from the clip — captures *what* objects/scene appears.
+- **Temporal stream**: takes a stack of optical flow fields (typically 10 frames worth) — captures *how* things move.
+
+Final prediction: average the two streams' softmax outputs (or learn a fusion). The flow field encodes motion explicitly, which the spatial stream can't capture from a single frame.
+
+This was the dominant action recognition approach for several years. Its key weakness: optical flow must be computed in advance, which is slow and adds engineering complexity.
 
 ### 2.1 Approach Taxonomy
 
@@ -236,6 +151,23 @@ class TwoStreamNetwork(nn.Module):
 
 ## 3. 3D Convolutions (C3D, I3D)
 
+### Theory: 3D Convolutions: Convolving Across Space AND Time
+
+A 2D conv slides a `k × k` filter over `H × W`. A **3D conv** slides a `k × k × k` filter over `T × H × W` — the time axis is treated as a third spatial dimension.
+
+C3D (Tran et al., 2015) was the first deep network built entirely from 3D convs. I3D (Carreira & Zisserman, 2017) showed how to **inflate** a 2D ImageNet-pretrained backbone to 3D: replicate each 2D filter `k` times along the new time dimension and divide by `k`. This trick lets you initialize 3D networks from 2D pretraining, dramatically reducing data requirements.
+
+Trade-offs:
+
+- **Parameters scale**: a 3×3 conv has 9 weights per channel; a 3×3×3 conv has 27.
+- **Compute scales linearly with `T`**.
+- **Captures local space-time patterns** (a hand moving across a few frames) directly without separate optical flow.
+
+Modern variants:
+
+- **R(2+1)D**: factor a 3D conv into a spatial 2D conv followed by a temporal 1D conv. Same expressive power, fewer parameters, easier optimization.
+- **CSN (Channel-Separated Networks)**: 3D depthwise convs for further efficiency.
+
 ### 3.1 3D Convolution Concept
 
 ```
@@ -302,6 +234,21 @@ class SimpleI3D(nn.Module):
 ---
 
 ## 4. SlowFast Networks
+
+### Theory: SlowFast: Multi-Rate Temporal Modeling
+
+SlowFast (Feichtenhofer et al., 2019) observed that the **rate** at which different visual content matters varies:
+
+- **Spatial content** (objects, scenes): consistent across frames; doesn't need many frames per second.
+- **Temporal/motion content** (gestures, movements): needs high frame rate to capture fast actions.
+
+SlowFast addresses this with **two pathways**:
+
+- **Slow pathway**: low frame rate (e.g. 4 frames per clip), heavyweight network with many channels. Captures scene/objects.
+- **Fast pathway**: high frame rate (e.g. 32 frames per clip), lightweight network with few channels. Captures motion.
+- **Lateral connections**: at multiple stages, the fast pathway feeds into the slow pathway, fusing motion cues into the deeper representation.
+
+The architecture trades temporal resolution against channel capacity per pathway. SlowFast achieved state-of-the-art on action recognition benchmarks for several years.
 
 ### 4.1 SlowFast Concept
 
@@ -397,6 +344,19 @@ class SlowFastNetwork(nn.Module):
 
 ## 5. Video Transformers
 
+### Theory: Video Transformers
+
+Vision transformers (ViT) replaced CNNs in image classification, and the same shift happened in video. **TimeSformer**, **ViViT**, and **Video Swin Transformer** apply attention over space and time:
+
+- **Tokens**: split each frame into patches, treat all patches across all frames as a token sequence.
+- **Spatial attention**: attend among patches in the same frame.
+- **Temporal attention**: attend among patches at the same spatial location across frames.
+- **Joint attention**: attend over all space-time tokens simultaneously (more expensive but more flexible).
+
+The factored variants (separate spatial and temporal attention layers) are computationally cheaper than fully joint attention, with similar performance.
+
+The state-of-the-art today: **Video MAE (Masked Autoencoder)** for self-supervised pretraining + transformer fine-tuning. Mask out 90%+ of patches and train to reconstruct them. The strong pretext task gives massive video models good representations even with limited labeled data.
+
 ### 5.1 TimeSformer
 
 ```python
@@ -452,6 +412,18 @@ class TimeSformerBlock(nn.Module):
 ---
 
 ## 6. Temporal Action Detection
+
+### Theory: Temporal Action Detection
+
+Beyond classification ("what action is happening?"), video understanding also includes **temporal localization** ("when does it start and end?"). This is the temporal analog of object detection — instead of bounding boxes in `(x, y)`, you output bounding intervals in time.
+
+Approaches mirror image detection:
+
+- **Two-stage**: propose temporal segments, then classify each (analogous to Faster R-CNN).
+- **One-stage**: directly regress action class + start + end at each time step (analogous to YOLO).
+- **Anchor-free**: predict per-frame action class plus offsets to action boundaries.
+
+Evaluation: temporal IoU + AP, computed analogously to image-level detection but in 1D instead of 2D.
 
 ### 6.1 Action Detection Pipeline
 

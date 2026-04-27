@@ -19,8 +19,6 @@ After completing this lesson, you will be able to:
 
 ## Table of Contents
 
-Before the OpenCV reference, read [**Theory & Principles**](#theory--principles) — convolution math, the frequency-domain view, and why linear filters blur edges while non-linear ones like the bilateral filter preserve them.
-
 1. [Kernels and Convolution](#1-kernels-and-convolution)
 2. [Average Blur - blur()](#2-average-blur---blur)
 3. [Gaussian Blur - GaussianBlur()](#3-gaussian-blur---gaussianblur)
@@ -34,22 +32,11 @@ Before the OpenCV reference, read [**Theory & Principles**](#theory--principles)
 
 ---
 
-## Theory & Principles
+## 1. Kernels and Convolution
 
-Image filtering, at its core, is **mathematical convolution applied to a 2D signal**. Every linear filter in the rest of this lesson — average blur, Gaussian blur, Sobel, Laplacian, sharpening, emboss, the custom kernels in `filter2D` — is one choice of kernel plugged into the same underlying operation. Understanding the math tells you what a kernel will do before you run it, lets you design new kernels for specific goals, and explains why a few filters (median, bilateral) sit outside the framework and have to be analyzed differently.
+Image filtering is, at its mathematical core, **convolution applied to a 2D signal**. Every linear filter in this lesson — average, Gaussian, Sobel, Laplacian, sharpening, emboss — is one specific choice of kernel plugged into the same operation. Two filters in this lesson (median in §4, bilateral in §5) sit *outside* this convolution framework, which is exactly what gives them their special edge-preserving behavior.
 
-This section covers:
-
-- **(A) Convolution** as the underlying operation — the mathematical definition, why implementations actually compute *cross-correlation*, the Linear-Shift-Invariant property, and why separable kernels are fast.
-- **(B) The frequency-domain view** — why "blur kernel = low-pass filter" is literally true, and how the same principle unifies blurring, sharpening, and edge detection.
-- **(C) The Gaussian kernel** in depth — `σ` vs kernel size, why Gaussian is the *unique* blur kernel with so many nice properties, and its connection to diffusion.
-- **(D) Bilateral filter** — how adding a *range* kernel deliberately breaks linearity to preserve edges.
-- **(E) Unsharp masking** — why "sharpen = original + α · (original − blur)" falls straight out of the frequency decomposition.
-- **(F) Boundary handling** — what each `BORDER_*` mode actually means when a kernel overhangs the image edge.
-
-### A. Convolution: the Mathematical Core
-
-#### A.1 Definition
+### Theory: What Convolution Actually Is
 
 In 1D, the continuous convolution of a signal `f(t)` with a kernel `h(t)` is
 
@@ -63,182 +50,36 @@ For discrete 2D images, the analogue is
 (I * K)(x, y) = Σᵢ Σⱼ  I(x - i, y - j) · K(i, j)
 ```
 
-where the sum runs over every offset `(i, j)` where `K` is non-zero. Every output pixel is a weighted sum of the input pixels in a local neighborhood, with weights given by the kernel. Different filters = different choices of the weight pattern.
+Each output pixel is a weighted sum of the input pixels in a local neighborhood, with weights given by the kernel. **Different filters = different weight patterns** — that is the whole story for linear filtering.
 
-#### A.2 Cross-correlation vs true convolution
+#### Cross-correlation vs true convolution
 
-The textbook definition above flips the kernel — `K(i, j)` is evaluated at `I(x - i, y - j)`, effectively rotating the kernel 180° before the sum. What `cv2.filter2D` and the other linear filters in this lesson actually compute is **cross-correlation**, *without* the flip:
+The textbook definition above flips the kernel — `K(i, j)` is evaluated at offset `-i, -j`. What `cv2.filter2D` actually computes is **cross-correlation**, *without* the flip:
 
 ```
 (I ⋆ K)(x, y) = Σᵢ Σⱼ  I(x + i, y + j) · K(i, j)
 ```
 
-For **symmetric kernels** — average, Gaussian, Laplacian, most sharpeners, most emboss kernels — the flip is a no-op and cross-correlation equals convolution. For **asymmetric kernels** (Sobel is the classic example), they differ by a 180° rotation of the kernel. The practical rule is: if you want the textbook convolution result with an asymmetric kernel, flip it yourself with `cv2.flip(kernel, -1)` before calling `filter2D`. In this lesson everything is called convolution even when technically cross-correlation — the two terms are used interchangeably in practice.
+For **symmetric kernels** (average, Gaussian, Laplacian, most sharpeners) the flip is a no-op and the two are identical. For **asymmetric kernels** (Sobel) they differ by 180° kernel rotation. Practical rule: flip an asymmetric kernel with `cv2.flip(kernel, -1)` before `filter2D` if you need true convolution. In this lesson the two terms are used interchangeably.
 
-#### A.3 Linearity and shift-invariance (LSI)
+#### Linear Shift-Invariance (LSI)
 
-Convolution with a fixed kernel is a **Linear Shift-Invariant** operation:
+Convolution with a fixed kernel is **Linear Shift-Invariant**:
 
-- **Linear**: filtering `I1 + I2` gives the same result as filtering each and adding. Doubling the input doubles the output.
-- **Shift-invariant**: translating the input by `(a, b)` translates the output by exactly `(a, b)`. The same filter is applied everywhere in the image.
+- **Linear**: filtering `I1 + I2` equals filtering each separately and adding. Doubling the input doubles the output.
+- **Shift-invariant**: translating the input by `(a, b)` translates the output by exactly `(a, b)`. The same filter is applied everywhere.
 
-Every filter built from `cv2.filter2D` — average, Gaussian, Sobel, Laplacian, sharpening, emboss, all the custom kernels in §6-7 — is LSI. The **median filter** (§4) and the **bilateral filter** (§5) are *not* linear, which is exactly what lets them do things linear filters cannot (outlier rejection, edge preservation). The frequency-domain tools in §B apply to LSI filters only.
+Every filter built from `cv2.filter2D` (Gaussian, Sobel, Laplacian, sharpening, emboss, custom) is LSI. The **median filter** (§4) and **bilateral filter** (§5) are *not* linear, which is exactly what lets them do things linear filters cannot.
 
-#### A.4 Separable kernels
+#### Separable kernels
 
-A 2D kernel `K` is **separable** if it factors as an outer product of two 1D kernels: `K(i, j) = u(i) · v(j)`. When this holds, a 2D convolution equals two successive 1D convolutions — one along rows, one along columns:
+A 2D kernel `K` is **separable** if it factors as `K(i, j) = u(i) · v(j)`. When this holds, a 2D convolution becomes two 1D convolutions:
 
 ```
 I * K  =  (I *row u) *col v
 ```
 
-For a `k × k` kernel that is `2k` multiply-adds per output pixel instead of `k²`. At `k = 9` that is 18 vs 81 — a 4.5× speedup for free. Gaussian, average/box, and Sobel kernels are all separable; OpenCV's `GaussianBlur`, `boxFilter`, and `Sobel` internally exploit this. You can too via `cv2.sepFilter2D` when you build a custom separable kernel.
-
-### B. The Frequency-Domain View
-
-Every image can be decomposed into sinusoids of different spatial frequencies via the 2D Fourier transform. Low frequencies correspond to smooth, slowly varying content (broad regions, gradients); high frequencies correspond to rapid change (edges, texture, noise).
-
-#### B.1 The convolution theorem
-
-The central result of Fourier analysis applied to filtering is:
-
-```
-convolution in the spatial domain  ⇔  multiplication in the frequency domain
-
-F(I * K) = F(I) · F(K)
-```
-
-So **the effect of a kernel is completely described by its Fourier transform `F(K)`**. Frequencies where `F(K)` is near 1 pass through almost untouched; frequencies where `F(K)` is near 0 are suppressed. This is why every linear filter has a natural category based on *what it lets through*:
-
-- **Low-pass**: `F(K)` is large near zero frequency and small at high frequency. Passes smooth content, blocks rapid change. This is blur. (Average, Gaussian.)
-- **High-pass**: `F(K)` is near 0 at zero frequency and larger at high frequency. Blocks smooth content, emphasizes edges and texture. (Laplacian.)
-- **Band-pass**: passes a ring of frequencies. (Difference-of-Gaussians, used in §8 for edge detection.)
-
-#### B.2 Why blurring removes noise (and why it also blurs edges)
-
-Sensor noise and salt-and-pepper noise appear as rapid pixel-to-pixel variation — high-frequency content almost by definition. Real scene features (objects, shading gradients) vary more slowly and concentrate in low frequencies. A low-pass kernel suppresses the high-frequency band where noise lives while preserving the low-frequency band where signal lives.
-
-The catch: **sharp edges are also high-frequency content**. A linear low-pass filter has no way to tell "high frequency because noise" from "high frequency because edge". It attenuates both. That is why every linear blur blurs edges, and why genuine edge-preserving smoothing requires going non-linear (§D).
-
-#### B.3 Sharpening as high-frequency amplification
-
-Sharpening formulae like "sharpen = original + α · (original − blur)" look arbitrary until you see them in the frequency domain: `(original − blur)` isolates the high-frequency part of the image, and adding it back with `α > 0` amplifies exactly the frequencies that a blur would have suppressed. §E derives this rigorously.
-
-### C. The Gaussian Kernel, in Depth
-
-#### C.1 The formula
-
-```
-G(x, y; σ) = (1 / (2π σ²)) · exp( -(x² + y²) / (2σ²) )
-```
-
-Each symbol:
-
-- `(x, y)` are offsets from the kernel center; the peak is at `(0, 0)`.
-- `σ` is the standard deviation in pixels. It controls how wide the bell is — larger `σ` spreads the weights further and produces a stronger blur.
-- `1 / (2π σ²)` is the 2D Gaussian's normalization. It makes the continuous integral equal 1, preserving overall brightness. OpenCV samples the continuous function on a grid and then re-normalizes the discrete sum to 1 to remove sampling error.
-
-#### C.2 Relationship between `σ` and kernel size
-
-`σ` sets the blur strength. Kernel size sets how wide a neighborhood the computation looks at. These must be consistent: if `ksize` is too small relative to `σ`, the tails are clipped and the kernel is no longer truly Gaussian — you get a blur that is weaker and less isotropic than intended.
-
-The standard rule of thumb is **`ksize ≥ 6σ + 1`**, which captures ≥ 99.7% of the mass (±3σ). When you leave one of the two as `0`, OpenCV derives it from the other:
-
-```
-σ = 0.3 · ((ksize - 1) · 0.5 - 1) + 0.8      # if sigma=0, ksize given
-```
-
-which roughly inverts to `ksize ≈ 2·⌈3σ⌉ + 1`. If blur strength is what you care about, set `σ` explicitly and pass `ksize=(0, 0)` — OpenCV will pick a sufficiently large kernel for you.
-
-#### C.3 Why Gaussian is *the* isotropic blur
-
-The Gaussian is the unique (up to scale) kernel that satisfies all of:
-
-- **Isotropic**: radially symmetric. A blurred point looks the same from any direction.
-- **Separable**: `G(x, y; σ) = G(x; σ) · G(y; σ)`. 2D blur is two 1D blurs — the `O(k²) → O(2k)` speedup from §A.4 is essentially free.
-- **Non-negative**: no negative weights, so every output value is a true weighted average of inputs — values can't fall outside the input range.
-- **Closed under self-convolution**: blurring a Gaussian with another Gaussian yields a Gaussian. `GaussianBlur(σ₁)` then `GaussianBlur(σ₂)` equals a single `GaussianBlur(√(σ₁² + σ₂²))`. Image pyramids and scale-space representations rely on this.
-
-No other kernel has all four properties simultaneously. That uniqueness is why Gaussian kernels keep appearing throughout computer vision — in scale-space (SIFT, §13), edge detection (Canny's preprocessing, §8), feature detectors, and implicit-regularization priors in neural networks.
-
-#### C.4 Connection to diffusion
-
-Applying `GaussianBlur` with variance `σ²` is mathematically equivalent to running the 2D **heat equation** `∂I/∂t = ∇²I` forward by time `t = σ²/2`. Blurring is literally letting pixel values diffuse into each other, just like heat in a metal plate. This viewpoint underlies scale-space methods and *anisotropic diffusion* for edge-preserving smoothing — variants where the diffusion rate depends on local gradients.
-
-### D. Bilateral Filter: Breaking Linearity to Preserve Edges
-
-A linear low-pass filter cannot distinguish "high-frequency content that is noise" from "high-frequency content that is an edge" — they look identical to `F(K)`. The bilateral filter sidesteps the problem by making the kernel **depend on the pixel values** in the neighborhood. That data-dependence breaks linearity, which is exactly the point.
-
-#### D.1 The formula
-
-```
-BF[I](x) = (1 / W(x)) · Σ_{y ∈ Ω}   Gσ_s(‖x - y‖) · Gσ_r(|I(x) - I(y)|) · I(y)
-```
-
-Where:
-
-- **Gσ_s** (spatial kernel) weights neighbors by *distance* — nearby pixels contribute more. Same role as the kernel in regular Gaussian blur. Controlled by `sigmaSpace` in OpenCV.
-- **Gσ_r** (range kernel) weights neighbors by *intensity similarity* — pixels with similar color to the center contribute more, pixels across an edge contribute almost zero. Controlled by `sigmaColor`.
-- **W(x)** is the per-pixel normalization making the weights sum to 1. It depends on `x`, which is part of why the filter is non-linear.
-
-#### D.2 Why edges survive
-
-Inside a flat region every neighbor has similar intensity, so `Gσ_r ≈ 1` for all of them, and the bilateral filter degenerates to a regular spatial Gaussian. Near an edge, neighbors on the other side of the edge have very different intensity, so their range weight is ≈ 0 — they are effectively ignored. The average runs only over the side of the edge the center pixel already belongs to. Flat regions get smoothed; edge transitions get preserved.
-
-The cost is computational and analytical: the filter is data-dependent, so separability (§A.4) does not apply, and the Fourier tools of §B do not directly apply either. Naïve implementations are `O(k²)` per pixel; fast approximations (e.g. permutohedral lattices) are what make real-time use practical.
-
-### E. Unsharp Masking, from the Frequency Decomposition
-
-Decompose any image into low-frequency and high-frequency parts: `I = I_low + I_high`, where `I_low = GaussianBlur(I)` and `I_high = I - I_low`. "Sharpening" means amplifying the high-frequency part:
-
-```
-I_sharp = I_low + (1 + α) · I_high
-        = I_low + (1 + α) · (I - I_low)
-        = I + α · (I - I_low)
-        = I + α · (I - GaussianBlur(I))
-```
-
-That final line is exactly the formula `unsharp_mask` in §7 implements. `α` is the `amount` parameter — larger `α` amplifies the high-frequency component more aggressively.
-
-The **threshold** parameter protects flat regions: below some `|I - I_low|` the difference is treated as noise rather than real detail, and the original pixel is kept unchanged. Without it, sharpening amplifies sensor noise in areas that were supposed to be flat — visible as grainy, crunchy-looking skin or sky.
-
-The equivalent effect in one pass is a sharpening kernel like `[[0,-1,0],[-1,5,-1],[0,-1,0]]`. It is exactly `I + 1·(I - Laplacian-derived blur)` collapsed into a single 3×3 convolution. The `5` at the center equals `1 (original) + 4 (amplification) = 5`, and the four `-1`s sum to `-4`, giving a kernel sum of `1` to preserve overall brightness.
-
-### F. Boundary Handling
-
-When a kernel overhangs the image edge, some taps fall on pixels that do not exist. Every filter in OpenCV exposes a `borderType` parameter to control what to use for those phantom pixels. The mathematical meaning of each mode (showing 3 phantom pixels on each side of a 1D row `abcdefgh`):
-
-```
-BORDER_CONSTANT     |  0  0  0 | a b c d e f g h |  0  0  0 |   (pad with 0, or specified value)
-BORDER_REPLICATE    |  a  a  a | a b c d e f g h |  h  h  h |   (extend edge pixel outward)
-BORDER_REFLECT      |  c  b  a | a b c d e f g h |  h  g  f |   (mirror, edge pixel included)
-BORDER_REFLECT_101  |  d  c  b | a b c d e f g h |  g  f  e |   (mirror, edge pixel excluded) ← OpenCV default
-BORDER_WRAP         |  f  g  h | a b c d e f g h |  a  b  c |   (periodic — image repeats)
-```
-
-Effects:
-
-- **BORDER_CONSTANT** works for symmetric zero-mean kernels (gradient operators) but creates dark halos at the borders for average/Gaussian kernels, because averaging with zeros pulls values down.
-- **BORDER_REPLICATE** is the cheapest and usually safest default for natural images — it never introduces new values.
-- **BORDER_REFLECT_101** (OpenCV default for most filters) produces the smoothest extension because the derivative is continuous across the boundary — which means no spurious strong response from edge-detection kernels at the image edge. Prefer it for Sobel, Laplacian, Canny's preprocessing, and multi-scale pyramids.
-- **BORDER_WRAP** matters for frequency-domain operations where the underlying DFT already assumes periodicity (§B).
-
-### From Theory to the Functions Below
-
-Each of the following sections is this framework made concrete:
-
-- `cv2.filter2D(..., kernel, borderType=...)` — direct 2D cross-correlation (§A.2) with user-defined kernel, boundary mode from §F.
-- `cv2.sepFilter2D` — separable 2D convolution exploiting §A.4.
-- `cv2.blur(ksize)` / `cv2.boxFilter` — flat low-pass kernel of size `ksize`. Separable. Isotropic in pixel space but *not* in frequency space (has sidelobes — why it's inferior to Gaussian for most uses).
-- `cv2.GaussianBlur(ksize, sigma)` — separable Gaussian low-pass filter (§C). The best general-purpose blur.
-- `cv2.medianBlur(ksize)` — non-linear rank-order filter. Optimal for salt-and-pepper noise because one outlier pixel cannot reach the median, whereas it always affects a linear filter's weighted sum.
-- `cv2.bilateralFilter(d, sigmaColor, sigmaSpace)` — non-linear edge-preserving smoother implementing §D.1.
-- **Sharpening kernel `[[0,-1,0],[-1,5,-1],[0,-1,0]]`** — one-pass implementation of §E with `amount = 1`.
-- `unsharp_mask(amount, threshold)` — explicit §E with a noise-protection threshold.
-
----
-
-## 1. Kernels and Convolution
+For a `k × k` kernel that is `2k` multiply-adds per pixel instead of `k²`. Gaussian, average, and Sobel kernels are all separable; OpenCV's `GaussianBlur`, `boxFilter`, and `Sobel` exploit this internally. You can too, via `cv2.sepFilter2D`.
 
 ### What is a Kernel?
 
@@ -302,6 +143,24 @@ Each of the following sections is this framework made concrete:
 └─────────────────────────────────────────────────────────────────┘
 ```
 
+### Theory: Boundary Handling
+
+When a kernel overhangs the image edge, some taps fall on pixels that do not exist. Every filter exposes a `borderType` parameter to control what value to use for those phantom pixels. Showing 3 phantom pixels on each side of a 1D row `abcdefgh`:
+
+```
+BORDER_CONSTANT     |  0  0  0 | a b c d e f g h |  0  0  0 |   (pad with 0, or specified value)
+BORDER_REPLICATE    |  a  a  a | a b c d e f g h |  h  h  h |   (extend edge pixel outward)
+BORDER_REFLECT      |  c  b  a | a b c d e f g h |  h  g  f |   (mirror, edge pixel included)
+BORDER_REFLECT_101  |  d  c  b | a b c d e f g h |  g  f  e |   (mirror, edge pixel excluded) ← OpenCV default
+BORDER_WRAP         |  f  g  h | a b c d e f g h |  a  b  c |   (periodic — image repeats)
+```
+
+Effects:
+- **CONSTANT** works for zero-mean kernels (gradient operators) but creates dark halos at borders for averaging kernels — averaging with zeros pulls values down.
+- **REPLICATE** is the cheapest and usually safest default for natural images — never introduces new values.
+- **REFLECT_101** (OpenCV default for most filters) produces the smoothest extension because the derivative is continuous across the boundary — no spurious strong response from edge-detection kernels at the image edge. Preferred for Sobel, Laplacian, Canny preprocessing, and multi-scale pyramids.
+- **WRAP** matters for frequency-domain operations where the underlying DFT already assumes periodicity.
+
 ### Convolution Visualization
 
 ```python
@@ -344,11 +203,33 @@ print("Input:\n", img)
 print("\nResult:\n", result)
 ```
 
-**Why does blurring work?** Noise in an image manifests as rapid, high-frequency pixel variations — adjacent pixels differ sharply without reflecting actual scene content. When a blur kernel averages neighboring pixels, these sharp random fluctuations cancel out, while genuine image features (which vary gradually across many pixels) are preserved. In signal processing terms, a blur kernel is a **low-pass filter** that suppresses high-frequency components. This is also why Gaussian blur is preferred as a preprocessing step before edge detection: it removes noise-induced false edges while preserving true structural boundaries.
+### Theory: Why Blurring Works (Frequency Domain View)
+
+Every image can be decomposed into sinusoids of different spatial frequencies via the 2D Fourier transform. Low frequencies = smooth, slowly-varying content (broad regions, gradients). High frequencies = rapid change (edges, texture, noise).
+
+The **convolution theorem** is the central result of Fourier analysis applied to filtering:
+
+```
+F(I * K) = F(I) · F(K)
+```
+
+A kernel's effect is completely described by its Fourier transform `F(K)`. Frequencies where `F(K) ≈ 1` pass through; frequencies where `F(K) ≈ 0` are suppressed. This classifies every linear filter:
+
+- **Low-pass**: `F(K)` large near zero, small at high frequency. Passes smooth content, blocks rapid change. This is blur. (Average, Gaussian.)
+- **High-pass**: `F(K)` near zero at zero frequency, larger at high. Blocks smooth content, emphasizes edges. (Laplacian.)
+- **Band-pass**: passes a ring of frequencies. (Difference-of-Gaussians, used in §08 Edge Detection.)
+
+**Why blurring removes noise — and also blurs edges**: sensor noise and salt-and-pepper noise appear as rapid pixel-to-pixel variation, which is high-frequency content almost by definition. Real scene features vary more slowly and concentrate in low frequencies. A low-pass kernel suppresses the high-frequency band where noise lives while preserving the low-frequency band where signal lives. The catch: **sharp edges are also high-frequency content**, so a linear low-pass filter has no way to distinguish "high frequency because noise" from "high frequency because edge" — it attenuates both. That is why every linear blur blurs edges, and why genuine edge-preserving smoothing requires going non-linear (§5).
 
 ---
 
 ## 2. Average Blur - blur()
+
+### Theory: Box Filter as Low-Pass
+
+The box (or "uniform average") kernel — every entry equal to `1/k²` — is the simplest low-pass filter. In the frequency domain its Fourier transform is a 2D `sinc` function: a main lobe at zero frequency plus oscillating side-lobes. Those side-lobes mean the box filter does *not* cleanly suppress high frequencies — it leaks some through with alternating signs, which is why averaged images can look slightly "ringy" near edges and why averaging is generally inferior to Gaussian (§3) for natural-image smoothing.
+
+The box kernel's only advantages: extreme simplicity, and **separability** (a 2D box is a 1D row mean × a 1D column mean), making it the fastest of all blurs. `cv2.boxFilter` is `cv2.blur`'s parent — same operation, with an optional non-normalized variant useful as an integral-image building block.
 
 ### Basic Usage
 
@@ -423,6 +304,42 @@ print(f"Difference: {np.sum(np.abs(cv2.blur(img, (5, 5)) - blur_normalized))}") 
 ---
 
 ## 3. Gaussian Blur - GaussianBlur()
+
+### Theory: The Gaussian Kernel in Depth
+
+The 2D Gaussian filter is
+
+```
+G(x, y; σ) = (1 / (2π σ²)) · exp( -(x² + y²) / (2σ²) )
+```
+
+- **`σ`** is the standard deviation in pixels — controls blur strength. Larger `σ` spreads the weights further, producing stronger blur.
+- **`1 / (2π σ²)`** normalizes so the integral equals 1, preserving overall brightness.
+
+#### Why Gaussian dominates
+
+The Gaussian is the unique (up to scale) kernel satisfying *all* of:
+
+- **Isotropic**: radially symmetric. A blurred point looks the same from any direction.
+- **Separable**: `G(x, y; σ) = G(x; σ) · G(y; σ)` — 2D blur is two 1D blurs (the `O(k²) → O(2k)` speedup is essentially free).
+- **Non-negative**: no negative weights, every output is a true weighted average — values can't fall outside the input range.
+- **Closed under self-convolution**: `GaussianBlur(σ₁) ∘ GaussianBlur(σ₂) = GaussianBlur(√(σ₁² + σ₂²))`. Image pyramids and scale-space rely on this identity.
+
+No other kernel has all four simultaneously, which is why Gaussians appear throughout computer vision — scale-space (SIFT, §13), edge-detection preprocessing (Canny, §08), feature detectors, and even neural-network priors.
+
+#### σ vs kernel size
+
+Rule of thumb: **`ksize ≥ 6σ + 1`** (captures ±3σ ≈ 99.7% of the Gaussian's mass). When you set `sigma=0`, OpenCV derives σ from `ksize`:
+
+```
+σ = 0.3 · ((ksize - 1) · 0.5 - 1) + 0.8
+```
+
+If you care about blur strength, set `σ` explicitly and pass `ksize=(0, 0)` — OpenCV will pick a sufficiently large kernel automatically.
+
+#### Connection to diffusion
+
+Applying `GaussianBlur` with variance `σ²` is mathematically equivalent to running the 2D **heat equation** `∂I/∂t = ∇²I` forward by time `t = σ²/2`. Blurring is literally letting pixel values diffuse, the same way heat spreads through a metal plate. This is the foundation of scale-space methods and *anisotropic diffusion* (a variant where diffusion rate depends on local gradients, used for edge-preserving smoothing).
 
 ### What is Gaussian Filter?
 
@@ -545,6 +462,17 @@ plt.show()
 
 ## 4. Median Blur - medianBlur()
 
+### Theory: Median as a Non-Linear Rank-Order Filter
+
+The median filter is *not* a convolution — it is a **rank-order operation**. For each pixel, sort the neighborhood values and pick the middle one. This single change has profound consequences:
+
+- **Linear filters cannot be optimal for outlier removal.** A linear filter's output is a weighted sum, so a single salt or pepper outlier (value 0 or 255) directly affects the result proportionally to its weight. Even a small weight produces a visible artifact.
+- **The median is robust to outliers up to 50%.** The middle value of a sorted neighborhood is unchanged as long as fewer than half its elements are outliers. A single outlier in a 3×3 neighborhood (one of 9 values) cannot reach the median.
+
+This robustness is mathematically optimal under the assumption that the noise process produces sparse outliers — exactly the model for salt-and-pepper noise. For Gaussian (additive) noise, the median is *worse* than the mean (which is the maximum-likelihood estimator under Gaussian assumptions) — that is why Gaussian blur is preferred for sensor noise even though median wins on impulse noise.
+
+The cost: sorting is O(k² log k), worse than convolution's O(k²). And because the operation is non-linear, none of the LSI tools (Fourier analysis, separability) apply.
+
 ### What is Median Filter?
 
 Median filter uses the median value of the kernel area. Very effective for salt-and-pepper noise removal.
@@ -632,6 +560,26 @@ cv2.destroyAllWindows()
 ---
 
 ## 5. Bilateral Filter - bilateralFilter()
+
+### Theory: Breaking Linearity to Preserve Edges
+
+Linear low-pass filters cannot distinguish "high-frequency content that is noise" from "high-frequency content that is an edge" — they look identical to `F(K)`. The bilateral filter sidesteps the problem by making the kernel **depend on the pixel values** in the neighborhood. That data-dependence breaks linearity, which is exactly the point.
+
+#### The formula
+
+```
+BF[I](x) = (1 / W(x)) · Σ_{y ∈ Ω}   Gσ_s(‖x - y‖) · Gσ_r(|I(x) - I(y)|) · I(y)
+```
+
+- **Gσ_s** (spatial kernel) weights neighbors by *distance* — same role as the kernel in regular Gaussian blur. Controlled by `sigmaSpace`.
+- **Gσ_r** (range kernel) weights neighbors by *intensity similarity* — pixels with similar color contribute more, pixels across an edge contribute almost zero. Controlled by `sigmaColor`.
+- **W(x)** is the per-pixel normalization making the weights sum to 1. It depends on `x`, which is part of why the filter is non-linear.
+
+#### Why edges survive
+
+Inside a flat region every neighbor has similar intensity, so `Gσ_r ≈ 1` for all of them, and the bilateral filter degenerates to a regular spatial Gaussian. Near an edge, neighbors on the other side have very different intensity, so their range weight ≈ 0 — they are effectively ignored. The average runs only within the side of the edge the center pixel belongs to. Flat regions get smoothed; edge transitions get preserved.
+
+The cost is computational and analytical: the filter is data-dependent, so separability does not apply, and the Fourier tools no longer directly apply. Naïve implementations are O(k²) per pixel; fast approximations (e.g. permutohedral lattice) are what make real-time use practical.
 
 ### What is Bilateral Filter?
 
@@ -771,6 +719,15 @@ plt.show()
 
 ## 6. Custom Filter - filter2D()
 
+### Theory: filter2D as the Generic LSI Filter
+
+`cv2.filter2D` is the most general linear-filter primitive in OpenCV — it implements arbitrary 2D cross-correlation with any user-supplied kernel. Every filter in §1-3 (and the sharpening kernels in §7) can be expressed as one specific `filter2D` call with a particular kernel; the dedicated functions (`blur`, `GaussianBlur`, `Sobel`) are essentially convenience wrappers with optimized internals.
+
+Two design considerations when building custom kernels:
+
+- **Sum to 1 to preserve brightness, sum to 0 for edge detection.** A kernel summing to 1 (averaging, Gaussian, sharpening with `[[0,-1,0],[-1,5,-1],[0,-1,0]]`) preserves the DC component (mean brightness). A kernel summing to 0 (Laplacian, Sobel, emboss) removes the DC component and only responds to changes — useful for edge / feature extraction.
+- **Use `cv2.sepFilter2D` for separable kernels.** If your kernel factors as `K(i, j) = u(i) · v(j)`, applying `sepFilter2D(img, ddepth, u, v)` is much faster than `filter2D(img, ddepth, K)`. Most useful kernels (Gaussian, box, Sobel) are separable; checking is worth a few extra lines for the speedup.
+
 ### filter2D() Usage
 
 `filter2D()` allows performing convolution with custom-defined kernels.
@@ -886,6 +843,38 @@ apply_and_show_kernel(img, kernel_emboss, 'Emboss')
 ---
 
 ## 7. Sharpening Filter
+
+### Theory: Unsharp Masking from the Frequency Decomposition
+
+Decompose any image into low-frequency and high-frequency parts:
+
+```
+I = I_low + I_high
+where I_low = GaussianBlur(I) and I_high = I - I_low
+```
+
+**Sharpening means amplifying the high-frequency part**:
+
+```
+I_sharp = I_low + (1 + α) · I_high
+        = I_low + (1 + α) · (I - I_low)
+        = I + α · (I - I_low)
+        = I + α · (I - GaussianBlur(I))
+```
+
+That last form is exactly what the `unsharp_mask` function later in this section computes. `α` is the `amount` parameter — larger `α` amplifies the high-frequency component more aggressively.
+
+The **threshold** parameter protects flat regions: below some `|I - I_low|` the difference is treated as noise rather than real detail and the original pixel is kept unchanged. Without this, sharpening amplifies sensor noise in flat areas — visible as grainy, crunchy-looking skin or sky.
+
+#### Equivalent one-pass kernel
+
+The standard `[[0,-1,0],[-1,5,-1],[0,-1,0]]` sharpening kernel collapses the same operation into a single 3×3 convolution:
+
+- Center value `5` = `1 (original) + 4 (high-frequency amplification with α=1)`
+- Four `-1`s sum to `-4` (the implicit blur subtraction)
+- Kernel sum = `1`, preserving overall brightness
+
+The strong sharpening kernel `[[-1,-1,-1],[-1,9,-1],[-1,-1,-1]]` corresponds to `α = 8` with all 8 neighbors treated as the blur estimate (a uniform 3×3 box).
 
 ### Sharpening Principle
 

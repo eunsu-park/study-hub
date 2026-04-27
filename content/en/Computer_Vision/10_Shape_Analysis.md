@@ -23,8 +23,6 @@ Shape analysis solves a fundamental recognition problem: the same physical objec
 
 ## Table of Contents
 
-Before the OpenCV reference, read [**Theory & Principles**](#theory--principles) — moments as integrated statistics of a shape, the derivation of translation/scale/rotation invariance, Hu's seven invariant moments, and the shape-matching metrics built on them.
-
 1. [Image Moments](#1-image-moments)
 2. [Centroid Calculation](#2-centroid-calculation)
 3. [Bounding Rectangles](#3-bounding-rectangles)
@@ -36,20 +34,9 @@ Before the OpenCV reference, read [**Theory & Principles**](#theory--principles)
 
 ---
 
-## Theory & Principles
+## 1. Image Moments
 
-Shape analysis answers a specific question: **how do you describe a 2D shape with a small vector of numbers such that the same shape always produces the same vector, regardless of where, how large, and in what orientation it appears in the image?** The classical answer, due to M.-K. Hu (1962), is a set of seven **moment invariants** — scalar functions of the image moments that are provably invariant to translation, scaling, and rotation.
-
-This section covers:
-
-- **(A) What moments are** — the general idea of integrated statistics of a shape.
-- **(B) Raw, central, and normalized moments** — the three levels of progressively more invariant statistics.
-- **(C) Hu's seven moments** — the rotation-invariant combinations of normalized central moments.
-- **(D) What moments can and cannot distinguish** — reflection ambiguity and the limits of seven scalars.
-- **(E) Shape matching** — distance metrics on moment vectors and what `cv2.matchShapes` actually computes.
-- **(F) Convex hull geometry** — convexity, convexity defects, and what they reveal about a shape.
-
-### A. Moments: Integrated Statistics of a Shape
+### Theory: Moments: Integrated Statistics of a Shape
 
 Given a binary shape `f(x, y) ∈ {0, 1}` where `1` indicates inside the shape, the raw geometric moment of order `(p + q)` is:
 
@@ -68,7 +55,7 @@ This is a **weighted sum over all shape pixels**, where the weight is `x^p · y^
 
 The family continues for higher orders. All have straightforward statistical interpretations: if you think of the shape as a uniform probability density, `M_{pq}` is proportional to `E[X^p · Y^q]`.
 
-### B. Raw → Central → Normalized: Building Invariances
+### Theory: Raw → Central → Normalized: Building Invariances
 
 #### B.1 Raw moments are not translation-invariant
 
@@ -107,71 +94,6 @@ Scale the shape by factor `α` and `μ_{pq}` scales by `α^{p + q + 2}` (the `+2
 ```
 
 Now `η_{pq}` is **translation- and scale-invariant**. Scaling the shape to any size produces the same `η` values.
-
-### C. Hu's Seven Moments: Adding Rotation Invariance
-
-Rotation scrambles central moments of the same total order among each other: a horizontal ellipse and a vertical ellipse of the same shape have swapped `μ_{20}` and `μ_{02}`. No single moment is rotation-invariant, but **specific combinations are**. Hu (1962) derived seven such combinations, up to order 3:
-
-```
-h₁ = η_{20} + η_{02}
-h₂ = (η_{20} - η_{02})² + 4·η_{11}²
-h₃ = (η_{30} - 3·η_{12})² + (3·η_{21} - η_{03})²
-h₄ = (η_{30} + η_{12})² + (η_{21} + η_{03})²
-h₅ = (η_{30} - 3·η_{12})·(η_{30} + η_{12})·[(η_{30} + η_{12})² - 3·(η_{21} + η_{03})²]
-    + (3·η_{21} - η_{03})·(η_{21} + η_{03})·[3·(η_{30} + η_{12})² - (η_{21} + η_{03})²]
-h₆ = (η_{20} - η_{02})·[(η_{30} + η_{12})² - (η_{21} + η_{03})²] + 4·η_{11}·(η_{30} + η_{12})·(η_{21} + η_{03})
-h₇ = (3·η_{21} - η_{03})·(η_{30} + η_{12})·[(η_{30} + η_{12})² - 3·(η_{21} + η_{03})²]
-    - (η_{30} - 3·η_{12})·(η_{21} + η_{03})·[3·(η_{30} + η_{12})² - (η_{21} + η_{03})²]
-```
-
-All seven are simultaneously **translation-, scale-, and rotation-invariant**. They form a 7-dimensional shape signature that is the same for the same shape in any pose.
-
-### D. What Moments Can and Cannot Distinguish
-
-Hu moments are a lossy compression: seven numbers cannot carry enough information to perfectly distinguish every pair of shapes. Known limitations:
-
-- **Reflection ambiguity**: `h₇` flips sign under reflection — distinguishing a shape from its mirror image requires using `h₇` with its sign, or adding an extra test.
-- **Global statistics only**: moments summarize the shape's bulk distribution but not fine-grained geometry. A square and a circle have different Hu moments; two different roughly-circular blobs often do not.
-- **Numerical sensitivity**: `h₅, h₆, h₇` involve high-order moments and are numerically unstable for small shapes. Many implementations use `|log(|h_i|)|` or sign-preserving logs for comparison to compress the wide dynamic range.
-
-When matching reliably matters, modern systems use **contour-based descriptors** (shape context, Fourier descriptors) or **learned feature vectors** from CNNs. Hu moments are still the go-to baseline: fast, analytically understood, and adequate for simple shape classification.
-
-### E. Shape Matching Metrics
-
-`cv2.matchShapes(contour1, contour2, method, parameter)` compares two contours by computing Hu moments of each and applying one of three distance metrics. With `m_i = sign(h_i) · log|h_i|` to compress the dynamic range:
-
-- **`CV_CONTOURS_MATCH_I1`**: `Σᵢ |1/m_i^A - 1/m_i^B|` — relative absolute difference.
-- **`CV_CONTOURS_MATCH_I2`**: `Σᵢ |m_i^A - m_i^B|` — absolute difference.
-- **`CV_CONTOURS_MATCH_I3`**: `Σᵢ |m_i^A - m_i^B| / |m_i^A|` — asymmetric relative difference (sensitive to small `m_i^A`).
-
-All three return 0 for identical shapes and increase with dissimilarity. I2 (linear) is the most common default; I1 and I3 reweight differently depending on whether you care more about large or small invariants.
-
-### F. Convex Hull Geometry
-
-A shape is **convex** if for every pair of interior points, the line segment between them lies entirely inside. If not, the shape is concave and has **convexity defects** — regions where the contour bulges inward from its convex hull.
-
-The **convex hull** of a point set is the smallest convex polygon containing all points. Algorithms: Graham scan `O(n log n)`, Quickhull similar. OpenCV uses Sklansky's algorithm, which is `O(n)` for already-sorted contour boundaries.
-
-Convexity defects are useful because they characterize the non-convex parts of a shape:
-
-- A **hand** has four defects (between each pair of fingers). Counting defects is a classical (pre-neural-network) technique for counting raised fingers.
-- A **star shape** has defects at each concave angle between points.
-- **Touching objects** produce defects at the contact points, which can be used to separate them.
-
-Each defect is described by `(start_index, end_index, far_index, depth)` where depth is the maximum perpendicular distance from the hull edge to the contour at that bulge. Filtering by depth removes shallow (noise-induced) defects.
-
-### From Theory to the Functions Below
-
-- `cv2.moments(contour)` — returns `m_{pq}`, `μ_{pq}`, `η_{pq}`, and centroid (§A–§B).
-- `cv2.HuMoments(moments_dict)` — computes `h₁...h₇` from the moments dict (§C).
-- `cv2.matchShapes(c1, c2, method, parameter)` — Hu-moment shape distance (§E).
-- `cv2.fitEllipse(contour)` — recovers the inertia tensor's eigenvalues and eigenvectors (§B.2) as an ellipse.
-- `cv2.minAreaRect(contour)`, `cv2.boundingRect(contour)`, `cv2.minEnclosingCircle(contour)`, `cv2.minEnclosingTriangle(contour)` — bounding geometries.
-- `cv2.convexHull(contour)`, `cv2.isContourConvex(contour)`, `cv2.convexityDefects(contour, hull)` — §F convex hull analysis.
-
----
-
-## 1. Image Moments
 
 ### What are Moments?
 
@@ -737,6 +659,20 @@ compare_bounding_shapes('shapes.jpg')
 
 ## 5. Convex Hull
 
+### Theory: Convex Hull Geometry
+
+A shape is **convex** if for every pair of interior points, the line segment between them lies entirely inside. If not, the shape is concave and has **convexity defects** — regions where the contour bulges inward from its convex hull.
+
+The **convex hull** of a point set is the smallest convex polygon containing all points. Algorithms: Graham scan `O(n log n)`, Quickhull similar. OpenCV uses Sklansky's algorithm, which is `O(n)` for already-sorted contour boundaries.
+
+Convexity defects are useful because they characterize the non-convex parts of a shape:
+
+- A **hand** has four defects (between each pair of fingers). Counting defects is a classical (pre-neural-network) technique for counting raised fingers.
+- A **star shape** has defects at each concave angle between points.
+- **Touching objects** produce defects at the contact points, which can be used to separate them.
+
+Each defect is described by `(start_index, end_index, far_index, depth)` where depth is the maximum perpendicular distance from the hull edge to the contour at that bulge. Filtering by depth removes shallow (noise-induced) defects.
+
 ### cv2.convexHull()
 
 ```
@@ -886,6 +822,44 @@ convexity_defects_example('hand.jpg')
 ---
 
 ## 6. Shape Matching
+
+### Theory: Hu's Seven Moments: Adding Rotation Invariance
+
+Rotation scrambles central moments of the same total order among each other: a horizontal ellipse and a vertical ellipse of the same shape have swapped `μ_{20}` and `μ_{02}`. No single moment is rotation-invariant, but **specific combinations are**. Hu (1962) derived seven such combinations, up to order 3:
+
+```
+h₁ = η_{20} + η_{02}
+h₂ = (η_{20} - η_{02})² + 4·η_{11}²
+h₃ = (η_{30} - 3·η_{12})² + (3·η_{21} - η_{03})²
+h₄ = (η_{30} + η_{12})² + (η_{21} + η_{03})²
+h₅ = (η_{30} - 3·η_{12})·(η_{30} + η_{12})·[(η_{30} + η_{12})² - 3·(η_{21} + η_{03})²]
+    + (3·η_{21} - η_{03})·(η_{21} + η_{03})·[3·(η_{30} + η_{12})² - (η_{21} + η_{03})²]
+h₆ = (η_{20} - η_{02})·[(η_{30} + η_{12})² - (η_{21} + η_{03})²] + 4·η_{11}·(η_{30} + η_{12})·(η_{21} + η_{03})
+h₇ = (3·η_{21} - η_{03})·(η_{30} + η_{12})·[(η_{30} + η_{12})² - 3·(η_{21} + η_{03})²]
+    - (η_{30} - 3·η_{12})·(η_{21} + η_{03})·[3·(η_{30} + η_{12})² - (η_{21} + η_{03})²]
+```
+
+All seven are simultaneously **translation-, scale-, and rotation-invariant**. They form a 7-dimensional shape signature that is the same for the same shape in any pose.
+
+### Theory: What Moments Can and Cannot Distinguish
+
+Hu moments are a lossy compression: seven numbers cannot carry enough information to perfectly distinguish every pair of shapes. Known limitations:
+
+- **Reflection ambiguity**: `h₇` flips sign under reflection — distinguishing a shape from its mirror image requires using `h₇` with its sign, or adding an extra test.
+- **Global statistics only**: moments summarize the shape's bulk distribution but not fine-grained geometry. A square and a circle have different Hu moments; two different roughly-circular blobs often do not.
+- **Numerical sensitivity**: `h₅, h₆, h₇` involve high-order moments and are numerically unstable for small shapes. Many implementations use `|log(|h_i|)|` or sign-preserving logs for comparison to compress the wide dynamic range.
+
+When matching reliably matters, modern systems use **contour-based descriptors** (shape context, Fourier descriptors) or **learned feature vectors** from CNNs. Hu moments are still the go-to baseline: fast, analytically understood, and adequate for simple shape classification.
+
+### Theory: Shape Matching Metrics
+
+`cv2.matchShapes(contour1, contour2, method, parameter)` compares two contours by computing Hu moments of each and applying one of three distance metrics. With `m_i = sign(h_i) · log|h_i|` to compress the dynamic range:
+
+- **`CV_CONTOURS_MATCH_I1`**: `Σᵢ |1/m_i^A - 1/m_i^B|` — relative absolute difference.
+- **`CV_CONTOURS_MATCH_I2`**: `Σᵢ |m_i^A - m_i^B|` — absolute difference.
+- **`CV_CONTOURS_MATCH_I3`**: `Σᵢ |m_i^A - m_i^B| / |m_i^A|` — asymmetric relative difference (sensitive to small `m_i^A`).
+
+All three return 0 for identical shapes and increase with dissimilarity. I2 (linear) is the most common default; I1 and I3 reweight differently depending on whether you care more about large or small invariants.
 
 ### cv2.matchShapes()
 

@@ -27,8 +27,6 @@ Classical detection methods remain relevant alongside deep learning because they
 
 ## Table of Contents
 
-Before the OpenCV reference, read [**Theory & Principles**](#theory--principles) — the sliding-window paradigm, the similarity metrics behind template matching, the AdaBoost-on-Haar-features theory behind cascades, the HOG+SVM pipeline, and the IoU/NMS post-processing that every detector still uses today.
-
 1. [Template Matching](#1-template-matching)
 2. [Template Matching Methods Comparison](#2-template-matching-methods-comparison)
 3. [Multi-scale Template Matching](#3-multi-scale-template-matching)
@@ -39,19 +37,9 @@ Before the OpenCV reference, read [**Theory & Principles**](#theory--principles)
 
 ---
 
-## Theory & Principles
+## 1. Template Matching
 
-Object detection asks a harder question than classification: **"which regions of this image contain an object, and what is each one?"** A classifier says "this image is a cat". A detector says "there is a cat here, a dog there, nothing in the rest of the image". Every classical detector shares the same overall architecture: **score every candidate region, keep the good ones, deduplicate**. Modern neural detectors (YOLO, Faster R-CNN) differ mainly in how the scoring is done — the other two stages are virtually unchanged.
-
-This section covers:
-
-- **(A) The sliding-window paradigm** — the foundational approach that every classical detector implements.
-- **(B) Template matching** — the simplest scoring function (pixel-wise similarity) and the three standard metrics.
-- **(C) Haar features and cascade classifiers** — how Viola-Jones achieved real-time face detection in 2001 using integral images and AdaBoost.
-- **(D) HOG + SVM** — the Dalal-Triggs (2005) pedestrian detection pipeline that introduced gradient-histogram features to detection.
-- **(E) IoU and Non-Maximum Suppression** — the post-processing that turns multiple overlapping detections into a clean list.
-
-### A. The Sliding-Window Paradigm
+### Theory: The Sliding-Window Paradigm
 
 An image has no "object regions" written on it — you have to find them. The universal classical approach:
 
@@ -65,153 +53,6 @@ An image has no "object regions" written on it — you have to find them. The un
 This is **exhaustive search over a discrete approximation of the space of bounding boxes**. The different classical detectors differ only in the scoring function. Even modern "anchor-based" neural detectors like YOLO and Faster R-CNN are really this same paradigm with a CNN-based score and a learned set of candidate boxes.
 
 The cost is computation: `(image width × image height × number of scales × score function cost)`. Classical detectors optimize via integral images (§C), separable computation, and cascades (early rejection).
-
-### B. Template Matching: Pixel-Wise Similarity
-
-The simplest scoring function: **how similar is this patch to a stored reference template?** Given template `T` of size `w × h` and image `I`, compute the score at every position `(x, y)` where the template fits inside the image.
-
-Three standard metrics, each with its own trade-offs:
-
-#### B.1 Sum of squared differences (`TM_SQDIFF`)
-
-```
-R(x, y) = Σ_{x', y'}  [T(x', y') - I(x + x', y + y')]²
-```
-
-Zero at a perfect match, grows with difference. Sensitive to brightness offsets (a uniformly brightened patch produces a large R even if the shape matches). Usually the wrong choice unless brightness is controlled.
-
-#### B.2 Cross-correlation (`TM_CCORR`)
-
-```
-R(x, y) = Σ_{x', y'}  T(x', y') · I(x + x', y + y')
-```
-
-Large at match, small elsewhere. But pathologically large at very bright patches regardless of content — a white wall scores higher than an actual match.
-
-#### B.3 Normalized cross-correlation (`TM_CCOEFF_NORMED`)
-
-Subtract means, divide by standard deviations:
-
-```
-R(x, y) = Σ [T' · I'] / √(Σ T'² · Σ I'²)
-
-where T' = T - mean(T), I' = patch - mean(patch)
-```
-
-Produces a score in `[-1, 1]` that is invariant to linear brightness changes and scale. **Almost always the right choice** — it compares the shape of the intensity variations, not absolute values. OpenCV calls this `TM_CCOEFF_NORMED`.
-
-The limitations of template matching: no invariance to rotation, scale, or perspective. Use multi-scale search (pyramid) to add scale coverage. For rotation, you need multiple rotated templates. This is why template matching mostly works only for rigid objects photographed at known orientation.
-
-### C. Haar Features and the Viola-Jones Cascade
-
-Viola and Jones (2001) built the first real-time face detector. The key innovations:
-
-#### C.1 Haar-like features
-
-A Haar feature is the difference between sums of pixel intensities in adjacent rectangular regions. Example patterns:
-
-```
-[ white ] [ black ]      horizontal edge feature
-[ white ] [ black ] [ white ]     vertical line feature
-
-feature_value = sum(pixels in white) - sum(pixels in black)
-```
-
-Each pattern is crude on its own — a single edge or bar — but there are thousands of possible patterns (different positions, sizes, types), and combining enough of them produces a discriminative classifier.
-
-#### C.2 Integral images for O(1) feature evaluation
-
-The naïve cost of a Haar feature at one location is `O(area)` — sum up every pixel in the white and black regions. Viola-Jones introduced the **integral image**: precompute `ii(x, y) = Σ_{x' ≤ x, y' ≤ y} I(x', y')`. Then the sum over any rectangle is a fixed 4-term expression:
-
-```
-sum_rect(x1, y1, x2, y2) = ii(x2, y2) - ii(x1, y2) - ii(x2, y1) + ii(x1, y1)
-```
-
-Any Haar feature at any position and size evaluates in constant time regardless of feature area. This is what makes scanning thousands of features over thousands of positions affordable.
-
-#### C.3 AdaBoost feature selection
-
-There are tens of thousands of possible Haar features in a detection window — far too many to use all of them. AdaBoost builds a strong classifier by **iteratively picking the single best feature** at each round, weighted by how hard the currently-misclassified examples are. After `T` rounds you have a weighted sum of `T` features which, as a whole, classifies faces vs non-faces well.
-
-#### C.4 Cascaded rejection
-
-Even evaluating the selected features at every position is expensive. Viola-Jones arranged the classifiers in a **cascade**:
-
-```
-Stage 1 (few features):        Pass → Stage 2
-                              Fail → Reject (90% of background)
-
-Stage 2 (more features):      Pass → Stage 3
-                              Fail → Reject (another 9% of background)
-
-...
-
-Final stage:                  Pass → Report detection
-```
-
-Early stages are cheap and reject most of the image; only the small fraction of positions looking plausible enter expensive later stages. The total cost is dominated by the cheap early stages because almost all background positions get rejected fast. This cascade structure is the reason Viola-Jones runs in real time — and the same idea appears in modern deep detectors (Cascade R-CNN, CenterNet with cascaded refinement).
-
-### D. HOG + SVM: Gradient Histograms for Detection
-
-Dalal and Triggs (2005) built the first effective pedestrian detector. The descriptor, **Histogram of Oriented Gradients (HOG)**, has two key ideas.
-
-#### D.1 Gradient histograms as detection features
-
-In a local cell (e.g. 8×8 pixels), compute the gradient at each pixel, bin the orientations (e.g. 9 bins over 0°–180°) weighted by gradient magnitude. The result: a 9-number summary of "what orientations are dominant in this cell". Concatenating cells across a detection window (e.g. 64×128 for pedestrians) gives a feature vector of ~3780 dimensions.
-
-Why this is better than raw pixels: gradient orientation is robust to illumination (absolute brightness doesn't matter, only brightness differences), and the histogram is robust to small spatial shifts within a cell.
-
-#### D.2 Block normalization
-
-Before classification, HOG features are normalized at the block level (e.g. 2×2 cells grouped, each cell appearing in multiple overlapping blocks). Normalization makes the descriptor robust to illumination and contrast changes. Two normalization schemes are common: L2-norm and L2-Hys (L2 with a clip to suppress dominant peaks).
-
-#### D.3 Linear SVM
-
-On top of HOG, Dalal-Triggs trained a **linear SVM** to separate pedestrian from non-pedestrian windows. SVM with a linear kernel is fast to evaluate (dot product with weights, plus a threshold), so scanning HOG+SVM across all positions and scales is practical. OpenCV's `HOGDescriptor` ships with a pre-trained linear SVM for pedestrians that you can apply directly.
-
-The HOG descriptor itself remains relevant — it is a good hand-crafted feature and often a baseline for learned features — but the HOG+SVM pipeline has mostly been replaced by CNN-based pedestrian detectors.
-
-### E. IoU and Non-Maximum Suppression (NMS)
-
-A sliding-window detector typically fires multiple times around each true object — a few positions and scales with overlapping bounding boxes. Before presenting the final detections, these duplicates must be merged. This is NMS, and every detector — classical or neural — does it.
-
-#### E.1 Intersection-over-Union (IoU)
-
-Given two bounding boxes `A` and `B`:
-
-```
-IoU(A, B) = area(A ∩ B) / area(A ∪ B)
-```
-
-IoU is 0 when boxes don't overlap, 1 when identical, and around 0.5 when boxes overlap about half. The standard threshold for "same object" is IoU ≥ 0.5 (this is also what "mAP@0.5" means in detection benchmarks).
-
-#### E.2 Greedy NMS
-
-Standard algorithm:
-
-1. Sort all detections by descending confidence.
-2. Pick the highest-confidence detection; add it to the output.
-3. Remove from the candidate list all detections with IoU ≥ threshold with the picked one (same object, lower-confidence duplicate).
-4. Repeat until no candidates remain.
-
-The output is one detection per object — the highest-confidence one in each cluster. IoU threshold typically 0.3-0.5 (higher = more aggressive merging).
-
-Variants:
-
-- **Soft-NMS**: instead of hard-removing overlapping boxes, reduce their confidence by a factor of `(1 - IoU)`. Better when two real objects are close together.
-- **Weighted NMS**: replace the winning box with a confidence-weighted average of its overlapping neighbors. Often slightly better localization.
-
-### From Theory to the Functions Below
-
-- `cv2.matchTemplate(img, template, method)` — template matching (§B). `method` = `TM_CCOEFF_NORMED` is the safe default.
-- `cv2.minMaxLoc(result)` — find the best-scoring location in the template-match result map.
-- `cv2.CascadeClassifier(xml_path)` — load a pre-trained Haar cascade; `.detectMultiScale(img, ...)` runs the cascade across scales (§C).
-- `cv2.HOGDescriptor()`, `cv2.HOGDescriptor_getDefaultPeopleDetector()` — Dalal-Triggs HOG+SVM (§D).
-- `cv2.dnn.NMSBoxes(boxes, scores, score_threshold, nms_threshold)` — greedy NMS (§E.2), reused by modern DNN detectors.
-
----
-
-## 1. Template Matching
 
 ### Basic Concept
 
@@ -286,6 +127,42 @@ Each pixel in result image = matching score at that location
 ---
 
 ## 2. Template Matching Methods Comparison
+
+### Theory: Template Matching: Pixel-Wise Similarity
+
+The simplest scoring function: **how similar is this patch to a stored reference template?** Given template `T` of size `w × h` and image `I`, compute the score at every position `(x, y)` where the template fits inside the image.
+
+Three standard metrics, each with its own trade-offs:
+
+#### B.1 Sum of squared differences (`TM_SQDIFF`)
+
+```
+R(x, y) = Σ_{x', y'}  [T(x', y') - I(x + x', y + y')]²
+```
+
+Zero at a perfect match, grows with difference. Sensitive to brightness offsets (a uniformly brightened patch produces a large R even if the shape matches). Usually the wrong choice unless brightness is controlled.
+
+#### B.2 Cross-correlation (`TM_CCORR`)
+
+```
+R(x, y) = Σ_{x', y'}  T(x', y') · I(x + x', y + y')
+```
+
+Large at match, small elsewhere. But pathologically large at very bright patches regardless of content — a white wall scores higher than an actual match.
+
+#### B.3 Normalized cross-correlation (`TM_CCOEFF_NORMED`)
+
+Subtract means, divide by standard deviations:
+
+```
+R(x, y) = Σ [T' · I'] / √(Σ T'² · Σ I'²)
+
+where T' = T - mean(T), I' = patch - mean(patch)
+```
+
+Produces a score in `[-1, 1]` that is invariant to linear brightness changes and scale. **Almost always the right choice** — it compares the shape of the intensity variations, not absolute values. OpenCV calls this `TM_CCOEFF_NORMED`.
+
+The limitations of template matching: no invariance to rotation, scale, or perspective. Use multi-scale search (pyramid) to add scale coverage. For rotation, you need multiple rotated templates. This is why template matching mostly works only for rigid objects photographed at known orientation.
 
 ### Matching Method Types
 
@@ -573,6 +450,55 @@ if result['location']:
 ---
 
 ## 4. Haar Cascade Classifier
+
+### Theory: Haar Features and the Viola-Jones Cascade
+
+Viola and Jones (2001) built the first real-time face detector. The key innovations:
+
+#### C.1 Haar-like features
+
+A Haar feature is the difference between sums of pixel intensities in adjacent rectangular regions. Example patterns:
+
+```
+[ white ] [ black ]      horizontal edge feature
+[ white ] [ black ] [ white ]     vertical line feature
+
+feature_value = sum(pixels in white) - sum(pixels in black)
+```
+
+Each pattern is crude on its own — a single edge or bar — but there are thousands of possible patterns (different positions, sizes, types), and combining enough of them produces a discriminative classifier.
+
+#### C.2 Integral images for O(1) feature evaluation
+
+The naïve cost of a Haar feature at one location is `O(area)` — sum up every pixel in the white and black regions. Viola-Jones introduced the **integral image**: precompute `ii(x, y) = Σ_{x' ≤ x, y' ≤ y} I(x', y')`. Then the sum over any rectangle is a fixed 4-term expression:
+
+```
+sum_rect(x1, y1, x2, y2) = ii(x2, y2) - ii(x1, y2) - ii(x2, y1) + ii(x1, y1)
+```
+
+Any Haar feature at any position and size evaluates in constant time regardless of feature area. This is what makes scanning thousands of features over thousands of positions affordable.
+
+#### C.3 AdaBoost feature selection
+
+There are tens of thousands of possible Haar features in a detection window — far too many to use all of them. AdaBoost builds a strong classifier by **iteratively picking the single best feature** at each round, weighted by how hard the currently-misclassified examples are. After `T` rounds you have a weighted sum of `T` features which, as a whole, classifies faces vs non-faces well.
+
+#### C.4 Cascaded rejection
+
+Even evaluating the selected features at every position is expensive. Viola-Jones arranged the classifiers in a **cascade**:
+
+```
+Stage 1 (few features):        Pass → Stage 2
+                              Fail → Reject (90% of background)
+
+Stage 2 (more features):      Pass → Stage 3
+                              Fail → Reject (another 9% of background)
+
+...
+
+Final stage:                  Pass → Report detection
+```
+
+Early stages are cheap and reject most of the image; only the small fraction of positions looking plausible enter expensive later stages. The total cost is dominated by the cheap early stages because almost all background positions get rejected fast. This cascade structure is the reason Viola-Jones runs in real time — and the same idea appears in modern deep detectors (Cascade R-CNN, CenterNet with cascaded refinement).
 
 ### Understanding Haar Features
 
@@ -879,6 +805,56 @@ cv2.imshow('Face Features', output)
 ---
 
 ## 6. HOG + SVM Pedestrian Detection
+
+### Theory: HOG + SVM: Gradient Histograms for Detection
+
+Dalal and Triggs (2005) built the first effective pedestrian detector. The descriptor, **Histogram of Oriented Gradients (HOG)**, has two key ideas.
+
+#### D.1 Gradient histograms as detection features
+
+In a local cell (e.g. 8×8 pixels), compute the gradient at each pixel, bin the orientations (e.g. 9 bins over 0°–180°) weighted by gradient magnitude. The result: a 9-number summary of "what orientations are dominant in this cell". Concatenating cells across a detection window (e.g. 64×128 for pedestrians) gives a feature vector of ~3780 dimensions.
+
+Why this is better than raw pixels: gradient orientation is robust to illumination (absolute brightness doesn't matter, only brightness differences), and the histogram is robust to small spatial shifts within a cell.
+
+#### D.2 Block normalization
+
+Before classification, HOG features are normalized at the block level (e.g. 2×2 cells grouped, each cell appearing in multiple overlapping blocks). Normalization makes the descriptor robust to illumination and contrast changes. Two normalization schemes are common: L2-norm and L2-Hys (L2 with a clip to suppress dominant peaks).
+
+#### D.3 Linear SVM
+
+On top of HOG, Dalal-Triggs trained a **linear SVM** to separate pedestrian from non-pedestrian windows. SVM with a linear kernel is fast to evaluate (dot product with weights, plus a threshold), so scanning HOG+SVM across all positions and scales is practical. OpenCV's `HOGDescriptor` ships with a pre-trained linear SVM for pedestrians that you can apply directly.
+
+The HOG descriptor itself remains relevant — it is a good hand-crafted feature and often a baseline for learned features — but the HOG+SVM pipeline has mostly been replaced by CNN-based pedestrian detectors.
+
+### Theory: IoU and Non-Maximum Suppression (NMS)
+
+A sliding-window detector typically fires multiple times around each true object — a few positions and scales with overlapping bounding boxes. Before presenting the final detections, these duplicates must be merged. This is NMS, and every detector — classical or neural — does it.
+
+#### E.1 Intersection-over-Union (IoU)
+
+Given two bounding boxes `A` and `B`:
+
+```
+IoU(A, B) = area(A ∩ B) / area(A ∪ B)
+```
+
+IoU is 0 when boxes don't overlap, 1 when identical, and around 0.5 when boxes overlap about half. The standard threshold for "same object" is IoU ≥ 0.5 (this is also what "mAP@0.5" means in detection benchmarks).
+
+#### E.2 Greedy NMS
+
+Standard algorithm:
+
+1. Sort all detections by descending confidence.
+2. Pick the highest-confidence detection; add it to the output.
+3. Remove from the candidate list all detections with IoU ≥ threshold with the picked one (same object, lower-confidence duplicate).
+4. Repeat until no candidates remain.
+
+The output is one detection per object — the highest-confidence one in each cluster. IoU threshold typically 0.3-0.5 (higher = more aggressive merging).
+
+Variants:
+
+- **Soft-NMS**: instead of hard-removing overlapping boxes, reduce their confidence by a factor of `(1 - IoU)`. Better when two real objects are close together.
+- **Weighted NMS**: replace the winning box with a confidence-weighted average of its overlapping neighbors. Often slightly better localization.
 
 ### Understanding HOG (Histogram of Oriented Gradients)
 

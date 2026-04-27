@@ -18,8 +18,6 @@
 
 ## 목차
 
-참조에 들어가기 전에, [**이론과 원리**](#이론과-원리) 섹션을 먼저 읽어보세요. 픽셀 단위 분류로서의 세그멘테이션, FCN → U-Net → DeepLab 아키텍처 진화, receptive-field 문제, 그리고 IoU / Dice 손실 공식화를 다룹니다.
-
 1. [세그멘테이션 개요](#1-세그멘테이션-개요)
 2. [Fully Convolutional Networks (FCN)](#2-fully-convolutional-networks-fcn)
 3. [U-Net 아키텍처](#3-u-net-아키텍처)
@@ -31,134 +29,15 @@
 
 ---
 
-## 이론과 원리
+## 1. 세그멘테이션 개요
 
-시맨틱 세그멘테이션은 이미지의 **모든 픽셀**을 고정된 클래스 집합 중 하나에 할당합니다. 경계 상자 없음, 객체 인스턴스 없음 — 단지 "도로의 모든 픽셀은 도로 클래스, 하늘의 모든 픽셀은 하늘 클래스". 분류의 픽셀 단위 극단: 이미지당 한 레이블이 아니라 픽셀당 한 레이블.
-
-이 섹션은 다음을 다룹니다:
-
-- **(A) 픽셀 단위 분류 프레이밍** — 세그멘테이션을 검출과 근본적으로 다르게 만드는 것.
-- **(B) FCN이 돌파구였던 이유** — 분류 대신 밀집 예측을 위해 CNN 사용.
-- **(C) Receptive-field 문제와 skip connection** — U-Net의 아키텍처적 답.
-- **(D) Dilated / atrous 컨볼루션** — 같은 문제에 대한 DeepLab의 답.
-- **(E) 손실 함수** — cross-entropy, dice loss, focal loss, 그리고 각각이 맞는 때.
-- **(F) 평가 메트릭** — IoU와 mIoU, pixel accuracy, accuracy가 오해를 불러일으키는 이유.
-
-### A. 픽셀 단위 분류
+### 이론: 픽셀 단위 분류
 
 시맨틱 세그멘테이션 출력 모양: `(H, W, K)` logits, `K`가 클래스 수. 픽셀당 클래스 확률을 얻기 위해 `K` 축을 따라 softmax 적용. 네트워크는 구조적으로 **모든 픽셀에 적용된 분류기처럼 생김** — 따라서 "픽셀 단위 분류".
 
 이 프레이밍은 즉시 문제를 시사: 분류 네트워크는 픽셀당이 아니라 이미지당 한 예측을 출력하도록 설계됨. 네트워크 내내 공격적으로 다운샘플링(max-pool, strided conv), `224×224` 이미지를 끝에서 `1×1` 특징 벡터로 축소. 세그멘테이션에는 출력이 입력과 같은 해상도여야 함.
 
 세그멘테이션의 전체 아키텍처 역사는 픽셀 레이블을 올바로 분류할 충분한 전역 컨텍스트를 집계하면서도 픽셀 레이블을 국소화할 만큼 공간 해상도를 높게 유지하는 방법에 관한 것.
-
-### B. FCN: 돌파구
-
-Long, Shelhamer & Darrell(2015)가 Fully Convolutional Network를 도입. 두 아이디어:
-
-1. **Fully-connected 분류기 헤드 제거**하고 `K` 채널을 생성하는 1×1 컨볼루션으로 대체. 네트워크가 이제 단일 벡터 대신 저해상도 클래스 확률 맵을 출력.
-2. Transposed convolution(또는 bilinear 보간 + 컨볼루션)을 통해 출력을 입력 해상도로 **업샘플**.
-
-아키텍처: 사전 훈련된 분류 네트워크(VGG)를 가져와, FC layer를 벗기고, conv layer로 대체, 세그멘테이션 데이터로 훈련. 네트워크가 이제 인간의 눈이 기대하는 것을 수행: 밀집 픽셀 단위 클래스 예측.
-
-바닐라 FCN의 문제: 특징이 최종 분류기에 도달할 때쯤 공간 해상도가 입력보다 32× 낮음. 그 32×를 원 해상도로 다시 업샘플하면 세밀한 디테일이 없는 흐릿한 세그멘테이션 — 필요한 곳(경계)에서 바로.
-
-### C. U-Net: 해상도를 위한 Skip Connection
-
-U-Net(Ronneberger 등, 2015, 원래 바이오메디컬 이미지용)은 FCN의 해상도 손실을 **대칭 인코더-디코더 구조와 skip connection**으로 해결:
-
-```
-입력 (572×572)
-  │
-  │  인코더(다운샘플링 경로): 4단계 conv + pool
-  │
-  ▼    ─────────► skip connection ─────────┐
-Level 1 (64 ch)                             │
-  │                                         │
-  │                                         ▼  디코더 출력 (64 ch)
-  ▼    ─────────► skip connection ──────┐    ▲
-Level 2 (128 ch)                        │    │ 업샘플
-  │                                     │    │
-  │                                     ▼    │
-  ▼    ─────────► skip connection ──┐   ... (각 레벨에서 같은 패턴)
-Level 3 (256 ch)                    │
-  │                                 │
-  │                                 │
-  ▼                                 │
-Bottleneck (1024 ch, 32×32)         │
-```
-
-핵심 통찰: 인코더가 더 깊이 갈수록 공간 정보를 버림; skip connection이 그 공간 정보를 **직접** 디코더로 라우팅, 거기서 업샘플된 특징과 연결됨. 디코더는 따라서 **의미 정보**(전체 이미지를 본 bottleneck에서)와 **공간 정보**(세밀한 디테일을 보존하는 skip connection에서) 둘 다 가짐.
-
-U-Net은 의료 영상, 위성 이미지, 많은 다른 세그멘테이션 작업의 템플릿이 됨. 변형(nnU-Net, TransUNet) 모두 skip-connection 아이디어 공유.
-
-### D. DeepLab: 다운샘플링 없는 Atrous 컨볼루션
-
-DeepLab(Chen 등, 2015-2018)은 다른 접근. 다운샘플링과 업샘플링(U-Net 스타일) 대신, 특징 맵을 더 높은 해상도로 유지하고 **atrous(dilated) 컨볼루션**을 써서 receptive field를 키움:
-
-- dilation rate 1의 일반 3×3 conv는 3×3 영역을 봄.
-- dilation rate 2의 3×3 conv는 5×5 영역을 보지만 9점만(하나 걸러) 샘플링.
-- dilation rate 4의 3×3 conv는 같은 9 파라미터로 9×9 영역을 봄.
-
-증가하는 rate의 atrous conv를 쌓으면 다운샘플링 없이 큰 효과적 receptive field를 얻음. DeepLab v3+의 **Atrous Spatial Pyramid Pooling(ASPP)** 모듈은 서로 다른 dilation rate를 가진 여러 병렬 atrous conv를 적용하고 연결, 다중 스케일 컨텍스트 포착.
-
-DeepLab v3+는 atrous 백본 위에 skip connection을 가진 작은 디코더를 추가, 두 접근 모두 결합.
-
-### E. 손실 함수
-
-#### E.1 Cross-entropy
-
-기본: 픽셀별 범주형 cross-entropy. 분류와 같음, 단지 모든 픽셀에 적용. 문제: **클래스 불균형**. 주행 장면에서 60% 픽셀이 도로이고 0.5%가 교통 표지일 수 있음. Cross-entropy는 모든 픽셀을 동등하게 취급, 네트워크가 도로에는 매우 능숙해지지만 표지는 거의 학습하지 않음.
-
-#### E.2 Dice / IoU 손실
-
-Dice loss는 예측과 ground-truth 마스크 간 겹침을 직접 최적화:
-
-```
-Dice(A, B) = 2 · |A ∩ B| / (|A| + |B|)
-Loss = 1 - Dice
-```
-
-이진 마스크: `Dice = 2 · Σ(p · g) / (Σp + Σg)` (`p`, `g`는 예측 및 ground-truth 확률). 클래스 불균형에 둔감 — 배경이 아니라 전경 겹침만 신경 쓰기 때문. 관심 클래스(종양)가 배경에 비해 작은 의료 영상에 인기.
-
-#### E.3 Focal loss
-
-Cross-entropy에 **잘 분류된 쉬운 픽셀을 다운가중**하는 추가 `(1 - p)^γ` 인자, 어려운 픽셀에 훈련 집중. 클래스 불균형과 싸우는 또 다른 방법, RetinaNet이 도입, 세그멘테이션에도 인기.
-
-전형 실천: cross-entropy와 dice loss 결합(합 또는 가중 평균). Cross-entropy가 안정적 기울기 제공; dice가 메트릭의 직접 최적화 제공.
-
-### F. 평가 메트릭
-
-#### F.1 Pixel accuracy
-
-가장 단순: 올바로 분류된 픽셀의 비율. 클래스 불균형 때문에 오해를 불러일으킴 — 주행 장면 데이터셋에서 절반 클래스에 대해 "모든 곳 도로"를 예측해도 95% pixel accuracy를 얻을 수 있음.
-
-#### F.2 Intersection-over-Union (IoU)
-
-클래스별 IoU:
-
-```
-IoU_c = |pred_c ∩ true_c| / |pred_c ∪ true_c|
-```
-
-클래스 `c`에 대해: 예측 및 진짜 `c`-픽셀의 합집합 중 둘 다에 있는 비율. IoU 1이 완벽, 0이 겹침 없음.
-
-#### F.3 Mean IoU (mIoU)
-
-모든 `K` 클래스에 걸친 평균 IoU, 각 클래스가 픽셀 수와 무관하게 동등하게 가중. **이것이 표준 세그멘테이션 메트릭** — Cityscapes, ADE20K, Pascal VOC, 모든 벤치마크에서. 희귀 클래스가 흔한 클래스와 같게 가중되어 클래스 불균형에 강건.
-
-부수 이점: mIoU가 개선되고 pixel accuracy가 감소하면, 희귀 클래스 세그멘테이션에서 약간 지배적 클래스를 희생해 나아지고 있음 — 보통 옳은 트레이드오프.
-
-### 이론에서 아래 함수들로
-
-- 현대 라이브러리(PyTorch: `torchvision.models.segmentation`, `segmentation_models_pytorch`)가 한 줄 로딩으로 사전 훈련된 FCN, U-Net, DeepLab 모델 제공.
-- OpenCV의 DNN 모듈은 내보낸 ONNX 세그멘테이션 모델 실행 가능; 추론 파이프라인은 §19를 따름.
-- 주요 하이퍼파라미터: 입력 크기(클수록 = 더 많은 컨텍스트지만 더 느림), 백본(ResNet, EfficientNet), 손실 함수 조합(CE + Dice).
-- 후처리: 최종 레이블 맵을 위해 클래스 축에 argmax, 에지 정제를 위한 선택적 CRF(conditional random field).
-
----
-
-## 1. 세그멘테이션 개요
 
 ### 1.1 세그멘테이션의 유형
 
@@ -209,6 +88,17 @@ Panoptic Segmentation:
 ---
 
 ## 2. Fully Convolutional Networks (FCN)
+
+### 이론: FCN: 돌파구
+
+Long, Shelhamer & Darrell(2015)가 Fully Convolutional Network를 도입. 두 아이디어:
+
+1. **Fully-connected 분류기 헤드 제거**하고 `K` 채널을 생성하는 1×1 컨볼루션으로 대체. 네트워크가 이제 단일 벡터 대신 저해상도 클래스 확률 맵을 출력.
+2. Transposed convolution(또는 bilinear 보간 + 컨볼루션)을 통해 출력을 입력 해상도로 **업샘플**.
+
+아키텍처: 사전 훈련된 분류 네트워크(VGG)를 가져와, FC layer를 벗기고, conv layer로 대체, 세그멘테이션 데이터로 훈련. 네트워크가 이제 인간의 눈이 기대하는 것을 수행: 밀집 픽셀 단위 클래스 예측.
+
+바닐라 FCN의 문제: 특징이 최종 분류기에 도달할 때쯤 공간 해상도가 입력보다 32× 낮음. 그 32×를 원 해상도로 다시 업샘플하면 세밀한 디테일이 없는 흐릿한 세그멘테이션 — 필요한 곳(경계)에서 바로.
 
 ### 2.1 분류에서 세그멘테이션으로
 
@@ -306,6 +196,35 @@ class FCN8s(nn.Module):
 ---
 
 ## 3. U-Net 아키텍처
+
+### 이론: U-Net: 해상도를 위한 Skip Connection
+
+U-Net(Ronneberger 등, 2015, 원래 바이오메디컬 이미지용)은 FCN의 해상도 손실을 **대칭 인코더-디코더 구조와 skip connection**으로 해결:
+
+```
+입력 (572×572)
+  │
+  │  인코더(다운샘플링 경로): 4단계 conv + pool
+  │
+  ▼    ─────────► skip connection ─────────┐
+Level 1 (64 ch)                             │
+  │                                         │
+  │                                         ▼  디코더 출력 (64 ch)
+  ▼    ─────────► skip connection ──────┐    ▲
+Level 2 (128 ch)                        │    │ 업샘플
+  │                                     │    │
+  │                                     ▼    │
+  ▼    ─────────► skip connection ──┐   ... (각 레벨에서 같은 패턴)
+Level 3 (256 ch)                    │
+  │                                 │
+  │                                 │
+  ▼                                 │
+Bottleneck (1024 ch, 32×32)         │
+```
+
+핵심 통찰: 인코더가 더 깊이 갈수록 공간 정보를 버림; skip connection이 그 공간 정보를 **직접** 디코더로 라우팅, 거기서 업샘플된 특징과 연결됨. 디코더는 따라서 **의미 정보**(전체 이미지를 본 bottleneck에서)와 **공간 정보**(세밀한 디테일을 보존하는 skip connection에서) 둘 다 가짐.
+
+U-Net은 의료 영상, 위성 이미지, 많은 다른 세그멘테이션 작업의 템플릿이 됨. 변형(nnU-Net, TransUNet) 모두 skip-connection 아이디어 공유.
 
 ### 3.1 U-Net 설계
 
@@ -406,6 +325,18 @@ class UNet(nn.Module):
 
 ## 4. DeepLab v3+
 
+### 이론: DeepLab: 다운샘플링 없는 Atrous 컨볼루션
+
+DeepLab(Chen 등, 2015-2018)은 다른 접근. 다운샘플링과 업샘플링(U-Net 스타일) 대신, 특징 맵을 더 높은 해상도로 유지하고 **atrous(dilated) 컨볼루션**을 써서 receptive field를 키움:
+
+- dilation rate 1의 일반 3×3 conv는 3×3 영역을 봄.
+- dilation rate 2의 3×3 conv는 5×5 영역을 보지만 9점만(하나 걸러) 샘플링.
+- dilation rate 4의 3×3 conv는 같은 9 파라미터로 9×9 영역을 봄.
+
+증가하는 rate의 atrous conv를 쌓으면 다운샘플링 없이 큰 효과적 receptive field를 얻음. DeepLab v3+의 **Atrous Spatial Pyramid Pooling(ASPP)** 모듈은 서로 다른 dilation rate를 가진 여러 병렬 atrous conv를 적용하고 연결, 다중 스케일 컨텍스트 포착.
+
+DeepLab v3+는 atrous 백본 위에 skip connection을 가진 작은 디코더를 추가, 두 접근 모두 결합.
+
 ### 4.1 Atrous (팽창) 합성곱
 
 ```
@@ -486,6 +417,29 @@ class ASPP(nn.Module):
 
 ## 5. 세그멘테이션 손실 함수
 
+### 이론: 손실 함수
+
+#### E.1 Cross-entropy
+
+기본: 픽셀별 범주형 cross-entropy. 분류와 같음, 단지 모든 픽셀에 적용. 문제: **클래스 불균형**. 주행 장면에서 60% 픽셀이 도로이고 0.5%가 교통 표지일 수 있음. Cross-entropy는 모든 픽셀을 동등하게 취급, 네트워크가 도로에는 매우 능숙해지지만 표지는 거의 학습하지 않음.
+
+#### E.2 Dice / IoU 손실
+
+Dice loss는 예측과 ground-truth 마스크 간 겹침을 직접 최적화:
+
+```
+Dice(A, B) = 2 · |A ∩ B| / (|A| + |B|)
+Loss = 1 - Dice
+```
+
+이진 마스크: `Dice = 2 · Σ(p · g) / (Σp + Σg)` (`p`, `g`는 예측 및 ground-truth 확률). 클래스 불균형에 둔감 — 배경이 아니라 전경 겹침만 신경 쓰기 때문. 관심 클래스(종양)가 배경에 비해 작은 의료 영상에 인기.
+
+#### E.3 Focal loss
+
+Cross-entropy에 **잘 분류된 쉬운 픽셀을 다운가중**하는 추가 `(1 - p)^γ` 인자, 어려운 픽셀에 훈련 집중. 클래스 불균형과 싸우는 또 다른 방법, RetinaNet이 도입, 세그멘테이션에도 인기.
+
+전형 실천: cross-entropy와 dice loss 결합(합 또는 가중 평균). Cross-entropy가 안정적 기울기 제공; dice가 메트릭의 직접 최적화 제공.
+
 ### 5.1 일반적인 손실 함수
 
 ```python
@@ -538,6 +492,28 @@ class CombinedLoss(nn.Module):
 ---
 
 ## 6. 평가 지표
+
+### 이론: 평가 메트릭
+
+#### F.1 Pixel accuracy
+
+가장 단순: 올바로 분류된 픽셀의 비율. 클래스 불균형 때문에 오해를 불러일으킴 — 주행 장면 데이터셋에서 절반 클래스에 대해 "모든 곳 도로"를 예측해도 95% pixel accuracy를 얻을 수 있음.
+
+#### F.2 Intersection-over-Union (IoU)
+
+클래스별 IoU:
+
+```
+IoU_c = |pred_c ∩ true_c| / |pred_c ∪ true_c|
+```
+
+클래스 `c`에 대해: 예측 및 진짜 `c`-픽셀의 합집합 중 둘 다에 있는 비율. IoU 1이 완벽, 0이 겹침 없음.
+
+#### F.3 Mean IoU (mIoU)
+
+모든 `K` 클래스에 걸친 평균 IoU, 각 클래스가 픽셀 수와 무관하게 동등하게 가중. **이것이 표준 세그멘테이션 메트릭** — Cityscapes, ADE20K, Pascal VOC, 모든 벤치마크에서. 희귀 클래스가 흔한 클래스와 같게 가중되어 클래스 불균형에 강건.
+
+부수 이점: mIoU가 개선되고 pixel accuracy가 감소하면, 희귀 클래스 세그멘테이션에서 약간 지배적 클래스를 희생해 나아지고 있음 — 보통 옳은 트레이드오프.
 
 ### 6.1 세그멘테이션 지표
 

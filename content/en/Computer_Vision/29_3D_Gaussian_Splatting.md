@@ -18,8 +18,6 @@ After completing this lesson, you will be able to:
 
 ## Table of Contents
 
-Before the reference, read [**Theory & Principles**](#theory--principles) — the explicit primitive representation, anisotropic 3D Gaussians, splatting via differentiable rasterization, and adaptive density control.
-
 1. [Why Gaussian Splatting?](#1-why-gaussian-splatting)
 2. [3D Gaussian Representation](#2-3d-gaussian-representation)
 3. [Differentiable Rasterization](#3-differentiable-rasterization)
@@ -31,108 +29,13 @@ Before the reference, read [**Theory & Principles**](#theory--principles) — th
 
 ---
 
-## Theory & Principles
+## 1. Why Gaussian Splatting?
 
-3D Gaussian Splatting (Kerbl et al., 2023) replaces NeRF's implicit neural representation with an **explicit set of 3D Gaussians**. The result: similar visual quality with **real-time rendering** (100+ FPS at 1080p) and **fast training** (minutes vs hours). The key idea is to represent the scene as a collection of anisotropic 3D Gaussian "blobs" and rasterize them to images using a differentiable splat operation.
-
-This section covers:
-
-- **(A) Why explicit beats implicit for rendering** — the lookup-vs-evaluation trade-off.
-- **(B) The 3D Gaussian primitive** — anisotropic shape, color, opacity.
-- **(C) Splatting: differentiable rasterization** — how Gaussians project to image pixels.
-- **(D) Adaptive density control** — how the optimization grows and prunes Gaussians.
-- **(E) Spherical harmonics for view-dependent color** — capturing specularity without view-dependent MLPs.
-- **(F) Comparison with NeRF** — concrete trade-offs.
-
-### A. Explicit Primitives Win at Rendering
+### Theory: Explicit Primitives Win at Rendering
 
 NeRF's bottleneck is querying the MLP hundreds of times per ray. Even Instant-NGP, with a tiny MLP, still has to evaluate it for every sample point along every pixel's ray.
 
 Gaussian Splatting eliminates the network from inference entirely. Each scene element is **explicitly stored** as a 3D Gaussian with parameters. Rendering is just a sorted alpha-blend of projected primitives — the same operation game engines have been doing for decades, just with Gaussians instead of triangles.
-
-### B. The 3D Gaussian Primitive
-
-Each Gaussian has parameters:
-
-- **Position** `μ ∈ ℝ³`: where it is in space.
-- **Covariance** `Σ ∈ ℝ³×³`: its shape — orientation and per-axis scale (an anisotropic blob).
-- **Color** (or spherical harmonics for view-dependent color, §E).
-- **Opacity** `α ∈ [0, 1]`.
-
-To make `Σ` learnable while staying valid (positive semi-definite), it is parameterized as `Σ = R · S · Sᵀ · Rᵀ` where `R` is rotation (from a quaternion) and `S = diag(s_x, s_y, s_z)` is per-axis scale. Quaternion + 3 scales = 7 numbers per Gaussian for shape.
-
-A scene typically contains **millions** of these Gaussians.
-
-### C. Splatting: Differentiable Rasterization
-
-Rendering a Gaussian to a 2D image:
-
-1. **Project the Gaussian** through the camera: a 3D Gaussian under perspective projection becomes a 2D Gaussian on the image plane (approximately, via local-linear approximation).
-2. **Compute affected pixels**: a tile of pixels around the projected mean.
-3. **Evaluate Gaussian density** at each pixel: this gives a per-pixel weight `w_i = exp(-0.5 · (p - μ_2D)ᵀ · Σ_2D⁻¹ · (p - μ_2D))`.
-4. **Multiply by opacity** and color: per-pixel contribution = `α · color · w_i`.
-
-For multiple overlapping Gaussians, sort by depth and **alpha-blend** front-to-back:
-
-```
-final_color(pixel) = Σ_i  T_i · α_i · w_i · c_i
-T_i = Π_{j < i}  (1 - α_j · w_j)        transmittance through earlier Gaussians
-```
-
-This is the **same volume rendering integral** as NeRF, just discretized over Gaussians instead of point samples. Crucially, it is differentiable — gradients flow back through alpha blending to update Gaussian parameters during training.
-
-The implementation uses **tile-based rasterization on GPU**: split the image into 16×16 tiles, sort Gaussians per tile, render each tile in parallel. Total throughput: tens of millions of Gaussians per second on a modern GPU.
-
-### D. Adaptive Density Control
-
-Starting from sparse SfM point cloud, the optimizer needs to add Gaussians where the scene has detail and remove them where they don't help. This is **adaptive density control**:
-
-- **Densify**: if a Gaussian has large position gradient (image loss strongly wants to move it), **clone or split** it. Cloning duplicates it; splitting replaces a large Gaussian with two smaller ones.
-- **Prune**: if a Gaussian's opacity drops below a threshold during training, remove it.
-
-This dynamic management lets the Gaussian count adapt to scene complexity. Smooth backgrounds get few large Gaussians; fine detail (foliage, hair) gets many small ones. Final count typically 1-5 million Gaussians depending on scene.
-
-### E. Spherical Harmonics for View-Dependent Color
-
-A simple per-Gaussian RGB color cannot capture specular reflections that change with viewpoint. NeRF uses an MLP that takes the viewing direction. Gaussian Splatting instead uses **spherical harmonics** (SH) — the analog of Fourier series on the sphere:
-
-```
-color(direction) = Σ_l  Σ_m  c_{lm} · Y_l^m(direction)
-```
-
-Each Gaussian stores SH coefficients up to some degree (typically degree 3, i.e. 16 coefficients per channel × 3 channels = 48 numbers per Gaussian). At render time, evaluate the SH basis in the viewing direction and combine with stored coefficients.
-
-SH provide **continuous direction-dependent color** with explicit, fixed coefficients — no neural network query at render time.
-
-### F. Comparison with NeRF
-
-| Property | NeRF (Instant-NGP) | 3D Gaussian Splatting |
-|----------|---------------------|----------------------|
-| Quality (PSNR) | ~32-34 dB | ~32-34 dB |
-| Training time | ~minutes | ~minutes |
-| Rendering speed (1080p) | ~10 FPS | **~100+ FPS** |
-| Memory (storage) | ~50 MB | ~500 MB - 2 GB |
-| Editability | Hard | Easier (move/recolor primitives) |
-| Specularity | Yes (MLP) | Yes (SH) |
-| Geometry quality | Good | Good but blob-like |
-| Anti-aliasing | Built-in | Needs care |
-
-The big trade-off: 3DGS uses more **memory** because it stores millions of explicit primitives, but renders much **faster** because there's no neural network in the inference loop. For applications that render the same scene many times (VR, gaming, telepresence), 3DGS dominates. For applications that need compact representation (NeRF mobile, asset distribution), NeRF still has advantages.
-
-3DGS has rapidly become the preferred approach for novel view synthesis. Variants (4D-GS for video, deformable-GS for animated scenes, large-scale GS for outdoor) extend it further.
-
-### From Theory to the Tools
-
-- **Original 3DGS implementation** (Inria/Graphdeco): reference C++/CUDA + Python.
-- **Nerfstudio**: now includes a Splatfacto trainer that follows 3DGS.
-- **Gsplat** (Nerfstudio team): clean PyTorch reimplementation with extensions.
-- **Spz / .ply formats**: standard formats for storing trained Gaussian Splatting scenes.
-
-Like NeRF, 3DGS is not part of OpenCV — but the rendering pipeline (camera projection + alpha blending) directly uses the geometry from §18 and §21.
-
----
-
-## 1. Why Gaussian Splatting?
 
 ### 1.1 NeRF vs Gaussian Splatting
 
@@ -156,6 +59,31 @@ Each "splat" is a 3D Gaussian that gets projected and blended.
 ---
 
 ## 2. 3D Gaussian Representation
+
+### Theory: The 3D Gaussian Primitive
+
+Each Gaussian has parameters:
+
+- **Position** `μ ∈ ℝ³`: where it is in space.
+- **Covariance** `Σ ∈ ℝ³×³`: its shape — orientation and per-axis scale (an anisotropic blob).
+- **Color** (or spherical harmonics for view-dependent color, §E).
+- **Opacity** `α ∈ [0, 1]`.
+
+To make `Σ` learnable while staying valid (positive semi-definite), it is parameterized as `Σ = R · S · Sᵀ · Rᵀ` where `R` is rotation (from a quaternion) and `S = diag(s_x, s_y, s_z)` is per-axis scale. Quaternion + 3 scales = 7 numbers per Gaussian for shape.
+
+A scene typically contains **millions** of these Gaussians.
+
+### Theory: Spherical Harmonics for View-Dependent Color
+
+A simple per-Gaussian RGB color cannot capture specular reflections that change with viewpoint. NeRF uses an MLP that takes the viewing direction. Gaussian Splatting instead uses **spherical harmonics** (SH) — the analog of Fourier series on the sphere:
+
+```
+color(direction) = Σ_l  Σ_m  c_{lm} · Y_l^m(direction)
+```
+
+Each Gaussian stores SH coefficients up to some degree (typically degree 3, i.e. 16 coefficients per channel × 3 channels = 48 numbers per Gaussian). At render time, evaluate the SH basis in the viewing direction and combine with stored coefficients.
+
+SH provide **continuous direction-dependent color** with explicit, fixed coefficients — no neural network query at render time.
 
 ### 2.1 Gaussian Parameters
 
@@ -217,6 +145,26 @@ class GaussianModel(nn.Module):
 ---
 
 ## 3. Differentiable Rasterization
+
+### Theory: Splatting: Differentiable Rasterization
+
+Rendering a Gaussian to a 2D image:
+
+1. **Project the Gaussian** through the camera: a 3D Gaussian under perspective projection becomes a 2D Gaussian on the image plane (approximately, via local-linear approximation).
+2. **Compute affected pixels**: a tile of pixels around the projected mean.
+3. **Evaluate Gaussian density** at each pixel: this gives a per-pixel weight `w_i = exp(-0.5 · (p - μ_2D)ᵀ · Σ_2D⁻¹ · (p - μ_2D))`.
+4. **Multiply by opacity** and color: per-pixel contribution = `α · color · w_i`.
+
+For multiple overlapping Gaussians, sort by depth and **alpha-blend** front-to-back:
+
+```
+final_color(pixel) = Σ_i  T_i · α_i · w_i · c_i
+T_i = Π_{j < i}  (1 - α_j · w_j)        transmittance through earlier Gaussians
+```
+
+This is the **same volume rendering integral** as NeRF, just discretized over Gaussians instead of point samples. Crucially, it is differentiable — gradients flow back through alpha blending to update Gaussian parameters during training.
+
+The implementation uses **tile-based rasterization on GPU**: split the image into 16×16 tiles, sort Gaussians per tile, render each tile in parallel. Total throughput: tens of millions of Gaussians per second on a modern GPU.
 
 ### 3.1 Projection and Splatting
 
@@ -305,6 +253,15 @@ def evaluate_2d_gaussian(mean, cov, opacity, H, W):
 ---
 
 ## 4. Adaptive Density Control
+
+### Theory: Adaptive Density Control
+
+Starting from sparse SfM point cloud, the optimizer needs to add Gaussians where the scene has detail and remove them where they don't help. This is **adaptive density control**:
+
+- **Densify**: if a Gaussian has large position gradient (image loss strongly wants to move it), **clone or split** it. Cloning duplicates it; splitting replaces a large Gaussian with two smaller ones.
+- **Prune**: if a Gaussian's opacity drops below a threshold during training, remove it.
+
+This dynamic management lets the Gaussian count adapt to scene complexity. Smooth backgrounds get few large Gaussians; fine detail (foliage, hair) gets many small ones. Final count typically 1-5 million Gaussians depending on scene.
 
 ### 4.1 Growing and Pruning Gaussians
 
@@ -402,6 +359,23 @@ This achieves:
 ---
 
 ## 7. Comparison with NeRF
+
+### Theory: Comparison with NeRF
+
+| Property | NeRF (Instant-NGP) | 3D Gaussian Splatting |
+|----------|---------------------|----------------------|
+| Quality (PSNR) | ~32-34 dB | ~32-34 dB |
+| Training time | ~minutes | ~minutes |
+| Rendering speed (1080p) | ~10 FPS | **~100+ FPS** |
+| Memory (storage) | ~50 MB | ~500 MB - 2 GB |
+| Editability | Hard | Easier (move/recolor primitives) |
+| Specularity | Yes (MLP) | Yes (SH) |
+| Geometry quality | Good | Good but blob-like |
+| Anti-aliasing | Built-in | Needs care |
+
+The big trade-off: 3DGS uses more **memory** because it stores millions of explicit primitives, but renders much **faster** because there's no neural network in the inference loop. For applications that render the same scene many times (VR, gaming, telepresence), 3DGS dominates. For applications that need compact representation (NeRF mobile, asset distribution), NeRF still has advantages.
+
+3DGS has rapidly become the preferred approach for novel view synthesis. Variants (4D-GS for video, deformable-GS for animated scenes, large-scale GS for outdoor) extend it further.
 
 ### 7.1 Feature Comparison
 
