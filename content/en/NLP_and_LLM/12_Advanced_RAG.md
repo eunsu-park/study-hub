@@ -18,21 +18,9 @@ This lesson covers more sophisticated retrieval and generation strategies beyond
 
 ---
 
-## Theory & Principles
+## 1. RAG Limitations and Advanced Techniques
 
-Basic RAG (lesson 10) does one round of retrieval, then one round of generation. Almost every RAG quality issue in production traces to this single-shot architecture: the user's question may not be a good search query (query–document mismatch), the retriever may return too many or too few candidates (precision–recall trade-off), the answer may need information from multiple documents that no single retrieval can find together (multi-hop), and the model has no way to recover when retrieval fails. **Advanced RAG is the catalog of techniques that break the single-shot constraint** — by transforming the query, looping retrieval, organizing the corpus hierarchically, or letting the LLM dynamically decide what to retrieve and when.
-
-This section covers:
-
-- **(A) Why single-shot RAG fails** — the four failure modes that motivate every advanced technique.
-- **(B) Query transformation** — HyDE, query expansion, sub-question decomposition.
-- **(C) Multi-hop and iterative retrieval** — when one retrieval is not enough.
-- **(D) Hierarchical retrieval (RAPTOR)** — recursive summarization for documents that exceed any single chunk.
-- **(E) Late-interaction (ColBERT)** — token-level retrieval, why it beats single-vector dense retrieval on hard queries.
-- **(F) Self-reflective and Agentic RAG** — the LLM controls the retrieval loop, deciding when to search and when to stop.
-- **(G) Reranking** — cross-encoder rerankers as the final precision filter.
-
-### A. Why Single-Shot RAG Fails
+### Theory: Why Single-Shot RAG Fails
 
 Four distinct failure modes:
 
@@ -46,83 +34,13 @@ Four distinct failure modes:
 
 Each advanced technique addresses one or more of these.
 
-### B. Query Transformation
-
-**B.1 HyDE (Hypothetical Document Embeddings)** (Gao et al., 2022). Instead of embedding the user's *question*, ask the LLM to *hypothesize the answer*, then embed the hypothesis. The hypothesis uses vocabulary similar to actual documents (since the LLM was trained on similar prose), shrinking the query–document gap. Surprisingly, the hypothesis being *factually wrong* is fine — only its lexical/semantic style needs to match real documents.
-
-```
-user: "what's the deal with the new chip?"
-LLM hypothesis: "The new chip is a 7nm processor with improved power efficiency..."
-embed(hypothesis) → retrieves the actual announcement chunk
-```
-
-**B.2 Query expansion.** Generate multiple paraphrases of the query, retrieve for each, union the results. Captures different phrasings of the same intent. Diminishing returns past ~5 paraphrases.
-
-**B.3 Sub-question decomposition.** For complex queries, ask the LLM to break the question into atomic sub-questions, retrieve for each separately, then synthesize. Foundation of multi-hop techniques in §C.
-
-### C. Multi-Hop and Iterative Retrieval
-
-**C.1 The pattern.** Initial retrieval → LLM extracts what it learned and what it still needs to know → next retrieval informed by the gap → repeat until the question is answerable.
-
-**C.2 IRCoT (Interleaved Retrieval CoT)** (Trivedi et al., 2022). The LLM produces one CoT reasoning step, the system retrieves on that step, the LLM continues reasoning conditional on retrieved evidence, retrieves again, and so on. Each retrieval is conditioned on what the model has already deduced — the search becomes a guided walk through the corpus.
-
-**C.3 Self-Ask** (Press et al., 2022). The LLM explicitly asks itself sub-questions, retrieves answers, and uses them to make the final inference. Cleaner separation of reasoning and retrieval than IRCoT, easier to debug.
-
-**C.4 Why this works.** Multi-hop questions decompose into a sequence of single-hop questions. Each hop reduces the unknown — once you know "Apple makes the iPhone," "who founded Apple?" is a single-hop retrieval. The LLM does the decomposition; the retriever handles each piece.
-
-### D. Hierarchical Retrieval: RAPTOR
-
-RAPTOR (Sarthi et al., 2024): instead of retrieving chunks, retrieve **summaries at multiple granularity levels**.
-
-**D.1 Construction.** Cluster all chunks (k-means on embeddings). Summarize each cluster with the LLM. Cluster the summaries. Summarize the clusters of summaries. Continue until you have a single root summary. The result is a tree where leaves are document chunks and internal nodes are progressively higher-level summaries.
-
-**D.2 Retrieval.** Embed the query. Compute similarity with *every node* in the tree (chunks + summaries at all levels). Return top-k.
-
-**D.3 Why it works.** A query about a high-level topic ("what does this paper conclude?") matches the root or near-root summary, returning a concise abstract. A query about a specific detail ("what did they measure on day 3?") matches a leaf chunk. The tree provides natural scale-adaptive retrieval — single-vector retrieval cannot do this, because no single chunk is the right granularity for both query types.
-
-### E. Late-Interaction: ColBERT
-
-Single-vector dense retrieval (lesson 10) compresses an entire document into one `d`-dimensional vector. Useful tokens get averaged with useless tokens; rare-but-decisive terms can be drowned out.
-
-**ColBERT** (Khattab & Zaharia, 2020) keeps **a vector per token** for both query and document. Similarity is the **MaxSim** operator:
-
-```
-score(Q, D) = Σ_{q ∈ Q}  max_{d ∈ D}  sim(q, d)
-```
-
-For each query token, find the document token most similar to it. Sum across all query tokens. This preserves token-level information and lets each query term find its best matching document term.
-
-Cost: storing many vectors per document inflates the index by ~100×; latency rises proportionally. ColBERT typically appears as a *reranker* over a smaller set of candidates from cheaper single-vector retrieval, not as a primary retriever.
-
-### F. Self-Reflective and Agentic RAG
-
-**F.1 Self-RAG** (Asai et al., 2023). The LLM emits special tokens during generation: `[Retrieval=Yes]` to trigger a retrieval, `[Relevant]` / `[Irrelevant]` to grade retrieved evidence, `[Supported]` / `[Partially]` / `[No]` to grade its own answer. Training fine-tunes the LLM to use these tokens correctly. The result: the LLM dynamically decides per-token whether retrieval is needed.
-
-**F.2 Agentic RAG.** Treat retrieval as one tool an agent (lesson 14) can call, alongside other tools (calculator, code executor, web search). The agent reasons in a ReAct loop, calling the retriever when it decides it needs evidence. Most flexible architecture, highest cost.
-
-The principle: **the LLM, not a fixed pipeline, decides the retrieval policy.** Single-shot RAG is the simplest possible policy ("retrieve once, always"); Agentic RAG is the most general.
-
-### G. Reranking
+### Theory: Reranking
 
 Retrieval (whether dense, sparse, or hybrid) is a recall-oriented stage — return many candidates cheaply. **Reranking** is a precision-oriented stage — score each candidate carefully with a more expensive model, keep the top few.
 
 A **cross-encoder reranker** takes (query, candidate) as a single concatenated input, produces a relevance score. Examples: `bge-reranker-large`, `Cohere Rerank`, MS MARCO cross-encoders.
 
 Cross-encoders are too slow to run over millions of documents (no precomputed index possible — each query–doc pair must be encoded together). But over the top 50-100 from cheap retrieval, reranking improves NDCG by 5-20 points routinely. Most production RAG: dense retrieve → top 100 → cross-encode rerank → top 5 → LLM.
-
-### From Theory to the Functions Below
-
-- §1 (RAG limitations) — frames the §A failure modes.
-- §2 (query transformation) — implements §B's HyDE and query expansion.
-- §3 (Agentic RAG) — codes §F's tool-using LLM-controlled retrieval.
-- §4 (multi-hop) — implements §C's IRCoT and Self-Ask.
-- §5 (RAPTOR) — builds the §D recursive summary tree and queries it.
-- §6 (ColBERT) — implements the §E late-interaction MaxSim retrieval.
-- §7 (Self-RAG) — implements the §F self-reflective tokens pattern.
-
----
-
-## 1. RAG Limitations and Advanced Techniques
 
 ### 1.1 Limitations of Basic RAG
 
@@ -173,6 +91,20 @@ Advanced RAG Techniques:
 ---
 
 ## 2. Query Transformation
+
+### Theory: Query Transformation
+
+**B.1 HyDE (Hypothetical Document Embeddings)** (Gao et al., 2022). Instead of embedding the user's *question*, ask the LLM to *hypothesize the answer*, then embed the hypothesis. The hypothesis uses vocabulary similar to actual documents (since the LLM was trained on similar prose), shrinking the query–document gap. Surprisingly, the hypothesis being *factually wrong* is fine — only its lexical/semantic style needs to match real documents.
+
+```
+user: "what's the deal with the new chip?"
+LLM hypothesis: "The new chip is a 7nm processor with improved power efficiency..."
+embed(hypothesis) → retrieves the actual announcement chunk
+```
+
+**B.2 Query expansion.** Generate multiple paraphrases of the query, retrieve for each, union the results. Captures different phrasings of the same intent. Diminishing returns past ~5 paraphrases.
+
+**B.3 Sub-question decomposition.** For complex queries, ask the LLM to break the question into atomic sub-questions, retrieve for each separately, then synthesize. Foundation of multi-hop techniques in §C.
 
 ### 2.1 HyDE (Hypothetical Document Embeddings)
 
@@ -433,6 +365,16 @@ def agentic_rag_example():
 
 ## 4. Multi-hop Reasoning
 
+### Theory: Multi-Hop and Iterative Retrieval
+
+**C.1 The pattern.** Initial retrieval → LLM extracts what it learned and what it still needs to know → next retrieval informed by the gap → repeat until the question is answerable.
+
+**C.2 IRCoT (Interleaved Retrieval CoT)** (Trivedi et al., 2022). The LLM produces one CoT reasoning step, the system retrieves on that step, the LLM continues reasoning conditional on retrieved evidence, retrieves again, and so on. Each retrieval is conditioned on what the model has already deduced — the search becomes a guided walk through the corpus.
+
+**C.3 Self-Ask** (Press et al., 2022). The LLM explicitly asks itself sub-questions, retrieves answers, and uses them to make the final inference. Cleaner separation of reasoning and retrieval than IRCoT, easier to debug.
+
+**C.4 Why this works.** Multi-hop questions decompose into a sequence of single-hop questions. Each hop reduces the unknown — once you know "Apple makes the iPhone," "who founded Apple?" is a single-hop retrieval. The LLM does the decomposition; the retriever handles each piece.
+
 ### 4.1 Concept
 
 ```
@@ -589,6 +531,16 @@ Final Answer:"""
 
 ## 5. RAPTOR (Recursive Abstractive Processing for Tree-Organized Retrieval)
 
+### Theory: Hierarchical Retrieval: RAPTOR
+
+RAPTOR (Sarthi et al., 2024): instead of retrieving chunks, retrieve **summaries at multiple granularity levels**.
+
+**D.1 Construction.** Cluster all chunks (k-means on embeddings). Summarize each cluster with the LLM. Cluster the summaries. Summarize the clusters of summaries. Continue until you have a single root summary. The result is a tree where leaves are document chunks and internal nodes are progressively higher-level summaries.
+
+**D.2 Retrieval.** Embed the query. Compute similarity with *every node* in the tree (chunks + summaries at all levels). Return top-k.
+
+**D.3 Why it works.** A query about a high-level topic ("what does this paper conclude?") matches the root or near-root summary, returning a concise abstract. A query about a specific detail ("what did they measure on day 3?") matches a leaf chunk. The tree provides natural scale-adaptive retrieval — single-vector retrieval cannot do this, because no single chunk is the right granularity for both query types.
+
 ### 5.1 Concept
 
 ```
@@ -705,6 +657,20 @@ Summary:"""
 
 ## 6. ColBERT (Contextualized Late Interaction)
 
+### Theory: Late-Interaction: ColBERT
+
+Single-vector dense retrieval (lesson 10) compresses an entire document into one `d`-dimensional vector. Useful tokens get averaged with useless tokens; rare-but-decisive terms can be drowned out.
+
+**ColBERT** (Khattab & Zaharia, 2020) keeps **a vector per token** for both query and document. Similarity is the **MaxSim** operator:
+
+```
+score(Q, D) = Σ_{q ∈ Q}  max_{d ∈ D}  sim(q, d)
+```
+
+For each query token, find the document token most similar to it. Sum across all query tokens. This preserves token-level information and lets each query term find its best matching document term.
+
+Cost: storing many vectors per document inflates the index by ~100×; latency rises proportionally. ColBERT typically appears as a *reranker* over a smaller set of candidates from cheaper single-vector retrieval, not as a primary retriever.
+
 ### 6.1 Concept
 
 ```
@@ -792,6 +758,14 @@ def colbert_with_ragatouille():
 ---
 
 ## 7. Self-RAG (Self-Reflective RAG)
+
+### Theory: Self-Reflective and Agentic RAG
+
+**F.1 Self-RAG** (Asai et al., 2023). The LLM emits special tokens during generation: `[Retrieval=Yes]` to trigger a retrieval, `[Relevant]` / `[Irrelevant]` to grade retrieved evidence, `[Supported]` / `[Partially]` / `[No]` to grade its own answer. Training fine-tunes the LLM to use these tokens correctly. The result: the LLM dynamically decides per-token whether retrieval is needed.
+
+**F.2 Agentic RAG.** Treat retrieval as one tool an agent (lesson 14) can call, alongside other tools (calculator, code executor, web search). The agent reasons in a ReAct loop, calling the retriever when it decides it needs evidence. Most flexible architecture, highest cost.
+
+The principle: **the LLM, not a fixed pipeline, decides the retrieval policy.** Single-shot RAG is the simplest possible policy ("retrieve once, always"); Agentic RAG is the most general.
 
 ```python
 class SelfRAG:

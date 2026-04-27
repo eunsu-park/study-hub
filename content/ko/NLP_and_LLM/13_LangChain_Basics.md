@@ -20,119 +20,13 @@
 
 ---
 
-## 이론과 원리
+## 1. LangChain 개요
 
-LangChain은 재사용 가능한 빌딩 블록으로 LLM 애플리케이션을 **구성(compose)**하는 프레임워크입니다. `prompt | model | parser`의 구문 설탕 아래 프레임워크는 작은 개념적 추상화 집합 위에 놓여 있습니다 — *Runnable*(입력을 받고 출력을 만드는 무엇이든), *파이핑을 통한 구성성*(LCEL 연산자 `|`), *기본 스트리밍과 비동기*(모든 Runnable이 둘 다 지원), *관측성*(모든 단계가 자동으로 추적 가능). 이 추상화들이 어떻게 맞물리는지 보면 전체 LangChain API 표면이 동일 주제의 작은 변주 집합이 됩니다.
-
-이 섹션은 다음을 다룹니다:
-
-- **(A) Runnable 추상화** — Runnable이 무엇이고 어떤 인터페이스를 구현하며 왜 "모든 것이 Runnable"이 중요한가.
-- **(B) LCEL (LangChain Expression Language)** — monadic 구성으로서의 `|`, 파이프의 대수.
-- **(C) 스트리밍, 배칭, 비동기** — 단일 Runnable 정의로부터의 자동 동시성.
-- **(D) 메모리와 상태성(statefulness)** — 상태 없는 프레임워크가 어떻게 다중 턴 대화를 지원하는가.
-- **(E) 에이전트와 ReAct 패러다임** — LangChain이 에이전트 패턴을 어떻게 감싸는가(전체는 레슨 14-15).
-- **(F) LangSmith를 통한 관측성** — 모든 Runnable 호출의 자동 추적.
-
-### A. Runnable 추상화
-
-`Runnable`은 다음을 구현하는 무엇이든:
-
-```
-.invoke(input) → output
-.stream(input) → 청크의 iterable
-.batch([input1, input2, ...]) → [output1, output2, ...]
-.ainvoke / .astream / .abatch — 비동기 버전
-```
-
-이것이 *전체* 핵심 인터페이스입니다. 모든 구체적 구성 요소 — 프롬프트 템플릿, 채팅 모델, 출력 파서, 도구, 검색기, 체인, 심지어 직접 작성한 함수 — 가 `Runnable`을 구현합니다. 이 균일성이 다른 모든 것이 의지하는 핵심 설계 선택입니다.
-
-왜 중요한가 — Runnable로 만든 어떤 코드 경로든 자동으로 스트리밍, 배칭, 비동기, 재시도, 폴백, 관측성을 — 무료로 — 얻습니다. 순수 로직만 작성하고 프레임워크가 이 단일 인터페이스를 통해 운영 관심사를 추가합니다.
-
-### B. LCEL: monadic 구성으로서의 `|`
-
-`prompt | model | parser`는 `invoke`가 함수 합성인 새 Runnable을 만듭니다. 수학적으로 `f`, `g`, `h`가 타입 `A → B`, `B → C`, `C → D`의 Runnable이라면 `f | g | h`는 `A → D`입니다.
-
-이 구성은 함수형 프로그래밍의 monadic 구성과 유사한 속성을 가집니다:
-
-- **결합법칙**: `(a | b) | c == a | (b | c)`. 묶음이 중요하지 않음; 결과 Runnable이 같음.
-- **항등원**: `RunnablePassthrough()`가 항등원(입력이 변경 없이 통과).
-- **효과가 자동으로 엮임**: 스트리밍, 비동기, 관측성이 명시적 배선 없이 구성을 통해 전파.
-
-파이프 외에 LCEL은 다음을 제공:
-
-- `RunnableParallel({"a": chainA, "b": chainB})`: 같은 입력에 여러 체인을 동시 실행, dict 반환.
-- `RunnableLambda(f)`: 어떤 Python 함수든 Runnable로 들어 올림.
-- `RunnableBranch([(condition, chain), ...])`: 입력에 따라 다른 체인으로 라우팅.
-
-이 네 가지(파이프, 병렬, 람다, 분기)로 대부분의 LLM 애플리케이션 토폴로지를 표현할 수 있습니다. 더 복잡한 흐름(루프, 재시도, human-in-the-loop)은 LangGraph로 진학하며, 이는 애플리케이션을 명시적 상태 기계로 표현합니다.
-
-### C. 스트리밍, 배칭, 비동기 — 무료로
-
-모든 Runnable이 `stream()`, `.batch()`, 비동기 변형을 구현하므로 Runnable을 구성하면 자동으로 이 행동들을 상속합니다:
-
-```
-chain = prompt | model | parser
-chain.stream(input)   # 모델에서 파서를 통해 토큰 스트리밍
-await chain.ainvoke(input)  # 비동기, 모델 호출 중 이벤트 루프 해제
-chain.batch([in1, in2, in3])  # 세 파이프라인의 병렬 실행
-```
-
-직접 스레딩, asyncio, 토큰 버퍼링 코드를 작성하지 않습니다. 이것이 Runnable 균일성(§A)의 운영적 보상입니다.
-
-### D. 메모리와 상태성
-
-LLM은 상태가 없습니다 — 각 `invoke()`는 독립적입니다. 대화를 지원하려면 이전 턴들을 다음 프롬프트에 엮어야 합니다. LangChain의 구식 `ConversationChain`이 이를 암묵적으로 했고, 현대 권장사항은 `RunnableWithMessageHistory`:
-
-```
-chain_with_history = RunnableWithMessageHistory(
-    chain,
-    get_session_history,  # callable: session_id → BaseChatMessageHistory
-    input_messages_key="input",
-    history_messages_key="history",
-)
-```
-
-래퍼:
-1. 주어진 `session_id`의 메시지 히스토리를 조회.
-2. 과거 메시지를 `history` 키 아래 프롬프트에 주입.
-3. 기저 체인 호출.
-4. 새 사용자 메시지와 어시스턴트 응답을 히스토리에 추가.
-
-상태는 `BaseChatMessageHistory` 구현체(인메모리, Redis, Postgres 등)에 살고, 체인 자체는 순수하게 유지됩니다. 상태성은 래퍼의 관심사입니다.
-
-### E. 에이전트와 ReAct
-
-에이전트는 추론에 기반하여 **도구를 동적으로 선택**하는 Runnable입니다. 표준 아키텍처(ReAct, Yao 등, 2022) — LLM이 "Thought / Action / Observation" 사이클을 방출하며, Action은 도구 호출. LangChain은 이 루프를 다음을 하는 더 높은 수준의 Runnable로 감쌉니다:
-
-1. 프롬프트 + 도구 설명을 LLM에 전송.
-2. LLM의 구조화된 출력을 파싱하여 도구 호출 식별.
-3. 요청된 인자로 각 도구 실행.
-4. 도구 결과를 대화에 추가.
-5. LLM이 "Final Answer"를 방출할 때까지 1단계로 복귀.
-
-LangChain의 `create_tool_calling_agent`가 도구 호출 가능한 어떤 LLM(현대 OpenAI, Anthropic, Google 등 모두 기본 지원) 주위에 2-3단계를 감쌉니다. 레슨 14가 에이전트를 깊이 다룹니다.
-
-### F. LangSmith를 통한 관측성
+### 이론: LangSmith를 통한 관측성
 
 모든 `Runnable.invoke()`가 자동으로 추적을 방출합니다 — 입력, 중간 상태, 출력, 지연, 오류, 토큰 수. LangSmith는 이 추적들을 수집하고 시각화하는 LangChain의 호스팅 백엔드입니다. 계측은 환경 변수를 통한 opt-in — `LANGCHAIN_TRACING_V2=true`를 설정하면 추적이 흐르기 시작합니다. 코드 변경 없음.
 
 이는 실제 프로덕션 문제를 해결합니다 — 다단계 체인이 잘못된 답을 만들 때 *어느 단계*가 잘못되었는지 알아야 합니다. LangSmith가 각 단계의 입력과 출력과 함께 전체 추적을 단일 UI에 보여줍니다.
-
-### 이론에서 아래 함수들로
-
-- §1 (개요) — §A Runnable 개념과 §B LCEL 구문을 틀.
-- §2 (LLM 래퍼) — 모델 Runnable의 구체적 예시.
-- §3 (프롬프트 템플릿) — `PromptTemplate`과 `ChatPromptTemplate`을 Runnable로.
-- §4 (체인) — §B LCEL 구성 실전; 구식 `LLMChain`과 현대 `prompt | model` 모두.
-- §5 (출력 파서) — 원시 LLM 출력을 구조화된 데이터로 변환하는 Runnable.
-- §6 (에이전트) — `AgentExecutor`로 감싼 §E ReAct 패턴.
-- §7 (메모리) — §D `RunnableWithMessageHistory`와 구식 `ConversationChain`.
-- §8 (RAG) — 검색기 Runnable을 체인과 구성(§B 병렬 + 파이프).
-- §9 (스트리밍) — Runnable 인터페이스를 통한 §C 자동 스트리밍.
-
----
-
-## 1. LangChain 개요
 
 ### 설치
 
@@ -157,6 +51,21 @@ LangChain
 ---
 
 ## 2. LLM 래퍼
+
+### 이론: Runnable 추상화
+
+`Runnable`은 다음을 구현하는 무엇이든:
+
+```
+.invoke(input) → output
+.stream(input) → 청크의 iterable
+.batch([input1, input2, ...]) → [output1, output2, ...]
+.ainvoke / .astream / .abatch — 비동기 버전
+```
+
+이것이 *전체* 핵심 인터페이스입니다. 모든 구체적 구성 요소 — 프롬프트 템플릿, 채팅 모델, 출력 파서, 도구, 검색기, 체인, 심지어 직접 작성한 함수 — 가 `Runnable`을 구현합니다. 이 균일성이 다른 모든 것이 의지하는 핵심 설계 선택입니다.
+
+왜 중요한가 — Runnable로 만든 어떤 코드 경로든 자동으로 스트리밍, 배칭, 비동기, 재시도, 폴백, 관측성을 — 무료로 — 얻습니다. 순수 로직만 작성하고 프레임워크가 이 단일 인터페이스를 통해 운영 관심사를 추가합니다.
 
 ### ChatOpenAI
 
@@ -391,6 +300,18 @@ parser = PydanticOutputParser(pydantic_object=MovieReview)
 
 ## 6. 에이전트 (Agents)
 
+### 이론: 에이전트와 ReAct
+
+에이전트는 추론에 기반하여 **도구를 동적으로 선택**하는 Runnable입니다. 표준 아키텍처(ReAct, Yao 등, 2022) — LLM이 "Thought / Action / Observation" 사이클을 방출하며, Action은 도구 호출. LangChain은 이 루프를 다음을 하는 더 높은 수준의 Runnable로 감쌉니다:
+
+1. 프롬프트 + 도구 설명을 LLM에 전송.
+2. LLM의 구조화된 출력을 파싱하여 도구 호출 식별.
+3. 요청된 인자로 각 도구 실행.
+4. 도구 결과를 대화에 추가.
+5. LLM이 "Final Answer"를 방출할 때까지 1단계로 복귀.
+
+LangChain의 `create_tool_calling_agent`가 도구 호출 가능한 어떤 LLM(현대 OpenAI, Anthropic, Google 등 모두 기본 지원) 주위에 2-3단계를 감쌉니다. 레슨 14가 에이전트를 깊이 다룹니다.
+
 ### 기본 에이전트
 
 ```python
@@ -457,6 +378,27 @@ class SearchTool(BaseTool):
 ---
 
 ## 7. 메모리 (Memory)
+
+### 이론: 메모리와 상태성
+
+LLM은 상태가 없습니다 — 각 `invoke()`는 독립적입니다. 대화를 지원하려면 이전 턴들을 다음 프롬프트에 엮어야 합니다. LangChain의 구식 `ConversationChain`이 이를 암묵적으로 했고, 현대 권장사항은 `RunnableWithMessageHistory`:
+
+```
+chain_with_history = RunnableWithMessageHistory(
+    chain,
+    get_session_history,  # callable: session_id → BaseChatMessageHistory
+    input_messages_key="input",
+    history_messages_key="history",
+)
+```
+
+래퍼:
+1. 주어진 `session_id`의 메시지 히스토리를 조회.
+2. 과거 메시지를 `history` 키 아래 프롬프트에 주입.
+3. 기저 체인 호출.
+4. 새 사용자 메시지와 어시스턴트 응답을 히스토리에 추가.
+
+상태는 `BaseChatMessageHistory` 구현체(인메모리, Redis, Postgres 등)에 살고, 체인 자체는 순수하게 유지됩니다. 상태성은 래퍼의 관심사입니다.
 
 > **권장 방식 변경**: LangChain 0.2+에서는 `ConversationChain`, `ConversationBufferMemory` 등이
 > deprecated 되었습니다. 새 프로젝트에서는 **RunnableWithMessageHistory** (아래 참조)를 사용하세요.
@@ -617,6 +559,19 @@ result = rag_chain.invoke("What is machine learning?")
 
 ## 9. 스트리밍
 
+### 이론: 스트리밍, 배칭, 비동기 — 무료로
+
+모든 Runnable이 `stream()`, `.batch()`, 비동기 변형을 구현하므로 Runnable을 구성하면 자동으로 이 행동들을 상속합니다:
+
+```
+chain = prompt | model | parser
+chain.stream(input)   # 모델에서 파서를 통해 토큰 스트리밍
+await chain.ainvoke(input)  # 비동기, 모델 호출 중 이벤트 루프 해제
+chain.batch([in1, in2, in3])  # 세 파이프라인의 병렬 실행
+```
+
+직접 스레딩, asyncio, 토큰 버퍼링 코드를 작성하지 않습니다. 이것이 Runnable 균일성(§A)의 운영적 보상입니다.
+
 ```python
 # 스트리밍 출력
 for chunk in chain.stream({"topic": "AI"}):
@@ -630,6 +585,24 @@ async for chunk in chain.astream({"topic": "AI"}):
 ---
 
 ## 10. LCEL (LangChain Expression Language) 심화
+
+### 이론: LCEL: monadic 구성으로서의 `|`
+
+`prompt | model | parser`는 `invoke`가 함수 합성인 새 Runnable을 만듭니다. 수학적으로 `f`, `g`, `h`가 타입 `A → B`, `B → C`, `C → D`의 Runnable이라면 `f | g | h`는 `A → D`입니다.
+
+이 구성은 함수형 프로그래밍의 monadic 구성과 유사한 속성을 가집니다:
+
+- **결합법칙**: `(a | b) | c == a | (b | c)`. 묶음이 중요하지 않음; 결과 Runnable이 같음.
+- **항등원**: `RunnablePassthrough()`가 항등원(입력이 변경 없이 통과).
+- **효과가 자동으로 엮임**: 스트리밍, 비동기, 관측성이 명시적 배선 없이 구성을 통해 전파.
+
+파이프 외에 LCEL은 다음을 제공:
+
+- `RunnableParallel({"a": chainA, "b": chainB})`: 같은 입력에 여러 체인을 동시 실행, dict 반환.
+- `RunnableLambda(f)`: 어떤 Python 함수든 Runnable로 들어 올림.
+- `RunnableBranch([(condition, chain), ...])`: 입력에 따라 다른 체인으로 라우팅.
+
+이 네 가지(파이프, 병렬, 람다, 분기)로 대부분의 LLM 애플리케이션 토폴로지를 표현할 수 있습니다. 더 복잡한 흐름(루프, 재시도, human-in-the-loop)은 LangGraph로 진학하며, 이는 애플리케이션을 명시적 상태 기계로 표현합니다.
 
 LCEL은 LangChain 0.2+에서 체인을 구축하는 권장 방식입니다. 복잡한 LLM 애플리케이션을 구축하기 위한 선언적이고 조합 가능한 문법을 제공합니다.
 

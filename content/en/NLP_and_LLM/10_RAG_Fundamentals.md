@@ -9,20 +9,9 @@
 
 ---
 
-## Theory & Principles
+## 1. RAG Overview
 
-RAG (Retrieval-Augmented Generation) addresses two fundamental limitations of LLMs: **knowledge cutoff** (the model only knows what was in its pre-training corpus) and **hallucination** (the model freely invents content when uncertain). The recipe is simple: at inference time, *retrieve* relevant documents from an external corpus, *prepend* them to the prompt, and let the LLM *generate* an answer grounded in the retrieved evidence. The engineering challenge is making each of these three stages — retrieve, prepend, generate — reliable, fast, and accurate.
-
-This section covers:
-
-- **(A) Why retrieve at all** — the parametric vs non-parametric memory trade-off, and what RAG buys you over fine-tuning.
-- **(B) Embeddings and similarity** — how text becomes a vector, and why cosine similarity is the natural metric.
-- **(C) Chunking strategies** — the unit-of-retrieval question, sliding windows, semantic chunking, recursive splits.
-- **(D) Dense vs sparse retrieval** — embedding-based vs BM25, when to use each, hybrid search.
-- **(E) The RAG pipeline** — end-to-end flow with citations, the role of context length budgeting.
-- **(F) Evaluation** — retrieval metrics (recall@k, MRR), generation metrics (faithfulness, answer relevance), and the RAGAS framework.
-
-### A. Why Retrieve at All: Parametric vs Non-Parametric Memory
+### Theory: Why Retrieve at All: Parametric vs Non-Parametric Memory
 
 An LLM stores knowledge in its weights — *parametric memory*. RAG adds a separate text store from which relevant pieces are pulled at inference — *non-parametric memory*. The two have complementary properties:
 
@@ -37,110 +26,6 @@ An LLM stores knowledge in its weights — *parametric memory*. RAG adds a separ
 RAG dominates fine-tuning for use cases where: knowledge changes frequently (news, docs), citations are required (legal, medical), per-user knowledge isolation is needed (multi-tenant SaaS), or the corpus is too large to memorize (enterprise document store).
 
 Fine-tuning still wins for: skills/behaviors (formatting, tone, refusal patterns), highly stable knowledge, and very tight latency budgets where retrieval overhead is unacceptable.
-
-### B. Embeddings and Similarity
-
-**B.1 Sentence embeddings.** A model `f : text → ℝ^d` (typically d ∈ [384, 1536]) such that semantically similar texts map to nearby vectors. Modern embedding models (Sentence-BERT, OpenAI `text-embedding-3`, BGE, Cohere Embed) are trained with **contrastive loss**: positive pairs (e.g., a question and its correct answer paragraph) get pulled together, negatives get pushed apart:
-
-```
-L = − log [ exp(sim(q, p+) / τ) / Σ_{p ∈ {p+, p-_1, ..., p-_k}} exp(sim(q, p) / τ) ]
-```
-
-After training, `sim(q, p)` (usually cosine) ranks `p+` ahead of all `p-`s. The embedding space inherits this geometry: relevant chunks cluster near their queries.
-
-**B.2 Cosine vs dot product.** Cosine similarity `cos(a, b) = (a · b) / (||a|| · ||b||)` is invariant to vector magnitude. Dot product `a · b` is not — long vectors win regardless of direction. For models trained with cosine loss (most), cosine is the correct metric. For models trained with dot product (e.g., some retrieval models), dot product is correct. Mismatching the metric to training silently degrades quality.
-
-**B.3 Why this geometry encodes meaning.** Embedding training creates a low-dimensional manifold where directions correspond to semantic axes (topic, tone, intent). The contrastive objective forces the model to discover what features actually distinguish relevant from irrelevant. With enough training pairs, the geometry generalizes — unseen queries land near unseen-but-relevant passages.
-
-### C. Chunking Strategies
-
-The unit-of-retrieval question: do you embed and retrieve sentences? paragraphs? whole documents? The trade-off:
-
-- **Smaller chunks**: precise retrieval (the chunk is mostly relevant), but loses surrounding context that may be needed for the answer.
-- **Larger chunks**: more context per retrieval, but the same chunk may be retrieved for unrelated queries (recall-precision dilution).
-
-**C.1 Fixed-size with overlap.** Split into N-token chunks (typical N = 256-1024) with M-token overlap (M ≈ 0.1·N). Overlap prevents losing answers that straddle chunk boundaries.
-
-**C.2 Sentence- or paragraph-aligned.** Use natural document structure. Avoids splitting mid-thought but produces variable chunk sizes.
-
-**C.3 Recursive character text splitting.** Try splitting on paragraph breaks first, then sentences, then words, then characters — recurse until chunks fit the target size. Used by LangChain.
-
-**C.4 Semantic chunking.** Compute embeddings for sentences; merge consecutive sentences whose embeddings are close (same topic). Splits where embedding similarity drops sharply (topic change). More expensive, often higher-quality chunks.
-
-**C.5 Information-theoretic view.** Each chunk is a unit of context. Retrieving `k` chunks gives a context budget of roughly `k · chunk_size` tokens, capped by the model's context window. Smaller chunks → higher `k` is feasible → better recall on diverse queries; larger chunks → lower `k` → better single-chunk completeness. The optimal point depends on query type (specific facts vs broad summaries) and is usually empirical.
-
-### D. Dense vs Sparse Retrieval
-
-**D.1 Sparse (BM25, TF-IDF).** Treat queries and documents as bags of words; rank by lexical overlap with frequency-weighted scoring. BM25's score:
-
-```
-score(q, d) = Σ_{t ∈ q}  IDF(t) · [ (tf(t,d) · (k₁+1)) / (tf(t,d) + k₁ · (1 − b + b · |d|/avgdl)) ]
-```
-
-with parameters `k₁ ≈ 1.5`, `b ≈ 0.75`. Strengths: exact term matching (great for proper nouns, IDs, exact phrases), no embedding model required, blazingly fast on inverted indexes. Weaknesses: vocabulary mismatch (synonyms invisible), no semantic generalization.
-
-**D.2 Dense (embedding-based).** Encode query and documents into vectors, retrieve nearest neighbors. Strengths: semantic matching (synonyms, paraphrases), cross-lingual capability with multilingual encoders. Weaknesses: misses exact lexical matches, requires embedding model + vector index.
-
-**D.3 Hybrid search.** Combine both: retrieve top-N from BM25 and top-N from dense, then either union and re-rank or use **Reciprocal Rank Fusion (RRF)**:
-
-```
-RRF_score(d) = Σ_methods  1 / (k + rank_method(d))   typical k = 60
-```
-
-Hybrid almost always beats either alone — they fail on disjoint cases. Production RAG systems default to hybrid.
-
-### E. The RAG Pipeline
-
-```
-[user query]
-    ↓
-[embed query]
-    ↓
-[retrieve top-k from vector store + BM25]
-    ↓
-[(optional) rerank with cross-encoder]
-    ↓
-[build prompt: instruction + retrieved chunks (with sources) + query]
-    ↓
-[LLM generates answer with inline citations]
-    ↓
-[(optional) verify citations, retry if hallucinated]
-```
-
-**Context budgeting.** Total prompt tokens ≤ context window. Subtract overhead (system prompt, instructions, query, expected response): the budget for retrieved chunks is typically 4-16K tokens for a 32K-context model. With chunks of 512 tokens, that is `k = 8-32` chunks.
-
-**Citation discipline.** A robust RAG prompt includes per-chunk identifiers (`[Source 3]`) and instructs the model to cite sources for every claim. The downstream pipeline can validate that cited sources actually appear in the retrieved set, and reject answers that cite non-existent sources.
-
-### F. Evaluation
-
-**F.1 Retrieval metrics.** Given a labeled set of (query, relevant chunk IDs):
-
-- **Recall@k**: fraction of relevant chunks in the top-k retrieved set. The dominant metric for RAG retrieval — if relevant chunks are not retrieved, no LLM can answer correctly.
-- **MRR (Mean Reciprocal Rank)**: 1 / rank of first relevant chunk, averaged. Captures how high the relevant chunk appears.
-- **NDCG**: handles graded relevance.
-
-**F.2 Generation metrics** (RAGAS framework):
-
-- **Faithfulness**: does every claim in the answer follow from the retrieved chunks? An LLM judge scores this by extracting claims and verifying each against the context.
-- **Answer relevance**: does the answer address the query? An LLM judge generates plausible questions for the answer and measures embedding similarity to the original query.
-- **Context precision/recall**: do the retrieved chunks contain (only) relevant information?
-
-These can all be computed with another LLM as judge — the standard pattern is GPT-4 as the evaluator, applied to outputs from any model under test.
-
-### From Theory to the Functions Below
-
-- §1 (RAG overview) — frames the §A parametric vs non-parametric trade-off.
-- §2 (preprocessing) — implements §C chunking strategies (fixed, recursive, semantic).
-- §3 (embedding generation) — calls §B's embedding models (Sentence-BERT, OpenAI embeddings).
-- §4 (vector search) — basic dense retrieval; hybrid (§D) covered in lesson 11.
-- §5 (simple RAG) — the §E pipeline end-to-end on a small corpus.
-- §6 (advanced techniques) — pointers to query rewriting and reranking (full lesson 12).
-- §7 (chunking comparison) — empirical comparison of §C strategies.
-- §8 (evaluation) — implements §F's RAGAS metrics on the simple RAG.
-
----
-
-## 1. RAG Overview
 
 ### Why RAG?
 
@@ -225,6 +110,20 @@ chunks = splitter.split_text(text)
 
 ## 3. Embedding Generation
 
+### Theory: Embeddings and Similarity
+
+**B.1 Sentence embeddings.** A model `f : text → ℝ^d` (typically d ∈ [384, 1536]) such that semantically similar texts map to nearby vectors. Modern embedding models (Sentence-BERT, OpenAI `text-embedding-3`, BGE, Cohere Embed) are trained with **contrastive loss**: positive pairs (e.g., a question and its correct answer paragraph) get pulled together, negatives get pushed apart:
+
+```
+L = − log [ exp(sim(q, p+) / τ) / Σ_{p ∈ {p+, p-_1, ..., p-_k}} exp(sim(q, p) / τ) ]
+```
+
+After training, `sim(q, p)` (usually cosine) ranks `p+` ahead of all `p-`s. The embedding space inherits this geometry: relevant chunks cluster near their queries.
+
+**B.2 Cosine vs dot product.** Cosine similarity `cos(a, b) = (a · b) / (||a|| · ||b||)` is invariant to vector magnitude. Dot product `a · b` is not — long vectors win regardless of direction. For models trained with cosine loss (most), cosine is the correct metric. For models trained with dot product (e.g., some retrieval models), dot product is correct. Mismatching the metric to training silently degrades quality.
+
+**B.3 Why this geometry encodes meaning.** Embedding training creates a low-dimensional manifold where directions correspond to semantic axes (topic, tone, intent). The contrastive objective forces the model to discover what features actually distinguish relevant from irrelevant. With enough training pairs, the geometry generalizes — unseen queries land near unseen-but-relevant passages.
+
 ### Sentence Transformers
 
 ```python
@@ -276,6 +175,26 @@ def get_openai_embeddings(texts, model="text-embedding-3-small"):
 
 ## 4. Vector Search
 
+### Theory: Dense vs Sparse Retrieval
+
+**D.1 Sparse (BM25, TF-IDF).** Treat queries and documents as bags of words; rank by lexical overlap with frequency-weighted scoring. BM25's score:
+
+```
+score(q, d) = Σ_{t ∈ q}  IDF(t) · [ (tf(t,d) · (k₁+1)) / (tf(t,d) + k₁ · (1 − b + b · |d|/avgdl)) ]
+```
+
+with parameters `k₁ ≈ 1.5`, `b ≈ 0.75`. Strengths: exact term matching (great for proper nouns, IDs, exact phrases), no embedding model required, blazingly fast on inverted indexes. Weaknesses: vocabulary mismatch (synonyms invisible), no semantic generalization.
+
+**D.2 Dense (embedding-based).** Encode query and documents into vectors, retrieve nearest neighbors. Strengths: semantic matching (synonyms, paraphrases), cross-lingual capability with multilingual encoders. Weaknesses: misses exact lexical matches, requires embedding model + vector index.
+
+**D.3 Hybrid search.** Combine both: retrieve top-N from BM25 and top-N from dense, then either union and re-rank or use **Reciprocal Rank Fusion (RRF)**:
+
+```
+RRF_score(d) = Σ_methods  1 / (k + rank_method(d))   typical k = 60
+```
+
+Hybrid almost always beats either alone — they fail on disjoint cases. Production RAG systems default to hybrid.
+
 ### Cosine Similarity
 
 ```python
@@ -319,6 +238,28 @@ distances, indices = index.search(query_emb, k=5)
 ---
 
 ## 5. Simple RAG Implementation
+
+### Theory: The RAG Pipeline
+
+```
+[user query]
+    ↓
+[embed query]
+    ↓
+[retrieve top-k from vector store + BM25]
+    ↓
+[(optional) rerank with cross-encoder]
+    ↓
+[build prompt: instruction + retrieved chunks (with sources) + query]
+    ↓
+[LLM generates answer with inline citations]
+    ↓
+[(optional) verify citations, retry if hallucinated]
+```
+
+**Context budgeting.** Total prompt tokens ≤ context window. Subtract overhead (system prompt, instructions, query, expected response): the budget for retrieved chunks is typically 4-16K tokens for a 32K-context model. With chunks of 512 tokens, that is `k = 8-32` chunks.
+
+**Citation discipline.** A robust RAG prompt includes per-chunk identifiers (`[Source 3]`) and instructs the model to cite sources for every claim. The downstream pipeline can validate that cited sources actually appear in the retrieved set, and reject answers that cite non-existent sources.
 
 ```python
 from sentence_transformers import SentenceTransformer
@@ -494,6 +435,23 @@ def multi_query_rag(question, rag, num_queries=3):
 
 ## 7. Chunking Strategy Comparison
 
+### Theory: Chunking Strategies
+
+The unit-of-retrieval question: do you embed and retrieve sentences? paragraphs? whole documents? The trade-off:
+
+- **Smaller chunks**: precise retrieval (the chunk is mostly relevant), but loses surrounding context that may be needed for the answer.
+- **Larger chunks**: more context per retrieval, but the same chunk may be retrieved for unrelated queries (recall-precision dilution).
+
+**C.1 Fixed-size with overlap.** Split into N-token chunks (typical N = 256-1024) with M-token overlap (M ≈ 0.1·N). Overlap prevents losing answers that straddle chunk boundaries.
+
+**C.2 Sentence- or paragraph-aligned.** Use natural document structure. Avoids splitting mid-thought but produces variable chunk sizes.
+
+**C.3 Recursive character text splitting.** Try splitting on paragraph breaks first, then sentences, then words, then characters — recurse until chunks fit the target size. Used by LangChain.
+
+**C.4 Semantic chunking.** Compute embeddings for sentences; merge consecutive sentences whose embeddings are close (same topic). Splits where embedding similarity drops sharply (topic change). More expensive, often higher-quality chunks.
+
+**C.5 Information-theoretic view.** Each chunk is a unit of context. Retrieving `k` chunks gives a context budget of roughly `k · chunk_size` tokens, capped by the model's context window. Smaller chunks → higher `k` is feasible → better recall on diverse queries; larger chunks → lower `k` → better single-chunk completeness. The optimal point depends on query type (specific facts vs broad summaries) and is usually empirical.
+
 | Strategy | Advantages | Disadvantages | When to Use |
 |----------|-----------|---------------|-------------|
 | Fixed size | Simple implementation | Context breaks | General text |
@@ -504,6 +462,22 @@ def multi_query_rag(question, rag, num_queries=3):
 ---
 
 ## 8. Evaluation Metrics
+
+### Theory: Evaluation
+
+**F.1 Retrieval metrics.** Given a labeled set of (query, relevant chunk IDs):
+
+- **Recall@k**: fraction of relevant chunks in the top-k retrieved set. The dominant metric for RAG retrieval — if relevant chunks are not retrieved, no LLM can answer correctly.
+- **MRR (Mean Reciprocal Rank)**: 1 / rank of first relevant chunk, averaged. Captures how high the relevant chunk appears.
+- **NDCG**: handles graded relevance.
+
+**F.2 Generation metrics** (RAGAS framework):
+
+- **Faithfulness**: does every claim in the answer follow from the retrieved chunks? An LLM judge scores this by extracting claims and verifying each against the context.
+- **Answer relevance**: does the answer address the query? An LLM judge generates plausible questions for the answer and measures embedding similarity to the original query.
+- **Context precision/recall**: do the retrieved chunks contain (only) relevant information?
+
+These can all be computed with another LLM as judge — the standard pattern is GPT-4 as the evaluator, applied to outputs from any model under test.
 
 ### Retrieval Evaluation
 

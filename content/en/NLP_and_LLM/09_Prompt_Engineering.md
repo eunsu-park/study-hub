@@ -9,20 +9,9 @@
 
 ---
 
-## Theory & Principles
+## 1. Prompt Basics
 
-A prompt is, to the model, *just text* — it has no special status, no privileged channel. Why then do small wording changes shift accuracy by 20+ points on hard tasks? Because an LLM's behavior is **conditional probability** `p(answer | prompt)`, and tiny shifts in the conditioning context can move the model into entirely different regions of its learned distribution. Prompt engineering is the empirical study of which conditioning patterns reliably steer the model toward correct, formatted, and safe completions.
-
-This section covers:
-
-- **(A) The conditioning-distribution view** — why prompt engineering works at all, and what we are actually doing when we write a prompt.
-- **(B) Zero-shot vs few-shot** — the in-context-learning mechanism and when each is appropriate.
-- **(C) Chain-of-Thought (CoT)** — why "let's think step by step" works and what it does to the model's computational graph.
-- **(D) Self-consistency, ToT, ReAct** — sampling and search wrapped around prompts.
-- **(E) Prompt structure and decomposition** — role, instruction, context, examples, format specification, the "anatomy" of a robust prompt.
-- **(F) Failure modes** — instruction drift, prompt injection vulnerability, format brittleness.
-
-### A. The Conditioning-Distribution View
+### Theory: The Conditioning-Distribution View
 
 An LLM models `p(next_token | full_context)`. The prompt sets the context that conditions every prediction that follows. Two prompts that look semantically similar to a human can correspond to wildly different distributions:
 
@@ -36,59 +25,7 @@ This view explains many empirical surprises:
 - Few-shot examples set a pattern that the model continues mechanically.
 - "Let's think step by step" elicits chain-of-reasoning text that pre-training data associates with correct answers.
 
-### B. Zero-Shot vs Few-Shot
-
-**B.1 Zero-shot.** Just the task description and the input:
-
-```
-Translate to French: "Hello, how are you?"
-Answer:
-```
-
-Works for tasks that are well-represented in pre-training and have a canonical format. Fails for novel tasks or unusual formats.
-
-**B.2 Few-shot.** Pre-pend `k` example input-output pairs:
-
-```
-English: "Hello" → French: "Bonjour"
-English: "Thank you" → French: "Merci"
-English: "Goodbye" → French: "
-```
-
-The model pattern-matches the format and continues. Examples teach both the *task* (what to do) and the *format* (how to output). Standard `k = 3-8`.
-
-**B.3 The induction-head mechanism (mechanistic interpretation).** Olsson et al. (2022) identified specific attention heads in trained Transformers that perform "find a previous occurrence of `[A]` in the prefix, look at what came after it, and predict the same thing now." Few-shot prompts are pure fuel for these heads: each example creates a `[input pattern] → [output pattern]` association that the induction head can copy.
-
-**B.4 When to choose.** Zero-shot when: task is generic, model is large (10B+), tokens are expensive. Few-shot when: task has unusual format, examples are short, you have ground-truth examples.
-
-### C. Chain-of-Thought (CoT)
-
-Wei et al. (2022) showed that prompting an LM to produce intermediate reasoning steps before its final answer dramatically improves accuracy on multi-step problems:
-
-```
-Q: Roger has 5 tennis balls. He buys 2 more cans of tennis balls. Each can has 3 balls. How many balls does he have?
-A: Roger started with 5 balls. 2 cans of 3 balls each is 6 balls. 5 + 6 = 11. The answer is 11.
-```
-
-**Why it works.** The Transformer has fixed depth — `L` layers, each performing one round of attention + FFN. With `L` layers, the model can compute at most `L` sequential operations *internally* per token. A multi-step math problem may need 5+ sequential operations, exceeding the model's internal depth budget for a single token.
-
-CoT externalizes the computation across multiple tokens. Each intermediate step is a new token, generated from the current state. The full reasoning unfolds across `T` generated tokens with effectively `L · T` sequential operations. The model "thinks out loud" by *spending tokens* on intermediate state.
-
-This is also why CoT only emerges at scale (~60B+ in early experiments): smaller models cannot reliably generate coherent intermediate steps even when prompted to.
-
-**Zero-shot CoT** (Kojima et al., 2022): just append "Let's think step by step." to the prompt. Works without any examples, on most large LLMs.
-
-### D. Self-Consistency, Tree-of-Thoughts, ReAct
-
-Three families of prompting techniques that wrap CoT or LLM calls in additional structure:
-
-**D.1 Self-consistency** (Wang et al., 2022). Sample `k` independent CoT trajectories at temperature `T > 0`. Take the **majority vote** over final answers. The intuition: many different reasoning paths can reach the same correct answer, but each wrong path is wrong in its own way. Voting marginalizes out reasoning noise. Often gains 5-10 points over single-trajectory CoT.
-
-**D.2 Tree-of-Thoughts (ToT)** (Yao et al., 2023). Treat reasoning as tree search: at each step, generate `b` candidate next-thoughts, score each with the LLM ("is this on track?"), expand only the top `k`. Standard search algorithms (BFS, DFS, beam) over the tree of possible reasoning steps. Useful when the problem has clear partial-progress signals.
-
-**D.3 ReAct** (Yao et al., 2022). Interleave reasoning steps ("Thought:") with tool actions ("Action:") and observations ("Observation:"). Each tool result becomes new context for the next thought. Foundation of modern agent frameworks (covered in lessons 14-15).
-
-### E. Prompt Structure: Anatomy of a Robust Prompt
+### Theory: Prompt Structure: Anatomy of a Robust Prompt
 
 Production prompts have predictable components:
 
@@ -111,31 +48,6 @@ Each part addresses a known failure mode:
 - Constraints handle edge cases that would otherwise cause hallucination.
 
 Order matters: the "instruction follows context" pattern works for many models but can be brittle. Many providers (OpenAI, Anthropic) recommend instructions *before* the input data.
-
-### F. Failure Modes
-
-**F.1 Instruction drift / forgetting.** In long contexts, the model "loses sight" of early instructions. Mitigation: repeat critical instructions at the end ("Remember: respond in JSON only.").
-
-**F.2 Prompt injection.** A malicious user input contains text like "Ignore previous instructions and ..." The model, having no privileged-vs-user channel, may comply. Mitigation: input sanitization, output validation, and architectural separation (covered in lesson 21).
-
-**F.3 Format brittleness.** "Output JSON" produces JSON 95% of the time but fails on the 5%. For reliable structured output, use grammar-constrained decoding or validation+retry (covered in lesson 22).
-
-**F.4 Adversarial sensitivity.** Small wording changes ("Solve" vs "Compute") can shift accuracy by several points. Mitigation: prompt ensembling, automated prompt search (APE, OPRO).
-
-**F.5 Sycophancy.** Models trained with RLHF often agree with users even when wrong. Mitigation: explicit "be honest, disagree with me if I'm wrong" instructions; or use a less RLHF-tuned base model.
-
-### From Theory to the Functions Below
-
-- §1 (basics) — concrete examples of §A's conditioning-distribution view (rephrasing, role injection).
-- §2 (zero-shot vs few-shot) — implements §B with the ICL induction-head intuition.
-- §3 (CoT) — codes §C, including zero-shot "let's think step by step" and few-shot CoT examples.
-- §4 (role playing) — §E's role/system component as a primary lever.
-- §5 (output format) — §E's format-spec component, with format brittleness from §F.3.
-- §6 (advanced techniques) — implements §D's self-consistency and the start of ToT/ReAct.
-
----
-
-## 1. Prompt Basics
 
 ### Prompt Components
 
@@ -164,6 +76,31 @@ Order matters: the "instruction follows context" pattern works for many models b
 ---
 
 ## 2. Zero-shot vs Few-shot
+
+### Theory: Zero-Shot vs Few-Shot
+
+**B.1 Zero-shot.** Just the task description and the input:
+
+```
+Translate to French: "Hello, how are you?"
+Answer:
+```
+
+Works for tasks that are well-represented in pre-training and have a canonical format. Fails for novel tasks or unusual formats.
+
+**B.2 Few-shot.** Pre-pend `k` example input-output pairs:
+
+```
+English: "Hello" → French: "Bonjour"
+English: "Thank you" → French: "Merci"
+English: "Goodbye" → French: "
+```
+
+The model pattern-matches the format and continues. Examples teach both the *task* (what to do) and the *format* (how to output). Standard `k = 3-8`.
+
+**B.3 The induction-head mechanism (mechanistic interpretation).** Olsson et al. (2022) identified specific attention heads in trained Transformers that perform "find a previous occurrence of `[A]` in the prefix, look at what came after it, and predict the same thing now." Few-shot prompts are pure fuel for these heads: each example creates a `[input pattern] → [output pattern]` association that the induction head can copy.
+
+**B.4 When to choose.** Zero-shot when: task is generic, model is large (10B+), tokens are expensive. Few-shot when: task has unusual format, examples are short, you have ground-truth examples.
 
 ### Zero-shot
 
@@ -223,6 +160,23 @@ Response: Negative
 ---
 
 ## 3. Chain-of-Thought (CoT)
+
+### Theory: Chain-of-Thought (CoT)
+
+Wei et al. (2022) showed that prompting an LM to produce intermediate reasoning steps before its final answer dramatically improves accuracy on multi-step problems:
+
+```
+Q: Roger has 5 tennis balls. He buys 2 more cans of tennis balls. Each can has 3 balls. How many balls does he have?
+A: Roger started with 5 balls. 2 cans of 3 balls each is 6 balls. 5 + 6 = 11. The answer is 11.
+```
+
+**Why it works.** The Transformer has fixed depth — `L` layers, each performing one round of attention + FFN. With `L` layers, the model can compute at most `L` sequential operations *internally* per token. A multi-step math problem may need 5+ sequential operations, exceeding the model's internal depth budget for a single token.
+
+CoT externalizes the computation across multiple tokens. Each intermediate step is a new token, generated from the current state. The full reasoning unfolds across `T` generated tokens with effectively `L · T` sequential operations. The model "thinks out loud" by *spending tokens* on intermediate state.
+
+This is also why CoT only emerges at scale (~60B+ in early experiments): smaller models cannot reliably generate coherent intermediate steps even when prompted to.
+
+**Zero-shot CoT** (Kojima et al., 2022): just append "Let's think step by step." to the prompt. Works without any examples, on most large LLMs.
 
 ### Basic CoT
 
@@ -371,6 +325,16 @@ Translate and explain the following text.
 
 ## 6. Advanced Techniques
 
+### Theory: Self-Consistency, Tree-of-Thoughts, ReAct
+
+Three families of prompting techniques that wrap CoT or LLM calls in additional structure:
+
+**D.1 Self-consistency** (Wang et al., 2022). Sample `k` independent CoT trajectories at temperature `T > 0`. Take the **majority vote** over final answers. The intuition: many different reasoning paths can reach the same correct answer, but each wrong path is wrong in its own way. Voting marginalizes out reasoning noise. Often gains 5-10 points over single-trajectory CoT.
+
+**D.2 Tree-of-Thoughts (ToT)** (Yao et al., 2023). Treat reasoning as tree search: at each step, generate `b` candidate next-thoughts, score each with the LLM ("is this on track?"), expand only the top `k`. Standard search algorithms (BFS, DFS, beam) over the tree of possible reasoning steps. Useful when the problem has clear partial-progress signals.
+
+**D.3 ReAct** (Yao et al., 2022). Interleave reasoning steps ("Thought:") with tool actions ("Action:") and observations ("Observation:"). Each tool result becomes new context for the next thought. Foundation of modern agent frameworks (covered in lessons 14-15).
+
 ### Self-Ask
 
 ```
@@ -438,6 +402,18 @@ def tree_of_thoughts(problem, depth=3, branches=3):
 ---
 
 ## 7. Prompt Optimization
+
+### Theory: Failure Modes
+
+**F.1 Instruction drift / forgetting.** In long contexts, the model "loses sight" of early instructions. Mitigation: repeat critical instructions at the end ("Remember: respond in JSON only.").
+
+**F.2 Prompt injection.** A malicious user input contains text like "Ignore previous instructions and ..." The model, having no privileged-vs-user channel, may comply. Mitigation: input sanitization, output validation, and architectural separation (covered in lesson 21).
+
+**F.3 Format brittleness.** "Output JSON" produces JSON 95% of the time but fails on the 5%. For reliable structured output, use grammar-constrained decoding or validation+retry (covered in lesson 22).
+
+**F.4 Adversarial sensitivity.** Small wording changes ("Solve" vs "Compute") can shift accuracy by several points. Mitigation: prompt ensembling, automated prompt search (APE, OPRO).
+
+**F.5 Sycophancy.** Models trained with RLHF often agree with users even when wrong. Mitigation: explicit "be honest, disagree with me if I'm wrong" instructions; or use a less RLHF-tuned base model.
 
 ### Iterative Improvement
 

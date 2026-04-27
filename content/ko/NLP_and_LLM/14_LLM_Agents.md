@@ -10,20 +10,9 @@
 
 ---
 
-## 이론과 원리
+## 1. LLM 에이전트 개요
 
-LLM 에이전트는 LLM 자체가 — 고정 파이프라인을 따르는 대신 — **다음에 무엇을 할지 결정**하는 시스템입니다 — 어떤 도구를 호출할지, 어떤 인자를 전달할지, 언제 멈출지. 정의적 속성은 **동적 제어 흐름** — 프로그램의 제어 흐름이 정적 코드가 아닌 런타임 LLM 출력에 의해 결정됩니다. 이는 어떤 고정 파이프라인도 풀 수 없는 작업(개방형 연구, 다단계 계획, 오류 복구)을 풀어내지만, 고정 파이프라인이 가지지 않는 실패 모드(루프, 환각된 도구, 통제 불능 비용)를 도입합니다.
-
-이 섹션은 다음을 다룹니다:
-
-- **(A) 에이전트 루프** — 무엇이 최소한으로 에이전트를 구성하는가, 지각-추론-행동 사이클.
-- **(B) ReAct (Reasoning + Acting)** — 지배적 프롬프팅 패러다임, 생각과 행동의 교차가 작동하는 이유.
-- **(C) 도구 사용 프로토콜** — LLM이 어떻게 구조화된 도구 호출을 방출하고 프레임워크가 어떻게 파싱하고 디스패치하는가.
-- **(D) Function calling** — 현대 도구 호출 API(OpenAI, Anthropic), JSON 스키마 기반 디스패치가 텍스트 파싱을 이기는 이유.
-- **(E) 자율성 스펙트럼** — 코파일럿(인간이 모든 행동 승인)에서 완전 자율 에이전트(AutoGPT 형식)까지; 트레이드오프.
-- **(F) 실패 모드** — 루프, 환각된 도구, 관측 절단, 비용 통제 불능, 표준 완화책.
-
-### A. 에이전트 루프
+### 이론: 에이전트 루프
 
 핵심에서 모든 에이전트는 루프를 실행합니다:
 
@@ -43,107 +32,6 @@ done = (action.type == "final_answer") or (steps > max_steps)
 3. **궤적의 메모리**(상태) — 지금까지 일어난 일, LLM이 전체 히스토리에 대해 추론할 수 있도록 누적.
 
 이 루프는 프레임워크가 LangChain, AutoGen, CrewAI, 또는 직접 만든 것이든 동일합니다. 차이는 각 구성 요소가 어떻게 구조화되고 루프가 어떻게 관측·제어되는가에 있습니다.
-
-### B. ReAct: Reasoning + Acting
-
-ReAct(Yao 등, 2022)는 지배적 에이전트 프롬프팅 패턴입니다. LLM은 *생각*(자유 형식 추론)과 *행동*(도구 호출)을 교대하도록 프롬프트됩니다:
-
-```
-Thought: I need to find the population of France in 2024.
-Action: search("France population 2024")
-Observation: 68.4 million as of 2024.
-Thought: Now I need to compare to Germany.
-Action: search("Germany population 2024")
-Observation: 84.5 million.
-Thought: France has fewer people than Germany.
-Action: final_answer("France: 68.4M, Germany: 84.5M; Germany has more.")
-```
-
-**작동 원리.** Thought 토큰은 Chain-of-Thought(레슨 9)처럼 추론을 외부화합니다. Action 토큰은 검증 가능한 다음 단계에 commit합니다. Observation 토큰은 LLM을 실제 데이터에 grounding하여 환각을 방지합니다. 교차는 새 도구 호출이 지금까지 학습한 모든 것을 통합할 수 있음을 의미합니다.
-
-ReAct는 본질적으로 **부수 효과**로 확장된 Chain-of-Thought(레슨 9) — 모델이 생각만이 아니라 세상에 작용하고 결과를 관측할 수 있습니다.
-
-### C. 도구 사용 프로토콜
-
-LLM 출력은 프레임워크가 "모델이 인자 X로 search를 호출하고 싶어 함"을 파싱할 수 있도록 구조화되어야 합니다. 두 접근:
-
-**C.1 텍스트 파싱(구식).** 에이전트 프롬프트가 LLM에게 행동을 `Action: tool_name[argument]` 같이 형식화하라고 지시. 정규식이 도구 이름과 인자 추출. 부서지기 쉬움 — 어떤 이탈도 파싱을 깸.
-
-**C.2 Function calling / tool calling(현대).** LLM이 도구 호출을 명세하는 구조화된 JSON 객체를 방출하도록 파인튜닝됩니다. API가 이를 타입화된 `tool_calls` 필드로 노출. 견고함 — 구조가 모델 수준에서 강제(API의 logit 제약).
-
-레슨 23이 도구 호출 API를 깊이 다룹니다. 에이전트의 핵심은 — **모델이 지원할 때는 항상 도구 호출 API를 사용; 텍스트 파싱은 지원하지 않는 구식이나 로컬 모델용으로 남겨두기.**
-
-### D. Function Calling: JSON 스키마 기반 디스패치
-
-현대 function calling은 도구 설명 목록을 JSON 스키마로 받습니다:
-
-```json
-{
-  "name": "search",
-  "description": "Search the web for a query",
-  "parameters": {
-    "type": "object",
-    "properties": {"query": {"type": "string"}},
-    "required": ["query"]
-  }
-}
-```
-
-LLM 응답은 다음을 포함할 수 있습니다:
-
-```json
-{
-  "tool_calls": [
-    {"id": "call_1", "name": "search", "arguments": {"query": "France population 2024"}}
-  ]
-}
-```
-
-프레임워크는 `tools["search"](**arguments)`로 디스패치, 반환값 캡처, 도구 메시지로 다시 공급. 스키마가 환각을 제약(존재하지 않는 도구 호출 불가, 미지의 인자 전달 불가). 한 응답의 여러 도구 호출이 병렬 실행을 가능하게 합니다.
-
-### E. 자율성 스펙트럼
-
-에이전트는 가지는 자율성 양에서 다릅니다:
-
-| 수준 | 패턴 | 예시 |
-|------|------|------|
-| 0 | 도구 없는 LLM | ChatGPT 채팅 모드 |
-| 1 | 검색 있는 LLM | 단일 샷 RAG (레슨 10) |
-| 2 | 도구 호출, 단일 행동 | "이 쿼리에 답하라, 이 도구들을 사용해도 된다" |
-| 3 | ReAct 루프, 제한된 단계 | "조사하고 답하라, 최대 10단계" |
-| 4 | 자기 계획 | LLM이 먼저 계획을 만든 후 실행 |
-| 5 | 완전 자율, 무한 루프 | AutoGPT, BabyAGI — 완료될 때까지 목표 추구 |
-
-높은 자율성 = 더 많은 능력이지만 더 많은 위험. 5수준에서 비용과 실패 모드가 빠르게 스케일. 프로덕션 에이전트는 보통 단단한 단계 상한과 비용 천장을 가진 2-3수준에 위치.
-
-### F. 실패 모드와 완화책
-
-**F.1 루프.** 에이전트가 같은 도구를 같은 인자로 반복 호출. 완화 — 반복 감지(캐시 + 비교), "이미 시도했다" 피드백 주입.
-
-**F.2 환각된 도구.** LLM이 사용 가능 목록에 없는 도구 이름 방출. 완화 — function calling(§D)이 이를 거의 불가능하게 함. 텍스트 파싱 에이전트는 도구 레지스트리에 대해 검증하고 재프롬프트.
-
-**F.3 관측 절단.** 도구가 50 KB 텍스트 반환; 컨텍스트에 추가하면 컨텍스트 윈도우가 빠르게 고갈. 완화 — 관측 절단, 요약, 또는 ID로 참조되는 별도 "스크래치패드"에 저장.
-
-**F.4 비용 통제 불능.** 각 단계가 LLM(비쌈)과 가능하게 도구(역시 비쌈)를 호출. 완화 — (a) 에이전트 실행당 최대 단계, (b) 최대 총 토큰, (c) 최대 벽시간, (d) 도구별 비용 예산에 단단한 상한.
-
-**F.5 도구 오류.** 도구가 예외를 던지거나 오류 반환. 완화 — 잡고, 관측으로 형식화("Error: <message>"), LLM이 반응하게. 종종 에이전트가 다른 접근을 시도하여 회복합니다.
-
-**F.6 안전하지 않은 행동.** 부수 효과가 있는 도구(파일 삭제, 결제, 이메일 전송)가 잘못된 인자로 호출. 완화 — 파괴적 행동에 대한 human-in-the-loop 확인; 샌드박스; 도구별 허용 목록.
-
-### 이론에서 아래 함수들로
-
-- §1 (개요) — §A 에이전트 루프와 §E 자율성 스펙트럼을 틀.
-- §2 (ReAct) — 텍스트 파싱 프롬프트로 §B 구현(교육적).
-- §3 (도구 사용) — 구식 텍스트 파싱 접근 포함 §C 다룸.
-- §3.5 (도구 사용 심화) — §D function calling을 위한 멀티 제공자 패턴.
-- §4 (LangChain Agent) — `create_tool_calling_agent`와 `AgentExecutor`로 §A-§D 감쌈.
-- §5 (자율 에이전트) — §F 실패 모드 완화와 함께 §E 5수준(AutoGPT 형식) 구현.
-- §6 (멀티 에이전트) — 레슨 15로 안내.
-- §7 (에이전트 평가) — 레슨 26으로 안내.
-
----
-
-## 1. LLM 에이전트 개요
 
 ### 에이전트란?
 
@@ -166,6 +54,25 @@ LLM 응답은 다음을 포함할 수 있습니다:
 ---
 
 ## 2. ReAct (Reasoning + Acting)
+
+### 이론: ReAct: Reasoning + Acting
+
+ReAct(Yao 등, 2022)는 지배적 에이전트 프롬프팅 패턴입니다. LLM은 *생각*(자유 형식 추론)과 *행동*(도구 호출)을 교대하도록 프롬프트됩니다:
+
+```
+Thought: I need to find the population of France in 2024.
+Action: search("France population 2024")
+Observation: 68.4 million as of 2024.
+Thought: Now I need to compare to Germany.
+Action: search("Germany population 2024")
+Observation: 84.5 million.
+Thought: France has fewer people than Germany.
+Action: final_answer("France: 68.4M, Germany: 84.5M; Germany has more.")
+```
+
+**작동 원리.** Thought 토큰은 Chain-of-Thought(레슨 9)처럼 추론을 외부화합니다. Action 토큰은 검증 가능한 다음 단계에 commit합니다. Observation 토큰은 LLM을 실제 데이터에 grounding하여 환각을 방지합니다. 교차는 새 도구 호출이 지금까지 학습한 모든 것을 통합할 수 있음을 의미합니다.
+
+ReAct는 본질적으로 **부수 효과**로 확장된 Chain-of-Thought(레슨 9) — 모델이 생각만이 아니라 세상에 작용하고 결과를 관측할 수 있습니다.
 
 ### ReAct 패턴
 
@@ -265,6 +172,44 @@ print(f"\n최종 답변: {answer}")
 ---
 
 ## 3. 도구 사용 (Tool Use)
+
+### 이론: 도구 사용 프로토콜
+
+LLM 출력은 프레임워크가 "모델이 인자 X로 search를 호출하고 싶어 함"을 파싱할 수 있도록 구조화되어야 합니다. 두 접근:
+
+**C.1 텍스트 파싱(구식).** 에이전트 프롬프트가 LLM에게 행동을 `Action: tool_name[argument]` 같이 형식화하라고 지시. 정규식이 도구 이름과 인자 추출. 부서지기 쉬움 — 어떤 이탈도 파싱을 깸.
+
+**C.2 Function calling / tool calling(현대).** LLM이 도구 호출을 명세하는 구조화된 JSON 객체를 방출하도록 파인튜닝됩니다. API가 이를 타입화된 `tool_calls` 필드로 노출. 견고함 — 구조가 모델 수준에서 강제(API의 logit 제약).
+
+레슨 23이 도구 호출 API를 깊이 다룹니다. 에이전트의 핵심은 — **모델이 지원할 때는 항상 도구 호출 API를 사용; 텍스트 파싱은 지원하지 않는 구식이나 로컬 모델용으로 남겨두기.**
+
+### 이론: Function Calling: JSON 스키마 기반 디스패치
+
+현대 function calling은 도구 설명 목록을 JSON 스키마로 받습니다:
+
+```json
+{
+  "name": "search",
+  "description": "Search the web for a query",
+  "parameters": {
+    "type": "object",
+    "properties": {"query": {"type": "string"}},
+    "required": ["query"]
+  }
+}
+```
+
+LLM 응답은 다음을 포함할 수 있습니다:
+
+```json
+{
+  "tool_calls": [
+    {"id": "call_1", "name": "search", "arguments": {"query": "France population 2024"}}
+  ]
+}
+```
+
+프레임워크는 `tools["search"](**arguments)`로 디스패치, 반환값 캡처, 도구 메시지로 다시 공급. 스키마가 환각을 제약(존재하지 않는 도구 호출 불가, 미지의 인자 전달 불가). 한 응답의 여러 도구 호출이 병렬 실행을 가능하게 합니다.
 
 ### Function Calling (OpenAI)
 
@@ -792,6 +737,21 @@ agent_executor.invoke({"input": "내 이름이 뭐라고 했지?"})
 
 ## 5. 자율 에이전트 시스템
 
+### 이론: 자율성 스펙트럼
+
+에이전트는 가지는 자율성 양에서 다릅니다:
+
+| 수준 | 패턴 | 예시 |
+|------|------|------|
+| 0 | 도구 없는 LLM | ChatGPT 채팅 모드 |
+| 1 | 검색 있는 LLM | 단일 샷 RAG (레슨 10) |
+| 2 | 도구 호출, 단일 행동 | "이 쿼리에 답하라, 이 도구들을 사용해도 된다" |
+| 3 | ReAct 루프, 제한된 단계 | "조사하고 답하라, 최대 10단계" |
+| 4 | 자기 계획 | LLM이 먼저 계획을 만든 후 실행 |
+| 5 | 완전 자율, 무한 루프 | AutoGPT, BabyAGI — 완료될 때까지 목표 추구 |
+
+높은 자율성 = 더 많은 능력이지만 더 많은 위험. 5수준에서 비용과 실패 모드가 빠르게 스케일. 프로덕션 에이전트는 보통 단단한 단계 상한과 비용 천장을 가진 2-3수준에 위치.
+
 ### Plan-and-Execute
 
 ```python
@@ -972,6 +932,20 @@ final_doc = system.create_document("인공지능의 미래")
 ---
 
 ## 7. 에이전트 평가
+
+### 이론: 실패 모드와 완화책
+
+**F.1 루프.** 에이전트가 같은 도구를 같은 인자로 반복 호출. 완화 — 반복 감지(캐시 + 비교), "이미 시도했다" 피드백 주입.
+
+**F.2 환각된 도구.** LLM이 사용 가능 목록에 없는 도구 이름 방출. 완화 — function calling(§D)이 이를 거의 불가능하게 함. 텍스트 파싱 에이전트는 도구 레지스트리에 대해 검증하고 재프롬프트.
+
+**F.3 관측 절단.** 도구가 50 KB 텍스트 반환; 컨텍스트에 추가하면 컨텍스트 윈도우가 빠르게 고갈. 완화 — 관측 절단, 요약, 또는 ID로 참조되는 별도 "스크래치패드"에 저장.
+
+**F.4 비용 통제 불능.** 각 단계가 LLM(비쌈)과 가능하게 도구(역시 비쌈)를 호출. 완화 — (a) 에이전트 실행당 최대 단계, (b) 최대 총 토큰, (c) 최대 벽시간, (d) 도구별 비용 예산에 단단한 상한.
+
+**F.5 도구 오류.** 도구가 예외를 던지거나 오류 반환. 완화 — 잡고, 관측으로 형식화("Error: <message>"), LLM이 반응하게. 종종 에이전트가 다른 접근을 시도하여 회복합니다.
+
+**F.6 안전하지 않은 행동.** 부수 효과가 있는 도구(파일 삭제, 결제, 이메일 전송)가 잘못된 인자로 호출. 완화 — 파괴적 행동에 대한 human-in-the-loop 확인; 샌드박스; 도구별 허용 목록.
 
 ### 도구 선택 정확도
 

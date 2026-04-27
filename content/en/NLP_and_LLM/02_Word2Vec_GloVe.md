@@ -9,127 +9,15 @@
 
 ---
 
-## Theory & Principles
+## 1. Word Embedding Overview
 
-Word embeddings answer one question: *how do we turn a discrete vocabulary into a continuous vector space such that geometric relationships in that space reflect linguistic relationships?* All static embedding methods — Word2Vec, GloVe, FastText — are different ways to fit a low-dimensional `d`-vector to each word so that **co-occurrence patterns** in a text corpus become **dot products** between vectors.
-
-This section covers:
-
-- **(A) Distributional hypothesis and the lookup table** — why "you shall know a word by the company it keeps" justifies learning a dense vector per word.
-- **(B) Word2Vec Skip-gram with negative sampling** — derivation of the loss, why log-sigmoid + negative samples approximates softmax cheaply.
-- **(C) CBOW** — the dual problem, when it wins.
-- **(D) GloVe** — log-bilinear factorization of the global co-occurrence matrix, derivation of the weighted least-squares loss.
-- **(E) Why vector arithmetic works** (`king − man + woman ≈ queen`) — the linear-substructure property and its connection to PMI.
-
-### A. The Distributional Hypothesis and the Lookup Table
+### Theory: The Distributional Hypothesis and the Lookup Table
 
 The distributional hypothesis (Harris, 1954): *words that occur in similar contexts tend to have similar meanings.* Operationally, if `cat` and `dog` both appear near `pet`, `feed`, `bowl`, `vet`, then any model that predicts context from word (or word from context) is forced to assign them similar internal representations.
 
 The simplest learnable representation is a **lookup table** `E ∈ ℝ^{V × d}` where row `i` is the `d`-dimensional vector for word `i`. This is exactly an embedding layer in PyTorch (`nn.Embedding`). The number of parameters is `V × d` — for `V = 30K` and `d = 300` that is 9M, modest by modern standards.
 
 Critically, the embedding itself is just a one-hot multiplication shortcut: `E[i] = E^T · onehot(i)`. The "magic" is entirely in the loss function used to train `E`.
-
-### B. Word2Vec: Skip-gram with Negative Sampling (SGNS)
-
-**B.1 Skip-gram objective.** Given a center word `wₜ`, predict each context word `wₜ₊ⱼ` for `j ∈ [-c, c] \ {0}`. Maximize:
-
-```
-J = (1/T) · Σₜ Σⱼ  log p(wₜ₊ⱼ | wₜ)
-```
-
-The naïve parameterization uses softmax over the full vocabulary:
-
-```
-p(o | c) = exp(uₒ · vc) / Σ_{w ∈ V} exp(uw · vc)
-```
-
-where `vc` is the *input* embedding of the center word and `uₒ` is the *output* embedding of the context word. Two tables are learned. The denominator costs `O(V)` per training example — prohibitive at `V = 10⁵+`.
-
-**B.2 Negative sampling — the trick that made it work.** Replace the multi-class softmax with a binary logistic regression: distinguish *real* (center, context) pairs from `k` *fake* pairs `(center, sampled noise word)`. The loss for one positive pair plus `k` negatives:
-
-```
-L = -log σ(uₒ · vc) − Σᵢ₌₁..k  𝔼_{wᵢ ~ Pₙ(w)}  log σ(−uᵢ · vc)
-```
-
-where `σ` is the sigmoid and `Pₙ(w) ∝ U(w)^{3/4}` is the unigram distribution raised to the 0.75 power (downweighting very common words slightly). With `k = 5-20`, each update touches only `k+1` rows of the output table — `O(1)` instead of `O(V)`.
-
-**B.3 Why negative sampling works.** The loss can be derived as a noise-contrastive estimation (NCE) objective: it asymptotically estimates the same softmax distribution, but in a way that avoids the partition function. Mikolov et al. (2013) further showed that SGNS is *implicitly* factorizing a shifted PMI matrix:
-
-```
-uₒ · vc ≈ PMI(o, c) − log k
-```
-
-where `PMI(o, c) = log[ p(o, c) / (p(o) · p(c)) ]` is pointwise mutual information. This is the bridge to GloVe.
-
-### C. CBOW: Predict Center from Context
-
-CBOW (Continuous Bag of Words) inverts the prediction direction: given context words `{wₜ₋c, ..., wₜ₊c}`, predict the center word `wₜ`. The context vectors are averaged into a single representation that goes through softmax (or, in practice, hierarchical softmax / negative sampling) to predict `wₜ`.
-
-| Property | Skip-gram | CBOW |
-|----------|-----------|------|
-| Predicts | context from center | center from context |
-| Effective examples per word | `2c` (one per context position) | 1 (one per center) |
-| Sample efficiency on rare words | better (each occurrence trains 2c times) | worse |
-| Training speed | slower (more updates per sentence) | faster |
-| Quality on small datasets | better | worse |
-
-Skip-gram is the default choice for most practical settings unless training time is the binding constraint.
-
-### D. GloVe: Global Vectors for Word Representation
-
-Word2Vec is a **local** method — it slides a window over the corpus and updates one example at a time. GloVe (Pennington et al., 2014) is a **global** method — it first builds the full word-context co-occurrence matrix `X` (where `Xᵢⱼ` = count of word `j` appearing in the context of word `i`), then factorizes it.
-
-**D.1 The log-bilinear model.** The model assumes:
-
-```
-wᵢ · w̃ⱼ + bᵢ + b̃ⱼ ≈ log Xᵢⱼ
-```
-
-where `wᵢ` is the word vector, `w̃ⱼ` is a separate context vector, and `bᵢ`, `b̃ⱼ` are bias terms. The motivation is that ratios of co-occurrence probabilities encode meaning. For example, `P(solid | ice) / P(solid | steam) >> 1`, and the dot-product structure linearizes such ratios.
-
-**D.2 The weighted least-squares loss.**
-
-```
-J = Σᵢⱼ  f(Xᵢⱼ) · (wᵢ · w̃ⱼ + bᵢ + b̃ⱼ − log Xᵢⱼ)²
-```
-
-with weighting function
-
-```
-f(x) = (x / xₘₐₓ)^α   if x < xₘₐₓ,   else 1     (typically xₘₐₓ = 100, α = 0.75)
-```
-
-Why the weight? Without it, very frequent pairs (e.g., `the` co-occurring with everything) dominate the loss. The cap `xₘₐₓ` prevents that, while the polynomial damping below `xₘₐₓ` downweights extremely rare pairs that are mostly noise. After training, the final word vector is `wᵢ + w̃ᵢ` (averaging the two roles improves stability).
-
-**D.3 GloVe vs Word2Vec.** GloVe's loss explicitly factorizes a co-occurrence matrix; Word2Vec's SGNS implicitly does the same (as shown in B.3, factorizing shifted PMI). Both produce comparable embeddings of comparable quality on intrinsic tasks. GloVe is more memory-hungry (the matrix `X` can be huge) but trains faster on a fixed corpus because it iterates over `X`, not over individual word occurrences.
-
-### E. Why Vector Arithmetic Works
-
-The famous result `king − man + woman ≈ queen` is not a coincidence — it follows from the log-bilinear structure. Suppose embeddings approximately satisfy
-
-```
-w_x · w_y ≈ log P(x | y) + const
-```
-
-Then for a relational pair like (man, woman), (king, queen):
-
-```
-w_king − w_man ≈ log P(king | y) − log P(man | y) for any y
-```
-
-If the relation `royalty` shifts the distribution the same way for both gender variants, then `w_king − w_man ≈ w_queen − w_woman`, which rearranges to `w_king − w_man + w_woman ≈ w_queen`. The analogy works whenever the underlying relation is *linearly encoded* — gender, plurality, country-capital, comparative-superlative all qualify. Relations that aren't linearly encoded (e.g., synonymy gradations) fail this test.
-
-### From Theory to the Functions Below
-
-- §1 (overview) — distributional hypothesis from §A made tangible with toy vectors.
-- §2 (Word2Vec) implements §B (Skip-gram + negative sampling) and §C (CBOW), wired up to gensim's `Word2Vec` class.
-- §3 (GloVe) walks through the global co-occurrence matrix construction of §D.
-- §4 (pre-trained embeddings) shows how to load Google News word2vec and Stanford GloVe checkpoints — both produced by the algorithms in §B and §D.
-- §5 (embedding operations) demonstrates the §E linearity property (analogy, similarity, odd-one-out).
-
----
-
-## 1. Word Embedding Overview
 
 ### One-Hot vs Distributed Representation
 
@@ -164,6 +52,52 @@ cat ≈ dog (similar context)
 ---
 
 ## 2. Word2Vec
+
+### Theory: Word2Vec: Skip-gram with Negative Sampling (SGNS)
+
+**B.1 Skip-gram objective.** Given a center word `wₜ`, predict each context word `wₜ₊ⱼ` for `j ∈ [-c, c] \ {0}`. Maximize:
+
+```
+J = (1/T) · Σₜ Σⱼ  log p(wₜ₊ⱼ | wₜ)
+```
+
+The naïve parameterization uses softmax over the full vocabulary:
+
+```
+p(o | c) = exp(uₒ · vc) / Σ_{w ∈ V} exp(uw · vc)
+```
+
+where `vc` is the *input* embedding of the center word and `uₒ` is the *output* embedding of the context word. Two tables are learned. The denominator costs `O(V)` per training example — prohibitive at `V = 10⁵+`.
+
+**B.2 Negative sampling — the trick that made it work.** Replace the multi-class softmax with a binary logistic regression: distinguish *real* (center, context) pairs from `k` *fake* pairs `(center, sampled noise word)`. The loss for one positive pair plus `k` negatives:
+
+```
+L = -log σ(uₒ · vc) − Σᵢ₌₁..k  𝔼_{wᵢ ~ Pₙ(w)}  log σ(−uᵢ · vc)
+```
+
+where `σ` is the sigmoid and `Pₙ(w) ∝ U(w)^{3/4}` is the unigram distribution raised to the 0.75 power (downweighting very common words slightly). With `k = 5-20`, each update touches only `k+1` rows of the output table — `O(1)` instead of `O(V)`.
+
+**B.3 Why negative sampling works.** The loss can be derived as a noise-contrastive estimation (NCE) objective: it asymptotically estimates the same softmax distribution, but in a way that avoids the partition function. Mikolov et al. (2013) further showed that SGNS is *implicitly* factorizing a shifted PMI matrix:
+
+```
+uₒ · vc ≈ PMI(o, c) − log k
+```
+
+where `PMI(o, c) = log[ p(o, c) / (p(o) · p(c)) ]` is pointwise mutual information. This is the bridge to GloVe.
+
+### Theory: CBOW: Predict Center from Context
+
+CBOW (Continuous Bag of Words) inverts the prediction direction: given context words `{wₜ₋c, ..., wₜ₊c}`, predict the center word `wₜ`. The context vectors are averaged into a single representation that goes through softmax (or, in practice, hierarchical softmax / negative sampling) to predict `wₜ`.
+
+| Property | Skip-gram | CBOW |
+|----------|-----------|------|
+| Predicts | context from center | center from context |
+| Effective examples per word | `2c` (one per context position) | 1 (one per center) |
+| Sample efficiency on rare words | better (each occurrence trains 2c times) | worse |
+| Training speed | slower (more updates per sentence) | faster |
+| Quality on small datasets | better | worse |
+
+Skip-gram is the default choice for most practical settings unless training time is the binding constraint.
 
 ### Skip-gram
 
@@ -275,6 +209,34 @@ def negative_sampling_loss(pos_score, neg_score):
 ---
 
 ## 3. GloVe
+
+### Theory: GloVe: Global Vectors for Word Representation
+
+Word2Vec is a **local** method — it slides a window over the corpus and updates one example at a time. GloVe (Pennington et al., 2014) is a **global** method — it first builds the full word-context co-occurrence matrix `X` (where `Xᵢⱼ` = count of word `j` appearing in the context of word `i`), then factorizes it.
+
+**D.1 The log-bilinear model.** The model assumes:
+
+```
+wᵢ · w̃ⱼ + bᵢ + b̃ⱼ ≈ log Xᵢⱼ
+```
+
+where `wᵢ` is the word vector, `w̃ⱼ` is a separate context vector, and `bᵢ`, `b̃ⱼ` are bias terms. The motivation is that ratios of co-occurrence probabilities encode meaning. For example, `P(solid | ice) / P(solid | steam) >> 1`, and the dot-product structure linearizes such ratios.
+
+**D.2 The weighted least-squares loss.**
+
+```
+J = Σᵢⱼ  f(Xᵢⱼ) · (wᵢ · w̃ⱼ + bᵢ + b̃ⱼ − log Xᵢⱼ)²
+```
+
+with weighting function
+
+```
+f(x) = (x / xₘₐₓ)^α   if x < xₘₐₓ,   else 1     (typically xₘₐₓ = 100, α = 0.75)
+```
+
+Why the weight? Without it, very frequent pairs (e.g., `the` co-occurring with everything) dominate the loss. The cap `xₘₐₓ` prevents that, while the polynomial damping below `xₘₐₓ` downweights extremely rare pairs that are mostly noise. After training, the final word vector is `wᵢ + w̃ᵢ` (averaging the two roles improves stability).
+
+**D.3 GloVe vs Word2Vec.** GloVe's loss explicitly factorizes a co-occurrence matrix; Word2Vec's SGNS implicitly does the same (as shown in B.3, factorizing shifted PMI). Both produce comparable embeddings of comparable quality on intrinsic tasks. GloVe is more memory-hungry (the matrix `X` can be huge) but trains faster on a fixed corpus because it iterates over `X`, not over individual word occurrences.
 
 ### Concept
 
@@ -424,6 +386,22 @@ class TextClassifier(nn.Module):
 ---
 
 ## 5. Embedding Operations
+
+### Theory: Why Vector Arithmetic Works
+
+The famous result `king − man + woman ≈ queen` is not a coincidence — it follows from the log-bilinear structure. Suppose embeddings approximately satisfy
+
+```
+w_x · w_y ≈ log P(x | y) + const
+```
+
+Then for a relational pair like (man, woman), (king, queen):
+
+```
+w_king − w_man ≈ log P(king | y) − log P(man | y) for any y
+```
+
+If the relation `royalty` shifts the distribution the same way for both gender variants, then `w_king − w_man ≈ w_queen − w_woman`, which rearranges to `w_king − w_man + w_woman ≈ w_queen`. The analogy works whenever the underlying relation is *linearly encoded* — gender, plurality, country-capital, comparative-superlative all qualify. Relations that aren't linearly encoded (e.g., synonymy gradations) fail this test.
 
 ### Similarity Calculation
 

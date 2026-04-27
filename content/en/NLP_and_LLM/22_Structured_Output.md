@@ -10,21 +10,9 @@
 
 ---
 
-## Theory & Principles
+## 1. The Structured Output Challenge
 
-A free-text LLM response works for chat. It fails for any downstream system that wants to **parse** the output: extract entities into a database, populate a form, trigger an action with typed parameters. "Output JSON" works most of the time but occasionally produces invalid JSON, missing fields, or unexpected types — and "occasionally" at scale means thousands of failures per day. Structured output techniques close this gap by either constraining the model's generation at the token level, validating after generation with retry, or both.
-
-This section covers:
-
-- **(A) The constrained generation problem** — what guarantees do you actually need, and at what cost.
-- **(B) Prompt-level structuring** — JSON mode, system-prompt instructions, the limits of asking nicely.
-- **(C) Function calling as structured output** — how OpenAI/Anthropic's tool-calling APIs guarantee structure.
-- **(D) Grammar-based constrained decoding** — Outlines, LMQL, JSON-schema-aware token masking.
-- **(E) Pydantic parse-and-retry** — validation as a separate stage, with retry-on-failure.
-- **(F) The instructor library** — type-safe Python interface, automatic retry, partial outputs for streaming.
-- **(G) Designing schemas** — nesting, optionality, enums, the trade-off between precision and model success rate.
-
-### A. The Constrained Generation Problem
+### Theory: The Constrained Generation Problem
 
 You want the LLM to produce a string `s` such that `parse(s)` succeeds and the parsed result satisfies some schema. Three guarantee levels:
 
@@ -33,128 +21,6 @@ You want the LLM to produce a string `s` such that `parse(s)` succeeds and the p
 - **Level 2 (constrained decoding)**: restrict the model's token choices at each step to those that maintain a valid prefix of the schema. 100% success guaranteed (when supported).
 
 Each level adds capability and cost. Production systems pick the lowest level that gives acceptable failure rate, weighing latency and cost against retry frequency.
-
-### B. Prompt-Level Structuring
-
-The simplest approach: tell the model what you want.
-
-```
-Output JSON with keys "name" (string), "age" (integer), "skills" (array of strings).
-Output ONLY the JSON. No explanation.
-```
-
-OpenAI's "JSON mode" (`response_format = {"type": "json_object"}`) constrains the output to be parseable JSON but does not enforce a specific schema. Field names, types, and structure are still up to the model — and the model can still hallucinate fields, omit required ones, or swap types.
-
-Use prompt-level for prototyping or low-stakes systems. Pair with validation (E) for production.
-
-### C. Function Calling as Structured Output
-
-Although designed for tool calling (lesson 23), the function-calling API is also the cleanest way to get structured output. Define a "tool" whose parameters are the schema you want; ask the model to call the tool with the extracted data:
-
-```
-tool = {
-  "name": "save_person",
-  "parameters": {
-    "type": "object",
-    "properties": {
-      "name": {"type": "string"},
-      "age": {"type": "integer"},
-      "skills": {"type": "array", "items": {"type": "string"}}
-    },
-    "required": ["name", "age"]
-  }
-}
-# Model returns: {"tool_calls": [{"name": "save_person", "arguments": {"name": "...", ...}}]}
-```
-
-The arguments are guaranteed to be valid JSON of the declared types (the API enforces). You don't need to actually execute a tool — you're just using the API's schema enforcement.
-
-OpenAI's "Strict Mode" function calling and Anthropic's tool use both implement this with token-level constraint at the API level: invalid tokens are simply not sampled. ~100% success rate.
-
-### D. Grammar-Based Constrained Decoding
-
-For open-source models without provider-side enforcement, libraries like **Outlines** (Willard & Louf, 2023) and **LMQL** implement constrained decoding directly.
-
-**The mechanism.** A JSON schema (or regex) is compiled into a finite-state automaton (FSA). At each generation step, the model produces logits for all `V` tokens; the constraint masks out tokens that would not advance any valid path through the FSA, and the model samples from the remainder. This guarantees the output matches the schema by construction.
-
-**Cost.** A small per-step computation to update FSA state; usually negligible. Some constraints (especially complex JSON schemas) can be slow to compile but the result is reusable across queries.
-
-This is the only approach that gives **categorical** guarantees on local models without API support.
-
-### E. Pydantic Parse-and-Retry
-
-The most common production pattern:
-
-```python
-class Person(BaseModel):
-    name: str
-    age: int
-    skills: list[str]
-
-def extract(text: str, max_retries=3):
-    for _ in range(max_retries):
-        response = llm(prompt + text)
-        try:
-            return Person.model_validate_json(response)
-        except ValidationError as e:
-            prompt = f"{prompt}\n\nPrevious attempt failed validation: {e}\nPlease fix and retry."
-    raise ValueError("Max retries exceeded")
-```
-
-The validator catches both JSON parse errors and type/constraint violations. Re-prompting with the error usually produces a valid output on the next attempt. Combines prompt-level (B) with validation as a backstop.
-
-This gives ~99%+ success at modest cost (one retry per ~20 calls on average for simple schemas).
-
-### F. The Instructor Library
-
-`instructor` (Liu, 2023) wraps the OpenAI/Anthropic SDKs to make Pydantic-based extraction the primary interface:
-
-```python
-import instructor
-from openai import OpenAI
-
-client = instructor.from_openai(OpenAI())
-person = client.chat.completions.create(
-    model="gpt-4",
-    messages=[{"role": "user", "content": text}],
-    response_model=Person,
-)
-# `person` is a typed Person instance — no JSON parsing, no validation in user code
-```
-
-Behind the scenes: instructor converts the Pydantic model to a function-calling schema (C), invokes the API, validates the result, and retries on failure (E). It also supports partial validation for streaming (yield typed chunks as they arrive) and `Iterable[Person]` for extracting lists.
-
-This is the production pattern: type safety from the user's perspective, robust generation under the hood.
-
-### G. Designing Schemas
-
-Schema design directly affects the model's success rate.
-
-**G.1 Optional fields.** Mark fields not always present as `Optional[T]`. Forces the model to consider whether the data exists; reduces hallucination of fake values.
-
-**G.2 Enums.** Constrain string fields to a closed set: `Literal["pending", "approved", "rejected"]`. Eliminates typos and invented categories.
-
-**G.3 Examples in field descriptions.** Pydantic's `Field(description="...")` is included in the JSON schema. Examples help the model understand what to extract: `Field(description="The person's full legal name, e.g., 'John Smith'")`.
-
-**G.4 Nesting depth.** Each level of nesting increases failure rate (more places for the model to confuse itself). Flatten when possible: prefer `customer_name` over `customer.name`.
-
-**G.5 Numeric constraints.** Use `Field(ge=0, le=120)` for `age`, `Field(min_length=1, max_length=100)` for strings. The model usually respects these; the validator catches the rest.
-
-The general principle: **encode invariants in the schema, not in the prompt.** Schema constraints are checkable; prompt instructions are advisory.
-
-### From Theory to the Functions Below
-
-- §1 (the challenge) — frames §A's three guarantee levels.
-- §2 (JSON mode) — implements §B prompt-level structuring with OpenAI/Anthropic JSON modes.
-- §3 (function calling) — implements §C function-calling as structured output.
-- §4 (Pydantic) — implements §E parse-and-retry pattern.
-- §5 (instructor library) — uses §F's wrapper for type-safe extraction.
-- §6 (OpenAI Structured Outputs) — provider-native §C/§D fusion (strict-mode function calling).
-- §7 (production pipeline) — combines §A-§F into a realistic data-extraction pipeline with §G schema design.
-
----
-
-## 1. The Structured Output Challenge
 
 ### Why Structured Output Matters
 
@@ -180,6 +46,19 @@ The general principle: **encode invariants in the schema, not in the prompt.** S
 ---
 
 ## 2. JSON Mode
+
+### Theory: Prompt-Level Structuring
+
+The simplest approach: tell the model what you want.
+
+```
+Output JSON with keys "name" (string), "age" (integer), "skills" (array of strings).
+Output ONLY the JSON. No explanation.
+```
+
+OpenAI's "JSON mode" (`response_format = {"type": "json_object"}`) constrains the output to be parseable JSON but does not enforce a specific schema. Field names, types, and structure are still up to the model — and the model can still hallucinate fields, omit required ones, or swap types.
+
+Use prompt-level for prototyping or low-stakes systems. Pair with validation (E) for production.
 
 ### OpenAI JSON Mode
 
@@ -301,6 +180,30 @@ clean = coerce_types(raw, schema)
 ---
 
 ## 3. Function Calling for Structured Extraction
+
+### Theory: Function Calling as Structured Output
+
+Although designed for tool calling (lesson 23), the function-calling API is also the cleanest way to get structured output. Define a "tool" whose parameters are the schema you want; ask the model to call the tool with the extracted data:
+
+```
+tool = {
+  "name": "save_person",
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "name": {"type": "string"},
+      "age": {"type": "integer"},
+      "skills": {"type": "array", "items": {"type": "string"}}
+    },
+    "required": ["name", "age"]
+  }
+}
+# Model returns: {"tool_calls": [{"name": "save_person", "arguments": {"name": "...", ...}}]}
+```
+
+The arguments are guaranteed to be valid JSON of the declared types (the API enforces). You don't need to actually execute a tool — you're just using the API's schema enforcement.
+
+OpenAI's "Strict Mode" function calling and Anthropic's tool use both implement this with token-level constraint at the API level: invalid tokens are simply not sampled. ~100% success rate.
 
 ### Schema-Driven Extraction
 
@@ -471,6 +374,30 @@ def multi_schema_extract(text: str) -> dict:
 
 ## 4. Pydantic Output Parsing
 
+### Theory: Pydantic Parse-and-Retry
+
+The most common production pattern:
+
+```python
+class Person(BaseModel):
+    name: str
+    age: int
+    skills: list[str]
+
+def extract(text: str, max_retries=3):
+    for _ in range(max_retries):
+        response = llm(prompt + text)
+        try:
+            return Person.model_validate_json(response)
+        except ValidationError as e:
+            prompt = f"{prompt}\n\nPrevious attempt failed validation: {e}\nPlease fix and retry."
+    raise ValueError("Max retries exceeded")
+```
+
+The validator catches both JSON parse errors and type/constraint violations. Re-prompting with the error usually produces a valid output on the next attempt. Combines prompt-level (B) with validation as a backstop.
+
+This gives ~99%+ success at modest cost (one retry per ~20 calls on average for simple schemas).
+
 ### Basic Pydantic Models
 
 ```python
@@ -582,6 +509,27 @@ def extract_with_retry(text: str) -> DocumentExtraction | None:
 ---
 
 ## 5. Instructor Library
+
+### Theory: The Instructor Library
+
+`instructor` (Liu, 2023) wraps the OpenAI/Anthropic SDKs to make Pydantic-based extraction the primary interface:
+
+```python
+import instructor
+from openai import OpenAI
+
+client = instructor.from_openai(OpenAI())
+person = client.chat.completions.create(
+    model="gpt-4",
+    messages=[{"role": "user", "content": text}],
+    response_model=Person,
+)
+# `person` is a typed Person instance — no JSON parsing, no validation in user code
+```
+
+Behind the scenes: instructor converts the Pydantic model to a function-calling schema (C), invokes the API, validates the result, and retries on failure (E). It also supports partial validation for streaming (yield typed chunks as they arrive) and `Iterable[Person]` for extracting lists.
+
+This is the production pattern: type safety from the user's perspective, robust generation under the hood.
 
 ### Type-Safe LLM Outputs
 
@@ -805,6 +753,16 @@ for item in invoice.items:
 
 ## 6. OpenAI Structured Outputs
 
+### Theory: Grammar-Based Constrained Decoding
+
+For open-source models without provider-side enforcement, libraries like **Outlines** (Willard & Louf, 2023) and **LMQL** implement constrained decoding directly.
+
+**The mechanism.** A JSON schema (or regex) is compiled into a finite-state automaton (FSA). At each generation step, the model produces logits for all `V` tokens; the constraint masks out tokens that would not advance any valid path through the FSA, and the model samples from the remainder. This guarantees the output matches the schema by construction.
+
+**Cost.** A small per-step computation to update FSA state; usually negligible. Some constraints (especially complex JSON schemas) can be slow to compile but the result is reusable across queries.
+
+This is the only approach that gives **categorical** guarantees on local models without API support.
+
 ### Strict Mode
 
 ```python
@@ -881,6 +839,22 @@ class BadSchema(BaseModel):
 ---
 
 ## 7. Production Data Extraction Pipeline
+
+### Theory: Designing Schemas
+
+Schema design directly affects the model's success rate.
+
+**G.1 Optional fields.** Mark fields not always present as `Optional[T]`. Forces the model to consider whether the data exists; reduces hallucination of fake values.
+
+**G.2 Enums.** Constrain string fields to a closed set: `Literal["pending", "approved", "rejected"]`. Eliminates typos and invented categories.
+
+**G.3 Examples in field descriptions.** Pydantic's `Field(description="...")` is included in the JSON schema. Examples help the model understand what to extract: `Field(description="The person's full legal name, e.g., 'John Smith'")`.
+
+**G.4 Nesting depth.** Each level of nesting increases failure rate (more places for the model to confuse itself). Flatten when possible: prefer `customer_name` over `customer.name`.
+
+**G.5 Numeric constraints.** Use `Field(ge=0, le=120)` for `age`, `Field(min_length=1, max_length=100)` for strings. The model usually respects these; the validator catches the rest.
+
+The general principle: **encode invariants in the schema, not in the prompt.** Schema constraints are checkable; prompt instructions are advisory.
 
 ### End-to-End Pipeline
 

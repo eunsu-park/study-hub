@@ -9,20 +9,9 @@
 
 ---
 
-## Theory & Principles
+## 1. Vector Database Overview
 
-A vector database is, at its core, a system optimized for one operation: **k-nearest-neighbor search in high-dimensional space**. Given a query vector `q ∈ ℝ^d` and a corpus of `N` vectors, find the `k` corpus vectors most similar to `q`. The naïve algorithm — compute `q · vᵢ` for all `i` and sort — is `O(N · d)` per query, which becomes prohibitive at `N = 10^7+`. Every algorithm in modern vector search trades exactness for sublinear query time, and the choice of trade-off determines what database you should use.
-
-This section covers:
-
-- **(A) The curse of dimensionality** — why exact nearest neighbor in high dimensions is essentially impossible to do faster than brute force.
-- **(B) Approximate nearest neighbor (ANN)** — the recall–latency–memory frontier, the meaning of "approximate."
-- **(C) HNSW (Hierarchical Navigable Small World)** — the dominant graph-based index, its construction, and why it works.
-- **(D) IVF (Inverted File) and Product Quantization (PQ)** — partition-based indexing, vector compression, IVF-PQ as the workhorse for billion-scale corpora.
-- **(E) MIPS (Maximum Inner Product Search)** — when you actually want dot product, not cosine, and the reduction tricks.
-- **(F) Filtering and metadata** — pre-filter vs post-filter, the impact on recall.
-
-### A. The Curse of Dimensionality
+### Theory: The Curse of Dimensionality
 
 In low dimensions (2D, 3D), spatial data structures like KD-trees give `O(log N)` exact nearest-neighbor query. In high dimensions (`d > 20-30`), every such structure degrades to `O(N)` — because volume scales as `r^d`, so to contain a constant number of points you need a constant *fraction* of the space, defeating any partitioning scheme.
 
@@ -30,51 +19,7 @@ Specifically: in `d` dimensions, the ratio of distances to the nearest and farth
 
 For embedding dimensions of 384-1536 typical in modern RAG, exact NN is essentially `O(N · d)` brute force. The only way to go faster is to **give up exactness** in a controlled way.
 
-### B. Approximate Nearest Neighbor (ANN)
-
-ANN algorithms return *most* of the true top-k, *most* of the time. Quality is measured by **recall@k**:
-
-```
-recall@k = |returned_top_k ∩ true_top_k| / k
-```
-
-The Pareto frontier is recall vs query latency vs memory:
-
-- **High recall** (≥ 0.95): typically achievable with HNSW, but at cost of memory and indexing time.
-- **Low latency** (< 1 ms): demands in-memory indexes, often quantized.
-- **Low memory**: PQ-based indexes (4-8 bytes per vector instead of 384·4 = 1536 bytes).
-
-You cannot maximize all three. The choice depends on application: chatbot RAG (latency-sensitive, mid recall ok), legal/medical (high recall mandatory), web-scale recommendation (memory-sensitive).
-
-### C. HNSW: Hierarchical Navigable Small World
-
-HNSW (Malkov & Yashunin, 2016) is a graph-based ANN index with the best recall–latency trade-off for in-memory data.
-
-**C.1 The graph.** Each vector becomes a node. Each node has edges to a fixed number `M` of "neighbor" nodes. The neighbor selection biases toward both close points and a few long-range "shortcut" links — making the graph a **small-world graph** with logarithmic graph diameter.
-
-**C.2 The hierarchy.** Multiple graph layers are stacked. Layer 0 contains all nodes. Layer `l` contains a probabilistic subset (each node in layer `l-1` is in layer `l` with probability `1/M`). Higher layers are sparser; the top layer has only a handful of nodes.
-
-**C.3 Search.** Start at an entry point in the top layer. Greedily walk toward the query: at each node, examine its neighbors, move to the neighbor closest to the query. When no neighbor is closer than the current node, drop down one layer and continue. The top layers do coarse navigation (long jumps); the bottom layer does fine refinement.
-
-Total cost: `O(log N · M)` per query — logarithmic in corpus size. Recall typically 0.95-0.99 with `M = 16, ef_search = 100`.
-
-**C.4 Why it works.** Greedy graph search would normally get stuck in local minima. The hierarchy + small-world property combine to escape: high layers provide long shortcuts (escape locality), low layers provide dense local connections (refine to true minimum). Empirically, this beats every other graph-based or tree-based index at the same recall–latency point.
-
-### D. IVF and Product Quantization
-
-For billion-scale corpora, HNSW becomes too memory-hungry (each vector + edges in RAM). IVF-PQ trades recall for memory.
-
-**D.1 IVF (Inverted File).** Cluster vectors into `n_list` partitions using k-means (e.g., `n_list = √N`). For a query, identify the `n_probe` nearest centroids and search only within those partitions. Reduces brute-force cost from `O(N)` to `O(N · n_probe / n_list)` — roughly `O(√N)` with `n_probe = 1`. Recall rises with `n_probe`; latency falls.
-
-**D.2 Product Quantization (PQ).** Compress each vector aggressively. Split a `d`-dim vector into `m` sub-vectors of dim `d/m`. For each sub-position, run k-means with 256 centroids on all sub-vectors at that position. Each sub-vector is now represented by its centroid index — a single byte (256 levels). Total: `m` bytes per vector instead of `4d` bytes for fp32. Compression ratio `4d/m`, e.g., 384·4/8 = 192× for `m = 8`.
-
-Search: for the query's `m` sub-vectors, precompute distances to all 256 centroids per sub-position (a `m × 256` lookup table). Then approximate `||q − v||²` as the sum of `m` table lookups — extremely fast.
-
-**D.3 IVF-PQ as the workhorse.** Combine: IVF for partitioning, PQ inside each partition. Memory is `m` bytes/vector (compressed) plus a small per-centroid overhead. Recall is lower than HNSW but workable (0.85-0.95 with tuning), and you can fit billion-scale corpora in commodity RAM.
-
-FAISS (Facebook AI Similarity Search) implements both HNSW and IVF-PQ as primary index types.
-
-### E. MIPS: Maximum Inner Product Search
+### Theory: MIPS: Maximum Inner Product Search
 
 Most ANN libraries optimize for L2 distance (cosine becomes equivalent after normalization). When the embedding model is trained with un-normalized dot product (e.g., classical retrieval models), you need **maximum inner product**, not minimum distance:
 
@@ -89,30 +34,6 @@ Reduction trick: append a coordinate so that `||v'||` becomes constant. For each
 ```
 
 minimizing distance ↔ maximizing inner product. Now any L2-based ANN library works.
-
-### F. Filtering and Metadata
-
-Real-world queries often require filtering: "find similar docs *but only from this user* / *only after this date*." Two approaches:
-
-- **Pre-filter**: apply the filter to candidate set first, then run ANN on the filtered subset. Exact but slow if the filter is non-selective (still need to scan many vectors). Vector indexes don't natively support arbitrary predicates.
-- **Post-filter**: run ANN on the full corpus, retrieve `k' >> k` candidates, then drop those failing the filter, return the top `k`. Fast but may have low recall if the filter is selective (most candidates filtered out → fewer than `k` survive).
-
-Production systems implement either pre-filter via per-tenant indexes or hybrid via filtered HNSW (HNSW that supports inline metadata predicates during graph traversal — a research frontier).
-
-### From Theory to the Functions Below
-
-- §1 (overview) — frames the §A curse of dimensionality.
-- §2 (Chroma) — a managed wrapper over HNSW (§C); great for prototyping.
-- §3 (FAISS) — direct access to HNSW, IVF, IVF-PQ (§C, §D); industry standard for self-hosted indexes.
-- §4 (Pinecone) — managed cloud service offering both HNSW-style and IVF-PQ-style indexes; abstracts §C-§D behind an API.
-- §5 (indexing strategies) — when to pick HNSW vs IVF-PQ from §B's recall-latency-memory trade-off.
-- §6 (metadata filters) — implements §F's pre-filter and post-filter patterns.
-- §7 (practical patterns) — production patterns: re-indexing, sharding, multi-tenant.
-- §8 (performance optimization) — recall-vs-latency tuning of §C and §D parameters.
-
----
-
-## 1. Vector Database Overview
 
 ### Why Vector DB?
 
@@ -424,6 +345,50 @@ docs = vectorstore.similarity_search("query", k=3)
 
 ## 5. Indexing Strategies
 
+### Theory: Approximate Nearest Neighbor (ANN)
+
+ANN algorithms return *most* of the true top-k, *most* of the time. Quality is measured by **recall@k**:
+
+```
+recall@k = |returned_top_k ∩ true_top_k| / k
+```
+
+The Pareto frontier is recall vs query latency vs memory:
+
+- **High recall** (≥ 0.95): typically achievable with HNSW, but at cost of memory and indexing time.
+- **Low latency** (< 1 ms): demands in-memory indexes, often quantized.
+- **Low memory**: PQ-based indexes (4-8 bytes per vector instead of 384·4 = 1536 bytes).
+
+You cannot maximize all three. The choice depends on application: chatbot RAG (latency-sensitive, mid recall ok), legal/medical (high recall mandatory), web-scale recommendation (memory-sensitive).
+
+### Theory: HNSW: Hierarchical Navigable Small World
+
+HNSW (Malkov & Yashunin, 2016) is a graph-based ANN index with the best recall–latency trade-off for in-memory data.
+
+**C.1 The graph.** Each vector becomes a node. Each node has edges to a fixed number `M` of "neighbor" nodes. The neighbor selection biases toward both close points and a few long-range "shortcut" links — making the graph a **small-world graph** with logarithmic graph diameter.
+
+**C.2 The hierarchy.** Multiple graph layers are stacked. Layer 0 contains all nodes. Layer `l` contains a probabilistic subset (each node in layer `l-1` is in layer `l` with probability `1/M`). Higher layers are sparser; the top layer has only a handful of nodes.
+
+**C.3 Search.** Start at an entry point in the top layer. Greedily walk toward the query: at each node, examine its neighbors, move to the neighbor closest to the query. When no neighbor is closer than the current node, drop down one layer and continue. The top layers do coarse navigation (long jumps); the bottom layer does fine refinement.
+
+Total cost: `O(log N · M)` per query — logarithmic in corpus size. Recall typically 0.95-0.99 with `M = 16, ef_search = 100`.
+
+**C.4 Why it works.** Greedy graph search would normally get stuck in local minima. The hierarchy + small-world property combine to escape: high layers provide long shortcuts (escape locality), low layers provide dense local connections (refine to true minimum). Empirically, this beats every other graph-based or tree-based index at the same recall–latency point.
+
+### Theory: IVF and Product Quantization
+
+For billion-scale corpora, HNSW becomes too memory-hungry (each vector + edges in RAM). IVF-PQ trades recall for memory.
+
+**D.1 IVF (Inverted File).** Cluster vectors into `n_list` partitions using k-means (e.g., `n_list = √N`). For a query, identify the `n_probe` nearest centroids and search only within those partitions. Reduces brute-force cost from `O(N)` to `O(N · n_probe / n_list)` — roughly `O(√N)` with `n_probe = 1`. Recall rises with `n_probe`; latency falls.
+
+**D.2 Product Quantization (PQ).** Compress each vector aggressively. Split a `d`-dim vector into `m` sub-vectors of dim `d/m`. For each sub-position, run k-means with 256 centroids on all sub-vectors at that position. Each sub-vector is now represented by its centroid index — a single byte (256 levels). Total: `m` bytes per vector instead of `4d` bytes for fp32. Compression ratio `4d/m`, e.g., 384·4/8 = 192× for `m = 8`.
+
+Search: for the query's `m` sub-vectors, precompute distances to all 256 centroids per sub-position (a `m × 256` lookup table). Then approximate `||q − v||²` as the sum of `m` table lookups — extremely fast.
+
+**D.3 IVF-PQ as the workhorse.** Combine: IVF for partitioning, PQ inside each partition. Memory is `m` bytes/vector (compressed) plus a small per-centroid overhead. Recall is lower than HNSW but workable (0.85-0.95 with tuning), and you can fit billion-scale corpora in commodity RAM.
+
+FAISS (Facebook AI Similarity Search) implements both HNSW and IVF-PQ as primary index types.
+
 ### Index Type Comparison
 
 | Type | Accuracy | Speed | Memory | When to Use |
@@ -452,6 +417,15 @@ index.add(vectors)
 ---
 
 ## 6. Using Metadata
+
+### Theory: Filtering and Metadata
+
+Real-world queries often require filtering: "find similar docs *but only from this user* / *only after this date*." Two approaches:
+
+- **Pre-filter**: apply the filter to candidate set first, then run ANN on the filtered subset. Exact but slow if the filter is non-selective (still need to scan many vectors). Vector indexes don't natively support arbitrary predicates.
+- **Post-filter**: run ANN on the full corpus, retrieve `k' >> k` candidates, then drop those failing the filter, return the top `k`. Fast but may have low recall if the filter is selective (most candidates filtered out → fewer than `k` survive).
+
+Production systems implement either pre-filter via per-tenant indexes or hybrid via filtered HNSW (HNSW that supports inline metadata predicates during graph traversal — a research frontier).
 
 ### Filtering Patterns
 

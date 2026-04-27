@@ -9,121 +9,6 @@
 
 ---
 
-## Theory & Principles
-
-Before the code-level walkthrough, it helps to see what every preprocessing pipeline is really doing: turning a sequence of human-readable characters into a sequence of integers that a neural network can consume — without losing the linguistic structure that the model needs in order to generalize. Each design choice (normalization rule, tokenization granularity, vocabulary cap, padding policy) is a trade-off between **information preservation** and **statistical regularity**.
-
-This section covers:
-
-- **(A) The token as a unit** — characters, words, and subwords as alternative samplings of language; their effect on vocabulary size and out-of-vocabulary (OOV) rate.
-- **(B) Subword tokenization (BPE / WordPiece / Unigram)** — the algorithms behind modern tokenizers and why they bound OOV.
-- **(C) Vocabulary, encoding, and Zipf's law** — how the long-tail distribution of words motivates a fixed vocabulary plus an `<unk>` token.
-- **(D) Padding, batching, and attention masks** — turning variable-length sequences into rectangular tensors without poisoning gradients.
-- **(E) Normalization** — when lowercasing, accent stripping, and stopword removal help and when they destroy signal.
-
-### A. The Token as a Unit
-
-A *token* is the atomic input unit of an NLP model. Three classic choices exist, each placing a different point on the **vocabulary size vs sequence length** Pareto front:
-
-| Granularity | Vocabulary size | Avg tokens per word | OOV problem |
-|-------------|-----------------|---------------------|-------------|
-| Character | very small (~100) | high (5-10) | none |
-| Word | very large (10⁵-10⁶) | 1 | severe (every typo, name, neologism) |
-| Subword | medium (10⁴-10⁵) | 1.3-2 | bounded — rare words decompose |
-
-Total compute scales as `vocabulary_size × hidden_dim` for the embedding/output projection and `sequence_length²` for self-attention. Subword tokenization is the modern compromise: small enough vocabulary to keep embeddings cheap, short enough sequences to keep attention cheap, and *no* OOV because any unseen word can be decomposed into known pieces (in the worst case, individual bytes).
-
-### B. Subword Tokenization
-
-The shared idea: start with a base alphabet, then learn merges of frequent adjacent units until you reach a target vocabulary size.
-
-**B.1 Byte-Pair Encoding (BPE)**
-
-Algorithm (training):
-
-```
-1. Initialize vocabulary V = set of all characters in the corpus.
-2. Represent each word as a sequence of characters.
-3. Count adjacent symbol pairs across the corpus.
-4. Merge the most frequent pair (a, b) into a new symbol "ab" and add to V.
-5. Repeat 3-4 until |V| reaches the target.
-```
-
-Encoding a new word: greedily apply learned merges in the order they were created. Decoding: concatenate the symbols.
-
-Why it works: Zipf's law (see C) says a few words are very common. Frequent character pairs inside common words become single tokens, while rare words stay decomposed. The result is a vocabulary that allocates short codes to common patterns — exactly what an information-theoretic optimal code does (Huffman/arithmetic coding intuition).
-
-**B.2 WordPiece**
-
-Used by BERT. Identical to BPE except for the merge criterion: instead of raw frequency `count(a,b)`, it picks the pair that maximizes
-
-```
-score(a, b) = count(a, b) / (count(a) × count(b))
-```
-
-This is essentially the pair's pointwise mutual information. Pairs that co-occur because they are *together* (not because both are individually common) are preferred. WordPiece marks subword continuations with `##` (e.g., `playing` → `play`, `##ing`).
-
-**B.3 Unigram language model (SentencePiece)**
-
-Reverses the direction: start with a large candidate vocabulary, score each token's marginal contribution to the corpus likelihood under a unigram LM, and iteratively prune the worst tokens until the target size is reached. Encoding picks the segmentation that maximizes the unigram probability product. This produces probabilistic tokenization (used by T5, mBART, ALBERT).
-
-### C. Vocabulary, Encoding, and Zipf's Law
-
-Empirically, word frequency in natural language follows **Zipf's law**:
-
-```
-freq(rank r) ∝ 1 / r^s    with s ≈ 1
-```
-
-The 100th most common word is ~100× rarer than the most common; the 10⁴th word is ~10⁴× rarer. This has two consequences:
-
-1. **A small vocabulary covers most tokens.** The top 10K English words cover ~95% of running text. Capping the vocabulary at 30K-50K (BERT-base = 30522, GPT-2 = 50257) is essentially free in coverage.
-2. **The tail is enormous.** Names, numbers, technical jargon, code, multilingual content — the long tail is unbounded. Word-level tokenization must define an `<unk>` token for everything outside the vocabulary, which loses information; subword tokenization decomposes the tail instead.
-
-Special tokens carry structural meaning beyond the lexicon: `<pad>` (padding), `<unk>` (unknown), `<bos>`/`<eos>` (beginning/end of sequence), `[CLS]`/`[SEP]` (BERT classification and separator), `<mask>` (BERT pre-training). These are typically inserted at IDs 0-4 so they never collide with learned tokens.
-
-### D. Padding, Batching, and Attention Masks
-
-Modern accelerators (GPU/TPU) want rectangular tensors. To batch sentences of different lengths together you must:
-
-1. Choose a target length `L` (max in batch, or a fixed cap).
-2. Pad shorter sequences with the `<pad>` token to length `L`.
-3. Build an **attention mask** `m ∈ {0, 1}^L` with `m[i] = 1` for real tokens and `0` for padding.
-
-The attention mask is critical. In Transformer attention, the score `q·kᵀ` for a padding key would otherwise contribute to the softmax denominator and dilute attention to real tokens. The standard fix is to set masked scores to `-∞` (or a large negative number) *before* softmax:
-
-```
-scores[masked] = -inf
-attn = softmax(scores)
-# softmax(-inf) = 0, so masked positions contribute zero weight
-```
-
-For loss computation, the same mask zeros out the loss at padding positions — otherwise the model would learn to predict `<pad>` and gradients would be polluted.
-
-**Dynamic padding** (pad to the longest in *each* batch) is much faster than padding every batch to a global max length, since average lengths are much smaller than max. This is what HuggingFace's `DataCollatorWithPadding` does.
-
-### E. Normalization: When to Apply, When to Skip
-
-Normalization choices are not free — each one trades **information** for **statistical regularity**:
-
-- **Lowercasing**: shrinks vocabulary by ~half, but loses signal on proper nouns, acronyms, and sentence starts (`Apple` ≠ `apple`). Modern tokenizers like BERT-base-cased simply keep both.
-- **Punctuation removal**: helpful for bag-of-words classifiers; harmful for parsing, sentiment ("!" matters), and anything generative.
-- **Stopword removal**: a relic of TF-IDF days. For neural models, function words (`the`, `of`, `to`) carry syntactic information that helps the model parse structure. Almost never apply this for Transformer inputs.
-- **Stemming/lemmatization**: lossy and language-specific. Subword tokenization solves the same morphology problem more gracefully (`running`, `ran`, `runs` share a `run` prefix).
-
-Rule of thumb: **the more capable the downstream model, the less aggressive the preprocessing should be.** A logistic-regression bag-of-words pipeline benefits from heavy normalization; a Transformer benefits from raw text.
-
-### From Theory to the Functions Below
-
-- §1 (preprocessing) — the lightweight regex normalization corresponds to §E; we deliberately keep it minimal because §2 will use a learned tokenizer that handles morphology better than rules.
-- §2 (tokenization) implements three points on the granularity spectrum from §A.
-- §3 (vocabulary building) illustrates the Zipf cap of §C, including the `<unk>`/`<pad>` indexing convention.
-- §4 (padding and batch processing) is the dynamic-padding + attention-mask pipeline of §D.
-- §5 (text normalization) walks through the §E trade-offs concretely.
-- §6 (HuggingFace tokenizers) wires up the BPE/WordPiece algorithms of §B with their fast Rust implementations.
-
----
-
 ## 1. Text Preprocessing
 
 ### Preprocessing Pipeline
@@ -167,6 +52,52 @@ print(preprocess(text))
 ---
 
 ## 2. Tokenization
+
+### Theory: The Token as a Unit
+
+A *token* is the atomic input unit of an NLP model. Three classic choices exist, each placing a different point on the **vocabulary size vs sequence length** Pareto front:
+
+| Granularity | Vocabulary size | Avg tokens per word | OOV problem |
+|-------------|-----------------|---------------------|-------------|
+| Character | very small (~100) | high (5-10) | none |
+| Word | very large (10⁵-10⁶) | 1 | severe (every typo, name, neologism) |
+| Subword | medium (10⁴-10⁵) | 1.3-2 | bounded — rare words decompose |
+
+Total compute scales as `vocabulary_size × hidden_dim` for the embedding/output projection and `sequence_length²` for self-attention. Subword tokenization is the modern compromise: small enough vocabulary to keep embeddings cheap, short enough sequences to keep attention cheap, and *no* OOV because any unseen word can be decomposed into known pieces (in the worst case, individual bytes).
+
+### Theory: Subword Tokenization
+
+The shared idea: start with a base alphabet, then learn merges of frequent adjacent units until you reach a target vocabulary size.
+
+**B.1 Byte-Pair Encoding (BPE)**
+
+Algorithm (training):
+
+```
+1. Initialize vocabulary V = set of all characters in the corpus.
+2. Represent each word as a sequence of characters.
+3. Count adjacent symbol pairs across the corpus.
+4. Merge the most frequent pair (a, b) into a new symbol "ab" and add to V.
+5. Repeat 3-4 until |V| reaches the target.
+```
+
+Encoding a new word: greedily apply learned merges in the order they were created. Decoding: concatenate the symbols.
+
+Why it works: Zipf's law (see C) says a few words are very common. Frequent character pairs inside common words become single tokens, while rare words stay decomposed. The result is a vocabulary that allocates short codes to common patterns — exactly what an information-theoretic optimal code does (Huffman/arithmetic coding intuition).
+
+**B.2 WordPiece**
+
+Used by BERT. Identical to BPE except for the merge criterion: instead of raw frequency `count(a,b)`, it picks the pair that maximizes
+
+```
+score(a, b) = count(a, b) / (count(a) × count(b))
+```
+
+This is essentially the pair's pointwise mutual information. Pairs that co-occur because they are *together* (not because both are individually common) are preferred. WordPiece marks subword continuations with `##` (e.g., `playing` → `play`, `##ing`).
+
+**B.3 Unigram language model (SentencePiece)**
+
+Reverses the direction: start with a large candidate vocabulary, score each token's marginal contribution to the corpus likelihood under a unigram LM, and iteratively prune the worst tokens until the target size is reached. Encoding picks the segmentation that maximizes the unigram probability product. This produces probabilistic tokenization (used by T5, mBART, ALBERT).
 
 ### Word Tokenization
 
@@ -266,6 +197,21 @@ ids = sp.encode_as_ids("Hello, world!")
 
 ## 3. Vocabulary Building
 
+### Theory: Vocabulary, Encoding, and Zipf's Law
+
+Empirically, word frequency in natural language follows **Zipf's law**:
+
+```
+freq(rank r) ∝ 1 / r^s    with s ≈ 1
+```
+
+The 100th most common word is ~100× rarer than the most common; the 10⁴th word is ~10⁴× rarer. This has two consequences:
+
+1. **A small vocabulary covers most tokens.** The top 10K English words cover ~95% of running text. Capping the vocabulary at 30K-50K (BERT-base = 30522, GPT-2 = 50257) is essentially free in coverage.
+2. **The tail is enormous.** Names, numbers, technical jargon, code, multilingual content — the long tail is unbounded. Word-level tokenization must define an `<unk>` token for everything outside the vocabulary, which loses information; subword tokenization decomposes the tail instead.
+
+Special tokens carry structural meaning beyond the lexicon: `<pad>` (padding), `<unk>` (unknown), `<bos>`/`<eos>` (beginning/end of sequence), `[CLS]`/`[SEP]` (BERT classification and separator), `<mask>` (BERT pre-training). These are typically inserted at IDs 0-4 so they never collide with learned tokens.
+
 ### Basic Vocabulary Dictionary
 
 ```python
@@ -332,6 +278,26 @@ indices = vocab(tokenizer("hello world"))
 
 ## 4. Padding and Batch Processing
 
+### Theory: Padding, Batching, and Attention Masks
+
+Modern accelerators (GPU/TPU) want rectangular tensors. To batch sentences of different lengths together you must:
+
+1. Choose a target length `L` (max in batch, or a fixed cap).
+2. Pad shorter sequences with the `<pad>` token to length `L`.
+3. Build an **attention mask** `m ∈ {0, 1}^L` with `m[i] = 1` for real tokens and `0` for padding.
+
+The attention mask is critical. In Transformer attention, the score `q·kᵀ` for a padding key would otherwise contribute to the softmax denominator and dilute attention to real tokens. The standard fix is to set masked scores to `-∞` (or a large negative number) *before* softmax:
+
+```
+scores[masked] = -inf
+attn = softmax(scores)
+# softmax(-inf) = 0, so masked positions contribute zero weight
+```
+
+For loss computation, the same mask zeros out the loss at padding positions — otherwise the model would learn to predict `<pad>` and gradients would be polluted.
+
+**Dynamic padding** (pad to the longest in *each* batch) is much faster than padding every batch to a global max length, since average lengths are much smaller than max. This is what HuggingFace's `DataCollatorWithPadding` does.
+
 ### Sequence Padding
 
 ```python
@@ -375,6 +341,17 @@ attention_mask = create_attention_mask(input_ids)
 ---
 
 ## 5. Text Normalization
+
+### Theory: Normalization: When to Apply, When to Skip
+
+Normalization choices are not free — each one trades **information** for **statistical regularity**:
+
+- **Lowercasing**: shrinks vocabulary by ~half, but loses signal on proper nouns, acronyms, and sentence starts (`Apple` ≠ `apple`). Modern tokenizers like BERT-base-cased simply keep both.
+- **Punctuation removal**: helpful for bag-of-words classifiers; harmful for parsing, sentiment ("!" matters), and anything generative.
+- **Stopword removal**: a relic of TF-IDF days. For neural models, function words (`the`, `of`, `to`) carry syntactic information that helps the model parse structure. Almost never apply this for Transformer inputs.
+- **Stemming/lemmatization**: lossy and language-specific. Subword tokenization solves the same morphology problem more gracefully (`running`, `ran`, `runs` share a `run` prefix).
+
+Rule of thumb: **the more capable the downstream model, the less aggressive the preprocessing should be.** A logistic-regression bag-of-words pipeline benefits from heavy normalization; a Transformer benefits from raw text.
 
 ### Various Normalization Techniques
 

@@ -9,20 +9,9 @@
 
 ---
 
-## Theory & Principles
+## 1. Fine-Tuning Overview
 
-Fine-tuning takes a model that already knows *general* language and bends it toward a *specific* task or domain. The pre-training did the expensive work — learning syntax, basic semantics, world knowledge — using terabytes of unlabeled text. Fine-tuning leverages that representation with a small labeled dataset, often a few thousand examples instead of billions. The whole game is **how to update the weights enough to learn the task without destroying the general knowledge that made the model useful in the first place.**
-
-This section covers:
-
-- **(A) Transfer learning** — why pre-train then fine-tune dominates train-from-scratch.
-- **(B) Full fine-tuning vs feature extraction vs head-only** — the spectrum of how many parameters you update.
-- **(C) Catastrophic forgetting** — the failure mode that drives every "be gentle" recipe.
-- **(D) Learning rate schedules and warm-up** — why fine-tuning uses `2e-5` and a linear schedule, not `1e-3` cosine.
-- **(E) Loss functions per task** — cross-entropy variants for classification, NER (per-token), QA (start/end span), seq2seq.
-- **(F) Regularization tricks** — early stopping, dropout, weight decay, label smoothing, layer-wise learning rate decay.
-
-### A. Transfer Learning: Why It Dominates
+### Theory: Transfer Learning: Why It Dominates
 
 Training a Transformer from scratch on, say, a 10K-sentence sentiment dataset would underfit catastrophically — the model has 100M+ parameters and the dataset has 10⁴ examples. The number of effective parameters in random initialization vastly exceeds what 10⁴ examples can constrain.
 
@@ -30,7 +19,7 @@ Pre-training inverts the ratio: 100M parameters constrained by 10¹¹+ tokens (B
 
 Empirically: a fine-tuned BERT beats a from-scratch LSTM by 10+ F1 points on most NLP tasks, with 100× less labeled data.
 
-### B. The Update-Spectrum: Head-Only → Feature → Full → PEFT
+### Theory: The Update-Spectrum: Head-Only → Feature → Full → PEFT
 
 There is a continuum of how aggressively to update the pre-trained weights:
 
@@ -42,79 +31,6 @@ There is a continuum of how aggressively to update the pre-trained weights:
 | PEFT (LoRA, etc.) | injected adapters only (~0.1-1%) | small | large model, want ~full FT quality at fraction of cost |
 
 The rule of thumb: **the more your task differs from pre-training, the more parameters you should update.** Sentiment classification (close to general English LM) does well head-only; medical NER on rare entities (far from general English) needs full fine-tuning.
-
-### C. Catastrophic Forgetting
-
-When you continue training a pre-trained model on a new task with vanilla SGD at the original learning rate, the model rapidly fits the new task — and forgets everything it knew. This is **catastrophic forgetting**: the gradient updates from the new task overwrite weight patterns that encoded general knowledge.
-
-Symptoms: training accuracy on the new task climbs to 99%, but if you evaluate on a held-out language modeling perplexity or on a related task, performance crashes.
-
-Why it happens: the pre-trained model sits at a local minimum of the LM loss. The fine-tuning loss has a *different* minimum. With a large learning rate, the model rapidly walks toward the new minimum, leaving the LM minimum behind. The "general knowledge" was implicit in the position in weight space; once you leave that neighborhood, it is gone.
-
-Mitigations:
-
-- **Small learning rate** (§D) — keep updates small enough to stay in the neighborhood.
-- **Few epochs** — don't have time to drift far.
-- **Gradual unfreezing** (ULMFiT) — fine-tune the top layer first, then progressively unfreeze lower layers.
-- **PEFT methods** (LoRA) — leave the base weights frozen entirely, learn small additions.
-- **Replay** / **multi-task** — interleave the fine-tuning task with the original LM objective.
-
-### D. Learning Rate Schedules and Warm-Up
-
-A typical BERT fine-tuning recipe:
-
-```
-optimizer: AdamW(lr=2e-5, weight_decay=0.01)
-schedule: linear warmup over 10% of steps, then linear decay to 0
-epochs: 2-4
-batch size: 16-32
-```
-
-**Why `2e-5` instead of `1e-3`?** From C: large updates cause forgetting. The pre-trained weights have small per-element magnitudes (LayerNorm-stabilized), so even small relative updates are enough to learn a task.
-
-**Why warm-up?** AdamW's adaptive learning rate uses a running estimate of the gradient's second moment. At step 0, this estimate is the bias-corrected initial value (close to zero divided by close to zero), which can produce wildly large effective learning rates. Warm-up linearly raises the LR from 0 to peak over the first ~10% of steps, giving Adam time to build a good second-moment estimate before applying full updates.
-
-**Why linear decay?** Empirically the best simple schedule. The model needs aggressive updates early, fine-grained refinement late. Cosine decay also works.
-
-### E. Loss Functions per Task
-
-The encoder is the same; the head and loss change:
-
-**E.1 Sequence classification.** Linear `[CLS]` → softmax over `C` classes; cross-entropy `−Σ y log p`.
-
-**E.2 Token classification (NER).** Linear at *every* token position → softmax over tag set; cross-entropy summed over real (non-pad, non-special) tokens. Subword tokens of the same word usually share a label, with the convention of computing loss only at the first subword.
-
-**E.3 Extractive QA (SQuAD-style).** Two linear heads at every token: one predicts probability that this token is the *start* of the answer span, the other the *end*. Loss is the sum of the two cross-entropies. At inference, the predicted span is `argmax_{i ≤ j}  p_start(i) · p_end(j)` subject to length constraints.
-
-**E.4 Seq2seq (T5, BART).** Encoder-decoder; loss is cross-entropy on the decoder's predicted tokens against the target sequence (teacher forcing). Same as autoregressive LM loss but conditioned on the encoded source.
-
-**E.5 Causal LM fine-tuning (instruction tuning).** Model is GPT-like; loss is cross-entropy on the response tokens only (mask out the prompt tokens to avoid wasting capacity learning to predict the user's input).
-
-### F. Regularization
-
-A model with 100M parameters fine-tuned on 10K examples will overfit unless regularized.
-
-- **Early stopping**: monitor a held-out set, stop when it plateaus or degrades.
-- **Dropout**: usually `0.1` in attention and FFN. Already baked into pre-trained checkpoints; raising it can help small datasets.
-- **Weight decay**: `0.01` in AdamW. Penalizes drift from zero, indirectly keeping weights close to the pre-trained values (which are themselves near zero in magnitude).
-- **Label smoothing**: replace one-hot targets with `(1−ε)·onehot + ε/C·uniform`. Prevents over-confidence, improves calibration. Common `ε = 0.1`.
-- **Layer-wise LR decay (ULMFiT)**: lower layers get smaller LR than upper layers, since lower layers encode more general features that need less updating.
-- **Mixout**: dropout-like, but masked positions revert to the pre-trained value rather than zero. Specifically designed to combat catastrophic forgetting.
-
-### From Theory to the Functions Below
-
-- §1 (overview) — frames the §A transfer learning thesis.
-- §2 (text classification FT) — implements §E.1 with `BertForSequenceClassification`, using §D's learning-rate recipe.
-- §3 (NER FT) — implements §E.2 with token-level alignment for subwords.
-- §4 (QA FT) — implements §E.3's start/end span loss on SQuAD.
-- §5 (PEFT) — points to the §B right column, full lesson in 08.
-- §6 (conversational FT) — implements §E.5 instruction tuning.
-- §7 (training optimization) — applies §D schedules, mixed precision, gradient accumulation.
-- §8 (complete example) — wires §C-§F into a runnable end-to-end pipeline.
-
----
-
-## 1. Fine-Tuning Overview
 
 ### Transfer Learning Paradigm
 
@@ -140,6 +56,20 @@ Task Performance
 ---
 
 ## 2. Text Classification Fine-Tuning
+
+### Theory: Loss Functions per Task
+
+The encoder is the same; the head and loss change:
+
+**E.1 Sequence classification.** Linear `[CLS]` → softmax over `C` classes; cross-entropy `−Σ y log p`.
+
+**E.2 Token classification (NER).** Linear at *every* token position → softmax over tag set; cross-entropy summed over real (non-pad, non-special) tokens. Subword tokens of the same word usually share a label, with the convention of computing loss only at the first subword.
+
+**E.3 Extractive QA (SQuAD-style).** Two linear heads at every token: one predicts probability that this token is the *start* of the answer span, the other the *end*. Loss is the sum of the two cross-entropies. At inference, the predicted span is `argmax_{i ≤ j}  p_start(i) · p_end(j)` subject to length constraints.
+
+**E.4 Seq2seq (T5, BART).** Encoder-decoder; loss is cross-entropy on the decoder's predicted tokens against the target sequence (teacher forcing). Same as autoregressive LM loss but conditioned on the encoded source.
+
+**E.5 Causal LM fine-tuning (instruction tuning).** Model is GPT-like; loss is cross-entropy on the response tokens only (mask out the prompt tokens to avoid wasting capacity learning to predict the user's input).
 
 ### Basic Pipeline
 
@@ -516,6 +446,50 @@ trainer.train()
 ---
 
 ## 7. Training Optimization
+
+### Theory: Catastrophic Forgetting
+
+When you continue training a pre-trained model on a new task with vanilla SGD at the original learning rate, the model rapidly fits the new task — and forgets everything it knew. This is **catastrophic forgetting**: the gradient updates from the new task overwrite weight patterns that encoded general knowledge.
+
+Symptoms: training accuracy on the new task climbs to 99%, but if you evaluate on a held-out language modeling perplexity or on a related task, performance crashes.
+
+Why it happens: the pre-trained model sits at a local minimum of the LM loss. The fine-tuning loss has a *different* minimum. With a large learning rate, the model rapidly walks toward the new minimum, leaving the LM minimum behind. The "general knowledge" was implicit in the position in weight space; once you leave that neighborhood, it is gone.
+
+Mitigations:
+
+- **Small learning rate** (§D) — keep updates small enough to stay in the neighborhood.
+- **Few epochs** — don't have time to drift far.
+- **Gradual unfreezing** (ULMFiT) — fine-tune the top layer first, then progressively unfreeze lower layers.
+- **PEFT methods** (LoRA) — leave the base weights frozen entirely, learn small additions.
+- **Replay** / **multi-task** — interleave the fine-tuning task with the original LM objective.
+
+### Theory: Learning Rate Schedules and Warm-Up
+
+A typical BERT fine-tuning recipe:
+
+```
+optimizer: AdamW(lr=2e-5, weight_decay=0.01)
+schedule: linear warmup over 10% of steps, then linear decay to 0
+epochs: 2-4
+batch size: 16-32
+```
+
+**Why `2e-5` instead of `1e-3`?** From C: large updates cause forgetting. The pre-trained weights have small per-element magnitudes (LayerNorm-stabilized), so even small relative updates are enough to learn a task.
+
+**Why warm-up?** AdamW's adaptive learning rate uses a running estimate of the gradient's second moment. At step 0, this estimate is the bias-corrected initial value (close to zero divided by close to zero), which can produce wildly large effective learning rates. Warm-up linearly raises the LR from 0 to peak over the first ~10% of steps, giving Adam time to build a good second-moment estimate before applying full updates.
+
+**Why linear decay?** Empirically the best simple schedule. The model needs aggressive updates early, fine-grained refinement late. Cosine decay also works.
+
+### Theory: Regularization
+
+A model with 100M parameters fine-tuned on 10K examples will overfit unless regularized.
+
+- **Early stopping**: monitor a held-out set, stop when it plateaus or degrades.
+- **Dropout**: usually `0.1` in attention and FFN. Already baked into pre-trained checkpoints; raising it can help small datasets.
+- **Weight decay**: `0.01` in AdamW. Penalizes drift from zero, indirectly keeping weights close to the pre-trained values (which are themselves near zero in magnitude).
+- **Label smoothing**: replace one-hot targets with `(1−ε)·onehot + ε/C·uniform`. Prevents over-confidence, improves calibration. Common `ε = 0.1`.
+- **Layer-wise LR decay (ULMFiT)**: lower layers get smaller LR than upper layers, since lower layers encode more general features that need less updating.
+- **Mixout**: dropout-like, but masked positions revert to the pre-trained value rather than zero. Specifically designed to combat catastrophic forgetting.
 
 ### Gradient Checkpointing
 

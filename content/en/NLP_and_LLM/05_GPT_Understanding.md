@@ -9,129 +9,6 @@
 
 ---
 
-## Theory & Principles
-
-GPT (Generative Pre-trained Transformer) is a Transformer **decoder** stack trained on a single objective — **next-token prediction** — and used for everything by autoregressive generation. Where BERT optimizes for understanding via bidirectional context, GPT trades that for the ability to *generate* and to be steered by *prompts*. Every behavior we associate with modern LLMs — chat, in-context learning, code completion — falls out of next-token prediction at sufficient scale.
-
-This section covers:
-
-- **(A) Autoregressive language modeling** — the objective, why it suffices, the chain-rule decomposition.
-- **(B) Causal masking** — implementation, geometric meaning, and why it makes parallel training possible.
-- **(C) Decoding strategies** — greedy, beam, sampling, top-k, top-p (nucleus), temperature; the mathematics of each.
-- **(D) KV-cache** — autoregressive inference is `O(L²)` naively; the cache makes it `O(L)`.
-- **(E) In-context learning** — why a sufficiently large LM can pattern-match few-shot examples without any gradient updates.
-- **(F) Scaling laws** — Kaplan / Chinchilla compute–data–parameter trade-offs.
-
-### A. Autoregressive Language Modeling
-
-**A.1 The objective.** The joint probability of a sequence factorizes by the chain rule:
-
-```
-p(w_1, w_2, ..., w_L) = ∏_{t=1..L}  p(w_t | w_1, ..., w_{t-1})
-```
-
-GPT models each conditional `p(w_t | w_{<t})` and is trained by maximizing the log-likelihood of the corpus:
-
-```
-L_LM = − Σ_t  log p(w_t | w_{<t})
-```
-
-**A.2 Why this suffices for everything.** Any task that can be expressed as continuing a text prompt — classification ("Sentiment: ___"), translation ("English: ... French: ___"), QA ("Question: ... Answer: ___") — collapses to next-token prediction once the right prompt is chosen. This is the foundation of zero-shot and in-context learning.
-
-**A.3 Loss is per-token.** Every position in the sequence contributes a loss term, so a sequence of length `L` provides `L` training signals. This is much more efficient than NSP-style sentence-level objectives, which provide one signal per pair.
-
-### B. Causal Masking
-
-To compute `p(w_t | w_{<t})` for *all* `t` in parallel, we need the hidden state at position `t` to depend only on positions `1...t-1`. The mechanism is **causal masking**: in self-attention, set `S[i, j] = -∞` for all `j > i` before softmax:
-
-```
-mask = torch.triu(torch.ones(L, L), diagonal=1).bool()
-S.masked_fill_(mask, float('-inf'))
-attn = softmax(S / sqrt(d_k)) @ V
-```
-
-After softmax, the masked entries become 0, so each row only mixes values from the corresponding row index and earlier. Crucially, this lets us train on a length-`L` sequence with **a single forward pass** and compute `L` next-token predictions and their losses simultaneously. Without causal masking we would need `L` separate forward passes, each with one fewer token visible.
-
-The same masking is applied at every layer — bidirectional information cannot leak even through deep stacking.
-
-### C. Decoding Strategies
-
-The model outputs a categorical distribution over the next token. Sampling from that distribution is its own design space.
-
-**C.1 Greedy.** `w_t = argmax p(w_t | w_{<t})`. Deterministic, fast, but myopic — locally optimal tokens often lead to globally degenerate text (repetition loops).
-
-**C.2 Beam search.** Maintain `B` candidate sequences; at each step, expand each by every vocabulary token, keep the top `B` by joint log-probability. Better than greedy for tasks with a single correct answer (translation, summarization), but produces unnaturally "average" text for open-ended generation.
-
-**C.3 Temperature.** Scale logits before softmax: `p(w) ∝ exp(logit(w) / T)`. `T < 1` sharpens (more deterministic), `T > 1` flattens (more random), `T = 0` reduces to greedy. A core knob for the determinism vs creativity trade-off.
-
-**C.4 Top-k sampling.** Restrict sampling to the `k` highest-probability tokens, renormalize, sample. Avoids the long tail of nonsense tokens. Choice of `k` is awkward — too small at confident steps wastes capacity, too large at unconfident steps reintroduces noise.
-
-**C.5 Top-p (nucleus) sampling.** Restrict to the smallest set of tokens whose cumulative probability ≥ `p` (typical `p = 0.9` or `0.95`). Adapts dynamically: at confident steps the set is small (1-3 tokens), at uncertain steps it expands. Standard choice for chat models.
-
-**C.6 Combined: temperature + top-p.** Modern API default. `temperature ≈ 0.7`, `top_p ≈ 0.9` yields fluent yet diverse generations.
-
-The trade-off is fundamental: high randomness produces creative but error-prone text; low randomness produces accurate but repetitive text.
-
-### D. KV-Cache
-
-At inference, generating token `t` requires running self-attention over the entire prefix `1...t-1`. Naïvely this is `O(L²)` per generated token, `O(L³)` total — quadratic in the worst case.
-
-But: at step `t`, the keys and values for positions `1...t-1` are *identical* to those computed at step `t-1`. Only the new token's `K, V` need to be computed, and only the new token's `Q` needs to attend to the cached `K`s.
-
-**KV-cache:**
-
-```
-At step t:
-  q_t, k_t, v_t = compute Q, K, V for position t only
-  K_cache.append(k_t)
-  V_cache.append(v_t)
-  output_t = softmax(q_t · K_cache^T / sqrt(d_k)) · V_cache
-```
-
-Per-token cost drops to `O(L · d)`, total generation cost `O(L² · d)` — quadratic in sequence length but linear in model dim (instead of cubic in length). The memory cost is `2 · L · d_model · n_layers` (keys + values per layer per token) and dominates large-context LLM serving. Tricks like multi-query attention (MQA), grouped-query attention (GQA), and PagedAttention exist specifically to compress or virtualize this cache.
-
-### E. In-Context Learning
-
-GPT-3 (Brown et al., 2020) showed that a sufficiently large LM can perform new tasks given only natural-language examples in the prompt — *no gradient updates*:
-
-```
-Prompt:
-  "English: hello / French: bonjour
-   English: thank you / French: merci
-   English: goodbye / French:"
-Output: "au revoir"
-```
-
-**Why does this work?** A large LM has implicitly seen many "task description + examples + completion" patterns in its training data. The forward pass at test time pattern-matches the prompt to similar structures and continues accordingly. Mechanistically, recent work (induction heads in Olsson et al., 2022) shows that two attention heads in series can learn to perform "find a previous occurrence of `[A]` followed by `[B]`, and when `[A]` appears again, predict `[B]`." This is a primitive form of meta-learning baked into attention.
-
-In-context learning *requires* scale — small LMs cannot pattern-match novel tasks this way. The emergence of the capability around the GPT-3 scale (175B parameters, 300B tokens) is one of the most studied "phase transitions" in deep learning.
-
-### F. Scaling Laws
-
-Kaplan et al. (2020) and Hoffmann et al. (Chinchilla, 2022) studied how loss `L` depends on model parameters `N`, dataset size `D`, and compute `C`:
-
-```
-L(N, D) ≈ L_∞ + (A / N^α) + (B / D^β)
-```
-
-Two empirical conclusions:
-
-1. **Loss is power-law in each axis.** Doubling parameters predictably reduces loss; doubling data does too.
-2. **Compute-optimal trade-off (Chinchilla).** For a fixed compute budget, the optimal allocation has roughly **20 training tokens per parameter**. Earlier models (GPT-3) were *under-trained* — the same compute split toward more data and fewer parameters would have done better. LLaMA-1 (65B at 1.4T tokens) and LLaMA-2 (7B at 2T tokens) follow the Chinchilla recipe.
-
-### From Theory to the Functions Below
-
-- §1 (overview) — situates GPT among Transformer variants from the previous lesson.
-- §2 (autoregressive LM) — implements §A's chain-rule loss with `cross_entropy` over shifted logits.
-- §3 (architecture) — assembles the decoder stack with the §B causal mask.
-- §4 (text generation) — codes §C's decoding strategies (greedy, beam, top-k, top-p, temperature).
-- §5 (GPT series) — surveys the §F scaling-law journey from GPT-1 to GPT-4.
-- §6 (HuggingFace GPT-2) — wires §A-§D to `GPT2LMHeadModel.generate()`.
-- §7 (in-context learning) — demonstrates §E's zero-shot / few-shot prompting.
-- §8 (KV cache) — implements the §D cache and benchmarks the speedup.
-
----
-
 ## 1. GPT Overview
 
 ### Generative Pre-trained Transformer
@@ -157,6 +34,24 @@ Features:
 ---
 
 ## 2. Autoregressive Language Modeling
+
+### Theory: Autoregressive Language Modeling
+
+**A.1 The objective.** The joint probability of a sequence factorizes by the chain rule:
+
+```
+p(w_1, w_2, ..., w_L) = ∏_{t=1..L}  p(w_t | w_1, ..., w_{t-1})
+```
+
+GPT models each conditional `p(w_t | w_{<t})` and is trained by maximizing the log-likelihood of the corpus:
+
+```
+L_LM = − Σ_t  log p(w_t | w_{<t})
+```
+
+**A.2 Why this suffices for everything.** Any task that can be expressed as continuing a text prompt — classification ("Sentiment: ___"), translation ("English: ... French: ___"), QA ("Question: ... Answer: ___") — collapses to next-token prediction once the right prompt is chosen. This is the foundation of zero-shot and in-context learning.
+
+**A.3 Loss is per-token.** Every position in the sequence contributes a loss term, so a sequence of length `L` provides `L` training signals. This is much more efficient than NSP-style sentence-level objectives, which provide one signal per pair.
 
 ### Training Objective
 
@@ -198,6 +93,20 @@ def causal_lm_loss(logits, targets):
 ---
 
 ## 3. GPT Architecture
+
+### Theory: Causal Masking
+
+To compute `p(w_t | w_{<t})` for *all* `t` in parallel, we need the hidden state at position `t` to depend only on positions `1...t-1`. The mechanism is **causal masking**: in self-attention, set `S[i, j] = -∞` for all `j > i` before softmax:
+
+```
+mask = torch.triu(torch.ones(L, L), diagonal=1).bool()
+S.masked_fill_(mask, float('-inf'))
+attn = softmax(S / sqrt(d_k)) @ V
+```
+
+After softmax, the masked entries become 0, so each row only mixes values from the corresponding row index and earlier. Crucially, this lets us train on a length-`L` sequence with **a single forward pass** and compute `L` next-token predictions and their losses simultaneously. Without causal masking we would need `L` separate forward passes, each with one fewer token visible.
+
+The same masking is applied at every layer — bidirectional information cannot leak even through deep stacking.
 
 ### Structure
 
@@ -295,6 +204,24 @@ class GPT(nn.Module):
 
 ## 4. Text Generation
 
+### Theory: Decoding Strategies
+
+The model outputs a categorical distribution over the next token. Sampling from that distribution is its own design space.
+
+**C.1 Greedy.** `w_t = argmax p(w_t | w_{<t})`. Deterministic, fast, but myopic — locally optimal tokens often lead to globally degenerate text (repetition loops).
+
+**C.2 Beam search.** Maintain `B` candidate sequences; at each step, expand each by every vocabulary token, keep the top `B` by joint log-probability. Better than greedy for tasks with a single correct answer (translation, summarization), but produces unnaturally "average" text for open-ended generation.
+
+**C.3 Temperature.** Scale logits before softmax: `p(w) ∝ exp(logit(w) / T)`. `T < 1` sharpens (more deterministic), `T > 1` flattens (more random), `T = 0` reduces to greedy. A core knob for the determinism vs creativity trade-off.
+
+**C.4 Top-k sampling.** Restrict sampling to the `k` highest-probability tokens, renormalize, sample. Avoids the long tail of nonsense tokens. Choice of `k` is awkward — too small at confident steps wastes capacity, too large at unconfident steps reintroduces noise.
+
+**C.5 Top-p (nucleus) sampling.** Restrict to the smallest set of tokens whose cumulative probability ≥ `p` (typical `p = 0.9` or `0.95`). Adapts dynamically: at confident steps the set is small (1-3 tokens), at uncertain steps it expands. Standard choice for chat models.
+
+**C.6 Combined: temperature + top-p.** Modern API default. `temperature ≈ 0.7`, `top_p ≈ 0.9` yields fluent yet diverse generations.
+
+The trade-off is fundamental: high randomness produces creative but error-prone text; low randomness produces accurate but repetitive text.
+
 ### Greedy Decoding
 
 ```python
@@ -381,6 +308,19 @@ def generate_top_p(model, input_ids, max_new_tokens, p=0.9, temperature=1.0):
 ---
 
 ## 5. GPT Series
+
+### Theory: Scaling Laws
+
+Kaplan et al. (2020) and Hoffmann et al. (Chinchilla, 2022) studied how loss `L` depends on model parameters `N`, dataset size `D`, and compute `C`:
+
+```
+L(N, D) ≈ L_∞ + (A / N^α) + (B / D^β)
+```
+
+Two empirical conclusions:
+
+1. **Loss is power-law in each axis.** Doubling parameters predictably reduces loss; doubling data does too.
+2. **Compute-optimal trade-off (Chinchilla).** For a fixed compute budget, the optimal allocation has roughly **20 training tokens per parameter**. Earlier models (GPT-3) were *under-trained* — the same compute split toward more data and fewer parameters would have done better. LLaMA-1 (65B at 1.4T tokens) and LLaMA-2 (7B at 2T tokens) follow the Chinchilla recipe.
 
 ### GPT-1 (2018)
 
@@ -495,6 +435,22 @@ print(tokenizer.decode(output[0]))
 
 ## 7. In-Context Learning
 
+### Theory: In-Context Learning
+
+GPT-3 (Brown et al., 2020) showed that a sufficiently large LM can perform new tasks given only natural-language examples in the prompt — *no gradient updates*:
+
+```
+Prompt:
+  "English: hello / French: bonjour
+   English: thank you / French: merci
+   English: goodbye / French:"
+Output: "au revoir"
+```
+
+**Why does this work?** A large LM has implicitly seen many "task description + examples + completion" patterns in its training data. The forward pass at test time pattern-matches the prompt to similar structures and continues accordingly. Mechanistically, recent work (induction heads in Olsson et al., 2022) shows that two attention heads in series can learn to perform "find a previous occurrence of `[A]` followed by `[B]`, and when `[A]` appears again, predict `[B]`." This is a primitive form of meta-learning baked into attention.
+
+In-context learning *requires* scale — small LMs cannot pattern-match novel tasks this way. The emergence of the capability around the GPT-3 scale (175B parameters, 300B tokens) is one of the most studied "phase transitions" in deep learning.
+
 ### Zero-shot
 
 ```
@@ -533,6 +489,24 @@ The answer is 11."
 ---
 
 ## 8. KV Cache
+
+### Theory: KV-Cache
+
+At inference, generating token `t` requires running self-attention over the entire prefix `1...t-1`. Naïvely this is `O(L²)` per generated token, `O(L³)` total — quadratic in the worst case.
+
+But: at step `t`, the keys and values for positions `1...t-1` are *identical* to those computed at step `t-1`. Only the new token's `K, V` need to be computed, and only the new token's `Q` needs to attend to the cached `K`s.
+
+**KV-cache:**
+
+```
+At step t:
+  q_t, k_t, v_t = compute Q, K, V for position t only
+  K_cache.append(k_t)
+  V_cache.append(v_t)
+  output_t = softmax(q_t · K_cache^T / sqrt(d_k)) · V_cache
+```
+
+Per-token cost drops to `O(L · d)`, total generation cost `O(L² · d)` — quadratic in sequence length but linear in model dim (instead of cubic in length). The memory cost is `2 · L · d_model · n_layers` (keys + values per layer per token) and dominates large-context LLM serving. Tricks like multi-query attention (MQA), grouped-query attention (GQA), and PagedAttention exist specifically to compress or virtualize this cache.
 
 ### Efficient Generation
 

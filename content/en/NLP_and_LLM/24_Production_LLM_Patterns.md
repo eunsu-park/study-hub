@@ -10,135 +10,6 @@
 
 ---
 
-## Theory & Principles
-
-A production LLM system has three concerns that prototype code can ignore: **cost** (LLM calls are expensive at scale), **latency** (user-facing apps demand sub-second responses), and **reliability** (LLMs occasionally fail, models are deprecated, providers go down). The patterns in this lesson — caching, fallbacks, routing, observability, A/B testing — are the operational layer that turns a working prototype into a system that runs 24/7 at scale without burning a hole in your budget.
-
-This section covers:
-
-- **(A) Cost economics** — where the money goes, the per-token math, the orders of magnitude that matter.
-- **(B) Caching** — exact-match cache (free wins), semantic cache (the trade-off), prompt caching (provider-side).
-- **(C) Latency optimization** — the wait-for-token hierarchy: TTFB, streaming, parallelization.
-- **(D) Fallback and retry patterns** — circuit breaker, multi-provider failover, exponential backoff.
-- **(E) Multi-model routing** — using a small model when possible, large model when necessary.
-- **(F) Observability** — distributed tracing for LLM apps, the things you must log, LangSmith / Phoenix.
-- **(G) A/B testing and gradual rollout** — measuring whether changes actually help in production.
-- **(H) Rate limiting and quotas** — protecting yourself and your users from cost runaway.
-
-### A. Cost Economics
-
-Per-token pricing varies by model and provider. As of late 2025:
-- Frontier models (GPT-4 class): $2-15 / million input tokens, $10-60 / million output tokens.
-- Mid-tier (Claude Sonnet, GPT-4o-mini): $0.15-3 / million input tokens.
-- Cheap (GPT-4o-mini, open-source): $0.05-0.5 / million tokens.
-
-A typical RAG query: ~1500 input tokens (system prompt + retrieved chunks + user query), ~300 output tokens. At GPT-4 prices: `(1500 · $5 + 300 · $15) / 10^6 = $0.012 / query`. At 1M queries/day, that is $12K/day — $4M/year — *just for the LLM calls*. Embedding, retrieval, infrastructure are extra.
-
-This is the central economic reality of LLM apps. Every optimization in the lesson — caching, routing, smaller models — exists because of this. Doubling the cache hit rate halves the LLM bill.
-
-### B. Caching
-
-**B.1 Exact-match cache.** Hash the input (prompt + parameters), look it up, return cached response if hit. Trivial to implement. Hit rate depends on input distribution: high (30-50%) for FAQ-style apps, low (<5%) for open-ended chat.
-
-**B.2 Semantic cache.** Embed the query, look up similar past queries (cosine similarity > threshold), return their cached responses if similar enough. Trades exactness for higher hit rate. Risk: returning a cached response to a query that *seems* similar but actually requires a different answer.
-
-```
-exact_cache[hash(query)] = response  # easy
-semantic_cache: embed(query) → top-1 in past queries → if sim > 0.97, return cached response
-```
-
-The threshold (0.95-0.99) is the lever. Higher = safer but lower hit rate. Production systems usually set conservative thresholds and verify with sampling.
-
-**B.3 Provider-side prompt caching** (Anthropic, OpenAI). When you make the same prompt prefix multiple times (e.g., a long system prompt + retrieved chunks that don't change), the provider caches the prefix's KV-cache and reuses it. Reduces input-token cost by 90% on cached portions and improves TTFB significantly. Free to enable, just mark the prefix as cacheable.
-
-### C. Latency Optimization
-
-User-perceived latency in an LLM app:
-
-```
-total = retrieve_latency + LLM_TTFB + decode_time
-```
-
-- **Retrieve latency**: 10-200ms for vector search; 50-500ms for web search APIs. Optimization: index tuning, smaller embedding models, caching.
-- **LLM TTFB**: 200ms-2s. Dominated by prompt length (prefill) and provider load. Optimization: shorter prompts, prompt caching, smaller models, dedicated capacity.
-- **Decode time**: number of output tokens × per-token speed (~50-200 tokens/sec). Optimization: shorter responses, streaming.
-
-**Streaming changes UX more than absolute latency.** A response that starts in 0.5s and streams smoothly feels faster than one that waits 1.5s and dumps. Always stream user-facing responses.
-
-### D. Fallback and Retry Patterns
-
-**D.1 Retry with exponential backoff.** Transient errors (rate limit, timeout, 5xx) — wait 1s, 2s, 4s, 8s, then give up. Standard.
-
-**D.2 Circuit breaker.** If a provider has been failing for a while, stop trying and immediately route to a fallback. Prevents cascading failures.
-
-**D.3 Multi-provider failover.** Primary provider fails → secondary → tertiary. Each can be a different LLM (GPT → Claude → Gemini → open-source). Cost: each provider needs auth keys, schema differences must be abstracted.
-
-**D.4 Static fallback.** If all LLM calls fail, return a canned response: "I'm having trouble right now, please try again later." Better than a 500 error to the user.
-
-The pattern: **always have a working response path**, even if it's degraded.
-
-### E. Multi-Model Routing
-
-Most production traffic is simple. Routing easy queries to a cheap model and reserving the expensive one for hard queries cuts cost by 5-10× without quality loss.
-
-**E.1 Heuristic routing.** Rule-based: short queries → cheap model, long queries → expensive. Crude but effective at the extremes.
-
-**E.2 Classifier-based routing.** A small classifier predicts difficulty; route accordingly. Trained on a labeled dataset (e.g., from past A/B tests). Better than heuristic but adds training/maintenance cost.
-
-**E.3 Cascading.** Try the cheap model first; if confidence is low or output fails validation, retry with the expensive model. Standard pattern.
-
-**E.4 Model-as-a-router.** A small LLM (or the cheap model itself) inspects the query and decides which downstream model handles it. Most flexible, adds an extra LLM call.
-
-### F. Observability
-
-LLM apps are harder to debug than traditional apps because the "logic" is implicit in prompts and weights. Observability requires logging:
-
-- Full input prompt (with all retrieved chunks, etc.)
-- Model identity and parameters (temperature, top_p, etc.)
-- Full output
-- Latency breakdown (retrieve / TTFB / decode)
-- Token counts, cost
-- Tool calls and their results (if agents)
-- User feedback (thumbs up/down) when collected
-
-**LangSmith** (LangChain), **Phoenix** (Arize), **Langfuse**, **Helicone**: hosted/OSS observability platforms for LLM apps. Each instruments your LLM calls (one-line setup with most LLM frameworks) and provides trace UIs, latency breakdowns, cost dashboards, and error analysis.
-
-The cost of observability is small (one HTTP call per LLM call to the trace backend); the value is enormous (debugging a production bug without it is essentially impossible).
-
-### G. A/B Testing and Gradual Rollout
-
-Changes that look good in offline eval often don't help in production (or actively hurt). The only way to know: serve both versions to real users, compare engagement metrics.
-
-Standard approach:
-1. Deploy the candidate alongside the production version.
-2. Route a small fraction (1-10%) of traffic to the candidate.
-3. Track engagement metrics (response acceptance, follow-up rate, user ratings, downstream conversion).
-4. Use statistical hypothesis tests to determine significance.
-5. If the candidate wins (or doesn't lose), gradually ramp up traffic.
-
-For LLM-specific changes, also track: cost per request, latency p50/p95/p99, error rate, refusal rate.
-
-### H. Rate Limiting and Quotas
-
-**Per-user limits**: prevent any one user from monopolizing capacity or causing surprise bills. Token-based (e.g., 100K tokens/day) is more aligned with cost than request-based.
-
-**Global limits**: protect against runaway scenarios — a bug that loops, a viral incident. Hard cap on total tokens per minute / hour / day.
-
-**Cost ceiling**: a separate budget guard that disables LLM calls if cost exceeds a threshold. The last line of defense.
-
-### From Theory to the Functions Below
-
-- §1 (architecture) — frames the §A-§H concerns at a system level.
-- §2 (caching) — implements §B.1 exact and §B.2 semantic cache.
-- §3 (cost optimization) — applies §A and §E to reduce per-query cost.
-- §4 (fallback/retry) — implements §D patterns.
-- §5 (A/B testing) — implements §G with traffic splitting and significance testing.
-- §6 (observability) — wires LangSmith and Phoenix per §F.
-- §7 (rate limiting / routing) — combines §E multi-model routing with §H rate limits.
-- §8 (deployment checklist) — synthesizes §A-§H into a launch-ready checklist.
-
----
-
 ## 1. LLM Application Architecture
 
 ### Production Architecture Overview
@@ -229,6 +100,21 @@ class LLMResponse:
 ---
 
 ## 2. Caching Strategies
+
+### Theory: Caching
+
+**B.1 Exact-match cache.** Hash the input (prompt + parameters), look it up, return cached response if hit. Trivial to implement. Hit rate depends on input distribution: high (30-50%) for FAQ-style apps, low (<5%) for open-ended chat.
+
+**B.2 Semantic cache.** Embed the query, look up similar past queries (cosine similarity > threshold), return their cached responses if similar enough. Trades exactness for higher hit rate. Risk: returning a cached response to a query that *seems* similar but actually requires a different answer.
+
+```
+exact_cache[hash(query)] = response  # easy
+semantic_cache: embed(query) → top-1 in past queries → if sim > 0.97, return cached response
+```
+
+The threshold (0.95-0.99) is the lever. Higher = safer but lower hit rate. Production systems usually set conservative thresholds and verify with sampling.
+
+**B.3 Provider-side prompt caching** (Anthropic, OpenAI). When you make the same prompt prefix multiple times (e.g., a long system prompt + retrieved chunks that don't change), the provider caches the prefix's KV-cache and reuses it. Reduces input-token cost by 90% on cached portions and improves TTFB significantly. Free to enable, just mark the prefix as cacheable.
 
 ### Exact Match Cache
 
@@ -430,6 +316,31 @@ class TieredCache:
 
 ## 3. Cost and Latency Optimization
 
+### Theory: Cost Economics
+
+Per-token pricing varies by model and provider. As of late 2025:
+- Frontier models (GPT-4 class): $2-15 / million input tokens, $10-60 / million output tokens.
+- Mid-tier (Claude Sonnet, GPT-4o-mini): $0.15-3 / million input tokens.
+- Cheap (GPT-4o-mini, open-source): $0.05-0.5 / million tokens.
+
+A typical RAG query: ~1500 input tokens (system prompt + retrieved chunks + user query), ~300 output tokens. At GPT-4 prices: `(1500 · $5 + 300 · $15) / 10^6 = $0.012 / query`. At 1M queries/day, that is $12K/day — $4M/year — *just for the LLM calls*. Embedding, retrieval, infrastructure are extra.
+
+This is the central economic reality of LLM apps. Every optimization in the lesson — caching, routing, smaller models — exists because of this. Doubling the cache hit rate halves the LLM bill.
+
+### Theory: Latency Optimization
+
+User-perceived latency in an LLM app:
+
+```
+total = retrieve_latency + LLM_TTFB + decode_time
+```
+
+- **Retrieve latency**: 10-200ms for vector search; 50-500ms for web search APIs. Optimization: index tuning, smaller embedding models, caching.
+- **LLM TTFB**: 200ms-2s. Dominated by prompt length (prefill) and provider load. Optimization: shorter prompts, prompt caching, smaller models, dedicated capacity.
+- **Decode time**: number of output tokens × per-token speed (~50-200 tokens/sec). Optimization: shorter responses, streaming.
+
+**Streaming changes UX more than absolute latency.** A response that starts in 0.5s and streams smoothly feels faster than one that waits 1.5s and dumps. Always stream user-facing responses.
+
 ### Cost Tracking and Budgets
 
 ```python
@@ -566,6 +477,18 @@ class PromptOptimizer:
 ---
 
 ## 4. Fallback and Retry Patterns
+
+### Theory: Fallback and Retry Patterns
+
+**D.1 Retry with exponential backoff.** Transient errors (rate limit, timeout, 5xx) — wait 1s, 2s, 4s, 8s, then give up. Standard.
+
+**D.2 Circuit breaker.** If a provider has been failing for a while, stop trying and immediately route to a fallback. Prevents cascading failures.
+
+**D.3 Multi-provider failover.** Primary provider fails → secondary → tertiary. Each can be a different LLM (GPT → Claude → Gemini → open-source). Cost: each provider needs auth keys, schema differences must be abstracted.
+
+**D.4 Static fallback.** If all LLM calls fail, return a canned response: "I'm having trouble right now, please try again later." Better than a 500 error to the user.
+
+The pattern: **always have a working response path**, even if it's degraded.
 
 ### Multi-Provider Fallback
 
@@ -735,6 +658,19 @@ class RetryableLLMClient:
 
 ## 5. A/B Testing LLM Responses
 
+### Theory: A/B Testing and Gradual Rollout
+
+Changes that look good in offline eval often don't help in production (or actively hurt). The only way to know: serve both versions to real users, compare engagement metrics.
+
+Standard approach:
+1. Deploy the candidate alongside the production version.
+2. Route a small fraction (1-10%) of traffic to the candidate.
+3. Track engagement metrics (response acceptance, follow-up rate, user ratings, downstream conversion).
+4. Use statistical hypothesis tests to determine significance.
+5. If the candidate wins (or doesn't lose), gradually ramp up traffic.
+
+For LLM-specific changes, also track: cost per request, latency p50/p95/p99, error rate, refusal rate.
+
 ### A/B Testing Framework
 
 ```python
@@ -831,6 +767,22 @@ print(f"User {user_id} assigned to variant: {variant.name}")
 ---
 
 ## 6. Observability
+
+### Theory: Observability
+
+LLM apps are harder to debug than traditional apps because the "logic" is implicit in prompts and weights. Observability requires logging:
+
+- Full input prompt (with all retrieved chunks, etc.)
+- Model identity and parameters (temperature, top_p, etc.)
+- Full output
+- Latency breakdown (retrieve / TTFB / decode)
+- Token counts, cost
+- Tool calls and their results (if agents)
+- User feedback (thumbs up/down) when collected
+
+**LangSmith** (LangChain), **Phoenix** (Arize), **Langfuse**, **Helicone**: hosted/OSS observability platforms for LLM apps. Each instruments your LLM calls (one-line setup with most LLM frameworks) and provides trace UIs, latency breakdowns, cost dashboards, and error analysis.
+
+The cost of observability is small (one HTTP call per LLM call to the trace backend); the value is enormous (debugging a production bug without it is essentially impossible).
 
 ### LangSmith Integration
 
@@ -1014,6 +966,26 @@ print(json.dumps(observer.dashboard(), indent=2))
 ---
 
 ## 7. Rate Limiting and Multi-Model Routing
+
+### Theory: Multi-Model Routing
+
+Most production traffic is simple. Routing easy queries to a cheap model and reserving the expensive one for hard queries cuts cost by 5-10× without quality loss.
+
+**E.1 Heuristic routing.** Rule-based: short queries → cheap model, long queries → expensive. Crude but effective at the extremes.
+
+**E.2 Classifier-based routing.** A small classifier predicts difficulty; route accordingly. Trained on a labeled dataset (e.g., from past A/B tests). Better than heuristic but adds training/maintenance cost.
+
+**E.3 Cascading.** Try the cheap model first; if confidence is low or output fails validation, retry with the expensive model. Standard pattern.
+
+**E.4 Model-as-a-router.** A small LLM (or the cheap model itself) inspects the query and decides which downstream model handles it. Most flexible, adds an extra LLM call.
+
+### Theory: Rate Limiting and Quotas
+
+**Per-user limits**: prevent any one user from monopolizing capacity or causing surprise bills. Token-based (e.g., 100K tokens/day) is more aligned with cost than request-based.
+
+**Global limits**: protect against runaway scenarios — a bug that loops, a viral incident. Hard cap on total tokens per minute / hour / day.
+
+**Cost ceiling**: a separate budget guard that disables LLM calls if cost exceeds a threshold. The last line of defense.
 
 ### Token Bucket Rate Limiter
 

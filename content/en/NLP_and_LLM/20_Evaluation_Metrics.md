@@ -9,141 +9,13 @@
 
 ---
 
-## Theory & Principles
+## 1. Importance of Evaluation
 
-Evaluating an LLM is harder than evaluating a classifier. A classifier has a single correct label per input; an LLM produces open-ended text where many different outputs can be equally correct. The field has evolved a layered evaluation strategy: **n-gram overlap** for tasks with concrete references, **embedding similarity** for semantic equivalence, **multiple-choice benchmarks** for capabilities, **execution-based scoring** for code, **LLM-as-judge** for nuanced quality judgments, and **human evaluation** as the gold standard. Each layer has known biases and failure modes — picking the wrong metric can mask real regressions or fabricate fake improvements.
-
-This section covers:
-
-- **(A) The fundamental challenge** — why "is this output correct?" is not a question with a single answer.
-- **(B) N-gram metrics: BLEU, ROUGE, METEOR** — definitions, what they capture, where they fail.
-- **(C) Embedding-based metrics: BERTScore, BLEURT** — semantic similarity instead of lexical overlap.
-- **(D) Perplexity** — the language-modeling intrinsic metric, its uses and limits.
-- **(E) Multiple-choice benchmarks: MMLU, HellaSwag, ARC** — measuring capability via likelihood.
-- **(F) Execution-based: HumanEval, MBPP** — code as a domain where ground truth is checkable.
-- **(G) LLM-as-judge** — using a strong LLM to grade outputs, the bias landscape.
-- **(H) Human evaluation** — when, how, the cost of doing it right.
-
-### A. The Fundamental Challenge
+### Theory: The Fundamental Challenge
 
 For a translation "The cat sat on the mat" → French, both "Le chat s'est assis sur le tapis" and "Le chat était assis sur le tapis" are valid. There is no single correct answer. Multiple references? Helps but doesn't enumerate the (infinite) space of valid translations. Worse, paraphrases can be valid translations even with no word in common.
 
 This is the core problem: **the space of acceptable outputs is open**. Any metric that compares against a fixed reference is approximate. Each metric trades off different aspects of "approximate."
-
-### B. N-gram Metrics
-
-**B.1 BLEU** (Papineni et al., 2002). For machine translation. Compute *modified n-gram precision* (clipped: each n-gram in candidate counted at most as many times as in any reference) for n = 1 to 4, then geometric mean, then a brevity penalty:
-
-```
-BLEU = BP · exp( Σ_{n=1..4} (1/4) · log p_n )
-where BP = 1 if c > r else exp(1 − r/c)    (c = candidate length, r = reference length)
-```
-
-The brevity penalty stops the model from gaming precision by emitting only the most-likely 1-2 words. BLEU correlates well with translation quality at corpus level but poorly at sentence level.
-
-**B.2 ROUGE** (Lin, 2004). For summarization. ROUGE-N is n-gram recall; ROUGE-L is longest common subsequence. Captures whether the summary covers the reference, where BLEU captures whether the candidate is contained in the references.
-
-**B.3 METEOR.** Adds stemming and synonym matching (via WordNet). More robust than BLEU on sentence-level evaluation, less standard.
-
-**Failure modes.** All n-gram metrics:
-- Reward verbatim copying, penalize valid paraphrasing.
-- Don't distinguish a critical word swap from a stylistic rewording.
-- Fail on tasks with no canonical reference (open-ended generation, dialogue).
-
-### C. Embedding-Based Metrics
-
-**C.1 BERTScore** (Zhang et al., 2020). For each token in the candidate, find the most similar token in the reference (in BERT embedding space), average the cosine similarities. Symmetric for precision/recall, F1 combines.
-
-```
-P_BERT = (1/|x|) · Σ_{xᵢ ∈ x}  max_{yⱼ ∈ y}  cos(BERT(xᵢ), BERT(yⱼ))
-```
-
-Captures semantic equivalence: "began" and "started" score high, even though n-gram metrics see them as different. Costs a BERT forward pass but is essentially zero-shot — no per-task tuning.
-
-**C.2 BLEURT.** A BERT model fine-tuned on human quality ratings. Output is a learned scalar score correlating better with human judgment than BERTScore. More accurate but model-specific.
-
-### D. Perplexity
-
-Perplexity is the **intrinsic** LM metric:
-
-```
-PPL(model, text) = exp( − (1/N) · Σᵢ log p_model(tokenᵢ | tokens<ᵢ) )
-```
-
-Lower is better. Equals the geometric mean of `1 / p(token)` over the corpus — "how surprised is the model on average?" PPL = 100 means the model is, on average, choosing among 100 equally-likely candidates per token.
-
-Uses:
-- Compare two LMs on the same evaluation corpus (lower PPL = better at predicting that corpus).
-- Track training progress.
-
-Limits:
-- Tokenizer-dependent: not comparable between models with different tokenizers (different N's, different units).
-- Not a quality measure: a model with low PPL on Wikipedia is not necessarily helpful for chat.
-- Cannot evaluate generation quality, only assignment of probability to held-out text.
-
-### E. Multiple-Choice Benchmarks
-
-**E.1 MMLU** (Massive Multitask Language Understanding). 57 subjects (math, history, law, ...) of multiple-choice questions. Score: fraction of questions where the model assigns highest probability to the correct option.
-
-**E.2 HellaSwag.** Sentence-completion questions designed to be easy for humans but hard for early LMs (adversarially filtered). Captures common-sense reasoning.
-
-**E.3 ARC, TruthfulQA, GSM8K, BIG-Bench.** Various task collections. ARC is grade-school science; TruthfulQA tests resistance to common misconceptions; GSM8K is grade-school math word problems.
-
-**Scoring.** All of these turn open-ended language modeling into a closed task by comparing per-option likelihoods. Cheap to evaluate (no generation, just scoring). Vulnerable to position bias (LLMs sometimes favor option (A)) and to memorization (test sets in training data).
-
-### F. Execution-Based Evaluation
-
-For code generation, the ground truth is *execution*. **HumanEval** (Chen et al., 2021) and **MBPP** (Mostly Basic Python Problems): given a function signature and docstring, generate the function body; run a hidden test suite; score = fraction passing.
-
-**pass@k** is the standard metric:
-
-```
-pass@k = E_problems [ 1 − C(n−c, k) / C(n, k) ]
-```
-
-where you sample `n` solutions per problem, `c` of them pass the tests; the formula gives the unbiased estimate of the probability that *some* of `k` independent samples pass.
-
-This is genuinely **objective**: passing is passing. Caveats: tests may be incomplete (the model could pass while having a bug not exercised by tests), and problems may be in pre-training data.
-
-### G. LLM-as-Judge
-
-Use a strong LLM (GPT-4, Claude) to grade outputs from a model under test. Common patterns:
-- **Direct scoring**: "Rate this response 1-5."
-- **Pairwise comparison**: "Which of A or B is better?"
-- **Faithfulness check**: "Does the response follow from the context?"
-
-**Biases:**
-- **Position bias**: judges often prefer option A over B even when content is identical.
-- **Length bias**: longer responses score higher.
-- **Self-preference**: GPT-4 tends to prefer GPT-4 outputs when judging.
-- **Sycophancy**: can be steered by user-revealed preferences.
-
-Mitigations: randomize positions, swap-and-average, use multiple judges, use Chain-of-Thought ("Explain your reasoning before scoring").
-
-LLM-as-judge correlates ~0.6-0.8 with human judgment on most tasks — better than n-gram metrics, much cheaper than humans, and improving as judge models improve.
-
-### H. Human Evaluation
-
-Still the gold standard for subjective quality. Standard procedure: define a rubric, hire raters, pilot to verify inter-rater agreement, run on a stratified sample, compute majority/average scores.
-
-**Cost** is the binding constraint: $0.50-$10 per labeled comparison depending on task complexity. Used sparingly — for final model evaluation, alignment data, or as the calibration target for cheaper metrics (LLM-as-judge, automated).
-
-A robust evaluation protocol layers these: automated metrics for every commit, LLM-as-judge for major changes, human evaluation for releases.
-
-### From Theory to the Functions Below
-
-- §1 (importance) — frames §A's fundamental challenge.
-- §2 (text similarity) — implements §B (BLEU, ROUGE, METEOR) and §C (BERTScore).
-- §3 (LM metrics) — implements §D perplexity.
-- §4 (code generation) — implements §F's pass@k for HumanEval / MBPP.
-- §5 (LLM benchmarks) — runs §E benchmarks (MMLU, HellaSwag).
-- §6 (LLM-as-judge) — implements §G with bias-mitigation patterns.
-- §7 (human evaluation) — §H protocols for setting up rater workflows.
-- §8 (integrated framework) — combines §B-§H into a multi-layered evaluation suite.
-
----
-
-## 1. Importance of Evaluation
 
 ### Challenges in LLM Evaluation
 
@@ -175,6 +47,38 @@ A robust evaluation protocol layers these: automated metrics for every commit, L
 ---
 
 ## 2. Text Similarity Metrics
+
+### Theory: N-gram Metrics
+
+**B.1 BLEU** (Papineni et al., 2002). For machine translation. Compute *modified n-gram precision* (clipped: each n-gram in candidate counted at most as many times as in any reference) for n = 1 to 4, then geometric mean, then a brevity penalty:
+
+```
+BLEU = BP · exp( Σ_{n=1..4} (1/4) · log p_n )
+where BP = 1 if c > r else exp(1 − r/c)    (c = candidate length, r = reference length)
+```
+
+The brevity penalty stops the model from gaming precision by emitting only the most-likely 1-2 words. BLEU correlates well with translation quality at corpus level but poorly at sentence level.
+
+**B.2 ROUGE** (Lin, 2004). For summarization. ROUGE-N is n-gram recall; ROUGE-L is longest common subsequence. Captures whether the summary covers the reference, where BLEU captures whether the candidate is contained in the references.
+
+**B.3 METEOR.** Adds stemming and synonym matching (via WordNet). More robust than BLEU on sentence-level evaluation, less standard.
+
+**Failure modes.** All n-gram metrics:
+- Reward verbatim copying, penalize valid paraphrasing.
+- Don't distinguish a critical word swap from a stylistic rewording.
+- Fail on tasks with no canonical reference (open-ended generation, dialogue).
+
+### Theory: Embedding-Based Metrics
+
+**C.1 BERTScore** (Zhang et al., 2020). For each token in the candidate, find the most similar token in the reference (in BERT embedding space), average the cosine similarities. Symmetric for precision/recall, F1 combines.
+
+```
+P_BERT = (1/|x|) · Σ_{xᵢ ∈ x}  max_{yⱼ ∈ y}  cos(BERT(xᵢ), BERT(yⱼ))
+```
+
+Captures semantic equivalence: "began" and "started" score high, even though n-gram metrics see them as different. Costs a BERT forward pass but is essentially zero-shot — no per-task tuning.
+
+**C.2 BLEURT.** A BERT model fine-tuned on human quality ratings. Output is a learned scalar score correlating better with human judgment than BERTScore. More accurate but model-specific.
 
 ### BLEU (Bilingual Evaluation Understudy)
 
@@ -312,6 +216,25 @@ print(compare_metrics(ref, cand2))
 
 ## 3. Language Model Metrics
 
+### Theory: Perplexity
+
+Perplexity is the **intrinsic** LM metric:
+
+```
+PPL(model, text) = exp( − (1/N) · Σᵢ log p_model(tokenᵢ | tokens<ᵢ) )
+```
+
+Lower is better. Equals the geometric mean of `1 / p(token)` over the corpus — "how surprised is the model on average?" PPL = 100 means the model is, on average, choosing among 100 equally-likely candidates per token.
+
+Uses:
+- Compare two LMs on the same evaluation corpus (lower PPL = better at predicting that corpus).
+- Track training progress.
+
+Limits:
+- Tokenizer-dependent: not comparable between models with different tokenizers (different N's, different units).
+- Not a quality measure: a model with low PPL on Wikipedia is not necessarily helpful for chat.
+- Cannot evaluate generation quality, only assignment of probability to held-out text.
+
 ### Perplexity
 
 ```python
@@ -371,6 +294,20 @@ print(f"Token Accuracy: {acc:.2%}")
 ---
 
 ## 4. Code Generation Evaluation
+
+### Theory: Execution-Based Evaluation
+
+For code generation, the ground truth is *execution*. **HumanEval** (Chen et al., 2021) and **MBPP** (Mostly Basic Python Problems): given a function signature and docstring, generate the function body; run a hidden test suite; score = fraction passing.
+
+**pass@k** is the standard metric:
+
+```
+pass@k = E_problems [ 1 − C(n−c, k) / C(n, k) ]
+```
+
+where you sample `n` solutions per problem, `c` of them pass the tests; the formula gives the unbiased estimate of the probability that *some* of `k` independent samples pass.
+
+This is genuinely **objective**: passing is passing. Caveats: tests may be incomplete (the model could pass while having a bug not exercised by tests), and problems may be in pre-training data.
 
 ### HumanEval (pass@k)
 
@@ -490,6 +427,16 @@ def evaluate_mbpp(model, tokenizer, n_samples=1):
 ---
 
 ## 5. LLM Benchmarks
+
+### Theory: Multiple-Choice Benchmarks
+
+**E.1 MMLU** (Massive Multitask Language Understanding). 57 subjects (math, history, law, ...) of multiple-choice questions. Score: fraction of questions where the model assigns highest probability to the correct option.
+
+**E.2 HellaSwag.** Sentence-completion questions designed to be easy for humans but hard for early LMs (adversarially filtered). Captures common-sense reasoning.
+
+**E.3 ARC, TruthfulQA, GSM8K, BIG-Bench.** Various task collections. ARC is grade-school science; TruthfulQA tests resistance to common misconceptions; GSM8K is grade-school math word problems.
+
+**Scoring.** All of these turn open-ended language modeling into a closed task by comparing per-option likelihoods. Cheap to evaluate (no generation, just scoring). Vulnerable to position bias (LLMs sometimes favor option (A)) and to memorization (test sets in training data).
 
 ### MMLU (Massive Multitask Language Understanding)
 
@@ -639,6 +586,23 @@ def evaluate_hellaswag(model, tokenizer):
 
 ## 6. LLM-as-Judge Evaluation
 
+### Theory: LLM-as-Judge
+
+Use a strong LLM (GPT-4, Claude) to grade outputs from a model under test. Common patterns:
+- **Direct scoring**: "Rate this response 1-5."
+- **Pairwise comparison**: "Which of A or B is better?"
+- **Faithfulness check**: "Does the response follow from the context?"
+
+**Biases:**
+- **Position bias**: judges often prefer option A over B even when content is identical.
+- **Length bias**: longer responses score higher.
+- **Self-preference**: GPT-4 tends to prefer GPT-4 outputs when judging.
+- **Sycophancy**: can be steered by user-revealed preferences.
+
+Mitigations: randomize positions, swap-and-average, use multiple judges, use Chain-of-Thought ("Explain your reasoning before scoring").
+
+LLM-as-judge correlates ~0.6-0.8 with human judgment on most tasks — better than n-gram metrics, much cheaper than humans, and improving as judge models improve.
+
 ### GPT-4 Evaluator
 
 ```python
@@ -743,6 +707,14 @@ print(scores)
 ---
 
 ## 7. Human Evaluation
+
+### Theory: Human Evaluation
+
+Still the gold standard for subjective quality. Standard procedure: define a rubric, hire raters, pilot to verify inter-rater agreement, run on a stratified sample, compute majority/average scores.
+
+**Cost** is the binding constraint: $0.50-$10 per labeled comparison depending on task complexity. Used sparingly — for final model evaluation, alignment data, or as the calibration target for cheaper metrics (LLM-as-judge, automated).
+
+A robust evaluation protocol layers these: automated metrics for every commit, LLM-as-judge for major changes, human evaluation for releases.
 
 ### Evaluation Interface
 

@@ -16,8 +16,6 @@ Previous: [Agent Evaluation and Benchmarks](./26_Agent_Evaluation_and_Benchmarks
 
 ## Table of Contents
 
-Before the per-pattern reference, read [**Theory & Principles**](#theory--principles) — the small set of design forces (control flow, state, safety, cost) that all agent patterns trade off, and the decision flow for picking the right one.
-
 1. [Orchestrator-Worker Pattern](#1-orchestrator-worker-pattern)
 2. [Router Pattern](#2-router-pattern)
 3. [Escalation Pattern](#3-escalation-pattern)
@@ -30,122 +28,6 @@ Before the per-pattern reference, read [**Theory & Principles**](#theory--princi
 10. [Agent Composition and Nesting](#10-agent-composition-and-nesting)
 11. [Choosing the Right Pattern](#11-choosing-the-right-pattern)
 12. [Exercises](#exercises)
-
----
-
-## Theory & Principles
-
-Agent design patterns are reusable shapes of control flow + state + interaction that solve recurring problems in agent systems. Each pattern is a particular way of arranging the basic agent loop (lesson 14) to handle a specific concern: complex task decomposition (orchestrator-worker), routing diverse queries (router), graceful failure (escalation), human oversight (HITL), safety boundaries (guardrails), and so on. Picking the right pattern matters because the wrong shape introduces bugs that no amount of prompt-tuning will fix; conversely, the right pattern can turn a tangled bespoke system into a few standard pieces.
-
-This section covers:
-
-- **(A) The four design forces** — control flow, state, safety, cost — that every pattern trades off.
-- **(B) The pattern catalog** — overview of the 11 patterns in this lesson and what each addresses.
-- **(C) Composition** — how patterns nest and combine; the "patterns of patterns" view.
-- **(D) Decision flow** — questions to ask when choosing a pattern.
-- **(E) Anti-patterns** — common mis-uses and how to recognize them.
-
-### A. The Four Design Forces
-
-Every agent pattern is a specific resolution of four competing forces:
-
-**A.1 Control flow.** Who decides what happens next — the LLM (autonomous), a fixed pipeline (deterministic), or a hybrid (router + worker)? More LLM control = more flexibility, less predictability.
-
-**A.2 State.** Where does information about the task live — in the prompt (transient, easy to reason about), in a database (persistent, scalable), in a graph of shared messages (multi-agent, coordinated)? More state externalization = more capability, more complexity.
-
-**A.3 Safety.** What checks happen, when, and by whom — pre-execution validation (guardrails), human approval (HITL), post-execution audit (output filter)? More safety checks = lower risk, higher latency.
-
-**A.4 Cost.** How many LLM calls, how big each, how parallel — orchestrator-worker is more LLM calls per task, but allows parallel workers; router is one extra call per query but routes most to cheap models. More autonomy = often more cost.
-
-Every pattern in the catalog (§B) is a specific point in this 4-D trade-off space. Knowing the trade-off helps you understand *why* a pattern looks the way it does and what its weaknesses are.
-
-### B. The Pattern Catalog
-
-Quick map of what each pattern in this lesson optimizes for:
-
-| Pattern | Primary force resolved | Use when |
-|---------|------------------------|----------|
-| Orchestrator-Worker | control flow (decompose) | task is complex, has independent sub-tasks |
-| Router | control flow (specialize) | many distinct query types, each best handled by a different agent/model |
-| Escalation | safety + cost (graceful degradation) | most queries are easy, few need expensive treatment |
-| Human-in-the-Loop | safety (oversight) | high-stakes actions need approval |
-| Guardrailed Agent | safety (validation) | input/output must satisfy hard constraints |
-| Supervisor | control flow (oversight) | multi-agent coordination needs central decision-maker |
-| Parallel Execution | cost (latency) | sub-tasks are independent and can run concurrently |
-| Agent Handoff | control flow + state | task crosses domain boundaries (sales → engineering, etc.) |
-| Error Recovery | safety (resilience) | tools fail, need automatic retry / fallback |
-| Composition / Nesting | reusability | same agent should be a tool for other agents |
-
-Production systems usually combine multiple — e.g., a supervisor that routes to specialized workers, with HITL for destructive actions and guardrails on outputs.
-
-### C. Composition
-
-Patterns compose. The classic production agent stack:
-
-```
-[user] → Guardrail (input check) → Router (which agent handles this?)
-       → Specialized Agent (Orchestrator-Worker for sub-tasks)
-                            ├→ Worker A (parallel)
-                            └→ Worker B (parallel)
-                            └→ HITL approval if destructive
-       → Guardrail (output check) → [response]
-```
-
-This single flow uses 5 patterns (Guardrail × 2, Router, Orchestrator-Worker, Parallel Execution, HITL). Each pattern handles one concern; the whole is the system. This is the value of having a pattern vocabulary — you can describe the system in terms a coworker recognizes.
-
-### D. Decision Flow
-
-When designing an agent system, work through these questions in order:
-
-1. **Is the task simple or complex?**
-   - Simple → single agent (lesson 14), maybe with router for input variety.
-   - Complex → orchestrator-worker (decompose) or hierarchical patterns.
-
-2. **Are sub-tasks independent or sequential?**
-   - Independent → parallel execution.
-   - Sequential → pipeline / sequential plan-execute.
-
-3. **Does the agent take destructive actions?**
-   - Yes → HITL gate on those actions, guardrails on inputs/outputs.
-   - No → standard agent loop is fine.
-
-4. **What is the cost-quality target?**
-   - Low cost → router → cheap model first, escalation to expensive only when needed.
-   - High quality → ensemble / debate, large models throughout.
-
-5. **Will this agent be used by other agents?**
-   - Yes → expose it as a tool (composition); document its inputs/outputs/failure modes carefully.
-   - No → standalone is fine.
-
-The answers determine which patterns from §B you stack together. Don't pick patterns by what's cool — pick by what these answers point to.
-
-### E. Anti-Patterns
-
-Common mis-uses:
-
-**E.1 Over-decomposition.** Splitting a simple task into a dozen agents when a single agent would have done it. Symptoms: latency multiplies without quality gain; cost blows up; debugging becomes harder. Fix: simpler is better; only decompose when the task genuinely has structure.
-
-**E.2 Missing guardrails on destructive actions.** Letting the agent autonomously delete data, send emails, or pay invoices. Symptoms: a single bug causes irreversible damage. Fix: always HITL or hard validation on destructive tools.
-
-**E.3 Spaghetti routing.** A router with so many branches that the routing logic itself is hard to maintain. Symptoms: the router prompt is 2K tokens of "if user mentions X then..." Fix: hierarchical routing (a primary router into broad categories, then specialized sub-routers).
-
-**E.4 Trust without verification.** Assuming the LLM's "I have completed the task" claim. Symptoms: agents declare success on unfinished work. Fix: programmatic outcome verification independent of the agent's self-report.
-
-**E.5 No timeout / step cap.** Agents that can run forever in pursuit of a vague goal. Symptoms: cost runaway, system stuck. Fix: hard caps on every dimension (steps, tokens, wall time, dollars).
-
-### From Theory to the Functions Below
-
-- §1 (orchestrator-worker) — implements §B's primary decomposition pattern.
-- §2 (router) — implements §B routing.
-- §3 (escalation) — implements §B graceful-degradation.
-- §4 (HITL) — implements §B human-oversight pattern.
-- §5 (guardrailed agents) — implements §B safety-validation pattern (uses lesson 21 guardrails).
-- §6 (supervisor) — implements §B's centralized multi-agent control.
-- §7 (parallel execution) — implements §B parallel-execution.
-- §8 (agent handoff) — implements §B handoff between specialized agents.
-- §9 (error recovery) — implements §B resilience pattern (uses lesson 24 retry/fallback).
-- §10 (composition / nesting) — implements §C agent-as-tool composition.
-- §11 (choosing the right pattern) — implements §D decision flow as a practical guide.
 
 ---
 
@@ -1475,6 +1357,21 @@ class ErrorRecoveryAgent:
 
 ## 10. Agent Composition and Nesting
 
+### Theory: Composition
+
+Patterns compose. The classic production agent stack:
+
+```
+[user] → Guardrail (input check) → Router (which agent handles this?)
+       → Specialized Agent (Orchestrator-Worker for sub-tasks)
+                            ├→ Worker A (parallel)
+                            └→ Worker B (parallel)
+                            └→ HITL approval if destructive
+       → Guardrail (output check) → [response]
+```
+
+This single flow uses 5 patterns (Guardrail × 2, Router, Orchestrator-Worker, Parallel Execution, HITL). Each pattern handles one concern; the whole is the system. This is the value of having a pattern vocabulary — you can describe the system in terms a coworker recognizes.
+
 ### Composable Agent Building Blocks
 
 ```python
@@ -1574,6 +1471,79 @@ print(f"Final draft: {result.get('draft', 'N/A')[:60]}...")
 ---
 
 ## 11. Choosing the Right Pattern
+
+### Theory: The Four Design Forces
+
+Every agent pattern is a specific resolution of four competing forces:
+
+**A.1 Control flow.** Who decides what happens next — the LLM (autonomous), a fixed pipeline (deterministic), or a hybrid (router + worker)? More LLM control = more flexibility, less predictability.
+
+**A.2 State.** Where does information about the task live — in the prompt (transient, easy to reason about), in a database (persistent, scalable), in a graph of shared messages (multi-agent, coordinated)? More state externalization = more capability, more complexity.
+
+**A.3 Safety.** What checks happen, when, and by whom — pre-execution validation (guardrails), human approval (HITL), post-execution audit (output filter)? More safety checks = lower risk, higher latency.
+
+**A.4 Cost.** How many LLM calls, how big each, how parallel — orchestrator-worker is more LLM calls per task, but allows parallel workers; router is one extra call per query but routes most to cheap models. More autonomy = often more cost.
+
+Every pattern in the catalog (§B) is a specific point in this 4-D trade-off space. Knowing the trade-off helps you understand *why* a pattern looks the way it does and what its weaknesses are.
+
+### Theory: The Pattern Catalog
+
+Quick map of what each pattern in this lesson optimizes for:
+
+| Pattern | Primary force resolved | Use when |
+|---------|------------------------|----------|
+| Orchestrator-Worker | control flow (decompose) | task is complex, has independent sub-tasks |
+| Router | control flow (specialize) | many distinct query types, each best handled by a different agent/model |
+| Escalation | safety + cost (graceful degradation) | most queries are easy, few need expensive treatment |
+| Human-in-the-Loop | safety (oversight) | high-stakes actions need approval |
+| Guardrailed Agent | safety (validation) | input/output must satisfy hard constraints |
+| Supervisor | control flow (oversight) | multi-agent coordination needs central decision-maker |
+| Parallel Execution | cost (latency) | sub-tasks are independent and can run concurrently |
+| Agent Handoff | control flow + state | task crosses domain boundaries (sales → engineering, etc.) |
+| Error Recovery | safety (resilience) | tools fail, need automatic retry / fallback |
+| Composition / Nesting | reusability | same agent should be a tool for other agents |
+
+Production systems usually combine multiple — e.g., a supervisor that routes to specialized workers, with HITL for destructive actions and guardrails on outputs.
+
+### Theory: Decision Flow
+
+When designing an agent system, work through these questions in order:
+
+1. **Is the task simple or complex?**
+   - Simple → single agent (lesson 14), maybe with router for input variety.
+   - Complex → orchestrator-worker (decompose) or hierarchical patterns.
+
+2. **Are sub-tasks independent or sequential?**
+   - Independent → parallel execution.
+   - Sequential → pipeline / sequential plan-execute.
+
+3. **Does the agent take destructive actions?**
+   - Yes → HITL gate on those actions, guardrails on inputs/outputs.
+   - No → standard agent loop is fine.
+
+4. **What is the cost-quality target?**
+   - Low cost → router → cheap model first, escalation to expensive only when needed.
+   - High quality → ensemble / debate, large models throughout.
+
+5. **Will this agent be used by other agents?**
+   - Yes → expose it as a tool (composition); document its inputs/outputs/failure modes carefully.
+   - No → standalone is fine.
+
+The answers determine which patterns from §B you stack together. Don't pick patterns by what's cool — pick by what these answers point to.
+
+### Theory: Anti-Patterns
+
+Common mis-uses:
+
+**E.1 Over-decomposition.** Splitting a simple task into a dozen agents when a single agent would have done it. Symptoms: latency multiplies without quality gain; cost blows up; debugging becomes harder. Fix: simpler is better; only decompose when the task genuinely has structure.
+
+**E.2 Missing guardrails on destructive actions.** Letting the agent autonomously delete data, send emails, or pay invoices. Symptoms: a single bug causes irreversible damage. Fix: always HITL or hard validation on destructive tools.
+
+**E.3 Spaghetti routing.** A router with so many branches that the routing logic itself is hard to maintain. Symptoms: the router prompt is 2K tokens of "if user mentions X then..." Fix: hierarchical routing (a primary router into broad categories, then specialized sub-routers).
+
+**E.4 Trust without verification.** Assuming the LLM's "I have completed the task" claim. Symptoms: agents declare success on unfinished work. Fix: programmatic outcome verification independent of the agent's self-report.
+
+**E.5 No timeout / step cap.** Agents that can run forever in pursuit of a vague goal. Symptoms: cost runaway, system stuck. Fix: hard caps on every dimension (steps, tokens, wall time, dollars).
 
 ### Decision Guide
 

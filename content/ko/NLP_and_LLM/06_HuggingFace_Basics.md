@@ -9,142 +9,6 @@
 
 ---
 
-## 이론과 원리
-
-HuggingFace Transformers 라이브러리는 본질적으로 수백 가지의 서로 다른 모델 아키텍처에 대한 **표준화된 추상 계층**입니다. 편리한 `AutoModel.from_pretrained("bert-base")` 호출 뒤에는 세 가지 독립적 관심사를 분리한 신중한 설계가 있습니다 — **토크나이즈**(텍스트 → 텐서), **아키텍처**(모델을 구현하는 Python 클래스), **가중치**(Hub에 저장된 학습된 파라미터). 이 조각들이 어떻게 맞물리는지, 그리고 상호 운용을 가능하게 하는 관습들을 이해하는 것이 — 연구 논문에서 작동하는 모델까지 세 줄로 가는 비결입니다.
-
-이 섹션은 다음을 다룹니다:
-
-- **(A) Auto-클래스 추상화** — `AutoModel`, `AutoTokenizer`, `AutoConfig`가 모델의 `config.json`을 보고 올바른 구체 클래스로 라우팅하는 방식.
-- **(B) 토크나이저 내부** — fast(Rust) vs slow(Python), 인코딩 파이프라인, `BatchEncoding`이 실제로 담는 것.
-- **(C) 모델 로딩과 가중치 초기화** — `state_dict`, weight tying, 부분 로드, `device_map`과 양자화 옵션.
-- **(D) Pipeline API** — `pipeline("sentiment-analysis")`이 전처리·모델 추론·후처리를 어떻게 구성하는가.
-- **(E) Datasets / Trainer 파이프라인** — 스트리밍과 캐싱을 위한 `datasets`, 표준 학습 루프를 위한 `Trainer`.
-- **(F) Hub** — 모델 카드, 버전 관리, `from_pretrained` 해석 알고리즘.
-
-### A. Auto-클래스 추상화
-
-`AutoTokenizer.from_pretrained("bert-base-uncased")`는 대략 다음을 합니다:
-
-```
-1. 모델 식별자 → HF Hub URL 해석.
-2. config.json 다운로드 — "model_type": "bert"와 아키텍처 하이퍼파라미터 포함.
-3. model_type을 레지스트리에서 조회 (bert → BertTokenizer 또는 BertTokenizerFast).
-4. 다운로드된 config와 vocab 파일로 그 구체 클래스 인스턴스화.
-```
-
-`AutoModel`, `AutoConfig`, `AutoFeatureExtractor`, `AutoProcessor`도 같은 알고리즘. 이점은 **사용자 코드를 모델 아키텍처와 분리**하는 것 — `bert-base-uncased`에서 `roberta-base` 또는 `microsoft/deberta-v3-base`로 바꾸는 데 문자열 하나만 수정하면 됩니다. Auto-클래스는 모달리티당 ~20개의 서로 다른 구체 클래스를 숨깁니다.
-
-작업 특화 Auto-클래스(`AutoModelForSequenceClassification`, `AutoModelForTokenClassification`, `AutoModelForQuestionAnswering`)는 기본 인코더에 적절한 작업 헤드를 둘러쌉니다. 작업 특화 체크포인트가 없으면 헤드의 무작위 초기화 가중치를 처리합니다.
-
-### B. 토크나이저 내부
-
-**B.1 Fast vs slow.** Python 토크나이저(slow)는 BPE/WordPiece를 순수 Python으로 구현; fast 토크나이저(`tokenizers` 라이브러리)는 같은 알고리즘을 Rust로 병렬 구현. 100만 문장 코퍼스의 BERT-base에서 fast는 ~50-100배 빠릅니다 — 토크나이즈가 종종 학습 병목이라 중요합니다.
-
-**B.2 인코딩 파이프라인.** `tokenizer(text)` 호출은 다음을 실행:
-
-```
-text → 정규화 → 사전 토큰화 → 토큰화 (BPE/WordPiece/Unigram) → 후처리 ([CLS], [SEP] 추가) → BatchEncoding 반환
-```
-
-각 단계는 설정 가능. 정규화는 Unicode(NFC/NFD), 악센트 제거, 소문자화 처리. 사전 토큰화는 공백·구두점에서 분리하지만 원본 문자 오프셋 기록을 유지. 후처리는 특수 토큰을 추가하고 어텐션 마스크를 만듭니다.
-
-**B.3 BatchEncoding 내용.**
-
-```python
-out = tokenizer(["Hello world", "Hi"], padding=True, return_tensors="pt")
-# out["input_ids"]:        토큰 ID 텐서, shape (B, L)
-# out["attention_mask"]:   실제 토큰은 1, 패딩은 0, shape (B, L)
-# out["token_type_ids"]:   문장 쌍 모델용 세그먼트 ID (0/1)
-# out.offset_mapping:      원본 문자열로의 문자 오프셋 (fast 토크나이저만)
-```
-
-`offset_mapping`은 NER 같은 토큰 수준 작업에 결정적 — 예측된 토큰 라벨을 원본 텍스트의 문자 범위로 매핑할 수 있게 합니다. 오프셋 추적 없이는 정확한 매핑이 불가능합니다.
-
-### C. 모델 로딩과 가중치 초기화
-
-**C.1 `from_pretrained`가 하는 일.**
-
-```
-1. config.json + 토크나이저 파일 + safetensors/pytorch_model.bin 다운로드.
-2. config로부터 아키텍처 인스턴스화 (무작위 가중치).
-3. 다운로드한 state_dict를 이름으로 매핑하여 로드.
-4. missing keys (아키텍처가 기대했지만 체크포인트에 없는 가중치)와
-   unexpected keys (체크포인트에 있지만 이 아키텍처가 사용하지 않는 가중치) 보고.
-```
-
-Missing keys는 자동 초기화됩니다 — `BertForSequenceClassification`의 분류 헤드 가중치는 사전학습된 `bert-base-uncased` 체크포인트에 그런 헤드가 없으므로 무작위입니다. 어떤 가중치가 사전학습되지 않았는지 알 수 있도록 라이브러리가 경고를 로그합니다.
-
-**C.2 Weight tying.** LM에서 입력 임베딩 `E ∈ ℝ^{V × d}`와 출력 사영 `W ∈ ℝ^{d × V}`는 보통 묶여 있습니다(`W = E^T`). 임베딩/출력의 파라미터 수를 절반으로 줄이고, 두 사영이 동시에 두 역할을 만족해야 한다는 정규화 효과도 줍니다. HF 라이브러리가 로딩 중 자동으로 처리합니다.
-
-**C.3 `device_map`과 양자화.** 현대 LLM은 단일 GPU에 풀 정밀도로 들어가지 않습니다. `from_pretrained(..., device_map="auto", load_in_4bit=True)`는 다음을 트리거:
-
-- meta 디바이스에 아키텍처 인스턴스화(할당 없음).
-- 가중치별 로딩: 각 텐서를 디스크에서 로드, 선택적으로 NF4/INT8로 양자화, 메모리 예산에 따라 GPU/CPU/디스크에 배치.
-- 결과: 각 파라미터가 자동 결정된 디바이스에 있는, 끝까지 실행 가능한 모델.
-
-이는 상당한 추상화입니다 — 없으면 `accelerate` 글루 코드를 수백 줄 작성해야 합니다.
-
-### D. Pipeline API
-
-```python
-nlp = pipeline("sentiment-analysis")
-nlp("I love this!")  # → [{"label": "POSITIVE", "score": 0.99}]
-```
-
-파이프라인은 다음을 구성하는 얇은 래퍼:
-
-```
-1. 토크나이저 (모델의 기본값에서).
-2. 모델 (no_grad로 forward).
-3. 후처리: 분류는 argmax, 생성은 디코딩, QA는 span 추출 등.
-```
-
-파이프라인은 편의 래퍼입니다 — 기본 토크나이즈, 기본 디코딩 전략, Python 수준 배칭에 묶입니다. 프로덕션에는 직접 토크나이저 + 모델 호출로 내려가고, 프로토타이핑이나 일회성 추론에는 파이프라인이 완벽합니다.
-
-### E. Datasets와 Trainer
-
-**E.1 `datasets`.** 로컬 파일, Hub, 커스텀 로더 위의 통합 API로, NLP에 중요한 세 속성:
-
-- **메모리 매핑 저장**(Apache Arrow): RAM에 안 들어가도 100 GB 데이터셋을 질의 가능.
-- **스트리밍**: `load_dataset(..., streaming=True)`이 요청 시 다운로드하는 이터레이터 반환 — C4(700 GB+) 같은 데이터셋에 필수.
-- **캐싱이 있는 `map()`**: `dataset.map(tokenize_fn)`이 한 번 실행되고 토크나이즈 결과를 디스크에 캐시. 재실행 시 캐시를 사용.
-
-**E.2 `Trainer`.** 표준 학습 루프 구현:
-
-```
-for epoch in range(num_epochs):
-    for batch in train_loader:
-        loss = model(**batch).loss
-        loss.backward()
-        optimizer.step()
-        scheduler.step()
-        optimizer.zero_grad()
-        if step % eval_steps == 0:
-            evaluate(...)
-```
-
-내장: 그래디언트 누적, 혼합 정밀도 학습, 분산 학습, 학습률 스케줄링, 체크포인팅, W&B / TensorBoard 통합. 연구에서는 `Trainer`를 직접 작성한 PyTorch로 대체해도 좋지만, 어떤 표준 파인튜닝 작업이든 `Trainer`가 수백 줄을 절약합니다.
-
-### F. Hub
-
-`huggingface.co/<org>/<model>`의 각 모델은 `config.json`, 토크나이저 파일, 가중치, `README.md`(모델 카드)를 담은 Git 저장소입니다. 모델 버전 관리는 Git 리비전을 사용하므로 `from_pretrained(..., revision="v1.0")`이 특정 커밋에 고정합니다.
-
-Hub는 현대 NLP의 의존성 메커니즘입니다 — 논문이 코드를 공개할 때 표준 패턴은 학습된 체크포인트도 Hub에 공개하여 모든 독자가 `from_pretrained`로 결과를 재현할 수 있게 하는 것입니다. 이것이 NLP 분야의 재현성이 ML 전반보다 훨씬 나은 구조적 이유입니다.
-
-### 이론에서 아래 함수들로
-
-- §1 (생태계) — §A Auto-클래스 계층과 §F Hub 모델 개관.
-- §2 (Pipeline API) — 일반 작업을 위한 §D 래퍼.
-- §3 (토크나이저) — §B `AutoTokenizer`의 직접 사용, offset_mapping 예시.
-- §4 (모델 로딩) — §C `from_pretrained` 메커니즘, `AutoModel`과 작업 특화 헤드.
-- §5 (Datasets 라이브러리) — §E.1의 load/map/cache 패턴.
-- §6 (Trainer API) — §E.2의 표준 파인튜닝 루프.
-- §7 (저장/로드) — `save_pretrained` / `push_to_hub` (§F).
-- §8 (감정 분류) — §B, §C, §E를 묶는 엔드 투 엔드 프로젝트.
-
----
-
 ## 1. HuggingFace 생태계
 
 ### 주요 구성요소
@@ -168,6 +32,23 @@ pip install transformers datasets tokenizers accelerate evaluate
 ---
 
 ## 2. Pipeline API
+
+### 이론: Pipeline API
+
+```python
+nlp = pipeline("sentiment-analysis")
+nlp("I love this!")  # → [{"label": "POSITIVE", "score": 0.99}]
+```
+
+파이프라인은 다음을 구성하는 얇은 래퍼:
+
+```
+1. 토크나이저 (모델의 기본값에서).
+2. 모델 (no_grad로 forward).
+3. 후처리: 분류는 argmax, 생성은 디코딩, QA는 span 추출 등.
+```
+
+파이프라인은 편의 래퍼입니다 — 기본 토크나이즈, 기본 디코딩 전략, Python 수준 배칭에 묶입니다. 프로덕션에는 직접 토크나이저 + 모델 호출로 내려가고, 프로토타이핑이나 일회성 추론에는 파이프라인이 완벽합니다.
 
 ### 가장 간단한 사용법
 
@@ -262,6 +143,30 @@ qa = pipeline(
 
 ## 3. 토크나이저
 
+### 이론: 토크나이저 내부
+
+**B.1 Fast vs slow.** Python 토크나이저(slow)는 BPE/WordPiece를 순수 Python으로 구현; fast 토크나이저(`tokenizers` 라이브러리)는 같은 알고리즘을 Rust로 병렬 구현. 100만 문장 코퍼스의 BERT-base에서 fast는 ~50-100배 빠릅니다 — 토크나이즈가 종종 학습 병목이라 중요합니다.
+
+**B.2 인코딩 파이프라인.** `tokenizer(text)` 호출은 다음을 실행:
+
+```
+text → 정규화 → 사전 토큰화 → 토큰화 (BPE/WordPiece/Unigram) → 후처리 ([CLS], [SEP] 추가) → BatchEncoding 반환
+```
+
+각 단계는 설정 가능. 정규화는 Unicode(NFC/NFD), 악센트 제거, 소문자화 처리. 사전 토큰화는 공백·구두점에서 분리하지만 원본 문자 오프셋 기록을 유지. 후처리는 특수 토큰을 추가하고 어텐션 마스크를 만듭니다.
+
+**B.3 BatchEncoding 내용.**
+
+```python
+out = tokenizer(["Hello world", "Hi"], padding=True, return_tensors="pt")
+# out["input_ids"]:        토큰 ID 텐서, shape (B, L)
+# out["attention_mask"]:   실제 토큰은 1, 패딩은 0, shape (B, L)
+# out["token_type_ids"]:   문장 쌍 모델용 세그먼트 ID (0/1)
+# out.offset_mapping:      원본 문자열로의 문자 오프셋 (fast 토크나이저만)
+```
+
+`offset_mapping`은 NER 같은 토큰 수준 작업에 결정적 — 예측된 토큰 라벨을 원본 텍스트의 문자 범위로 매핑할 수 있게 합니다. 오프셋 추적 없이는 정확한 매핑이 불가능합니다.
+
 ### AutoTokenizer
 
 ```python
@@ -340,6 +245,45 @@ tokens = tokenizer.convert_ids_to_tokens(ids)
 
 ## 4. 모델 로드
 
+### 이론: Auto-클래스 추상화
+
+`AutoTokenizer.from_pretrained("bert-base-uncased")`는 대략 다음을 합니다:
+
+```
+1. 모델 식별자 → HF Hub URL 해석.
+2. config.json 다운로드 — "model_type": "bert"와 아키텍처 하이퍼파라미터 포함.
+3. model_type을 레지스트리에서 조회 (bert → BertTokenizer 또는 BertTokenizerFast).
+4. 다운로드된 config와 vocab 파일로 그 구체 클래스 인스턴스화.
+```
+
+`AutoModel`, `AutoConfig`, `AutoFeatureExtractor`, `AutoProcessor`도 같은 알고리즘. 이점은 **사용자 코드를 모델 아키텍처와 분리**하는 것 — `bert-base-uncased`에서 `roberta-base` 또는 `microsoft/deberta-v3-base`로 바꾸는 데 문자열 하나만 수정하면 됩니다. Auto-클래스는 모달리티당 ~20개의 서로 다른 구체 클래스를 숨깁니다.
+
+작업 특화 Auto-클래스(`AutoModelForSequenceClassification`, `AutoModelForTokenClassification`, `AutoModelForQuestionAnswering`)는 기본 인코더에 적절한 작업 헤드를 둘러쌉니다. 작업 특화 체크포인트가 없으면 헤드의 무작위 초기화 가중치를 처리합니다.
+
+### 이론: 모델 로딩과 가중치 초기화
+
+**C.1 `from_pretrained`가 하는 일.**
+
+```
+1. config.json + 토크나이저 파일 + safetensors/pytorch_model.bin 다운로드.
+2. config로부터 아키텍처 인스턴스화 (무작위 가중치).
+3. 다운로드한 state_dict를 이름으로 매핑하여 로드.
+4. missing keys (아키텍처가 기대했지만 체크포인트에 없는 가중치)와
+   unexpected keys (체크포인트에 있지만 이 아키텍처가 사용하지 않는 가중치) 보고.
+```
+
+Missing keys는 자동 초기화됩니다 — `BertForSequenceClassification`의 분류 헤드 가중치는 사전학습된 `bert-base-uncased` 체크포인트에 그런 헤드가 없으므로 무작위입니다. 어떤 가중치가 사전학습되지 않았는지 알 수 있도록 라이브러리가 경고를 로그합니다.
+
+**C.2 Weight tying.** LM에서 입력 임베딩 `E ∈ ℝ^{V × d}`와 출력 사영 `W ∈ ℝ^{d × V}`는 보통 묶여 있습니다(`W = E^T`). 임베딩/출력의 파라미터 수를 절반으로 줄이고, 두 사영이 동시에 두 역할을 만족해야 한다는 정규화 효과도 줍니다. HF 라이브러리가 로딩 중 자동으로 처리합니다.
+
+**C.3 `device_map`과 양자화.** 현대 LLM은 단일 GPU에 풀 정밀도로 들어가지 않습니다. `from_pretrained(..., device_map="auto", load_in_4bit=True)`는 다음을 트리거:
+
+- meta 디바이스에 아키텍처 인스턴스화(할당 없음).
+- 가중치별 로딩: 각 텐서를 디스크에서 로드, 선택적으로 NF4/INT8로 양자화, 메모리 예산에 따라 GPU/CPU/디스크에 배치.
+- 결과: 각 파라미터가 자동 결정된 디바이스에 있는, 끝까지 실행 가능한 모델.
+
+이는 상당한 추상화입니다 — 없으면 `accelerate` 글루 코드를 수백 줄 작성해야 합니다.
+
 ### AutoModel
 
 ```python
@@ -394,6 +338,30 @@ print(f"Class: {predicted_class}, Confidence: {predictions[0][predicted_class]:.
 ---
 
 ## 5. Datasets 라이브러리
+
+### 이론: Datasets와 Trainer
+
+**E.1 `datasets`.** 로컬 파일, Hub, 커스텀 로더 위의 통합 API로, NLP에 중요한 세 속성:
+
+- **메모리 매핑 저장**(Apache Arrow): RAM에 안 들어가도 100 GB 데이터셋을 질의 가능.
+- **스트리밍**: `load_dataset(..., streaming=True)`이 요청 시 다운로드하는 이터레이터 반환 — C4(700 GB+) 같은 데이터셋에 필수.
+- **캐싱이 있는 `map()`**: `dataset.map(tokenize_fn)`이 한 번 실행되고 토크나이즈 결과를 디스크에 캐시. 재실행 시 캐시를 사용.
+
+**E.2 `Trainer`.** 표준 학습 루프 구현:
+
+```
+for epoch in range(num_epochs):
+    for batch in train_loader:
+        loss = model(**batch).loss
+        loss.backward()
+        optimizer.step()
+        scheduler.step()
+        optimizer.zero_grad()
+        if step % eval_steps == 0:
+            evaluate(...)
+```
+
+내장: 그래디언트 누적, 혼합 정밀도 학습, 분산 학습, 학습률 스케줄링, 체크포인팅, W&B / TensorBoard 통합. 연구에서는 `Trainer`를 직접 작성한 PyTorch로 대체해도 좋지만, 어떤 표준 파인튜닝 작업이든 `Trainer`가 수백 줄을 절약합니다.
 
 ### 데이터셋 로드
 
@@ -539,6 +507,12 @@ trainer = Trainer(
 ---
 
 ## 7. 모델 저장/로드
+
+### 이론: Hub
+
+`huggingface.co/<org>/<model>`의 각 모델은 `config.json`, 토크나이저 파일, 가중치, `README.md`(모델 카드)를 담은 Git 저장소입니다. 모델 버전 관리는 Git 리비전을 사용하므로 `from_pretrained(..., revision="v1.0")`이 특정 커밋에 고정합니다.
+
+Hub는 현대 NLP의 의존성 메커니즘입니다 — 논문이 코드를 공개할 때 표준 패턴은 학습된 체크포인트도 Hub에 공개하여 모든 독자가 `from_pretrained`로 결과를 재현할 수 있게 하는 것입니다. 이것이 NLP 분야의 재현성이 ML 전반보다 훨씬 나은 구조적 이유입니다.
 
 ### 로컬 저장
 

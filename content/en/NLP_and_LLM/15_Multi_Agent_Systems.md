@@ -10,21 +10,9 @@
 
 ---
 
-## Theory & Principles
+## 1. Multi-Agent Architecture Overview
 
-A multi-agent system replaces the single LLM-with-tools of lesson 14 with a **team** of specialized agents that communicate to solve a problem. The key claim is that decomposition pays: a researcher-agent + a writer-agent + a critic-agent collectively outperform a single generalist agent doing all three jobs. Whether this is actually true depends on architecture — bad coordination can make multi-agent systems strictly worse than a single agent, with multiplied cost. The art is choosing the right *topology* (who talks to whom), the right *communication protocol* (what they exchange), and the right *control* (who decides when the task is done).
-
-This section covers:
-
-- **(A) Why decompose** — the empirical and theoretical case for specialization, the role of role-conditioning.
-- **(B) Topologies** — supervisor, sequential, parallel, hierarchical, network; what each enables and constrains.
-- **(C) Communication patterns** — shared memory vs message passing, broadcast vs point-to-point.
-- **(D) Coordination protocols** — turn-taking (round-robin), supervisor-routed, voting, debate.
-- **(E) State and termination** — how agents share context, how the system knows when to stop.
-- **(F) Framework comparison** — CrewAI (role-based), AutoGen (conversational), LangGraph (state-machine), and when each fits.
-- **(G) Failure modes** — runaway loops, agent disagreement deadlock, context explosion, cost amplification.
-
-### A. Why Decompose
+### Theory: Why Decompose
 
 Two arguments for splitting one agent into many:
 
@@ -33,94 +21,6 @@ Two arguments for splitting one agent into many:
 **A.2 Cognitive division of labor.** A complex task often has structurally different sub-tasks (search, draft, critique, revise). Asking one prompt to do all four sequentially in one message dilutes attention. Splitting them into separate calls — each with full context budget for its own task — improves quality.
 
 Counter-arguments (when single-agent wins): the task is simple, communication overhead exceeds the specialization benefit, the same LLM is doing all the "agents" so the diversity is illusory. Multi-agent is not free — it multiplies token cost by the number of agents and adds coordination cost.
-
-### B. Topologies
-
-The topology defines the communication graph between agents.
-
-**B.1 Supervisor (manager-workers).** A central supervisor agent reads the task, decides which worker to invoke, collects results, decides next step. Workers don't talk to each other. Simple, debuggable, easy to add new workers.
-
-**B.2 Sequential (pipeline).** Agent A's output is Agent B's input, then C, etc. Pure chain. Useful when sub-tasks are dependent (research → outline → write → edit). Limited because B cannot ask A to clarify.
-
-**B.3 Parallel (broadcast / map).** All agents work on the same input simultaneously, then results are aggregated. Useful for ensembles (3 agents draft, 1 agent picks the best) or independent decomposition (extract entities + extract relations + extract dates from same doc).
-
-**B.4 Hierarchical.** Trees of supervisors managing sub-supervisors managing workers. Used when the task itself decomposes hierarchically.
-
-**B.5 Network (peer-to-peer).** Any agent can talk to any other. Most flexible, most chaotic. Used in debate setups (Liang et al., 2023) where agents iteratively critique each other.
-
-The rule of thumb: **start with supervisor, add complexity only when needed.** Most production multi-agent systems are supervisor-routed.
-
-### C. Communication Patterns
-
-How agents exchange information:
-
-**C.1 Shared memory.** A blackboard data structure all agents read/write. Simple but fragile (concurrent writes, ambiguous ownership). Common in research prototypes.
-
-**C.2 Message passing.** Explicit "from A to B" messages with structured payloads. Maps cleanly to function calling at the framework level. Standard in production frameworks.
-
-**C.3 Broadcast.** Supervisor sends to all workers; all workers can read each other's prior messages (via the supervisor's collected state).
-
-**C.4 Tool-call as message.** Treat agent invocations as tool calls — Agent A "calls" Agent B with arguments, gets a return value. Convenient because frameworks already handle tool calls; turns multi-agent into a recursion of single-agent.
-
-### D. Coordination Protocols
-
-Who decides who acts next:
-
-**D.1 Round-robin.** Fixed turn order. Simple but inefficient — agents speak when they have nothing to add.
-
-**D.2 Supervisor-routed.** A supervisor agent (or LLM) examines state and picks the next agent. Most common in production. Cost: one extra LLM call per step for routing.
-
-**D.3 Voting / consensus.** Each agent proposes; a vote determines the next action. Used when multiple agents have legitimate competing answers (e.g., self-consistency at agent scale).
-
-**D.4 Debate / critique.** Agents take adversarial roles ("argue for", "argue against") and refine through exchange. Empirically improves accuracy on hard reasoning tasks (Du et al., 2023, "Improving Factuality and Reasoning in Language Models through Multiagent Debate"). Cost is proportional to the number of debate rounds.
-
-### E. State and Termination
-
-**E.1 State sharing.** Three options: (1) full conversation broadcast (all agents see everything — high context cost), (2) summarized history (a summarizer compresses past turns periodically), (3) supervisor-mediated (workers only see what the supervisor passes to them). Production typically uses option 3 for cost control.
-
-**E.2 Termination conditions.** When does the system stop?
-- **Explicit signal** — the supervisor declares "task complete".
-- **Step budget** — hard cap on total agent turns.
-- **Convergence** — no agent has new information to add.
-- **External** — wall-clock timeout, cost ceiling.
-
-A robust multi-agent system needs *all four* in production: explicit primary, hard caps as fallbacks against runaway.
-
-### F. Framework Comparison
-
-**F.1 CrewAI** (role-based). Agents are defined by Role, Goal, Backstory. Tasks are assigned to agents; the framework orchestrates. Closest to "human team" mental model. Best for well-defined collaborative workflows.
-
-**F.2 AutoGen** (conversational). Agents are defined by their conversational behavior (who they reply to, what they say). Multi-agent conversations are first-class. Best for research-y settings, debate-style protocols.
-
-**F.3 LangGraph** (state-machine). The system is a graph of nodes (agents or functions) connected by conditional edges. State explicitly modeled. Best for complex flows with branching, loops, human-in-the-loop. Most production-grade.
-
-**F.4 Hand-rolled.** A loop with `if/elif` over agent names. Often the right choice for narrow, well-understood production systems — frameworks add observability and tooling but also abstraction debt.
-
-### G. Failure Modes
-
-**G.1 Runaway loops.** Two agents pass control back and forth without progress. Mitigation: step caps, termination detection.
-
-**G.2 Disagreement deadlock.** Two agents won't agree; the system stalls. Mitigation: supervisor with tiebreaker authority; or default to one agent's output if no consensus.
-
-**G.3 Context explosion.** Each agent's prompt includes the full conversation; total tokens grow as O(n_agents × n_turns). Mitigation: summarization, supervisor-mediated narrowing.
-
-**G.4 Cost amplification.** A 5-agent debate with 5 rounds and a supervisor is 25 + 5 = 30 LLM calls per query. Mitigation: aggressive caching, smaller models for cheaper roles, batch-mode for parallel agents.
-
-**G.5 Spurious specialization.** All agents are the same LLM with different prompts; "diversity" of opinion is illusory. Mitigation: actually use different models for genuinely different perspectives (e.g., GPT-4 + Claude + open-source).
-
-### From Theory to the Functions Below
-
-- §1 (overview) — frames §A's case for decomposition.
-- §2 (orchestration patterns) — implements §B's topologies (supervisor, sequential, parallel).
-- §3 (inter-agent communication) — codes §C's message passing and shared memory patterns.
-- §4 (CrewAI) — §F.1's role-based framework with §B's topologies.
-- §5 (AutoGen) — §F.2's conversational framework, naturally fitting §D.4 debate protocols.
-- §6 (LangGraph) — §F.3's state-machine with §E explicit state and termination.
-- §7 (multi-agent RAG) — end-to-end system combining §A-§G with the lesson 12 RAG techniques.
-
----
-
-## 1. Multi-Agent Architecture Overview
 
 ### Why Multi-Agent?
 
@@ -187,6 +87,34 @@ class AgentState:
 ---
 
 ## 2. Orchestration Patterns
+
+### Theory: Topologies
+
+The topology defines the communication graph between agents.
+
+**B.1 Supervisor (manager-workers).** A central supervisor agent reads the task, decides which worker to invoke, collects results, decides next step. Workers don't talk to each other. Simple, debuggable, easy to add new workers.
+
+**B.2 Sequential (pipeline).** Agent A's output is Agent B's input, then C, etc. Pure chain. Useful when sub-tasks are dependent (research → outline → write → edit). Limited because B cannot ask A to clarify.
+
+**B.3 Parallel (broadcast / map).** All agents work on the same input simultaneously, then results are aggregated. Useful for ensembles (3 agents draft, 1 agent picks the best) or independent decomposition (extract entities + extract relations + extract dates from same doc).
+
+**B.4 Hierarchical.** Trees of supervisors managing sub-supervisors managing workers. Used when the task itself decomposes hierarchically.
+
+**B.5 Network (peer-to-peer).** Any agent can talk to any other. Most flexible, most chaotic. Used in debate setups (Liang et al., 2023) where agents iteratively critique each other.
+
+The rule of thumb: **start with supervisor, add complexity only when needed.** Most production multi-agent systems are supervisor-routed.
+
+### Theory: Coordination Protocols
+
+Who decides who acts next:
+
+**D.1 Round-robin.** Fixed turn order. Simple but inefficient — agents speak when they have nothing to add.
+
+**D.2 Supervisor-routed.** A supervisor agent (or LLM) examines state and picks the next agent. Most common in production. Cost: one extra LLM call per step for routing.
+
+**D.3 Voting / consensus.** Each agent proposes; a vote determines the next action. Used when multiple agents have legitimate competing answers (e.g., self-consistency at agent scale).
+
+**D.4 Debate / critique.** Agents take adversarial roles ("argue for", "argue against") and refine through exchange. Empirically improves accuracy on hard reasoning tasks (Du et al., 2023, "Improving Factuality and Reasoning in Language Models through Multiagent Debate"). Cost is proportional to the number of debate rounds.
 
 ### Sequential Pipeline
 
@@ -415,6 +343,18 @@ result = asyncio.run(fan_out_then_aggregate("Should we adopt LLMs for customer s
 
 ## 3. Inter-Agent Communication
 
+### Theory: Communication Patterns
+
+How agents exchange information:
+
+**C.1 Shared memory.** A blackboard data structure all agents read/write. Simple but fragile (concurrent writes, ambiguous ownership). Common in research prototypes.
+
+**C.2 Message passing.** Explicit "from A to B" messages with structured payloads. Maps cleanly to function calling at the framework level. Standard in production frameworks.
+
+**C.3 Broadcast.** Supervisor sends to all workers; all workers can read each other's prior messages (via the supervisor's collected state).
+
+**C.4 Tool-call as message.** Treat agent invocations as tool calls — Agent A "calls" Agent B with arguments, gets a return value. Convenient because frameworks already handle tool calls; turns multi-agent into a recursion of single-agent.
+
 ### Message Passing Protocol
 
 ```python
@@ -539,6 +479,16 @@ class SharedMemory:
 ---
 
 ## 4. CrewAI Framework
+
+### Theory: Framework Comparison
+
+**F.1 CrewAI** (role-based). Agents are defined by Role, Goal, Backstory. Tasks are assigned to agents; the framework orchestrates. Closest to "human team" mental model. Best for well-defined collaborative workflows.
+
+**F.2 AutoGen** (conversational). Agents are defined by their conversational behavior (who they reply to, what they say). Multi-agent conversations are first-class. Best for research-y settings, debate-style protocols.
+
+**F.3 LangGraph** (state-machine). The system is a graph of nodes (agents or functions) connected by conditional edges. State explicitly modeled. Best for complex flows with branching, loops, human-in-the-loop. Most production-grade.
+
+**F.4 Hand-rolled.** A loop with `if/elif` over agent names. Often the right choice for narrow, well-understood production systems — frameworks add observability and tooling but also abstraction debt.
 
 ### Overview
 
@@ -772,6 +722,18 @@ executor.initiate_chat(
 
 ## 6. LangGraph Multi-Agent
 
+### Theory: State and Termination
+
+**E.1 State sharing.** Three options: (1) full conversation broadcast (all agents see everything — high context cost), (2) summarized history (a summarizer compresses past turns periodically), (3) supervisor-mediated (workers only see what the supervisor passes to them). Production typically uses option 3 for cost control.
+
+**E.2 Termination conditions.** When does the system stop?
+- **Explicit signal** — the supervisor declares "task complete".
+- **Step budget** — hard cap on total agent turns.
+- **Convergence** — no agent has new information to add.
+- **External** — wall-clock timeout, cost ceiling.
+
+A robust multi-agent system needs *all four* in production: explicit primary, hard caps as fallbacks against runaway.
+
 ### State-Based Agent Graph
 
 ```python
@@ -940,6 +902,18 @@ result = app_with_human.invoke(None, config=config)
 ---
 
 ## 7. Practical Multi-Agent RAG System
+
+### Theory: Failure Modes
+
+**G.1 Runaway loops.** Two agents pass control back and forth without progress. Mitigation: step caps, termination detection.
+
+**G.2 Disagreement deadlock.** Two agents won't agree; the system stalls. Mitigation: supervisor with tiebreaker authority; or default to one agent's output if no consensus.
+
+**G.3 Context explosion.** Each agent's prompt includes the full conversation; total tokens grow as O(n_agents × n_turns). Mitigation: summarization, supervisor-mediated narrowing.
+
+**G.4 Cost amplification.** A 5-agent debate with 5 rounds and a supervisor is 25 + 5 = 30 LLM calls per query. Mitigation: aggressive caching, smaller models for cheaper roles, batch-mode for parallel agents.
+
+**G.5 Spurious specialization.** All agents are the same LLM with different prompts; "diversity" of opinion is illusory. Mitigation: actually use different models for genuinely different perspectives (e.g., GPT-4 + Claude + open-source).
 
 ### Architecture
 
