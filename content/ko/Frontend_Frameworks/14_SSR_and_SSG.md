@@ -16,8 +16,6 @@
 
 ## 목차
 
-프레임워크 투어에 들어가기 전에 [**이론과 원리**](#이론과-원리)를 먼저 읽어보세요. 렌더링 전략 분류(CSR/SSR/SSG/ISR), 하이드레이션의 이중 렌더 비용, partial hydration, streaming SSR, island architecture를 다룹니다.
-
 1. [렌더링 전략 개요](#1-렌더링-전략-개요)
 2. [Next.js 15 (React)](#2-nextjs-15-react)
 3. [Nuxt 3 (Vue)](#3-nuxt-3-vue)
@@ -28,11 +26,9 @@
 
 ---
 
-## 이론과 원리
+## 1. 렌더링 전략 개요
 
-웹 페이지는 여러 곳에서 조립될 수 있습니다 — JavaScript 실행 후 브라우저에서(CSR), 요청마다 서버에서(SSR), 빌드 타임에(SSG), 또는 페이지를 일정에 따라 재생성하는 하이브리드(ISR)에서. 전략들은 **TTFB(time-to-first-byte)**, **TTI(time-to-interactive)**, **캐시 가능성**, **개인화**, **인프라 비용** 사이를 트레이드합니다. 이 절은 네 순수 전략을 명명하고, 하이드레이션의 이중 렌더 비용을 살펴보고, 모던 응답들 — streaming SSR, partial/selective hydration, React Server Components, island architecture — 을 설명합니다.
-
-### A. 네 가지 렌더링 전략
+### 이론: 네 가지 렌더링 전략
 
 ```
 전략     | HTML 빌드 시점          | JS 실행 시점         | 비고
@@ -64,30 +60,7 @@ ISR           일부 페이지 렌더    stale 페이지 재렌더     다운로
 
 단일 최선은 없습니다 — 대부분의 앱은 라우트별로 섞습니다. 블로그: 글에는 SSG, 홈페이지에는 ISR, 댓글 폼에는 CSR. SaaS 대시보드: 개인화 페이지에 SSR, 앱 내 인터랙션에 CSR.
 
-### B. 하이드레이션: 이중 렌더 비용
-
-서버 렌더된 HTML은 *수동적*입니다. 올바르게 보이지만 클릭에 응답할 수도, 상태를 관리할 수도, 이펙트를 실행할 수도 없습니다. 인터랙티브하게 만들려면 클라이언트가 JavaScript 번들을 다운로드하고, CSR에서 했을 같은 컴포넌트 트리를 실행하고, 그 결과의 이벤트 핸들러와 상태를 *기존 DOM 노드에 부착*합니다. 이 과정이 **하이드레이션(hydration)** 입니다.
-
-```
-1. 서버: VDOM 빌드 → HTML로 직렬화 → 전송
-2. 클라이언트: HTML 수신 → 시각적 렌더(아직 인터랙티브 X)
-3. 클라이언트: JS 번들 다운로드
-4. 클라이언트: 컴포넌트 트리 실행 → VDOM 생성
-5. 클라이언트: VDOM과 기존 DOM을 평행하게 순회,
-              이벤트 핸들러 부착, 상태 복원, 이펙트 실행
-6. 페이지가 이제 인터랙티브
-```
-
-비용은 실제로 존재합니다.
-
-- **컴포넌트 트리가 *두 번* 실행됨** — 서버에서(HTML용) 한 번, 클라이언트에서(하이드레이션용) 한 번. 둘 다 같은 일을 함.
-- **하이드레이션 시작 전 전체 JS 번들 다운로드 필수.** 200 KB 프레임워크 + 300 KB 앱 코드 = 페이지가 인터랙티브해지기 전에 파싱해야 할 500 KB.
-- **클래식 React(18 이전)에서 하이드레이션은 동기.** 긴 트리는 메인 스레드를 블록.
-- **하이드레이션 불일치는 경고를 던짐.** 서버 렌더된 HTML이 클라이언트가 렌더할 것과 다르면(타임존 의존 값, 무작위, `window` 기반 조건), React가 에러를 보고하고 영향받는 서브트리를 다시 렌더할 수 있음.
-
-"콘텐츠를 본다"(HTML 도착)와 "어떤 것이든 클릭할 수 있다"(하이드레이션 완료) 사이의 간격이 **TTI 갭**입니다. SSR의 판매 포인트 — 빠른 페인트 — 의 대가가 이 갭에서 지불됩니다.
-
-### C. Streaming SSR (React 18+)
+### 이론: Streaming SSR (React 18+)
 
 클래식 SSR은 서버에서 전체 HTML을 빌드한 뒤 보냅니다. 어떤 데이터 패치가 느리면 전체 응답이 보류됩니다. **Streaming SSR**은 컴포넌트가 끝나는 대로 서버가 HTML을 청크로 보낼 수 있게 합니다.
 
@@ -115,99 +88,6 @@ HTML <script>...replacePlaceholder(slowContent)...</script>
 - 비동기 경계를 명시적으로 표시하는 컴포넌트(React의 `<Suspense>`, Vue 3의 `<Suspense>`, SvelteKit의 등가 구성요소).
 
 결과: TTFB는 변하지 않지만, **fold 위 콘텐츠가 빠르게 페인트**되며 페이지 아래쪽의 데이터가 느려도 그렇고, **인터랙티브함이 한 번의 큰 블로킹 commit이 아니라 조각조각 도착**합니다.
-
-### D. Partial Hydration과 React Server Components
-
-추가 통찰: **대부분의 컴포넌트는 인터랙티브할 필요가 없다.** 블로그 본문, 정적 헤더, 마케팅 푸터 — 이들에는 이벤트 핸들러도, 상태도, 클라이언트 동작도 없습니다. 그들의 JavaScript를 클라이언트로 보내고 하이드레이션 동안 다시 실행하는 것은 순수 낭비입니다.
-
-**Partial hydration**은 인터랙티브함이 필요한 컴포넌트의 JS만 출고합니다. **React Server Components(RSC)**, Next.js 15의 App Router 뒤의 모델이 이를 형식화합니다.
-
-```
-RSC의 컴포넌트 종류:
-  - 서버 컴포넌트(Server Components): 서버에서 실행. 클라이언트에서는 절대 X.
-    DB를 읽고, Node API를 사용 가능. props는 받지만 이벤트 핸들러도 상태도 없음.
-    출력은 "RSC 페이로드" — HTML이 아니라 클라이언트 컴포넌트와 보간되는
-    구조화된 기술 — 의 트리로 직렬화됨.
-  - 클라이언트 컴포넌트(Client Components): "use client" 디렉티브로 표시.
-    서버(SSR용)와 클라이언트(하이드레이션용) 둘 다에서 실행. 훅, 이벤트
-    핸들러, 브라우저 API를 가짐.
-
-페이지 트리:
-  ServerLayout (서버)
-    ServerSidebar (서버)
-    ClientForm "use client" (서버 렌더된 HTML + 클라이언트 JS)
-      ServerLabel (서버. form의 children으로 렌더됨)
-```
-
-순효과:
-
-- 서버 컴포넌트 코드는 브라우저에 절대 도달하지 않음. 번들 크기 감소.
-- 서버 컴포넌트는 데이터베이스, 파일 시스템, 비밀에 직접 접근 가능 — fetch 간접화 없음.
-- 서버와 클라이언트의 경계가 명시적(`"use client"`)이라 무엇이 어디서 실행되는지 추론하기 쉬움.
-
-Vue 3에는 유사한 패턴(`useAsyncData`를 가진 `<script setup>`, Nuxt의 server-only 컴포넌트)이, Svelte에는 SvelteKit의 load 함수가 있습니다. 모양은 다르지만 원칙은 동일합니다 — 인터랙티브해야 할 것의 JS만 출고하라.
-
-### E. Island Architecture
-
-Astro가 **island architecture**를 대중화했습니다. 페이지가 정적 HTML 문서이며, 그 안에 격리된 인터랙티브 "islands"가 군데군데 흩뿌려져 있습니다. 각 island는 어떤 프레임워크(React, Vue, Svelte, Solid, Preact)로도 작성될 수 있고 독립적으로 하이드레이트됩니다 — island가 클라이언트 디렉티브를 갖지 않으면 아예 안 함.
-
-```
-정적 HTML 페이지(JS 없음):
-  <header>...</header>
-  <article>... 텍스트 콘텐츠 ...</article>
-  <CommentForm client:load />     ← React island. 즉시 하이드레이트
-  <Cart client:visible />          ← Svelte island. 뷰에 들어올 때 하이드레이트
-  <Newsletter client:idle />       ← Vue island. 브라우저 idle 시 하이드레이트
-  <footer>...</footer>
-```
-
-이득:
-
-- **정적 부분에 JS 0.** 글 본문은 프레임워크 코드를 출고하지 않음.
-- **Island별 하이드레이션 스케줄링**(`client:load`, `client:visible`, `client:idle`)이 즉시 필요하지 않은 island를 미룰 수 있게 함.
-- **여러 프레임워크 공존.** island 한 번에 하나씩 마이그레이션이 실행 가능.
-
-비용:
-
-- **Island는 독립적.** 평범한 컴포넌트 트리처럼 상태나 props를 공유하지 않음. 통신은 DOM 이벤트, URL 상태, 외부 스토어로.
-- **빌드 복잡도.** 각 프레임워크가 서버에서 별도로 번들되고 렌더되어야 함.
-
-Island architecture는 partial hydration의 가장 공격적인 형태 — 기본은 "JS 없음"이고 island별로 인터랙티브함에 opt-in.
-
-### F. 전략 고르기: 결정 트리
-
-```
-페이지가 사용자별로 고유해야 하는가(로그인, 개인화)?
-  yes → SSR 또는 CSR(하이브리드: SSR 셸, CSR 인터랙션)
-  no  → 계속
-
-콘텐츠가 거의 안 바뀌는가(예: 일일 블로그 글)?
-  yes → SSG
-  no  → 계속
-
-콘텐츠가 바뀌지만 N분 stale을 허용 가능한가?
-  yes → ISR(또는 잦은 재빌드를 가진 SSG)
-  no  → SSR
-
-페이지의 큰 부분이 비인터랙티브인가?
-  yes → partial hydration 고려(RSC, Astro islands, SvelteKit)
-  no  → 표준 SSR + 하이드레이션이면 충분
-```
-
-대부분의 프로덕션 앱은 넷을 모두 섞습니다. Next.js, Nuxt, SvelteKit 모두 라우트별로 고를 수 있게 합니다 — 결정은 앱별이 아니라 페이지별.
-
-### 이론에서 아래 절들로
-
-- §1 *렌더링 전략 개요* — (A)를 다이어그램과 사용 사례로 실전화.
-- §2 *Next.js 15 (React)* — App Router, 서버 컴포넌트 (D), 서버 액션, `generateStaticParams`(SSG).
-- §3 *Nuxt 3 (Vue)* — 유니버설 렌더링, `useFetch`, 서버 라우트. (A)~(E)의 Vue 등가.
-- §4 *SvelteKit (Svelte)* — load 함수, `+page.server.ts`, 폼 액션, 배포 어댑터. SvelteKit의 동일 트레이드오프 처리.
-- §5 *하이드레이션 심층 분석* — (B), (C), (D). 두 번째 렌더의 메커니즘과 모던 절감.
-- §6 *프레임워크 비교* — 어느 프레임워크가 어느 전략을 기본으로 제공하는지, 각자 어디에서 빛나는지.
-
----
-
-## 1. 렌더링 전략 개요
 
 HTML이 어디서 언제 생성되느냐가 애플리케이션의 성능 특성, SEO 동작, 인프라 요구사항을 결정합니다.
 
@@ -311,6 +191,37 @@ SSG와 SSR의 하이브리드. 페이지가 정적으로 생성되지만 전체 
 ---
 
 ## 2. Next.js 15 (React)
+
+### 이론: Partial Hydration과 React Server Components
+
+추가 통찰: **대부분의 컴포넌트는 인터랙티브할 필요가 없다.** 블로그 본문, 정적 헤더, 마케팅 푸터 — 이들에는 이벤트 핸들러도, 상태도, 클라이언트 동작도 없습니다. 그들의 JavaScript를 클라이언트로 보내고 하이드레이션 동안 다시 실행하는 것은 순수 낭비입니다.
+
+**Partial hydration**은 인터랙티브함이 필요한 컴포넌트의 JS만 출고합니다. **React Server Components(RSC)**, Next.js 15의 App Router 뒤의 모델이 이를 형식화합니다.
+
+```
+RSC의 컴포넌트 종류:
+  - 서버 컴포넌트(Server Components): 서버에서 실행. 클라이언트에서는 절대 X.
+    DB를 읽고, Node API를 사용 가능. props는 받지만 이벤트 핸들러도 상태도 없음.
+    출력은 "RSC 페이로드" — HTML이 아니라 클라이언트 컴포넌트와 보간되는
+    구조화된 기술 — 의 트리로 직렬화됨.
+  - 클라이언트 컴포넌트(Client Components): "use client" 디렉티브로 표시.
+    서버(SSR용)와 클라이언트(하이드레이션용) 둘 다에서 실행. 훅, 이벤트
+    핸들러, 브라우저 API를 가짐.
+
+페이지 트리:
+  ServerLayout (서버)
+    ServerSidebar (서버)
+    ClientForm "use client" (서버 렌더된 HTML + 클라이언트 JS)
+      ServerLabel (서버. form의 children으로 렌더됨)
+```
+
+순효과:
+
+- 서버 컴포넌트 코드는 브라우저에 절대 도달하지 않음. 번들 크기 감소.
+- 서버 컴포넌트는 데이터베이스, 파일 시스템, 비밀에 직접 접근 가능 — fetch 간접화 없음.
+- 서버와 클라이언트의 경계가 명시적(`"use client"`)이라 무엇이 어디서 실행되는지 추론하기 쉬움.
+
+Vue 3에는 유사한 패턴(`useAsyncData`를 가진 `<script setup>`, Nuxt의 server-only 컴포넌트)이, Svelte에는 SvelteKit의 load 함수가 있습니다. 모양은 다르지만 원칙은 동일합니다 — 인터랙티브해야 할 것의 JS만 출고하라.
 
 Next.js는 가장 인기 있는 React 메타프레임워크입니다. 버전 15는 React 서버 컴포넌트(RSC)를 기반으로 App Router를 기본으로 사용합니다.
 
@@ -909,6 +820,56 @@ export default {
 
 ## 5. 하이드레이션 심층 분석
 
+### 이론: 하이드레이션: 이중 렌더 비용
+
+서버 렌더된 HTML은 *수동적*입니다. 올바르게 보이지만 클릭에 응답할 수도, 상태를 관리할 수도, 이펙트를 실행할 수도 없습니다. 인터랙티브하게 만들려면 클라이언트가 JavaScript 번들을 다운로드하고, CSR에서 했을 같은 컴포넌트 트리를 실행하고, 그 결과의 이벤트 핸들러와 상태를 *기존 DOM 노드에 부착*합니다. 이 과정이 **하이드레이션(hydration)** 입니다.
+
+```
+1. 서버: VDOM 빌드 → HTML로 직렬화 → 전송
+2. 클라이언트: HTML 수신 → 시각적 렌더(아직 인터랙티브 X)
+3. 클라이언트: JS 번들 다운로드
+4. 클라이언트: 컴포넌트 트리 실행 → VDOM 생성
+5. 클라이언트: VDOM과 기존 DOM을 평행하게 순회,
+              이벤트 핸들러 부착, 상태 복원, 이펙트 실행
+6. 페이지가 이제 인터랙티브
+```
+
+비용은 실제로 존재합니다.
+
+- **컴포넌트 트리가 *두 번* 실행됨** — 서버에서(HTML용) 한 번, 클라이언트에서(하이드레이션용) 한 번. 둘 다 같은 일을 함.
+- **하이드레이션 시작 전 전체 JS 번들 다운로드 필수.** 200 KB 프레임워크 + 300 KB 앱 코드 = 페이지가 인터랙티브해지기 전에 파싱해야 할 500 KB.
+- **클래식 React(18 이전)에서 하이드레이션은 동기.** 긴 트리는 메인 스레드를 블록.
+- **하이드레이션 불일치는 경고를 던짐.** 서버 렌더된 HTML이 클라이언트가 렌더할 것과 다르면(타임존 의존 값, 무작위, `window` 기반 조건), React가 에러를 보고하고 영향받는 서브트리를 다시 렌더할 수 있음.
+
+"콘텐츠를 본다"(HTML 도착)와 "어떤 것이든 클릭할 수 있다"(하이드레이션 완료) 사이의 간격이 **TTI 갭**입니다. SSR의 판매 포인트 — 빠른 페인트 — 의 대가가 이 갭에서 지불됩니다.
+
+### 이론: Island Architecture
+
+Astro가 **island architecture**를 대중화했습니다. 페이지가 정적 HTML 문서이며, 그 안에 격리된 인터랙티브 "islands"가 군데군데 흩뿌려져 있습니다. 각 island는 어떤 프레임워크(React, Vue, Svelte, Solid, Preact)로도 작성될 수 있고 독립적으로 하이드레이트됩니다 — island가 클라이언트 디렉티브를 갖지 않으면 아예 안 함.
+
+```
+정적 HTML 페이지(JS 없음):
+  <header>...</header>
+  <article>... 텍스트 콘텐츠 ...</article>
+  <CommentForm client:load />     ← React island. 즉시 하이드레이트
+  <Cart client:visible />          ← Svelte island. 뷰에 들어올 때 하이드레이트
+  <Newsletter client:idle />       ← Vue island. 브라우저 idle 시 하이드레이트
+  <footer>...</footer>
+```
+
+이득:
+
+- **정적 부분에 JS 0.** 글 본문은 프레임워크 코드를 출고하지 않음.
+- **Island별 하이드레이션 스케줄링**(`client:load`, `client:visible`, `client:idle`)이 즉시 필요하지 않은 island를 미룰 수 있게 함.
+- **여러 프레임워크 공존.** island 한 번에 하나씩 마이그레이션이 실행 가능.
+
+비용:
+
+- **Island는 독립적.** 평범한 컴포넌트 트리처럼 상태나 props를 공유하지 않음. 통신은 DOM 이벤트, URL 상태, 외부 스토어로.
+- **빌드 복잡도.** 각 프레임워크가 서버에서 별도로 번들되고 렌더되어야 함.
+
+Island architecture는 partial hydration의 가장 공격적인 형태 — 기본은 "JS 없음"이고 island별로 인터랙티브함에 opt-in.
+
 ### 하이드레이션이란?
 
 서버가 사전 렌더링된 HTML을 보내면, 브라우저는 즉시 표시하지만 정적 상태입니다 (버튼이 클릭되지 않고 폼이 제출되지 않음). **하이드레이션(hydration)**은 기존 HTML에 JavaScript 이벤트 핸들러를 연결하여 인터랙티브하게 만드는 과정입니다.
@@ -1074,6 +1035,28 @@ export const load = async ({ fetch }) => {
 ---
 
 ## 7. 렌더링 전략 선택
+
+### 이론: 전략 고르기: 결정 트리
+
+```
+페이지가 사용자별로 고유해야 하는가(로그인, 개인화)?
+  yes → SSR 또는 CSR(하이브리드: SSR 셸, CSR 인터랙션)
+  no  → 계속
+
+콘텐츠가 거의 안 바뀌는가(예: 일일 블로그 글)?
+  yes → SSG
+  no  → 계속
+
+콘텐츠가 바뀌지만 N분 stale을 허용 가능한가?
+  yes → ISR(또는 잦은 재빌드를 가진 SSG)
+  no  → SSR
+
+페이지의 큰 부분이 비인터랙티브인가?
+  yes → partial hydration 고려(RSC, Astro islands, SvelteKit)
+  no  → 표준 SSR + 하이드레이션이면 충분
+```
+
+대부분의 프로덕션 앱은 넷을 모두 섞습니다. Next.js, Nuxt, SvelteKit 모두 라우트별로 고를 수 있게 합니다 — 결정은 앱별이 아니라 페이지별.
 
 애플리케이션의 각 페이지나 라우트에 이 결정 트리를 사용하세요:
 

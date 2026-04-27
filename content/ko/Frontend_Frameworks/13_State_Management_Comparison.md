@@ -16,8 +16,6 @@
 
 ## 목차
 
-라이브러리 투어에 들어가기 전에 [**이론과 원리**](#이론과-원리)를 먼저 읽어보세요. 네 가지 주요 상태 아키텍처 계열(flux, atomic, proxy 기반, subscribe 기반)과 각각의 리렌더 패턴, 복잡도, 트레이드오프를 다룹니다.
-
 1. [상태 관리 환경](#1-상태-관리-환경)
 2. [Zustand (React)](#2-zustand-react)
 3. [Pinia (Vue)](#3-pinia-vue)
@@ -29,13 +27,9 @@
 
 ---
 
-## 이론과 원리
+## 1. 상태 관리 환경
 
-상태 관리 라이브러리들은 표면적으로 매우 달라 보입니다(Redux의 `dispatch`/`reducer`/`store`, Zustand의 `useStore`, Jotai의 `atom`, Valtio의 변경 가능한 proxy, Svelte 스토어의 `subscribe`). 그러나 그 아래에는 단 네 가지 근본 아키텍처만 있습니다. 각각이 *상태가 어떻게 보유되는지*, *변경이 어떻게 전파되는지*, *무엇이 리렌더를 트리거하는지*에 대해 특정한 선택을 합니다. 라이브러리가 어느 계열에 속하는지 식별할 수 있다면 API 차이는 대부분 표면적입니다.
-
-이 절은 네 계열을 명명하고, 각각의 메커니즘을 살펴보고, 시간/공간 비용과 리렌더 범위를 정리합니다.
-
-### A. Flux 계열: Redux, Redux Toolkit, useReducer
+### 이론: Flux 계열: Redux, Redux Toolkit, useReducer
 
 **메커니즘**: 단일 스토어가 모든 상태를 보유. 변경은 *액션*(`type`을 가진 평범한 객체)으로 기술되고 순수 *reducer* 함수 `(state, action) => newState`로 적용. 컴포넌트가 액션을 dispatch하고, 셀렉터가 스토어에서 읽기 뷰를 도출합니다.
 
@@ -68,7 +62,7 @@ useSelector(s => s.user.name) — 셀렉터 재실행
 
 **약점**: 액션당 의식이 큽니다. 보일러플레이트 대부분을 제거한 Redux Toolkit조차 `dispatch → action → reducer → state` 간접화가 남습니다. 셀렉터는 신중히 메모이제이션해야 하며, 그렇지 않으면 모든 dispatch가 모든 구독 컴포넌트의 셀렉터를 다시 실행시킵니다.
 
-### B. Atomic 계열: Recoil, Jotai
+### 이론: Atomic 계열: Recoil, Jotai
 
 **메커니즘**: 큰 스토어 하나 대신 작은 **atom**(독립적 반응형 셀)을 여러 개 정의. 컴포넌트는 특정 atom을 구독. 파생 값은 atom들을 결합하는 **selector**를 사용.
 
@@ -94,138 +88,6 @@ const doubledAtom = atom((get) => get(countAtom) * 2);
 **강점**: 매우 fine-grained한 리렌더. 상태 추가는 글로벌 상태 모양 확장이 아니라 atom 추가. 파생 상태(셀렉터)는 자동이고 lazy.
 
 **약점**: 작은 조각이 많아 큰 모양 하나보다 검사하기 어렵습니다. atom 정체성이 참조 기준이라(같은 atom 객체를 export/import해야 함) 모듈 핫리로드가 미묘합니다. Flux보다 devtools 지원이 적습니다.
-
-### C. Proxy 계열: Vue의 `reactive`, Valtio, MobX
-
-**메커니즘**: 상태가 Proxy(6강의 `reactive`). 읽기는 추적되고 쓰기는 이펙트를 트리거. 컴포넌트는 자기가 추적한 읽기가 쓰일 때 재실행되는 이펙트.
-
-```
-const state = proxy({ user: { name: 'A' }, count: 0 });
-
-// 컴포넌트가 state.user.name을 읽음 — 그 속성 경로에 구독.
-// state.count 변경은 이 컴포넌트를 리렌더하지 않음.
-// state.user.name 변경은 리렌더함.
-```
-
-| 속성 | 값 |
-|------|-----|
-| 상태 위치 | 반응형 proxy(하나 또는 여럿) |
-| 변경 API | 직접 할당: `state.x = 1`, `state.list.push(item)` |
-| 갱신 메커니즘 | Proxy가 쓰기를 가로채 구독자를 조회, 재실행을 스케줄 |
-| 리렌더 트리거 | 속성 레벨 읽기 추적 |
-| 쓰기당 시간 비용 | O(k), k = 그 속성을 추적하는 이펙트 수 |
-| 공간 비용 | 중첩 객체당 proxy 오버헤드 + 의존성 맵 |
-
-**강점**: 평범한 JavaScript처럼 느껴짐 — `state.list.push(item)` 그대로 작동. 속성 레벨 추적이 모든 계열 중 가장 미세한 리렌더 범위를 제공. 셀렉터 불필요.
-
-**약점**: 디스트럭처링이 선을 끊음(7.A.1). 평범한 객체를 기대하는 라이브러리(JSON.stringify, structured cloning)와의 호환성에 `toRaw` 같은 탈출이 필요. 익숙하지 않은 코드 경로에서 정신 모델이 더 무겁습니다 — 읽기에 암묵적 구독 사이드 이펙트가 있기 때문.
-
-### D. Subscribe 계열: Zustand, Svelte 스토어, Valtio의 `useSnapshot`
-
-**메커니즘**: 상태가 `subscribe(listener)` 메서드를 가진 외부 스토어에 거주. 컴포넌트는 훅(`useStore(selector)`)으로 리스너를 등록하고, 셀렉터 결과가 바뀌면 리렌더됩니다.
-
-```
-const useStore = create((set) => ({
-  count: 0,
-  inc: () => set(s => ({ count: s.count + 1 }))
-}));
-
-// 컴포넌트 A:
-const count = useStore(s => s.count);  // count 슬라이스에 구독
-// 컴포넌트 B:
-const inc = useStore(s => s.inc);      // inc 참조에 구독(안정)
-```
-
-| 속성 | 값 |
-|------|-----|
-| 상태 위치 | `create(...)`당 외부 스토어 객체 하나 |
-| 변경 API | 스토어 안의 `set`을 이름 있는 메서드로 노출 |
-| 갱신 메커니즘 | 스토어가 모든 리스너를 새 상태로 호출 |
-| 리렌더 트리거 | 셀렉터 결과가 `Object.is`(또는 커스텀 동등성) 기준 변경 |
-| 쓰기당 시간 비용 | O(n × cost_of_selector), n = 구독자 수 |
-| 공간 비용 | 스토어 하나 + `useStore` 호출당 구독 하나 |
-
-**강점**: API 표면이 최소. 함수 하나(`create`)로 스토어 정의, 훅 하나(`useStore`)로 읽음. provider 불필요(스토어가 모듈 레벨). React 렌더, web worker, 테스트 간 공유가 쉬움.
-
-**약점**: 모든 쓰기가 모든 구독자에게 알려지고, 그들이 셀렉터를 실행. 구독자가 많고 셀렉터가 느리면 병목이 됩니다. 셀렉터 메모이제이션이나 더 가는 입자도의 스토어 레이아웃으로 완화.
-
-### E. 리렌더 입자도 비교
-
-네 계열은 주로 *상태 변경 시 누가 리렌더되는가*에서 다릅니다.
-
-```
-계열       | 단일 속성 변경 시 리렌더 범위
-───────────┼──────────────────────────────────────────────
-Flux       | 셀렉터가 새 참조를 반환하는 모든 구독자
-Atomic     | 바뀐 atom(또는 추이적으로 의존하는 파생 atom)을 읽는 모든 컴포넌트
-Proxy      | 추적된 읽기에 바뀐 속성이 포함된 모든 컴포넌트
-Subscribe  | 셀렉터가 새 참조를 반환하는 모든 구독자
-```
-
-Flux와 Subscribe는 표에서 동일해 보이고 — 메커니즘적으로 유사합니다. 차이는 조직적입니다(Flux: 액션 주도, 단일 글로벌 스토어. Subscribe: 직접 메서드 호출, 다중 스토어).
-
-Atomic과 Proxy는 가장 미세한 입자도를 제공하지만 다른 정신 모델(노드로서의 atom, 구독으로서의 읽기)을 받아들이라고 요구합니다. Flux와 Subscribe는 추론하기 더 쉬운 대신("dispatch 시 모든 구독자가 검사") 갱신을 싸게 유지하기 위해 메모이제이션이 필요합니다.
-
-### F. 서버 상태는 다른 동물
-
-4강에서 명명한 내용 — 이 레슨의 TanStack Query 다룸이 그것을 구체화합니다. 위 네 계열 모두는 *클라이언트가 진실을 소유함*을 가정합니다. 서버 상태는 그 가정을 깹니다.
-
-- 서버는 클라이언트가 모르는 사이에 바뀔 수 있음 → 캐시는 무효화, 재패치를 지원해야.
-- 같은 데이터를 많은 컴포넌트가 요청 가능 → 중복 제거, 요청 묶기.
-- 쓰기 후에는 로컬 캐시가 stale → 낙관적 갱신과 조정.
-- 네트워크가 느림 → 로딩, 에러, 재시도 상태가 일급.
-
-**TanStack Query**(와 SWR)는 다른 아키텍처를 구현합니다.
-
-```
-useQuery(['users'], fetchUsers) — 글로벌 캐시에 쿼리 등록
-       │
-       ▼
-캐시 조회:
-  - fresh: 캐시 데이터 즉시 반환
-  - stale: 캐시 데이터 반환 + 백그라운드 재패치 트리거
-  - missing: fetch 트리거, 로딩 상태 반환
-
-useMutation(updateUser) — 쓰기 수행 후 둘 중 하나
-       │
-       ▼
-  - 키로 쿼리 무효화(재패치 유발)
-  - 캐시 낙관적 갱신, 에러 시 롤백
-```
-
-캐시가 서버 상태의 진실 원천이며, 어떤 클라이언트 상태 라이브러리도 모델링하지 않는 라이프사이클(fetched → fresh → stale → expired)을 가집니다.
-
-**실용 규칙**: `fetch(...)`에서 온 데이터라면 TanStack Query. 전적으로 클라이언트에 사는 데이터(모달 열림/닫힘, 테마, 폼 입력 초안)라면 A-D 중 하나.
-
-### G. 라이브러리 고르기
-
-계열을 알면, 라이브러리 결정은 대부분 생태계 적합성과 팀 선호의 문제입니다.
-
-| 필요 | 계열 | 흔한 라이브러리 |
-|------|------|------------------|
-| 감사 가능한 엔터프라이즈 React 앱 | Flux | Redux Toolkit |
-| 가벼운 React 앱 | Subscribe | Zustand |
-| 독립적인 슬라이스가 많은 고도로 인터랙티브한 React 앱 | Atomic | Jotai |
-| Vue 앱 | Proxy + Subscribe (Pinia) | Pinia |
-| Svelte 앱 | Subscribe | 내장 stores 또는 runes |
-| React에서 MobX 스타일의 "그냥 변형" 느낌 | Proxy | Valtio 또는 MobX |
-| 모든 종류의 서버 데이터 | (서버 캐시) | TanStack Query / SWR |
-
-보편적 최적은 없습니다. 어느 계열의 정신 모델이 팀에 맞는지로 고르고, 그 안에서 최적화하세요.
-
-### 이론에서 아래 절들로
-
-- §1 *상태 관리 환경* — 네 계열과 서버/클라이언트 분리 (F)를 명명.
-- §2 *Zustand (React)* — React에서의 Subscribe 계열.
-- §3 *Pinia (Vue)* — Vue에서의 Proxy + Subscribe 하이브리드(8강이 API를 다뤘고, 이 절은 React/Svelte 등가물에 대비해 자리매김).
-- §4 *Svelte 스토어* — Svelte에서의 Subscribe 계열(10강의 스토어를 비교적으로 봄).
-- §5 *비교: 세 가지로 구현한 Todo 앱* — 같은 문제를 각 라이브러리로 풀어 계열별 관용구를 노출.
-- §6 *TanStack Query: 서버 상태* — (F). 진실 원천으로서의 캐시 모델.
-- §7 *무엇을 언제 사용하나* — (G)의 결정 매트릭스.
-
----
-
-## 1. 상태 관리 환경
 
 모든 상태가 동등하지는 않습니다. 관리하는 상태의 *종류*를 이해하면 어떤 도구를 사용할지 결정할 수 있습니다.
 
@@ -260,6 +122,35 @@ useMutation(updateUser) — 쓰기 수행 후 둘 중 하나
 ---
 
 ## 2. Zustand (React)
+
+### 이론: Subscribe 계열: Zustand, Svelte 스토어, Valtio의 `useSnapshot`
+
+**메커니즘**: 상태가 `subscribe(listener)` 메서드를 가진 외부 스토어에 거주. 컴포넌트는 훅(`useStore(selector)`)으로 리스너를 등록하고, 셀렉터 결과가 바뀌면 리렌더됩니다.
+
+```
+const useStore = create((set) => ({
+  count: 0,
+  inc: () => set(s => ({ count: s.count + 1 }))
+}));
+
+// 컴포넌트 A:
+const count = useStore(s => s.count);  // count 슬라이스에 구독
+// 컴포넌트 B:
+const inc = useStore(s => s.inc);      // inc 참조에 구독(안정)
+```
+
+| 속성 | 값 |
+|------|-----|
+| 상태 위치 | `create(...)`당 외부 스토어 객체 하나 |
+| 변경 API | 스토어 안의 `set`을 이름 있는 메서드로 노출 |
+| 갱신 메커니즘 | 스토어가 모든 리스너를 새 상태로 호출 |
+| 리렌더 트리거 | 셀렉터 결과가 `Object.is`(또는 커스텀 동등성) 기준 변경 |
+| 쓰기당 시간 비용 | O(n × cost_of_selector), n = 구독자 수 |
+| 공간 비용 | 스토어 하나 + `useStore` 호출당 구독 하나 |
+
+**강점**: API 표면이 최소. 함수 하나(`create`)로 스토어 정의, 훅 하나(`useStore`)로 읽음. provider 불필요(스토어가 모듈 레벨). React 렌더, web worker, 테스트 간 공유가 쉬움.
+
+**약점**: 모든 쓰기가 모든 구독자에게 알려지고, 그들이 셀렉터를 실행. 구독자가 많고 셀렉터가 느리면 병목이 됩니다. 셀렉터 메모이제이션이나 더 가는 입자도의 스토어 레이아웃으로 완화.
 
 Zustand(독일어로 "상태")는 React를 위한 최소한의 상태 관리 라이브러리입니다. 프로바이더 없이, 보일러플레이트 없이, 탁월한 TypeScript 지원으로 간단한 스토어 생성 패턴을 사용합니다.
 
@@ -426,6 +317,31 @@ export const useUserStore = create<UserStore>((set) => ({
 ---
 
 ## 3. Pinia (Vue)
+
+### 이론: Proxy 계열: Vue의 `reactive`, Valtio, MobX
+
+**메커니즘**: 상태가 Proxy(6강의 `reactive`). 읽기는 추적되고 쓰기는 이펙트를 트리거. 컴포넌트는 자기가 추적한 읽기가 쓰일 때 재실행되는 이펙트.
+
+```
+const state = proxy({ user: { name: 'A' }, count: 0 });
+
+// 컴포넌트가 state.user.name을 읽음 — 그 속성 경로에 구독.
+// state.count 변경은 이 컴포넌트를 리렌더하지 않음.
+// state.user.name 변경은 리렌더함.
+```
+
+| 속성 | 값 |
+|------|-----|
+| 상태 위치 | 반응형 proxy(하나 또는 여럿) |
+| 변경 API | 직접 할당: `state.x = 1`, `state.list.push(item)` |
+| 갱신 메커니즘 | Proxy가 쓰기를 가로채 구독자를 조회, 재실행을 스케줄 |
+| 리렌더 트리거 | 속성 레벨 읽기 추적 |
+| 쓰기당 시간 비용 | O(k), k = 그 속성을 추적하는 이펙트 수 |
+| 공간 비용 | 중첩 객체당 proxy 오버헤드 + 의존성 맵 |
+
+**강점**: 평범한 JavaScript처럼 느껴짐 — `state.list.push(item)` 그대로 작동. 속성 레벨 추적이 모든 계열 중 가장 미세한 리렌더 범위를 제공. 셀렉터 불필요.
+
+**약점**: 디스트럭처링이 선을 끊음(7.A.1). 평범한 객체를 기대하는 라이브러리(JSON.stringify, structured cloning)와의 호환성에 `toRaw` 같은 탈출이 필요. 익숙하지 않은 코드 경로에서 정신 모델이 더 무겁습니다 — 읽기에 암묵적 구독 사이드 이펙트가 있기 때문.
 
 Pinia는 Vue의 공식 상태 관리 라이브러리입니다. Vue 3의 Composition API에 맞는 더 간단하고 타입 안전한 API로 Vuex를 대체합니다.
 
@@ -730,6 +646,23 @@ export const timer = createTimer();
 
 ## 5. 비교: 세 가지로 구현한 Todo 앱
 
+### 이론: 리렌더 입자도 비교
+
+네 계열은 주로 *상태 변경 시 누가 리렌더되는가*에서 다릅니다.
+
+```
+계열       | 단일 속성 변경 시 리렌더 범위
+───────────┼──────────────────────────────────────────────
+Flux       | 셀렉터가 새 참조를 반환하는 모든 구독자
+Atomic     | 바뀐 atom(또는 추이적으로 의존하는 파생 atom)을 읽는 모든 컴포넌트
+Proxy      | 추적된 읽기에 바뀐 속성이 포함된 모든 컴포넌트
+Subscribe  | 셀렉터가 새 참조를 반환하는 모든 구독자
+```
+
+Flux와 Subscribe는 표에서 동일해 보이고 — 메커니즘적으로 유사합니다. 차이는 조직적입니다(Flux: 액션 주도, 단일 글로벌 스토어. Subscribe: 직접 메서드 호출, 다중 스토어).
+
+Atomic과 Proxy는 가장 미세한 입자도를 제공하지만 다른 정신 모델(노드로서의 atom, 구독으로서의 읽기)을 받아들이라고 요구합니다. Flux와 Subscribe는 추론하기 더 쉬운 대신("dispatch 시 모든 구독자가 검사") 갱신을 싸게 유지하기 위해 메모이제이션이 필요합니다.
+
 동일한 기능 — 추가, 토글, 삭제, 필터가 있는 Todo 목록 — 을 각 상태 관리 방식으로 구현합니다.
 
 ### Zustand (React)
@@ -1004,6 +937,37 @@ export function deleteTodo(id: string) {
 
 ## 6. TanStack Query: 서버 상태
 
+### 이론: 서버 상태는 다른 동물
+
+4강에서 명명한 내용 — 이 레슨의 TanStack Query 다룸이 그것을 구체화합니다. 위 네 계열 모두는 *클라이언트가 진실을 소유함*을 가정합니다. 서버 상태는 그 가정을 깹니다.
+
+- 서버는 클라이언트가 모르는 사이에 바뀔 수 있음 → 캐시는 무효화, 재패치를 지원해야.
+- 같은 데이터를 많은 컴포넌트가 요청 가능 → 중복 제거, 요청 묶기.
+- 쓰기 후에는 로컬 캐시가 stale → 낙관적 갱신과 조정.
+- 네트워크가 느림 → 로딩, 에러, 재시도 상태가 일급.
+
+**TanStack Query**(와 SWR)는 다른 아키텍처를 구현합니다.
+
+```
+useQuery(['users'], fetchUsers) — 글로벌 캐시에 쿼리 등록
+       │
+       ▼
+캐시 조회:
+  - fresh: 캐시 데이터 즉시 반환
+  - stale: 캐시 데이터 반환 + 백그라운드 재패치 트리거
+  - missing: fetch 트리거, 로딩 상태 반환
+
+useMutation(updateUser) — 쓰기 수행 후 둘 중 하나
+       │
+       ▼
+  - 키로 쿼리 무효화(재패치 유발)
+  - 캐시 낙관적 갱신, 에러 시 롤백
+```
+
+캐시가 서버 상태의 진실 원천이며, 어떤 클라이언트 상태 라이브러리도 모델링하지 않는 라이프사이클(fetched → fresh → stale → expired)을 가집니다.
+
+**실용 규칙**: `fetch(...)`에서 온 데이터라면 TanStack Query. 전적으로 클라이언트에 사는 데이터(모달 열림/닫힘, 테마, 폼 입력 초안)라면 A-D 중 하나.
+
 TanStack Query(이전 React Query)는 **서버 상태** — 서버에 존재하고 로컬에 캐시된 데이터 — 를 관리합니다. 가져오기, 캐싱, 동기화, 백그라운드 업데이트를 처리합니다. React, Vue, Svelte 등에서 사용 가능합니다.
 
 ### TanStack Query가 해결하는 문제
@@ -1172,6 +1136,22 @@ const { mutate: createUser, isPending } = useMutation({
 ---
 
 ## 7. 무엇을 언제 사용하나
+
+### 이론: 라이브러리 고르기
+
+계열을 알면, 라이브러리 결정은 대부분 생태계 적합성과 팀 선호의 문제입니다.
+
+| 필요 | 계열 | 흔한 라이브러리 |
+|------|------|------------------|
+| 감사 가능한 엔터프라이즈 React 앱 | Flux | Redux Toolkit |
+| 가벼운 React 앱 | Subscribe | Zustand |
+| 독립적인 슬라이스가 많은 고도로 인터랙티브한 React 앱 | Atomic | Jotai |
+| Vue 앱 | Proxy + Subscribe (Pinia) | Pinia |
+| Svelte 앱 | Subscribe | 내장 stores 또는 runes |
+| React에서 MobX 스타일의 "그냥 변형" 느낌 | Proxy | Valtio 또는 MobX |
+| 모든 종류의 서버 데이터 | (서버 캐시) | TanStack Query / SWR |
+
+보편적 최적은 없습니다. 어느 계열의 정신 모델이 팀에 맞는지로 고르고, 그 안에서 최적화하세요.
 
 ### 결정 매트릭스
 

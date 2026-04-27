@@ -16,8 +16,6 @@
 
 ## 목차
 
-패턴 카탈로그에 들어가기 전에 [**이론과 원리**](#이론과-원리)를 먼저 읽어보세요. 상속보다 합성(composition over inheritance), 재사용의 네 축(데이터, 레이아웃, 동작, 상태), 그리고 render props·HOC·슬롯·훅이 그 축들의 어디에 위치하는지를 다룹니다.
-
 1. [컴포넌트 패턴이 중요한 이유](#1-컴포넌트-패턴이-중요한-이유)
 2. [복합 컴포넌트](#2-복합-컴포넌트)
 3. [렌더 프롭과 스코프드 슬롯](#3-렌더-프롭과-스코프드-슬롯)
@@ -30,11 +28,9 @@
 
 ---
 
-## 이론과 원리
+## 1. 컴포넌트 패턴이 중요한 이유
 
-이 레슨의 패턴들 — 복합 컴포넌트, render props, HOC, 헤드리스 컴포넌트, controlled vs uncontrolled — 은 잡다한 트릭 모음처럼 보입니다. 이들은 단일 설계 원칙(**상속보다 합성**)으로 통일되며, *어느 재사용 축*을 다루느냐로 구별됩니다. 이 절은 두 발상을 모두 명시적으로 드러내, 아래 카탈로그가 외워야 할 목록이 아니라 탐색할 수 있는 결정 트리가 되도록 합니다.
-
-### A. 상속보다 합성: 스타일 선택이 아니라 원칙
+### 이론: 상속보다 합성: 스타일 선택이 아니라 원칙
 
 클래스 기반 UI 프레임워크(Backbone, ExtJS, 초기 Angular)는 동작을 공유하는 데 상속을 사용했습니다. 폼 타입마다 서브클래스를 가진 `BaseFormComponent`, 각 서브클래스가 메서드를 오버라이드. 친숙한 문제들이 따랐습니다.
 
@@ -50,7 +46,7 @@
 
 각각이 다이아몬드 문제 없이 재사용을 제공합니다. 한 컴포넌트에서 여러 훅을 호출할 수 있고, 여러 children을 받을 수 있고, 여러 HOC로 감쌀 수 있습니다. 조합 공간은 배타적이 아니라 곱셈적입니다.
 
-### B. 재사용의 네 축
+### 이론: 재사용의 네 축
 
 UI 작업의 한 조각이 재사용되어야 할 때 물어보세요 — *무엇이 재사용되는가?* 흔한 답이 네 가지 있습니다.
 
@@ -75,160 +71,6 @@ Controlled/Uncontrolled    ░░░    ░░░     ▓▓▓     ░░░  (
 ```
 
 엄밀한 분류학은 아니지만 — 패턴들은 섞입니다 — 두 패턴이 왜 "같은 일을 하는 것 같은지"와 언제 한쪽이 선호되는지를 알려 줍니다. 훅과 HOC는 같은 칸을 차지합니다. 모던 시대에 훅이 이긴 이유는 감싸기 비용(추가 컴포넌트 인스턴스, prop 이름 충돌)이 함수 합성 비용보다 컸기 때문입니다.
-
-### C. Render Props와 슬롯: 렌더링 제어의 역전
-
-평범한 컴포넌트는 자기 UI를 자기가 렌더링합니다 — `<Tabs items={...} />`이 각 탭이 어떻게 보일지 결정. **render prop**(React) 또는 **scoped slot**(Vue)은 이를 역전시킵니다 — 컴포넌트가 데이터를 계산해 노출하고, *부모*가 어떻게 렌더링할지 결정합니다.
-
-```jsx
-// React: render prop
-<DataLoader url="/api/users">
-  {(state) => state.loading ? <Spinner /> : <UserList users={state.data} />}
-</DataLoader>
-
-// Vue: scoped slot
-<DataLoader url="/api/users">
-  <template #default="{ state }">
-    <Spinner v-if="state.loading" />
-    <UserList v-else :users="state.data" />
-  </template>
-</DataLoader>
-```
-
-이 패턴이 작동하는 이유는 **자식이 JSX를 반환하는 대신 함수를 반환하기** 때문입니다. 부모의 호출자가 그 함수를 렌더링 로직으로 채웁니다. 가능한 가장 단순한 역전입니다 — 컴포넌트가 *동작*(데이터 패칭)을 소유하고, 소비자가 *프레젠테이션*을 소유합니다.
-
-Svelte의 슬롯 props도 `<slot {state} />`로 같은 역할을 합니다.
-
-트레이드오프: render props는 클로저 무거운 중첩 구조를 만듭니다(React에서 깊이 중첩된 `{(s) => {(t) => ...}}`). 훅과 컴포저블이 부분적으로 등장한 이유가 이를 고치기 위함입니다 — 콜백 중첩이 아니라 **평범한 함수 호출**로 같은 역전을 달성합니다.
-
-### D. 헤드리스 컴포넌트: 마크업 없는 동작
-
-헤드리스 컴포넌트는 render-props 발상을 더 밀어붙입니다 — *기본 마크업을 제공하지 않고*, 소비자가 자기 마크업을 구동할 props나 훅만 제공합니다. Headless UI, Radix UI, TanStack Table 같은 라이브러리가 이 모델을 따릅니다.
-
-```jsx
-// useCombobox는 ref, 핸들러, 상태를 반환
-const { getInputProps, getMenuProps, getItemProps, isOpen, items } = useCombobox({...});
-
-return (
-  <div>
-    <input {...getInputProps()} />
-    <ul {...getMenuProps()}>
-      {isOpen && items.map((item, i) => (
-        <li {...getItemProps({ item, index: i })}>{item.label}</li>
-      ))}
-    </ul>
-  </div>
-);
-```
-
-라이브러리가 키보드 내비게이션, ARIA 속성, 포커스 관리, 콤보박스 상태를 처리합니다. 소비자가 자기 DOM과 스타일링을 가져옵니다. *라이브러리 코드는 모든 프로젝트에서 같고*, *시각 구현은 각 프로젝트마다 고유*합니다.
-
-상속보다 합성을 *동작/레이아웃* 분리에 적용한 것입니다. 라이브러리가 레이아웃을 전혀 소유하지 않아 모든 디자인 시스템에서 재사용 가능해집니다.
-
-### E. HOC vs 훅: 업계가 마이그레이션한 이유
-
-고차 컴포넌트는 컴포넌트를 받아 새 컴포넌트를 반환합니다.
-
-```jsx
-const withAuth = (Component) => (props) => {
-  const user = useAuth(); // 가정
-  if (!user) return <Login />;
-  return <Component {...props} user={user} />;
-};
-
-const ProtectedPage = withAuth(MyPage);
-```
-
-작동했지만 세 가지 날카로운 모서리가 있었습니다.
-
-1. **Prop 이름 충돌.** `withAuth(withTheme(withLogger(Page)))`는 `user`, `theme`, `log`를 주입합니다 — 이름 중 어느 하나가 진짜 prop이나 서로 충돌하면, 안쪽 컴포넌트는 잘못된 값을 봅니다.
-2. **React DevTools의 wrapper hell.** 각 HOC가 트리에 wrapper 컴포넌트를 추가합니다. 다섯 HOC 안에 중첩된 진짜 컴포넌트는 여섯 개의 컴포넌트로 보입니다.
-3. **같은 종류를 여러 번 사용할 수 없음.** 두 URL을 패치하기 위해 `withApiData`로 컴포넌트를 두 번 감쌀 수 없습니다 — 둘 다 같은 prop 이름에 씁니다.
-
-훅(과 컴포저블, runes)은 **같은 로직을 한 컴포넌트에서 여러 번 호출하고 결과를 직접 이름 짓도록 함**으로써 HOC를 대체합니다.
-
-```jsx
-function ProtectedPage() {
-  const user = useAuth();
-  const theme = useTheme();
-  const log = useLogger();
-  const userData = useApiData('/api/user');
-  const orderData = useApiData('/api/orders');
-  if (!user) return <Login />;
-  // ... 모두 이름으로 사용
-}
-```
-
-충돌도, 추가 컴포넌트 인스턴스도 없고, 같은 훅의 여러 인스턴스를 가질 수 있습니다. HOC에서 훅으로의 마이그레이션(React 16.8+)은 정확히 이득이 명확하기 때문에 프레임워크 역사상 가장 큰 API 재설계 중 하나입니다.
-
-### F. Controlled vs Uncontrolled: 누가 상태를 소유하는가
-
-5강에서 폼에 대해 다뤘습니다. 원칙은 일반화됩니다 — *어떤* 상태 있는 컴포넌트든 다음일 수 있습니다.
-
-- **Uncontrolled**: 컴포넌트가 자기 상태를 소유, 콜백으로 노출. 부모는 읽지만 쓰지는 않음.
-- **Controlled**: 부모가 상태를 소유, 전달, 콜백으로 변경 요청을 받음.
-
-```jsx
-// Uncontrolled <Tabs/>:
-<Tabs defaultValue="overview">
-  <Tab value="overview">...</Tab>
-  <Tab value="settings">...</Tab>
-</Tabs>
-// Tabs 컴포넌트가 activeTab을 내부적으로 보유
-
-// Controlled <Tabs/>:
-const [tab, setTab] = useState('overview');
-<Tabs value={tab} onChange={setTab}>...</Tabs>
-// 부모가 activeTab을 보유하고 'change'의 의미를 결정
-```
-
-세 가지 규칙:
-
-1. **상태 조각마다 하나만 골라라.** `value`와 `defaultValue` props를 둘 다 가진 컴포넌트는 controlled나 uncontrolled 중 하나가 되라고 요구하면서도 둘 다는 아닌 것입니다. 라이프 중 모드 전환은 버그 원인.
-2. **기본값은 uncontrolled.** 소비자에게 의식이 적습니다. 외부 상태와 동기화가 필요할 때 controlled로 opt-in.
-3. **Controlled가 더 유연.** Uncontrolled로 할 수 있는 모든 것은 상태를 추가해 controlled로 할 수 있지만, 반대는 안 됩니다.
-
-잘 설계된 라이브러리 컴포넌트는 대부분 어떤 props가 전달되었는지 검사해 두 모드를 모두 지원합니다.
-
-### G. 컨테이너/프레젠테이셔널: 모듈러 분해
-
-컨테이너/프레젠테이셔널 패턴(Dan Abramov가 대중화. 훅이 경계를 흐려 나중에 부분적으로 철회)은 각 "기능 컴포넌트"를 다음으로 분리합니다.
-
-- 데이터를 패치하고, 상태를 보유하고, 액션을 디스패치하는 **컨테이너**.
-- 데이터를 props로 받아 렌더링하는 **프레젠테이셔널** 컴포넌트.
-
-```jsx
-// 컨테이너
-function UserListContainer() {
-  const { data: users, isLoading } = useApiData('/users');
-  if (isLoading) return <Spinner />;
-  return <UserList users={users} />;
-}
-
-// 프레젠테이셔널
-function UserList({ users }) {
-  return <ul>{users.map(u => <li key={u.id}>{u.name}</li>)}</ul>;
-}
-```
-
-프레젠테이셔널 컴포넌트는 자명하게 테스트 가능하고(목 사용자를 전달, 출력 스냅샷) 다른 맥락에서 재사용 가능합니다(예: Storybook 스토리는 네트워크 불필요). 컨테이너에 프레임워크 특유의 로직이 삽니다.
-
-훅이 경계를 흐렸습니다 — 단일 컴포넌트가 두 컴포넌트로 분리되지 않고 데이터 패칭을 훅(`useUsers()`)으로 빼낼 수 있게 되었기 때문. 패턴은 여전히 *분해 휴리스틱*으로 유용합니다 — "이 컴포넌트가 둘을 다 하고 있나?"
-
-### 이론에서 아래 절들로
-
-- §1 *컴포넌트 패턴이 중요한 이유* — 문제 공간 (B)을 명명. 어느 재사용 축을 다루는가.
-- §2 *복합 컴포넌트* — Context/provide-inject로 상태를 공유하는 다중 컴포넌트 API. 동작, 상태, 암묵적 레이아웃을 결합한 고축 패턴.
-- §3 *렌더 프롭과 스코프드 슬롯* — (C). 렌더링 제어의 역전.
-- §4 *헤드리스 컴포넌트* — (D). 레이아웃이 0인 동작. 소비자의 디자인을 잠그지 않고 "위젯"을 출고하는 모던 방식.
-- §5 *고차 컴포넌트 vs 훅/컴포저블* — (E). 역사적 마이그레이션과 훅이 이긴 이유.
-- §6 *컨테이너와 프레젠테이셔널 컴포넌트* — (G). 훅 시대를 살아남는 분해 원칙.
-- §7 *제어 vs 비제어 컴포넌트* — (F). 상태 소유권 축.
-- §8 *패턴 선택 가이드* — (B)의 결정 트리. 어느 재사용 축 → 어느 패턴.
-
----
-
-## 1. 컴포넌트 패턴이 중요한 이유
 
 모든 프론트엔드 애플리케이션은 단순하게 시작합니다. 몇 개의 컴포넌트, 간단한 props, 그리고 로컬 상태로 시작하죠. 하지만 애플리케이션이 성장하면서 반복적인 설계 문제들을 마주하게 됩니다.
 
@@ -451,6 +293,31 @@ Vue에서의 사용:
 
 ## 3. 렌더 프롭과 스코프드 슬롯
 
+### 이론: Render Props와 슬롯: 렌더링 제어의 역전
+
+평범한 컴포넌트는 자기 UI를 자기가 렌더링합니다 — `<Tabs items={...} />`이 각 탭이 어떻게 보일지 결정. **render prop**(React) 또는 **scoped slot**(Vue)은 이를 역전시킵니다 — 컴포넌트가 데이터를 계산해 노출하고, *부모*가 어떻게 렌더링할지 결정합니다.
+
+```jsx
+// React: render prop
+<DataLoader url="/api/users">
+  {(state) => state.loading ? <Spinner /> : <UserList users={state.data} />}
+</DataLoader>
+
+// Vue: scoped slot
+<DataLoader url="/api/users">
+  <template #default="{ state }">
+    <Spinner v-if="state.loading" />
+    <UserList v-else :users="state.data" />
+  </template>
+</DataLoader>
+```
+
+이 패턴이 작동하는 이유는 **자식이 JSX를 반환하는 대신 함수를 반환하기** 때문입니다. 부모의 호출자가 그 함수를 렌더링 로직으로 채웁니다. 가능한 가장 단순한 역전입니다 — 컴포넌트가 *동작*(데이터 패칭)을 소유하고, 소비자가 *프레젠테이션*을 소유합니다.
+
+Svelte의 슬롯 props도 `<slot {state} />`로 같은 역할을 합니다.
+
+트레이드오프: render props는 클로저 무거운 중첩 구조를 만듭니다(React에서 깊이 중첩된 `{(s) => {(t) => ...}}`). 훅과 컴포저블이 부분적으로 등장한 이유가 이를 고치기 위함입니다 — 콜백 중첩이 아니라 **평범한 함수 호출**로 같은 역전을 달성합니다.
+
 렌더 프롭(render prop) 패턴은 부모 컴포넌트가 자식이 *무엇을* 렌더링할지 제어하면서, 자식은 *언제* 그리고 *어떤 데이터로* 렌더링할지를 제어합니다. 일반적인 부모-자식 관계를 역전시키는 것입니다.
 
 ### React: 렌더 프롭
@@ -610,6 +477,30 @@ Svelte는 Vue와 유사하게 props를 전달하는 `<slot>`을 사용합니다.
 ---
 
 ## 4. 헤드리스 컴포넌트
+
+### 이론: 헤드리스 컴포넌트: 마크업 없는 동작
+
+헤드리스 컴포넌트는 render-props 발상을 더 밀어붙입니다 — *기본 마크업을 제공하지 않고*, 소비자가 자기 마크업을 구동할 props나 훅만 제공합니다. Headless UI, Radix UI, TanStack Table 같은 라이브러리가 이 모델을 따릅니다.
+
+```jsx
+// useCombobox는 ref, 핸들러, 상태를 반환
+const { getInputProps, getMenuProps, getItemProps, isOpen, items } = useCombobox({...});
+
+return (
+  <div>
+    <input {...getInputProps()} />
+    <ul {...getMenuProps()}>
+      {isOpen && items.map((item, i) => (
+        <li {...getItemProps({ item, index: i })}>{item.label}</li>
+      ))}
+    </ul>
+  </div>
+);
+```
+
+라이브러리가 키보드 내비게이션, ARIA 속성, 포커스 관리, 콤보박스 상태를 처리합니다. 소비자가 자기 DOM과 스타일링을 가져옵니다. *라이브러리 코드는 모든 프로젝트에서 같고*, *시각 구현은 각 프로젝트마다 고유*합니다.
+
+상속보다 합성을 *동작/레이아웃* 분리에 적용한 것입니다. 라이브러리가 레이아웃을 전혀 소유하지 않아 모든 디자인 시스템에서 재사용 가능해집니다.
 
 헤드리스(headless) 컴포넌트는 **UI 없이 로직만** 포함합니다. 상태와 동작을 노출하고, 소비자가 모든 렌더링을 제공합니다. 동일한 로직이 완전히 다른 시각적 디자인으로 렌더링될 수 있으므로 재사용성이 극대화됩니다.
 
@@ -782,6 +673,42 @@ export function createToggle(initialOpen = false) {
 
 ## 5. 고차 컴포넌트 vs 훅/컴포저블
 
+### 이론: HOC vs 훅: 업계가 마이그레이션한 이유
+
+고차 컴포넌트는 컴포넌트를 받아 새 컴포넌트를 반환합니다.
+
+```jsx
+const withAuth = (Component) => (props) => {
+  const user = useAuth(); // 가정
+  if (!user) return <Login />;
+  return <Component {...props} user={user} />;
+};
+
+const ProtectedPage = withAuth(MyPage);
+```
+
+작동했지만 세 가지 날카로운 모서리가 있었습니다.
+
+1. **Prop 이름 충돌.** `withAuth(withTheme(withLogger(Page)))`는 `user`, `theme`, `log`를 주입합니다 — 이름 중 어느 하나가 진짜 prop이나 서로 충돌하면, 안쪽 컴포넌트는 잘못된 값을 봅니다.
+2. **React DevTools의 wrapper hell.** 각 HOC가 트리에 wrapper 컴포넌트를 추가합니다. 다섯 HOC 안에 중첩된 진짜 컴포넌트는 여섯 개의 컴포넌트로 보입니다.
+3. **같은 종류를 여러 번 사용할 수 없음.** 두 URL을 패치하기 위해 `withApiData`로 컴포넌트를 두 번 감쌀 수 없습니다 — 둘 다 같은 prop 이름에 씁니다.
+
+훅(과 컴포저블, runes)은 **같은 로직을 한 컴포넌트에서 여러 번 호출하고 결과를 직접 이름 짓도록 함**으로써 HOC를 대체합니다.
+
+```jsx
+function ProtectedPage() {
+  const user = useAuth();
+  const theme = useTheme();
+  const log = useLogger();
+  const userData = useApiData('/api/user');
+  const orderData = useApiData('/api/orders');
+  if (!user) return <Login />;
+  // ... 모두 이름으로 사용
+}
+```
+
+충돌도, 추가 컴포넌트 인스턴스도 없고, 같은 훅의 여러 인스턴스를 가질 수 있습니다. HOC에서 훅으로의 마이그레이션(React 16.8+)은 정확히 이득이 명확하기 때문에 프레임워크 역사상 가장 큰 API 재설계 중 하나입니다.
+
 **고차 컴포넌트(Higher-Order Component, HOC)**는 컴포넌트를 받아 향상된 동작을 가진 새 컴포넌트를 반환하는 함수입니다. HOC는 React 클래스 컴포넌트 시대의 주요 재사용 패턴이었습니다.
 
 ### HOC 패턴 (레거시)
@@ -867,6 +794,31 @@ const { theme } = useTheme();
 ---
 
 ## 6. 컨테이너와 프레젠테이셔널 컴포넌트
+
+### 이론: 컨테이너/프레젠테이셔널: 모듈러 분해
+
+컨테이너/프레젠테이셔널 패턴(Dan Abramov가 대중화. 훅이 경계를 흐려 나중에 부분적으로 철회)은 각 "기능 컴포넌트"를 다음으로 분리합니다.
+
+- 데이터를 패치하고, 상태를 보유하고, 액션을 디스패치하는 **컨테이너**.
+- 데이터를 props로 받아 렌더링하는 **프레젠테이셔널** 컴포넌트.
+
+```jsx
+// 컨테이너
+function UserListContainer() {
+  const { data: users, isLoading } = useApiData('/users');
+  if (isLoading) return <Spinner />;
+  return <UserList users={users} />;
+}
+
+// 프레젠테이셔널
+function UserList({ users }) {
+  return <ul>{users.map(u => <li key={u.id}>{u.name}</li>)}</ul>;
+}
+```
+
+프레젠테이셔널 컴포넌트는 자명하게 테스트 가능하고(목 사용자를 전달, 출력 스냅샷) 다른 맥락에서 재사용 가능합니다(예: Storybook 스토리는 네트워크 불필요). 컨테이너에 프레임워크 특유의 로직이 삽니다.
+
+훅이 경계를 흐렸습니다 — 단일 컴포넌트가 두 컴포넌트로 분리되지 않고 데이터 패칭을 훅(`useUsers()`)으로 빼낼 수 있게 되었기 때문. 패턴은 여전히 *분해 휴리스틱*으로 유용합니다 — "이 컴포넌트가 둘을 다 하고 있나?"
 
 이 패턴은 **어떤 데이터를 가져올지** (컨테이너)와 **어떻게 표시할지** (프레젠테이셔널)를 분리합니다. 컨테이너는 사이드 이펙트, 상태, 데이터 변환을 처리합니다. 프레젠테이셔널 컴포넌트는 props를 통해 모든 것을 받고 순수한 UI를 렌더링합니다.
 
@@ -975,6 +927,35 @@ function UserList() {
 ---
 
 ## 7. 제어 vs 비제어 컴포넌트
+
+### 이론: Controlled vs Uncontrolled: 누가 상태를 소유하는가
+
+5강에서 폼에 대해 다뤘습니다. 원칙은 일반화됩니다 — *어떤* 상태 있는 컴포넌트든 다음일 수 있습니다.
+
+- **Uncontrolled**: 컴포넌트가 자기 상태를 소유, 콜백으로 노출. 부모는 읽지만 쓰지는 않음.
+- **Controlled**: 부모가 상태를 소유, 전달, 콜백으로 변경 요청을 받음.
+
+```jsx
+// Uncontrolled <Tabs/>:
+<Tabs defaultValue="overview">
+  <Tab value="overview">...</Tab>
+  <Tab value="settings">...</Tab>
+</Tabs>
+// Tabs 컴포넌트가 activeTab을 내부적으로 보유
+
+// Controlled <Tabs/>:
+const [tab, setTab] = useState('overview');
+<Tabs value={tab} onChange={setTab}>...</Tabs>
+// 부모가 activeTab을 보유하고 'change'의 의미를 결정
+```
+
+세 가지 규칙:
+
+1. **상태 조각마다 하나만 골라라.** `value`와 `defaultValue` props를 둘 다 가진 컴포넌트는 controlled나 uncontrolled 중 하나가 되라고 요구하면서도 둘 다는 아닌 것입니다. 라이프 중 모드 전환은 버그 원인.
+2. **기본값은 uncontrolled.** 소비자에게 의식이 적습니다. 외부 상태와 동기화가 필요할 때 controlled로 opt-in.
+3. **Controlled가 더 유연.** Uncontrolled로 할 수 있는 모든 것은 상태를 추가해 controlled로 할 수 있지만, 반대는 안 됩니다.
+
+잘 설계된 라이브러리 컴포넌트는 대부분 어떤 props가 전달되었는지 검사해 두 모드를 모두 지원합니다.
 
 **제어(controlled)** 컴포넌트는 props를 통해 부모가 값을 관리합니다. **비제어(uncontrolled)** 컴포넌트는 내부적으로 값을 관리하고, 부모는 필요할 때(일반적으로 ref를 통해) 읽습니다.
 

@@ -20,8 +20,6 @@ Svelte takes a fundamentally different approach from React and Vue. While those 
 
 ## Table of Contents
 
-Before the syntax tour, read [**Theory & Principles**](#theory--principles) — compile-time reactivity, what `$:` actually emits, the no-virtual-DOM trade-off, and why bundles are smaller.
-
 1. [Svelte Philosophy](#1-svelte-philosophy)
 2. [Component Structure](#2-component-structure)
 3. [Reactive Declarations](#3-reactive-declarations)
@@ -33,13 +31,9 @@ Before the syntax tour, read [**Theory & Principles**](#theory--principles) — 
 
 ---
 
-## Theory & Principles
+## 1. Svelte Philosophy
 
-React and Vue are *runtimes*: they ship a library to the browser that contains the diff algorithm, the reactivity system, and all the lifecycle plumbing. Your component code gets handed to that runtime, which interprets it on every render. Svelte goes the other way: at build time, the compiler reads your `.svelte` file and emits a bespoke piece of imperative JavaScript that updates the DOM directly. There is no diff, no virtual DOM, no central runtime. The framework's "engine" is unrolled into your component code.
-
-This section explains the mechanics of that approach, what `$:` actually compiles to, and the trade-offs Svelte accepts in exchange for the smaller bundle and faster initial paint.
-
-### A. Compile-Time Reactivity
+### Theory: Compile-Time Reactivity
 
 In React, when you write `setCount(count + 1)`, the framework re-runs your component, builds a new VDOM, diffs it against the old one, and patches the DOM. In Vue, the proxy traps the write, runs the effect graph, re-runs the render function, and patches the DOM. In both cases, the *runtime* decides what changed and what to update.
 
@@ -91,29 +85,7 @@ Three things to notice:
 
 The runtime that ships to the browser is tiny — mostly the `$$invalidate` plumbing and the lifecycle scheduler. Most "framework code" lives inside your bundled components.
 
-### B. The `$:` Reactive Statement
-
-In Svelte 4, `$:` marks a statement as reactive — it re-runs whenever any variable it reads is reassigned:
-
-```svelte
-<script>
-  let count = 0;
-  $: doubled = count * 2;
-  $: console.log(`count is now ${count}`);
-</script>
-```
-
-The compiler walks the AST of each `$:` statement, identifies the variables it reads (`count`), and emits a re-execution call inside the `update` function whenever those variables' bits are dirty. The `$:` syntax is JavaScript's labeled-statement syntax repurposed — it's valid JS that does nothing in plain JS, but Svelte's compiler treats it specially.
-
-Three rules follow from this:
-
-1. **Reactivity is by assignment, not mutation.** `arr.push(x)` does not trigger Svelte; `arr = [...arr, x]` (or `arr = arr` after a push) does. The compiler instruments the `=` operator, not deep mutations.
-2. **`$:` only tracks top-level variables in the component instance.** Reading `obj.field` triggers when `obj` is reassigned, not when `obj.field` is mutated.
-3. **Order matters.** `$:` statements are topologically sorted by dependency, so `$: y = x * 2; $: z = y + 1` re-runs in the right order. But ordinary `let` declarations are evaluated top-to-bottom regardless.
-
-Svelte 5 introduces **runes** (covered in lesson 10) — `$state`, `$derived`, `$effect` — which replace `$:` with an explicit, more flexible syntax. Same compile-time approach, but the dependency graph is encoded in function calls instead of label syntax.
-
-### C. The No-Virtual-DOM Trade-Off
+### Theory: The No-Virtual-DOM Trade-Off
 
 Skipping the VDOM has real performance benefits:
 
@@ -129,59 +101,6 @@ But there are real costs:
 4. **Compile-time analysis can be fooled.** `$: doubled = compute(count)` works if the compiler can see `count` in the expression. If you compute it via dynamic property access or eval-like indirection, the dependency is invisible.
 
 The rule of thumb: Svelte excels at small-to-medium apps where bundle size and per-component performance matter. React's ecosystem dominates very large apps where shared infrastructure amortizes the runtime cost.
-
-### D. Component Boundaries and Update Granularity
-
-Svelte's update function knows exactly which DOM nodes depend on which variables (the bitmask). Within a component, only the affected nodes are touched. But the unit of update *is still the component*: when a parent passes a changed prop, the child's update function is called, even if the prop is unused inside the child. There is no per-node subscription across component boundaries.
-
-This is conceptually similar to React's "the whole component re-renders on any state change," with the difference that the re-execution is a tiny update function rather than the full render function. The result is that component composition has roughly the same shape across all three frameworks at the architectural level — what differs is the *cost per update*.
-
-### E. Two-Way Bindings: Sugar Over `prop + event`
-
-Svelte's `bind:value={name}` looks like the two-way binding from old MVC frameworks. The compiler desugars it into one-way data + event:
-
-```svelte
-<input bind:value={name} />
-
-<!-- compiles roughly to: -->
-<input value={name} on:input={(e) => name = e.target.value} />
-```
-
-There is no magic two-way reactivity at runtime. The pattern is just compiler sugar over the prop-down-event-up convention from lesson 1. Same goes for `bind:checked`, `bind:group`, and `bind:this` (refs).
-
-### F. Scoped Styles by Default
-
-A `<style>` block inside a `.svelte` file is **scoped to the component** by default. The compiler rewrites class names (or attaches generated classes) to ensure that selector inside one component doesn't leak to another:
-
-```svelte
-<style>
-  p { color: red; }
-</style>
-
-<!-- compiles to something like: -->
-<style>
-  p.svelte-abc123 { color: red; }
-</style>
-
-<p class="svelte-abc123">hello</p>
-```
-
-No CSS-in-JS library, no manually-prefixed BEM, no `:scope` complexity. The compiler does the work at build time, the runtime carries no CSS overhead.
-
-### From Theory to the Sections Below
-
-- §1 *Svelte Philosophy* — names the compile-time vs runtime distinction in (A) and the bundle-size argument in (C).
-- §2 *Component Structure* — the `<script>`, `<template>`, `<style>` layout that the compiler in (A) operates on, with scoping per (F).
-- §3 *Reactive Declarations* — (B); `$:` and the assignment-as-reactivity rule.
-- §4 *Props* — `export let name` (Svelte 4) is how a top-level variable is marked as a prop; the compiler lifts it into the parent's update bitmask.
-- §5 *Events* — DOM events use `on:click`; custom events use `createEventDispatcher`. Both compile to direct `addEventListener` calls.
-- §6 *Bindings* — (E); the desugaring of `bind:value` into prop+event.
-- §7 *Template Logic Blocks* — `{#if}`, `{#each}`, `{#await}`. Each block becomes its own micro-fragment with its own `create`/`update`/`destroy` functions, mounted and unmounted as the condition or list changes.
-- §8 *Transitions and Animations* — the lifecycle hooks for entering/leaving DOM are first-class because the compiler controls every mount and unmount; transitions are just functions called at those moments with the DOM node as input.
-
----
-
-## 1. Svelte Philosophy
 
 ### 1.1 Compiler, Not Runtime
 
@@ -225,6 +144,31 @@ npm run dev    # http://localhost:5173
 ---
 
 ## 2. Component Structure
+
+### Theory: Component Boundaries and Update Granularity
+
+Svelte's update function knows exactly which DOM nodes depend on which variables (the bitmask). Within a component, only the affected nodes are touched. But the unit of update *is still the component*: when a parent passes a changed prop, the child's update function is called, even if the prop is unused inside the child. There is no per-node subscription across component boundaries.
+
+This is conceptually similar to React's "the whole component re-renders on any state change," with the difference that the re-execution is a tiny update function rather than the full render function. The result is that component composition has roughly the same shape across all three frameworks at the architectural level — what differs is the *cost per update*.
+
+### Theory: Scoped Styles by Default
+
+A `<style>` block inside a `.svelte` file is **scoped to the component** by default. The compiler rewrites class names (or attaches generated classes) to ensure that selector inside one component doesn't leak to another:
+
+```svelte
+<style>
+  p { color: red; }
+</style>
+
+<!-- compiles to something like: -->
+<style>
+  p.svelte-abc123 { color: red; }
+</style>
+
+<p class="svelte-abc123">hello</p>
+```
+
+No CSS-in-JS library, no manually-prefixed BEM, no `:scope` complexity. The compiler does the work at build time, the runtime carries no CSS overhead.
 
 A Svelte component is a `.svelte` file with three optional sections: `<script>`, markup (HTML), and `<style>`. Unlike Vue's `<template>` wrapper, Svelte's markup is written directly at the top level.
 
@@ -318,6 +262,28 @@ Svelte accepts any JavaScript expression inside curly braces:
 ---
 
 ## 3. Reactive Declarations
+
+### Theory: The `$:` Reactive Statement
+
+In Svelte 4, `$:` marks a statement as reactive — it re-runs whenever any variable it reads is reassigned:
+
+```svelte
+<script>
+  let count = 0;
+  $: doubled = count * 2;
+  $: console.log(`count is now ${count}`);
+</script>
+```
+
+The compiler walks the AST of each `$:` statement, identifies the variables it reads (`count`), and emits a re-execution call inside the `update` function whenever those variables' bits are dirty. The `$:` syntax is JavaScript's labeled-statement syntax repurposed — it's valid JS that does nothing in plain JS, but Svelte's compiler treats it specially.
+
+Three rules follow from this:
+
+1. **Reactivity is by assignment, not mutation.** `arr.push(x)` does not trigger Svelte; `arr = [...arr, x]` (or `arr = arr` after a push) does. The compiler instruments the `=` operator, not deep mutations.
+2. **`$:` only tracks top-level variables in the component instance.** Reading `obj.field` triggers when `obj` is reassigned, not when `obj.field` is mutated.
+3. **Order matters.** `$:` statements are topologically sorted by dependency, so `$: y = x * 2; $: z = y + 1` re-runs in the right order. But ordinary `let` declarations are evaluated top-to-bottom regardless.
+
+Svelte 5 introduces **runes** (covered in lesson 10) — `$state`, `$derived`, `$effect` — which replace `$:` with an explicit, more flexible syntax. Same compile-time approach, but the dependency graph is encoded in function calls instead of label syntax.
 
 Svelte's reactivity is built on a simple principle: **assignments trigger updates**. When you assign a new value to a variable declared in `<script>`, Svelte automatically updates the DOM.
 
@@ -679,6 +645,19 @@ A component can forward all events of a given type by using `on:event` without a
 ---
 
 ## 6. Bindings
+
+### Theory: Two-Way Bindings: Sugar Over `prop + event`
+
+Svelte's `bind:value={name}` looks like the two-way binding from old MVC frameworks. The compiler desugars it into one-way data + event:
+
+```svelte
+<input bind:value={name} />
+
+<!-- compiles roughly to: -->
+<input value={name} on:input={(e) => name = e.target.value} />
+```
+
+There is no magic two-way reactivity at runtime. The pattern is just compiler sugar over the prop-down-event-up convention from lesson 1. Same goes for `bind:checked`, `bind:group`, and `bind:this` (refs).
 
 Svelte's `bind:` directive creates two-way bindings between component state and DOM properties.
 

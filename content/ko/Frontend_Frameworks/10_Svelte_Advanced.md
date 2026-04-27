@@ -21,8 +21,6 @@ Svelte의 기본을 익혔다면, 이번 레슨에서는 Svelte 애플리케이�
 
 ## 목차
 
-API 투어에 들어가기 전에 [**이론과 원리**](#이론과-원리)를 먼저 읽어보세요. 스토어 뒤의 옵저버 패턴, 어떤 객체든 스토어로 만드는 `subscribe` 계약, `$store` 자동 구독 설탕, 그리고 같은 발상을 다시 짠 Svelte 5 runes를 다룹니다.
-
 1. [Svelte 스토어](#1-svelte-스토어)
 2. [커스텀 스토어](#2-커스텀-스토어)
 3. [스토어 자동 구독](#3-스토어-자동-구독)
@@ -33,11 +31,9 @@ API 투어에 들어가기 전에 [**이론과 원리**](#이론과-원리)를 �
 
 ---
 
-## 이론과 원리
+## 1. Svelte 스토어
 
-9강의 반응성은 컴포넌트 경계에서 멈춥니다. `let count = 0`은 그것을 선언한 컴포넌트 *안에서는* 반응형이지만 컴포넌트 간 공유될 수 없습니다. Svelte의 해법이 **스토어** — 어떤 객체든 반응형 값 원천으로 만드는 작고 잘 정의된 계약입니다. 이 절은 그 계약을 분해하고, 프레임워크의 자동 구독 설탕이 어떻게 작동하는지 보여 주며, `$:`/store 분리를 대체하고 있는 Svelte 5 runes 어휘로 같은 발상을 다시 짭니다.
-
-### A. 옵저버 패턴, 정수만 추출
+### 이론: 옵저버 패턴, 정수만 추출
 
 스토어는 작은 인터페이스를 만족하는 어떤 객체든 가능합니다.
 
@@ -58,7 +54,7 @@ interface Store<T> {
 
 이 계약은 정확히 Gang-of-Four 디자인 패턴의 **옵저버 패턴**입니다. 주체(스토어)가 옵저버(리스너) 목록을 유지하며 변경을 통지합니다. Svelte 스토어는 TypeScript 친화적인 모자를 쓴 옵저버입니다.
 
-### B. 세 가지 내장 스토어
+### 이론: 세 가지 내장 스토어
 
 `writable`, `readable`, `derived`는 계약 위의 편의 생성자들입니다.
 
@@ -87,155 +83,6 @@ const message = derived([count, time], ([$c, $t]) => `${$c} at ${$t}`);
 1. **`readable`의 두 번째 인자는 `start` 함수.** 첫 구독자가 생길 때 실행되고, 마지막 구독자가 unsubscribe할 때 실행되는 cleanup을 반환합니다. 이것이 스토어가 누구도 보지 않을 때 누수 없이 자기 라이프사이클(타이머, 웹소켓, 이벤트 리스너)을 관리하는 방법입니다.
 2. **`derived`는 어떤 source 스토어가 갱신되든 자기 함수를 재실행**하고 결과를 자기 구독자에게 푸시합니다. 함수는 동기(값 반환)이거나 비동기(`set` 두 번째 인자 사용) — 둘 다 같은 구독자 사슬로 합성됩니다.
 3. **셋 다 `Store` 계약과 일치하는 객체를 반환.** 전달하고, 배열에 저장하고, 고차 스토어를 만들 수 있습니다 — 일급 값.
-
-### C. 커스텀 스토어: 내부는 숨기고 메서드를 노출
-
-계약이 그저 `subscribe`이므로, `writable`을 감싸 소비자가 호출하길 원하는 메서드만 다시 export할 수 있습니다.
-
-```js
-function createCounter() {
-  const { subscribe, set, update } = writable(0);
-  return {
-    subscribe,                               // 자동 구독을 위해 노출
-    increment: () => update(n => n + 1),
-    decrement: () => update(n => n - 1),
-    reset: () => set(0)
-  };
-}
-
-export const counter = createCounter();
-```
-
-소비자는 `counter.subscribe`, `counter.increment`, `counter.decrement`, `counter.reset`을 봅니다 — 임의 값으로 `set`을 호출할 수 없습니다. 이것이 private 상태와 public 메서드를 가진 클래스의 등가물이지만, 단일 함수와 작은 객체 리터럴로 만들어집니다.
-
-이 패턴이 Svelte 생태계가 타입 지정되고 의도가 드러나는 스토어를 만드는 방법입니다 — 바깥은 `useCounter` 스타일 API, 안은 `writable`, 변경 규칙은 export로 강제.
-
-### D. 자동 구독: `$store`는 컴파일러 설탕
-
-컴포넌트 안에서 스토어를 읽는 건 장황합니다.
-
-```svelte
-<script>
-  import { onDestroy } from 'svelte';
-  import { count } from './store';
-
-  let value;
-  const unsub = count.subscribe(v => value = v);
-  onDestroy(unsub);
-</script>
-
-<p>{value}</p>
-```
-
-Svelte 컴파일러는 `$count`(스토어 타입 변수의 `$` 접두사)를 읽고 그 모든 보일러플레이트를 emit합니다.
-
-```svelte
-<script>
-  import { count } from './store';
-</script>
-
-<p>{$count}</p>
-```
-
-컴파일러는:
-
-1. `$` 접두사를 보고 `count`가 스토어인지 확인.
-2. `let $count;`와 거기에 쓰는 구독을 emit.
-3. 컴포넌트 언마운트 시 unsubscribe하는 `onDestroy`를 emit.
-4. 스크립트와 템플릿 어디서 읽히든 `$count`를 반응형 변수로 취급.
-
-스크립트의 `$count = 5` 문법도 `count.set(5)`의 설탕입니다(`set`이 있는 스토어에만 유효). 자동 구독은 순수히 컴파일러 기능 — 런타임에 Svelte는 여전히 평범한 `subscribe`/`unsubscribe` 호출을 사용합니다.
-
-### E. Context vs Stores: 트리 스코프 싱글턴
-
-스토어는 모듈 레벨 싱글턴 — 어디서 import하든 같은 인스턴스를 얻습니다. 컴포넌트 서브트리마다 *새* 공유 값을 원하는 경우(예: 자손 `Tab` 컴포넌트들과 공유되는 "현재 탭" 값을 가지면서 페이지의 여러 `Tabs` 인스턴스 간에는 독립적이어야 하는 `Tabs` 컴포넌트)에는 잘못된 선택입니다.
-
-`setContext`와 `getContext`가 해결합니다.
-
-```svelte
-<!-- Tabs.svelte -->
-<script>
-  import { setContext, writable } from 'svelte';
-  const current = writable(0);
-  setContext('tabs', current);
-</script>
-
-<!-- Tab.svelte -->
-<script>
-  import { getContext } from 'svelte';
-  const current = getContext('tabs');
-</script>
-```
-
-각 `<Tabs>` 인스턴스가 자기 `current` 스토어를 만들어 자손에게 제공합니다. Context API는 **인스턴스별 스코핑**을, 스토어는 **글로벌 스코핑**을 제공합니다. 합성됩니다 — context가 스토어를 담을 수 있어, 인스턴스별 반응형 값을 줍니다.
-
-### F. 액션: 재사용 가능한 DOM 동작
-
-대부분의 프레임워크 구성요소(컴포넌트, 스토어, 컨텍스트)는 값에 대해 작동합니다. **액션**은 *직접 DOM 동작*을 위한 탈출구입니다.
-
-```js
-// tooltip 액션
-export function tooltip(node, params) {
-  const tip = document.createElement('div');
-  tip.textContent = params.text;
-  tip.style.cssText = 'position:absolute; background:black; color:white;';
-
-  function show() { document.body.appendChild(tip); }
-  function hide() { tip.remove(); }
-
-  node.addEventListener('mouseenter', show);
-  node.addEventListener('mouseleave', hide);
-
-  return {
-    update(newParams) { tip.textContent = newParams.text; },
-    destroy() { node.removeEventListener('mouseenter', show); node.removeEventListener('mouseleave', hide); hide(); }
-  };
-}
-```
-
-사용:
-
-```svelte
-<button use:tooltip={{ text: 'Save your work' }}>Save</button>
-```
-
-컴파일러는 버튼이 마운트된 후 `tooltip(buttonNode, { text: ... })`을 호출하고, params가 바뀌면 `update`를 호출하고, 언마운트 시 `destroy`를 호출합니다. 액션이 적합한 곳: 서드파티 JS 라이브러리 통합(DOM 노드를 변형하는 차트 라이브러리), Svelte 이벤트 modifier에 맞지 않는 저수준 이벤트 처리, 라이프사이클에 묶인 재사용 가능한 동작.
-
-### G. Svelte 5 Runes: 같은 발상을 다시 짜기
-
-Svelte 5는 암묵적 `$:` 반응성과 별개의 stores 라이브러리를 하나의 통일된 어휘로 대체하는 **runes**를 도입합니다.
-
-```svelte
-<script>
-  let count = $state(0);                    // 이전: let count = 0
-  let doubled = $derived(count * 2);        // 이전: $: doubled = count * 2
-  $effect(() => {                           // 이전: $: console.log(...)
-    console.log(`count is ${count}`);
-  });
-</script>
-```
-
-컴파일 타임 반응성 기계는 같습니다. 바뀌는 것은 표면입니다.
-
-- **`$state(initial)`** — 변수를 스크립트의 어떤 깊이에서든 반응형으로 표시(최상위에 한정되지 않음).
-- **`$derived(expr)`** — 어떤 값이든 `derived`. 표현식을 통한 명시적 의존성 추적.
-- **`$effect(fn)`** — Vue의 `watchEffect` / React의 `useEffect`. 의존성이 바뀔 때마다 함수 실행.
-
-runes의 요점은 통일성입니다 — 하나의 메커니즘(반응형 핸들을 반환하는 함수 호출)이 이전에 `let` + `$:` + `writable` + `derived`가 필요했던 것을 모두 커버합니다. 레거시 스토어에는 `$store` 자동 구독이 여전히 작동하지만, 새 코드는 runes를 일관되게 사용할 것이 기대됩니다.
-
-### 이론에서 아래 절들로
-
-- §1 *Svelte 스토어* — (B). 세 가지 내장 스토어 생성자.
-- §2 *커스텀 스토어* — (C). writable을 감싸 도메인에 맞는 메서드만 노출.
-- §3 *스토어 자동 구독* — (D). `$store`는 수동 subscribe/unsubscribe 쌍의 컴파일러 설탕.
-- §4 *컨텍스트 API* — (E). `setContext`/`getContext`를 통한 인스턴스별 스코핑. 스토어와 상보적.
-- §5 *컴포넌트 컴포지션: 슬롯* — 슬롯은 부모가 자식에게 템플릿 덩어리(선택적 데이터와 함께)를 전달하는 방법. React `children`과 Vue `<slot>`의 등가물.
-- §6 *액션* — (F). 재사용 가능한 DOM 동작을 부착하는 `use:directive` 문법.
-- §7 *SvelteKit 기초* — 파일 기반 라우팅, `+page.svelte` / `+layout.svelte` / `+page.server.ts` 관습. 앞 레슨의 라우팅과 SSR 발상을 Svelte의 관용구로 가져옴.
-
----
-
-## 1. Svelte 스토어
 
 Svelte 스토어는 직접적인 부모-자식 관계가 없는 컴포넌트 간에 상태를 공유하는 문제를 해결합니다. 스토어는 값이 변경될 때 리스너에게 알리는 `subscribe` 메서드를 가진 모든 객체입니다.
 
@@ -391,6 +238,28 @@ export const userData = derived(userId, ($userId, set) => {
 
 ## 2. 커스텀 스토어
 
+### 이론: 커스텀 스토어: 내부는 숨기고 메서드를 노출
+
+계약이 그저 `subscribe`이므로, `writable`을 감싸 소비자가 호출하길 원하는 메서드만 다시 export할 수 있습니다.
+
+```js
+function createCounter() {
+  const { subscribe, set, update } = writable(0);
+  return {
+    subscribe,                               // 자동 구독을 위해 노출
+    increment: () => update(n => n + 1),
+    decrement: () => update(n => n - 1),
+    reset: () => set(0)
+  };
+}
+
+export const counter = createCounter();
+```
+
+소비자는 `counter.subscribe`, `counter.increment`, `counter.decrement`, `counter.reset`을 봅니다 — 임의 값으로 `set`을 호출할 수 없습니다. 이것이 private 상태와 public 메서드를 가진 클래스의 등가물이지만, 단일 함수와 작은 객체 리터럴로 만들어집니다.
+
+이 패턴이 Svelte 생태계가 타입 지정되고 의도가 드러나는 스토어를 만드는 방법입니다 — 바깥은 `useCounter` 스타일 API, 안은 `writable`, 변경 규칙은 export로 강제.
+
 커스텀 스토어는 `subscribe` 메서드를 가진 모든 객체입니다. 이를 통해 스토어 계약을 유지하면서 비즈니스 로직을 캡슐화할 수 있습니다. `writable` 스토어를 감싸고 제어된 API를 노출하는 패턴이 일반적입니다.
 
 ### 2.1 기본 커스텀 스토어
@@ -532,6 +401,42 @@ export const settings = persistent('settings', {
 
 ## 3. 스토어 자동 구독
 
+### 이론: 자동 구독: `$store`는 컴파일러 설탕
+
+컴포넌트 안에서 스토어를 읽는 건 장황합니다.
+
+```svelte
+<script>
+  import { onDestroy } from 'svelte';
+  import { count } from './store';
+
+  let value;
+  const unsub = count.subscribe(v => value = v);
+  onDestroy(unsub);
+</script>
+
+<p>{value}</p>
+```
+
+Svelte 컴파일러는 `$count`(스토어 타입 변수의 `$` 접두사)를 읽고 그 모든 보일러플레이트를 emit합니다.
+
+```svelte
+<script>
+  import { count } from './store';
+</script>
+
+<p>{$count}</p>
+```
+
+컴파일러는:
+
+1. `$` 접두사를 보고 `count`가 스토어인지 확인.
+2. `let $count;`와 거기에 쓰는 구독을 emit.
+3. 컴포넌트 언마운트 시 unsubscribe하는 `onDestroy`를 emit.
+4. 스크립트와 템플릿 어디서 읽히든 `$count`를 반응형 변수로 취급.
+
+스크립트의 `$count = 5` 문법도 `count.set(5)`의 설탕입니다(`set`이 있는 스토어에만 유효). 자동 구독은 순수히 컴파일러 기능 — 런타임에 Svelte는 여전히 평범한 `subscribe`/`unsubscribe` 호출을 사용합니다.
+
 `$` 접두사는 스토어를 위한 Svelte의 가장 편리한 기능입니다. 컴포넌트에서 스토어 변수 앞에 `$`를 붙이면 자동으로 구독하고 구독 해제합니다.
 
 ### 3.1 $ 문법
@@ -615,6 +520,29 @@ export const settings = persistent('settings', {
 ---
 
 ## 4. 컨텍스트 API
+
+### 이론: Context vs Stores: 트리 스코프 싱글턴
+
+스토어는 모듈 레벨 싱글턴 — 어디서 import하든 같은 인스턴스를 얻습니다. 컴포넌트 서브트리마다 *새* 공유 값을 원하는 경우(예: 자손 `Tab` 컴포넌트들과 공유되는 "현재 탭" 값을 가지면서 페이지의 여러 `Tabs` 인스턴스 간에는 독립적이어야 하는 `Tabs` 컴포넌트)에는 잘못된 선택입니다.
+
+`setContext`와 `getContext`가 해결합니다.
+
+```svelte
+<!-- Tabs.svelte -->
+<script>
+  import { setContext, writable } from 'svelte';
+  const current = writable(0);
+  setContext('tabs', current);
+</script>
+
+<!-- Tab.svelte -->
+<script>
+  import { getContext } from 'svelte';
+  const current = getContext('tabs');
+</script>
+```
+
+각 `<Tabs>` 인스턴스가 자기 `current` 스토어를 만들어 자손에게 제공합니다. Context API는 **인스턴스별 스코핑**을, 스토어는 **글로벌 스코핑**을 제공합니다. 합성됩니다 — context가 스토어를 담을 수 있어, 인스턴스별 반응형 값을 줍니다.
 
 컨텍스트(Context) API는 컴포넌트 서브트리 내에서 범위가 지정된 상태를 제공합니다. 전역 싱글톤인 스토어와 달리, 컨텍스트는 특정 컴포넌트 인스턴스와 그 자손들에 묶여 있습니다.
 
@@ -924,6 +852,38 @@ export function useTheme(): ThemeConfig {
 
 ## 6. 액션
 
+### 이론: 액션: 재사용 가능한 DOM 동작
+
+대부분의 프레임워크 구성요소(컴포넌트, 스토어, 컨텍스트)는 값에 대해 작동합니다. **액션**은 *직접 DOM 동작*을 위한 탈출구입니다.
+
+```js
+// tooltip 액션
+export function tooltip(node, params) {
+  const tip = document.createElement('div');
+  tip.textContent = params.text;
+  tip.style.cssText = 'position:absolute; background:black; color:white;';
+
+  function show() { document.body.appendChild(tip); }
+  function hide() { tip.remove(); }
+
+  node.addEventListener('mouseenter', show);
+  node.addEventListener('mouseleave', hide);
+
+  return {
+    update(newParams) { tip.textContent = newParams.text; },
+    destroy() { node.removeEventListener('mouseenter', show); node.removeEventListener('mouseleave', hide); hide(); }
+  };
+}
+```
+
+사용:
+
+```svelte
+<button use:tooltip={{ text: 'Save your work' }}>Save</button>
+```
+
+컴파일러는 버튼이 마운트된 후 `tooltip(buttonNode, { text: ... })`을 호출하고, params가 바뀌면 `update`를 호출하고, 언마운트 시 `destroy`를 호출합니다. 액션이 적합한 곳: 서드파티 JS 라이브러리 통합(DOM 노드를 변형하는 차트 라이브러리), Svelte 이벤트 modifier에 맞지 않는 저수준 이벤트 처리, 라이프사이클에 묶인 재사용 가능한 동작.
+
 액션(action)은 `use:`로 모든 엘리먼트에 붙일 수 있는 재사용 가능한 DOM 동작입니다. Svelte의 커스텀 디렉티브(directive)에 해당합니다. 액션은 DOM 노드와 선택적 파라미터를 받는 함수로, 선택적으로 `update`와 `destroy` 메서드를 반환할 수 있습니다.
 
 ### 6.1 기본 액션
@@ -1127,6 +1087,28 @@ export function focusTrap(node: HTMLElement) {
 ---
 
 ## 7. SvelteKit 기초
+
+### 이론: Svelte 5 Runes: 같은 발상을 다시 짜기
+
+Svelte 5는 암묵적 `$:` 반응성과 별개의 stores 라이브러리를 하나의 통일된 어휘로 대체하는 **runes**를 도입합니다.
+
+```svelte
+<script>
+  let count = $state(0);                    // 이전: let count = 0
+  let doubled = $derived(count * 2);        // 이전: $: doubled = count * 2
+  $effect(() => {                           // 이전: $: console.log(...)
+    console.log(`count is ${count}`);
+  });
+</script>
+```
+
+컴파일 타임 반응성 기계는 같습니다. 바뀌는 것은 표면입니다.
+
+- **`$state(initial)`** — 변수를 스크립트의 어떤 깊이에서든 반응형으로 표시(최상위에 한정되지 않음).
+- **`$derived(expr)`** — 어떤 값이든 `derived`. 표현식을 통한 명시적 의존성 추적.
+- **`$effect(fn)`** — Vue의 `watchEffect` / React의 `useEffect`. 의존성이 바뀔 때마다 함수 실행.
+
+runes의 요점은 통일성입니다 — 하나의 메커니즘(반응형 핸들을 반환하는 함수 호출)이 이전에 `let` + `$:` + `writable` + `derived`가 필요했던 것을 모두 커버합니다. 레거시 스토어에는 `$store` 자동 구독이 여전히 작동하지만, 새 코드는 runes를 일관되게 사용할 것이 기대됩니다.
 
 SvelteKit은 Svelte의 공식 애플리케이션 프레임워크로, 파일 기반 라우팅, 서버 사이드 렌더링(SSR), 코드 분할 등을 제공합니다. React의 Next.js, Vue의 Nuxt에 해당합니다.
 

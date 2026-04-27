@@ -20,8 +20,6 @@ Vue is a progressive JavaScript framework that emphasizes approachability while 
 
 ## Table of Contents
 
-Before the syntax tour, read [**Theory & Principles**](#theory--principles) — Vue's reactivity (`Object.defineProperty` in Vue 2 vs `Proxy` in Vue 3), what template compilation produces, and why directives are not "magic attributes."
-
 1. [Single File Components](#1-single-file-components)
 2. [Template Syntax](#2-template-syntax)
 3. [Reactive Data with ref()](#3-reactive-data-with-ref)
@@ -29,167 +27,6 @@ Before the syntax tour, read [**Theory & Principles**](#theory--principles) — 
 5. [Conditional Rendering](#5-conditional-rendering)
 6. [List Rendering](#6-list-rendering)
 7. [Event Handling](#7-event-handling)
-
----
-
-## Theory & Principles
-
-Vue's pitch is "you write HTML, you write JavaScript, the framework wires them together." Every line you read in a `.vue` file is short, and the interactivity feels automatic. Underneath, three independent mechanisms produce that feeling: a **reactivity system** that intercepts reads and writes of state; a **template compiler** that turns the HTML you wrote into a render function; and an **effect graph** that connects "this state was read by this render function" so a write can trigger exactly the right re-render. This section unpacks each, because the differences with React (hooks call order, dependency arrays, virtual DOM diffs) all trace back to a different choice for one of these three.
-
-### A. Reactivity: From `Object.defineProperty` (Vue 2) to `Proxy` (Vue 3)
-
-The core problem reactivity solves: "the user mutated some piece of state — which UI now needs to update?" Vue's answer is to make state mutations *observable* and to record, during each render, which state was read.
-
-**Vue 2** used `Object.defineProperty` to recursively replace every property on a reactive object with a getter/setter pair:
-
-```js
-function makeReactive(obj) {
-  Object.keys(obj).forEach(key => {
-    let value = obj[key];
-    Object.defineProperty(obj, key, {
-      get() { track(obj, key); return value; },
-      set(newValue) { value = newValue; trigger(obj, key); }
-    });
-  });
-}
-```
-
-Reads run `track(...)`; writes run `trigger(...)`. This works but has hard limits:
-
-1. **Adding a property is invisible.** `state.newField = 1` does not go through any setter — the property never had one defined. Vue 2 had to expose `this.$set` as a workaround.
-2. **Array mutation methods (`push`, `splice`) are invisible.** Vue 2 monkey-patched the seven mutating methods to make them reactive.
-3. **Index assignment is invisible.** `state.items[0] = 'x'` is the same problem as adding a property.
-4. **Recursive walk is eager.** Every property at every depth gets a getter/setter at definition time, which costs setup time and memory for properties that may never be read.
-
-**Vue 3** rewrote this on top of `Proxy`:
-
-```js
-function makeReactive(obj) {
-  return new Proxy(obj, {
-    get(target, key) { track(target, key); return Reflect.get(target, key); },
-    set(target, key, value) { Reflect.set(target, key, value); trigger(target, key); return true; },
-    deleteProperty(target, key) { Reflect.deleteProperty(target, key); trigger(target, key); return true; },
-    has(target, key) { track(target, key); return Reflect.has(target, key); }
-  });
-}
-```
-
-`Proxy` traps *every* operation on the object, including additions, deletions, `in` checks, and array index sets. The four limits above all go away. The proxy is also lazy: nested objects are only wrapped in their own proxies when accessed, which makes large reactive objects cheap to declare. The cost is that `Proxy` requires modern browsers (no polyfill possible), which is why Vue 3 dropped IE 11 support.
-
-This shift is invisible in user code, but it is the foundation of every Vue 3 feature: `ref`, `reactive`, `computed`, `watch`, and the entire Composition API.
-
-### B. The Effect Graph: Automatic Dependency Tracking
-
-A **reactive effect** is a function that reads reactive state and produces some output (a DOM update, a derived value, a side effect). Vue's runtime tracks which reactive properties an effect read, and re-runs the effect when any of those properties is written.
-
-```
-                ┌────────────────┐
-                │  count (ref)   │
-                └───┬────────┬───┘
-                    │        │
-        read by ────┘        └──── read by
-                    │        │
-                    ▼        ▼
-        ┌────────────────┐  ┌──────────────────────┐
-        │ render effect  │  │ computed: count*2    │
-        │ (updates DOM)  │  │ (cached, recomputed  │
-        └────────────────┘  │  when count changes) │
-                            └──────────────────────┘
-```
-
-The mechanism is simple:
-
-```
-when an effect runs:
-  set "currently active effect" = this effect
-  call the effect's function
-    every reactive read inside calls track(target, key)
-      → adds (target, key) → effect to a dependency map
-  unset "currently active effect"
-
-when a reactive write happens:
-  call trigger(target, key)
-    → look up effects in the dependency map
-    → re-run each one (often via a scheduler)
-```
-
-No dependency array, no manual subscription. The framework discovers dependencies by *what the effect actually read* during execution. This is **fine-grained reactivity**: only the effects that read the changed value re-run. Compare with React, where any state change inside a component re-runs the entire component function (and its children, subject to memoization).
-
-The render function is just one effect. `computed` is another effect that caches its output. `watch` is an effect that calls your callback when its dependencies change. They are all the same primitive — `effect(() => { ... })` — wearing different hats.
-
-### C. Template Compilation: From HTML to Render Function
-
-You write:
-
-```vue
-<template>
-  <div>
-    <p>{{ count }}</p>
-    <button @click="count++">+1</button>
-  </div>
-</template>
-```
-
-The Vue compiler (running at build time, or at runtime if you use the runtime-only build) parses the template and emits a render function:
-
-```js
-import { openBlock, createElementBlock, createElementVNode, toDisplayString } from 'vue';
-
-function render(ctx) {
-  return (openBlock(), createElementBlock('div', null, [
-    createElementVNode('p', null, toDisplayString(ctx.count), 1 /* TEXT */),
-    createElementVNode('button', { onClick: () => ctx.count++ }, '+1')
-  ]));
-}
-```
-
-Three things to notice:
-
-1. **The render function reads `ctx.count`.** When the framework runs this function inside a reactive effect, the read is tracked. Mutating `count` later triggers a re-run.
-2. **Each VNode carries a `patchFlag`** (the `1 /* TEXT */`). The compiler analyzed the template and noticed that the `<p>` only ever changes its text content, never its attributes. At diff time, Vue only checks the text, not props or children. This is **compiler-informed runtime** — a major performance win over React's "compare everything" diff.
-3. **Static parts are hoisted.** A literal `<h1>Hello</h1>` with no bindings becomes a constant outside the render function, allocated once and reused on every render. The diff skips it entirely.
-
-Directives like `v-if`, `v-for`, `v-model` are syntactic sugar that the compiler expands:
-
-- `v-if="ok"` becomes a ternary in the render function: `ok ? createElement(...) : createCommentVNode('v-if')`.
-- `v-for="x in items"` becomes a `.map(...)` call.
-- `v-model="value"` desugars to `:value="value" @input="value = $event.target.value"` (a `value` binding plus an `input` listener).
-
-There is no runtime "directive system" in the way Angular has — the compiler resolves them all to plain VNode trees and JS expressions.
-
-### D. `ref` and `reactive`: Two Shapes for the Same Mechanism
-
-Vue 3 exposes reactivity through two functions:
-
-- `reactive(obj)` — returns a Proxy of `obj`. Reads and writes on the proxy are tracked. Use when you have an object whose properties you want reactive.
-- `ref(value)` — returns `{ value: <Proxy or boxed primitive> }`. The wrapping is necessary because primitives (`number`, `string`, `boolean`) cannot be proxied directly. Reading and writing `.value` is what gets tracked.
-
-```js
-const count = ref(0);
-console.log(count.value); // 0    ← .value is the boxed read
-count.value++;             // triggers any effect that read count.value
-
-const user = reactive({ name: 'Ada', age: 30 });
-user.name = 'Linus';       // triggers any effect that read user.name
-```
-
-Inside a `<template>`, Vue auto-unwraps refs at the top level — you write `{{ count }}`, not `{{ count.value }}`. Inside `<script setup>`, you write `.value` explicitly. The asymmetry exists because templates have a fixed shape Vue can analyze; arbitrary JavaScript does not.
-
-The two coexist because they cover different ergonomics:
-
-- For a single value or a returned-from-composable handle: `ref`.
-- For an object with multiple related fields: `reactive`.
-
-Both produce identical effect-tracking behavior. Pick by what reads better at the call site.
-
-### From Theory to the Sections Below
-
-- §1 *Single File Components* — the file format that bundles template, script, and style; the compiler in (C) operates on `.vue` files.
-- §2 *Template Syntax* — the directives in (C); each one desugars to a VNode-tree construction with the right patch flags.
-- §3 *Reactive Data with ref()* — (D); the `ref` half of the reactivity API.
-- §4 *Computed Properties* — (B)'s "effect that caches its output" — `computed(() => ...)` is just a derived effect.
-- §5 *Conditional Rendering* and §6 *List Rendering* — (C)'s `v-if`/`v-for` desugarings; the `key` requirement is the same diff-algorithm constraint as in React.
-- §7 *Event Handling* — `@click` desugars to a prop on the VNode whose value is the handler; from the runtime's view it is a normal callback.
 
 ---
 
@@ -336,6 +173,46 @@ app.mount('#app')  // Mounts to <div id="app"> in index.html
 ---
 
 ## 2. Template Syntax
+
+### Theory: Template Compilation: From HTML to Render Function
+
+You write:
+
+```vue
+<template>
+  <div>
+    <p>{{ count }}</p>
+    <button @click="count++">+1</button>
+  </div>
+</template>
+```
+
+The Vue compiler (running at build time, or at runtime if you use the runtime-only build) parses the template and emits a render function:
+
+```js
+import { openBlock, createElementBlock, createElementVNode, toDisplayString } from 'vue';
+
+function render(ctx) {
+  return (openBlock(), createElementBlock('div', null, [
+    createElementVNode('p', null, toDisplayString(ctx.count), 1 /* TEXT */),
+    createElementVNode('button', { onClick: () => ctx.count++ }, '+1')
+  ]));
+}
+```
+
+Three things to notice:
+
+1. **The render function reads `ctx.count`.** When the framework runs this function inside a reactive effect, the read is tracked. Mutating `count` later triggers a re-run.
+2. **Each VNode carries a `patchFlag`** (the `1 /* TEXT */`). The compiler analyzed the template and noticed that the `<p>` only ever changes its text content, never its attributes. At diff time, Vue only checks the text, not props or children. This is **compiler-informed runtime** — a major performance win over React's "compare everything" diff.
+3. **Static parts are hoisted.** A literal `<h1>Hello</h1>` with no bindings becomes a constant outside the render function, allocated once and reused on every render. The diff skips it entirely.
+
+Directives like `v-if`, `v-for`, `v-model` are syntactic sugar that the compiler expands:
+
+- `v-if="ok"` becomes a ternary in the render function: `ok ? createElement(...) : createCommentVNode('v-if')`.
+- `v-for="x in items"` becomes a `.map(...)` call.
+- `v-model="value"` desugars to `:value="value" @input="value = $event.target.value"` (a `value` binding plus an `input` listener).
+
+There is no runtime "directive system" in the way Angular has — the compiler resolves them all to plain VNode trees and JS expressions.
 
 Vue templates are valid HTML enhanced with special syntax for data binding, directives, and expressions.
 
@@ -570,6 +447,73 @@ The `.lazy` modifier changes the sync event from `input` to `change` (updates on
 
 ## 3. Reactive Data with ref()
 
+### Theory: Reactivity: From `Object.defineProperty` (Vue 2) to `Proxy` (Vue 3)
+
+The core problem reactivity solves: "the user mutated some piece of state — which UI now needs to update?" Vue's answer is to make state mutations *observable* and to record, during each render, which state was read.
+
+**Vue 2** used `Object.defineProperty` to recursively replace every property on a reactive object with a getter/setter pair:
+
+```js
+function makeReactive(obj) {
+  Object.keys(obj).forEach(key => {
+    let value = obj[key];
+    Object.defineProperty(obj, key, {
+      get() { track(obj, key); return value; },
+      set(newValue) { value = newValue; trigger(obj, key); }
+    });
+  });
+}
+```
+
+Reads run `track(...)`; writes run `trigger(...)`. This works but has hard limits:
+
+1. **Adding a property is invisible.** `state.newField = 1` does not go through any setter — the property never had one defined. Vue 2 had to expose `this.$set` as a workaround.
+2. **Array mutation methods (`push`, `splice`) are invisible.** Vue 2 monkey-patched the seven mutating methods to make them reactive.
+3. **Index assignment is invisible.** `state.items[0] = 'x'` is the same problem as adding a property.
+4. **Recursive walk is eager.** Every property at every depth gets a getter/setter at definition time, which costs setup time and memory for properties that may never be read.
+
+**Vue 3** rewrote this on top of `Proxy`:
+
+```js
+function makeReactive(obj) {
+  return new Proxy(obj, {
+    get(target, key) { track(target, key); return Reflect.get(target, key); },
+    set(target, key, value) { Reflect.set(target, key, value); trigger(target, key); return true; },
+    deleteProperty(target, key) { Reflect.deleteProperty(target, key); trigger(target, key); return true; },
+    has(target, key) { track(target, key); return Reflect.has(target, key); }
+  });
+}
+```
+
+`Proxy` traps *every* operation on the object, including additions, deletions, `in` checks, and array index sets. The four limits above all go away. The proxy is also lazy: nested objects are only wrapped in their own proxies when accessed, which makes large reactive objects cheap to declare. The cost is that `Proxy` requires modern browsers (no polyfill possible), which is why Vue 3 dropped IE 11 support.
+
+This shift is invisible in user code, but it is the foundation of every Vue 3 feature: `ref`, `reactive`, `computed`, `watch`, and the entire Composition API.
+
+### Theory: `ref` and `reactive`: Two Shapes for the Same Mechanism
+
+Vue 3 exposes reactivity through two functions:
+
+- `reactive(obj)` — returns a Proxy of `obj`. Reads and writes on the proxy are tracked. Use when you have an object whose properties you want reactive.
+- `ref(value)` — returns `{ value: <Proxy or boxed primitive> }`. The wrapping is necessary because primitives (`number`, `string`, `boolean`) cannot be proxied directly. Reading and writing `.value` is what gets tracked.
+
+```js
+const count = ref(0);
+console.log(count.value); // 0    ← .value is the boxed read
+count.value++;             // triggers any effect that read count.value
+
+const user = reactive({ name: 'Ada', age: 30 });
+user.name = 'Linus';       // triggers any effect that read user.name
+```
+
+Inside a `<template>`, Vue auto-unwraps refs at the top level — you write `{{ count }}`, not `{{ count.value }}`. Inside `<script setup>`, you write `.value` explicitly. The asymmetry exists because templates have a fixed shape Vue can analyze; arbitrary JavaScript does not.
+
+The two coexist because they cover different ergonomics:
+
+- For a single value or a returned-from-composable handle: `ref`.
+- For an object with multiple related fields: `reactive`.
+
+Both produce identical effect-tracking behavior. Pick by what reads better at the call site.
+
 In Vue 3's Composition API, `ref()` creates a reactive reference for primitive values. Accessing the value in `<script>` requires `.value`, but in `<template>` it is automatically unwrapped.
 
 ### 3.1 Creating and Using Refs
@@ -656,6 +600,45 @@ countRef.value++  // This updates correctly
 ---
 
 ## 4. Computed Properties
+
+### Theory: The Effect Graph: Automatic Dependency Tracking
+
+A **reactive effect** is a function that reads reactive state and produces some output (a DOM update, a derived value, a side effect). Vue's runtime tracks which reactive properties an effect read, and re-runs the effect when any of those properties is written.
+
+```
+                ┌────────────────┐
+                │  count (ref)   │
+                └───┬────────┬───┘
+                    │        │
+        read by ────┘        └──── read by
+                    │        │
+                    ▼        ▼
+        ┌────────────────┐  ┌──────────────────────┐
+        │ render effect  │  │ computed: count*2    │
+        │ (updates DOM)  │  │ (cached, recomputed  │
+        └────────────────┘  │  when count changes) │
+                            └──────────────────────┘
+```
+
+The mechanism is simple:
+
+```
+when an effect runs:
+  set "currently active effect" = this effect
+  call the effect's function
+    every reactive read inside calls track(target, key)
+      → adds (target, key) → effect to a dependency map
+  unset "currently active effect"
+
+when a reactive write happens:
+  call trigger(target, key)
+    → look up effects in the dependency map
+    → re-run each one (often via a scheduler)
+```
+
+No dependency array, no manual subscription. The framework discovers dependencies by *what the effect actually read* during execution. This is **fine-grained reactivity**: only the effects that read the changed value re-run. Compare with React, where any state change inside a component re-runs the entire component function (and its children, subject to memoization).
+
+The render function is just one effect. `computed` is another effect that caches its output. `watch` is an effect that calls your callback when its dependencies change. They are all the same primitive — `effect(() => { ... })` — wearing different hats.
 
 Computed properties derive values from reactive state. They are cached: Vue only recalculates them when their dependencies change.
 

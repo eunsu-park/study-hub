@@ -16,8 +16,6 @@
 
 ## Table of Contents
 
-Before the API tour, read [**Theory & Principles**](#theory--principles) — the prop-drilling problem, why Context's reference equality forces re-renders, the flux pattern, and how subscribe-based stores like Zustand sidestep both.
-
 1. [useReducer: Complex State Logic](#1-usereducer-complex-state-logic)
 2. [Context API](#2-context-api)
 3. [Context Limitations: The Re-render Problem](#3-context-limitations-the-re-render-problem)
@@ -27,58 +25,9 @@ Before the API tour, read [**Theory & Principles**](#theory--principles) — the
 
 ---
 
-## Theory & Principles
+## 1. useReducer: Complex State Logic
 
-State management is not really about "where to put data." It is about **who is allowed to change data, who is allowed to read it, and what triggers a re-render when it changes.** Different libraries answer those three questions differently, and the differences are mechanical, not stylistic. This section walks the four mainstream answers — local state, Context, flux/Redux, and external subscribe-based stores — and shows the failure mode that motivated each one.
-
-### A. The Prop-Drilling Problem
-
-When state lives in a parent and is needed by a deeply nested descendant, the natural reaction is to pass it as a prop through every intermediate component. Each intermediate sees a prop it does not use, must declare it in its own type signature, and must remember to forward it to its child.
-
-```
-App (owns user)
-  └─ Layout (forwards user)
-       └─ Sidebar (forwards user)
-            └─ ProfileMenu (finally uses user)
-```
-
-Three concrete costs:
-
-1. **Type pollution.** `Layout` and `Sidebar` now have `user` in their prop types even though their job has nothing to do with users.
-2. **Refactor friction.** Adding a new piece of cross-cutting state (theme, locale, auth token) means touching every intermediate.
-3. **Forwarded-prop bugs.** A missing `{...props}` spread or a renamed prop in one of the intermediates silently breaks the leaf.
-
-Prop-drilling is fine for one or two levels and for state that genuinely belongs in the chain. It becomes a problem when the prop is **passed through components that do not use it**.
-
-### B. Context: Solves Drilling, Introduces Re-renders
-
-`createContext` plus `useContext` lets a leaf read directly from a provider higher in the tree without involving the intermediates. The mechanism is straightforward: `<Context.Provider value={...}>` registers a value at a position in the tree; `useContext(Context)` walks up the tree from the consumer to find the nearest matching provider and returns its `value`.
-
-The catch is the **re-render rule**: every consumer of a context re-renders whenever the provider's `value` changes by `Object.is`. There is no selector, no partial subscription, no deep comparison. Two patterns immediately become bugs:
-
-```jsx
-// BUG 1: a fresh object literal every render
-<UserContext.Provider value={{ user, setUser }}>
-  ...
-</UserContext.Provider>
-// every render of the parent → new {user, setUser} object →
-// every consumer re-renders, even ones that read only `user`
-```
-
-```jsx
-// BUG 2: many unrelated values bundled into one context
-<AppContext.Provider value={{ user, theme, locale, cart }}>
-// changing `cart` re-renders consumers that only read `theme`
-```
-
-The fixes follow directly:
-
-- **Stabilize the value with `useMemo`**: `const value = useMemo(() => ({ user, setUser }), [user])`.
-- **Split contexts by change frequency**: one context per piece of state that updates independently. A separate `UserContext` and `ThemeContext` means a theme change does not re-render user consumers.
-
-But there is a structural ceiling: even with perfect splitting, *every* consumer of a context re-renders on *every* change to that context. There is no way to say "only re-render me when `user.name` changes." For UIs where dozens or hundreds of components subscribe to overlapping slices of state, Context becomes a performance trap. That is the gap external state libraries fill.
-
-### C. The Flux Pattern: Centralize Mutations Behind Actions
+### Theory: The Flux Pattern: Centralize Mutations Behind Actions
 
 Redux popularized a strict three-piece architecture:
 
@@ -95,78 +44,6 @@ Three rules make this work:
 The win is auditability. Every state change has a name and a payload, the reducer is a single switch over those names, and you can replay or time-travel through the action log to debug. The cost is ceremony: action types, action creators, reducers, selectors, and the cognitive overhead of routing every change through the `dispatch → reducer` pipeline.
 
 `useReducer` is exactly this pattern at component scope: state in one place, actions describe intent, a reducer produces the next state. When you outgrow `useReducer` (because the state needs to be shared) you reach for either Context + reducer (the textbook approach) or an external store like Redux Toolkit, Zustand, or Jotai.
-
-### D. Subscribe-Based Stores: Selector-Driven Re-renders
-
-Zustand, Redux (with `react-redux`'s `useSelector`), Valtio, and similar libraries break free of Context's all-or-nothing re-render by moving state outside React. The mechanism:
-
-```
-External store (lives outside React's tree)
-   ├─ getState() → returns current state
-   ├─ setState(updater) → applies update, notifies subscribers
-   └─ subscribe(listener) → registers a callback fired on every change
-
-Inside a React component:
-   const value = useStore(state => state.user.name)
-                              ↑ selector function
-```
-
-The store keeps a list of listeners. On every `setState`, every listener is called with the new state. The library's `useStore(selector)` hook subscribes the component, runs the selector, and triggers a re-render only when the **selected slice** has changed (by `Object.is` or a custom equality function).
-
-The contract is stronger than Context:
-
-- **Per-component subscriptions.** Two components subscribed to the same store but selecting different slices re-render independently.
-- **No provider needed.** The store is a module-level singleton; you import it where you need it.
-- **Synchronous updates.** Reads always see the latest state because the store is plain JavaScript, not React state.
-
-Zustand's API is the minimal surface of this pattern: `create((set) => ({ ... }))` returns the hook directly. Redux Toolkit wraps the same idea with reducers, action creators, devtools, and middleware — useful at scale, overkill for a small app.
-
-The atomic family (Recoil, Jotai) takes the idea further: instead of one store with selectors, you define many small "atoms" (independent reactive cells) and components subscribe to specific atoms. Re-renders are scoped to the components reading the atoms that changed. The trade is more pieces to manage, but finer granularity.
-
-### E. The Re-render Tree Decoded
-
-To compare these mechanisms, look at what happens when state changes:
-
-| Mechanism | Who re-renders |
-|-----------|----------------|
-| Local `useState` | The component that owns the state, plus its descendants (subject to `React.memo`) |
-| Lifted state + props | The owner and every component on the path to consumers (drilling cost) |
-| Context | The provider's children that called `useContext` for the changed context — and their subtrees |
-| Zustand with selector | Only the components whose selected slice changed |
-| Atomic (Jotai/Recoil) | Only the components reading the changed atom |
-
-The progression is a steady tightening of the re-render scope. The right tool depends on how often state changes and how many components subscribe.
-
-### F. Server State vs Client State
-
-A dimension orthogonal to all of the above: state that comes from the server (a list of users fetched from an API) has different needs than state that lives entirely in the client (a modal's open/closed flag).
-
-Server state is:
-
-- **Asynchronous** (loading, error, success states).
-- **Cached** (multiple components might want the same data — refetching is wasteful).
-- **Stale-able** (the server's truth diverges from the local cache after writes).
-- **Background-refreshable** (fetch on focus, on reconnect, on stale).
-
-Client state is:
-
-- **Synchronous.**
-- **Owned by no one but the client.**
-- **Not refetchable.**
-
-Trying to handle server state with `useState` + `useEffect` reinvents caching, deduplication, and stale-while-revalidate badly. TanStack Query (covered in lesson 13) and SWR exist precisely because server state is its own problem. Treat them as separate axes: TanStack Query for server, Zustand/Jotai for client.
-
-### From Theory to the Sections Below
-
-- §1 *useReducer* is (C) at component scope: actions, reducer, single state object.
-- §2 *Context API* is (B): solves prop-drilling at the cost of (B)'s re-render rule.
-- §3 *Context Limitations: The Re-render Problem* names exactly the bugs in (B) and shows their fixes.
-- §4 *Zustand* is (D) — selector-based subscribe with the smallest possible API.
-- §5 *When to Use What* is the matrix in (E) and (F) made operational: pick local for local, Context for low-frequency cross-cutting state, Zustand for high-frequency or large-tree-spanning state, and TanStack Query for anything that comes from the server.
-
----
-
-## 1. useReducer: Complex State Logic
 
 `useReducer` is an alternative to `useState` for state with multiple sub-values or complex update logic. It follows the same pattern as Redux: dispatch an **action** to a **reducer** function that returns the new state.
 
@@ -380,6 +257,25 @@ function TodoApp() {
 
 ## 2. Context API
 
+### Theory: The Prop-Drilling Problem
+
+When state lives in a parent and is needed by a deeply nested descendant, the natural reaction is to pass it as a prop through every intermediate component. Each intermediate sees a prop it does not use, must declare it in its own type signature, and must remember to forward it to its child.
+
+```
+App (owns user)
+  └─ Layout (forwards user)
+       └─ Sidebar (forwards user)
+            └─ ProfileMenu (finally uses user)
+```
+
+Three concrete costs:
+
+1. **Type pollution.** `Layout` and `Sidebar` now have `user` in their prop types even though their job has nothing to do with users.
+2. **Refactor friction.** Adding a new piece of cross-cutting state (theme, locale, auth token) means touching every intermediate.
+3. **Forwarded-prop bugs.** A missing `{...props}` spread or a renamed prop in one of the intermediates silently breaks the leaf.
+
+Prop-drilling is fine for one or two levels and for state that genuinely belongs in the chain. It becomes a problem when the prop is **passed through components that do not use it**.
+
 React's Context API lets you pass data through the component tree without manually threading props at every level. It solves the **prop drilling** problem.
 
 ### The Prop Drilling Problem
@@ -514,6 +410,48 @@ function ThemeToggleButton() {
 
 ## 3. Context Limitations: The Re-render Problem
 
+### Theory: Context: Solves Drilling, Introduces Re-renders
+
+`createContext` plus `useContext` lets a leaf read directly from a provider higher in the tree without involving the intermediates. The mechanism is straightforward: `<Context.Provider value={...}>` registers a value at a position in the tree; `useContext(Context)` walks up the tree from the consumer to find the nearest matching provider and returns its `value`.
+
+The catch is the **re-render rule**: every consumer of a context re-renders whenever the provider's `value` changes by `Object.is`. There is no selector, no partial subscription, no deep comparison. Two patterns immediately become bugs:
+
+```jsx
+// BUG 1: a fresh object literal every render
+<UserContext.Provider value={{ user, setUser }}>
+  ...
+</UserContext.Provider>
+// every render of the parent → new {user, setUser} object →
+// every consumer re-renders, even ones that read only `user`
+```
+
+```jsx
+// BUG 2: many unrelated values bundled into one context
+<AppContext.Provider value={{ user, theme, locale, cart }}>
+// changing `cart` re-renders consumers that only read `theme`
+```
+
+The fixes follow directly:
+
+- **Stabilize the value with `useMemo`**: `const value = useMemo(() => ({ user, setUser }), [user])`.
+- **Split contexts by change frequency**: one context per piece of state that updates independently. A separate `UserContext` and `ThemeContext` means a theme change does not re-render user consumers.
+
+But there is a structural ceiling: even with perfect splitting, *every* consumer of a context re-renders on *every* change to that context. There is no way to say "only re-render me when `user.name` changes." For UIs where dozens or hundreds of components subscribe to overlapping slices of state, Context becomes a performance trap. That is the gap external state libraries fill.
+
+### Theory: The Re-render Tree Decoded
+
+To compare these mechanisms, look at what happens when state changes:
+
+| Mechanism | Who re-renders |
+|-----------|----------------|
+| Local `useState` | The component that owns the state, plus its descendants (subject to `React.memo`) |
+| Lifted state + props | The owner and every component on the path to consumers (drilling cost) |
+| Context | The provider's children that called `useContext` for the changed context — and their subtrees |
+| Zustand with selector | Only the components whose selected slice changed |
+| Atomic (Jotai/Recoil) | Only the components reading the changed atom |
+
+The progression is a steady tightening of the re-render scope. The right tool depends on how often state changes and how many components subscribe.
+
 Context has a fundamental performance limitation: **every consumer re-renders whenever the provider's value changes**, even if the consumer only uses a small part of the context value.
 
 ### The Problem Illustrated
@@ -598,6 +536,33 @@ This is often the best solution when context re-renders become a problem. Zustan
 ---
 
 ## 4. Zustand: Lightweight State Management
+
+### Theory: Subscribe-Based Stores: Selector-Driven Re-renders
+
+Zustand, Redux (with `react-redux`'s `useSelector`), Valtio, and similar libraries break free of Context's all-or-nothing re-render by moving state outside React. The mechanism:
+
+```
+External store (lives outside React's tree)
+   ├─ getState() → returns current state
+   ├─ setState(updater) → applies update, notifies subscribers
+   └─ subscribe(listener) → registers a callback fired on every change
+
+Inside a React component:
+   const value = useStore(state => state.user.name)
+                              ↑ selector function
+```
+
+The store keeps a list of listeners. On every `setState`, every listener is called with the new state. The library's `useStore(selector)` hook subscribes the component, runs the selector, and triggers a re-render only when the **selected slice** has changed (by `Object.is` or a custom equality function).
+
+The contract is stronger than Context:
+
+- **Per-component subscriptions.** Two components subscribed to the same store but selecting different slices re-render independently.
+- **No provider needed.** The store is a module-level singleton; you import it where you need it.
+- **Synchronous updates.** Reads always see the latest state because the store is plain JavaScript, not React state.
+
+Zustand's API is the minimal surface of this pattern: `create((set) => ({ ... }))` returns the hook directly. Redux Toolkit wraps the same idea with reducers, action creators, devtools, and middleware — useful at scale, overkill for a small app.
+
+The atomic family (Recoil, Jotai) takes the idea further: instead of one store with selectors, you define many small "atoms" (independent reactive cells) and components subscribe to specific atoms. Re-renders are scoped to the components reading the atoms that changed. The trade is more pieces to manage, but finer granularity.
 
 [Zustand](https://github.com/pmndrs/zustand) is a small (~1 kB), unopinionated state management library. It avoids the boilerplate of Redux and the re-render problems of Context. Components subscribe to specific slices of state, so they only re-render when the data they use changes.
 
@@ -810,6 +775,25 @@ useTodoStore.getState().addTodo("New task from outside");
 ---
 
 ## 5. When to Use What
+
+### Theory: Server State vs Client State
+
+A dimension orthogonal to all of the above: state that comes from the server (a list of users fetched from an API) has different needs than state that lives entirely in the client (a modal's open/closed flag).
+
+Server state is:
+
+- **Asynchronous** (loading, error, success states).
+- **Cached** (multiple components might want the same data — refetching is wasteful).
+- **Stale-able** (the server's truth diverges from the local cache after writes).
+- **Background-refreshable** (fetch on focus, on reconnect, on stale).
+
+Client state is:
+
+- **Synchronous.**
+- **Owned by no one but the client.**
+- **Not refetchable.**
+
+Trying to handle server state with `useState` + `useEffect` reinvents caching, deduplication, and stale-while-revalidate badly. TanStack Query (covered in lesson 13) and SWR exist precisely because server state is its own problem. Treat them as separate axes: TanStack Query for server, Zustand/Jotai for client.
 
 Choosing the right state management approach depends on **scope** (how many components need the data) and **complexity** (how the data changes).
 

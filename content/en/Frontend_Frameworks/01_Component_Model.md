@@ -16,8 +16,6 @@
 
 ## Table of Contents
 
-Before the framework tour, read [**Theory & Principles**](#theory--principles) — the declarative model `UI = f(state)`, unidirectional data flow, and the component tree as a reconciliation target.
-
 1. [What Is a Component?](#1-what-is-a-component)
 2. [Props: Data In](#2-props-data-in)
 3. [State: Internal Data](#3-state-internal-data)
@@ -29,13 +27,9 @@ Before the framework tour, read [**Theory & Principles**](#theory--principles) �
 
 ---
 
-## Theory & Principles
+## 1. What Is a Component?
 
-The component model is not just a code-organization convention. It is the practical surface of a much older idea from functional programming: **describe what the UI should look like as a pure function of state, and let the runtime figure out how to mutate the DOM to match.** Once you accept that framing, almost every design decision in React, Vue, and Svelte falls out as a consequence.
-
-This section separates the model into four ideas that operate independently and then recombine in every framework: (A) declarative vs imperative description, (B) unidirectional data flow, (C) the component tree as a structured value, and (D) reconciliation as the bridge from values to DOM. The framework comparison later in the lesson is just these four ideas instantiated with different syntax.
-
-### A. Declarative vs Imperative UI
+### Theory: Declarative vs Imperative UI
 
 The imperative style describes *how* to update the DOM. You hold references to nodes, you call `appendChild`, `removeChild`, `setAttribute`. The order of operations matters; missing one step leaves the DOM in an inconsistent state with the data. As applications grow, the number of "if data changes from X to Y, then mutate the DOM in this sequence" rules grows quadratically — every state pair needs its own transition.
 
@@ -55,29 +49,7 @@ The trade-off is the cost of the diff. Returning a new description on every chan
 
 This single shift — from "mutate" to "describe" — is what every component framework sells. React, Vue, and Svelte differ in *how* they implement the diff, not in whether they make this trade.
 
-### B. Unidirectional Data Flow
-
-Two-way binding (a child can reach up and modify a parent's state) makes simple cases feel magical and large cases impossible to reason about. If any component can change any state visible to it, then "how did this state become 47?" is a search across the whole component tree.
-
-Unidirectional flow imposes a strict rule:
-
-```
-Parent (owns state)
-   │
-   │  data flows down via props (read-only)
-   ▼
-Child (renders, dispatches)
-   │
-   │  events flow up via callbacks
-   ▼
-Parent (decides what to do, possibly updates state)
-```
-
-Children read; parents write. A child that needs to influence parent state asks the parent (via a callback prop or emitted event), and the parent decides whether and how to update. This converts "where did this state mutation come from?" into a tree walk from the owner downward — bounded and local.
-
-The pattern repeats at every depth: the parent might itself be a child of a higher component, so the same rule cascades. The owner of a piece of state is the lowest common ancestor of all components that need to read or update it. When two siblings need to share state, you **lift the state up** to that ancestor — that is not a new pattern, it is a direct consequence of unidirectionality.
-
-### C. The Component Tree as a Value
+### Theory: The Component Tree as a Value
 
 In a declarative framework, the result of calling `View(state)` is not DOM — it is a tree of *descriptions* of DOM. React calls these elements; Vue calls them VNodes; Svelte compiles them into low-level instructions but the conceptual tree still exists. The tree is just data: nodes have a type (`'div'`, `Button`, `MyForm`), props (attributes), and children.
 
@@ -100,39 +72,6 @@ Two properties of this tree matter:
 2. **It has structural identity.** A component appears at a specific path from the root: "second child of `Sidebar`, which is the second child of `Layout`". That path is what the framework uses to decide whether two renderings refer to "the same" component instance — and therefore whether to reuse its state and DOM nodes, or unmount and remount.
 
 This is why **changing the *type* at a position forces a remount**, even if the rendered DOM looks similar. The tree position plus the component type identifies the instance; either changes and the framework treats it as a different thing.
-
-### D. Reconciliation: From Description to DOM
-
-The framework holds two trees in mind: the previous description (what is currently in the DOM) and the new description (what the latest `View(state)` returned). Reconciliation is the algorithm that walks both trees in parallel and decides which DOM operations to perform.
-
-The naive tree-diff algorithm is O(n³) — comparing every node in one tree to every node in the other. No production framework can afford this. Instead, every framework adopts the same two heuristics that drop the cost to O(n):
-
-1. **Different types at the same position = unmount and remount.** Do not try to morph a `<div>` into a `<span>`; throw the subtree away and build a new one. Same for components: replacing `<UserCard>` with `<AdminCard>` at the same slot remounts entirely, even if both render a card-shaped DOM.
-2. **Lists are matched by stable keys, not by index.** When rendering `items.map(...)`, the framework needs to know which child in the new list corresponds to which child in the old. Using array index as the key means inserting at the front shifts every key down one — every element looks "changed" and gets rebuilt. Using a stable id (item.id) means the framework can match `key=42` in the old tree to `key=42` in the new tree, regardless of position, and the DOM node for that item is moved rather than recreated. State inside that child is preserved.
-
-These two rules are why React requires the `key` prop on lists, why Vue's `v-for` warns when keys are missing, and why Svelte compiles keyed `{#each}` blocks differently from unkeyed ones. They are all the same algorithm.
-
-The lifecycle phases — mount, update, unmount — are exactly the three things reconciliation can do to a node:
-
-- **Mount**: a node is in the new tree but not the old. Create the DOM, run setup code (effects, refs), insert.
-- **Update**: a node is at the same position in both trees with the same type. Diff its props, patch the DOM in place, re-run effects whose dependencies changed.
-- **Unmount**: a node is in the old tree but not the new (or its type changed). Run cleanup, remove the DOM.
-
-Every "lifecycle hook" in every framework is just a callback the runtime fires at one of these three transitions.
-
-### From Theory to the Framework Tour Below
-
-Each section that follows is one of these four ideas under a particular framework's syntax:
-
-- §2 *Props* and §3 *State* are the two halves of `View(state)` — props are state passed in, state is state owned locally.
-- §4 *One-Way Data Flow* is (B) made concrete: the rules for how parents and children exchange data.
-- §5 *Lifting State Up* is the logical consequence of (B) when two children need to share state.
-- §6 *Component Lifecycle* is (D)'s mount/update/unmount, exposed as user hooks.
-- §7 *Framework Comparison* shows how React, Vue, and Svelte each pick a different point on the spectrum of "how to express the description and run the diff" — but every choice still implements the same four ideas above.
-
----
-
-## 1. What Is a Component?
 
 A **component** is a self-contained, reusable building block that encapsulates structure (HTML), style (CSS), and behavior (JavaScript) into a single unit. Before components, web applications were organized as pages with tangled scripts — changing one part of the UI often broke another. Components solve this by isolating concerns.
 
@@ -325,6 +264,28 @@ Svelte's approach is notably different — the compiler detects assignments and 
 
 ## 4. One-Way Data Flow
 
+### Theory: Unidirectional Data Flow
+
+Two-way binding (a child can reach up and modify a parent's state) makes simple cases feel magical and large cases impossible to reason about. If any component can change any state visible to it, then "how did this state become 47?" is a search across the whole component tree.
+
+Unidirectional flow imposes a strict rule:
+
+```
+Parent (owns state)
+   │
+   │  data flows down via props (read-only)
+   ▼
+Child (renders, dispatches)
+   │
+   │  events flow up via callbacks
+   ▼
+Parent (decides what to do, possibly updates state)
+```
+
+Children read; parents write. A child that needs to influence parent state asks the parent (via a callback prop or emitted event), and the parent decides whether and how to update. This converts "where did this state mutation come from?" into a tree walk from the owner downward — bounded and local.
+
+The pattern repeats at every depth: the parent might itself be a child of a higher component, so the same rule cascades. The owner of a piece of state is the lowest common ancestor of all components that need to read or update it. When two siblings need to share state, you **lift the state up** to that ancestor — that is not a new pattern, it is a direct consequence of unidirectionality.
+
 In component-based architecture, data flows in **one direction**: from parent to child through props. This principle — sometimes called "unidirectional data flow" — makes applications easier to reason about because you always know where data comes from.
 
 ```
@@ -488,6 +449,25 @@ The key insight: `TemperatureInput` is now a **controlled component** — it doe
 ---
 
 ## 6. Component Lifecycle
+
+### Theory: Reconciliation: From Description to DOM
+
+The framework holds two trees in mind: the previous description (what is currently in the DOM) and the new description (what the latest `View(state)` returned). Reconciliation is the algorithm that walks both trees in parallel and decides which DOM operations to perform.
+
+The naive tree-diff algorithm is O(n³) — comparing every node in one tree to every node in the other. No production framework can afford this. Instead, every framework adopts the same two heuristics that drop the cost to O(n):
+
+1. **Different types at the same position = unmount and remount.** Do not try to morph a `<div>` into a `<span>`; throw the subtree away and build a new one. Same for components: replacing `<UserCard>` with `<AdminCard>` at the same slot remounts entirely, even if both render a card-shaped DOM.
+2. **Lists are matched by stable keys, not by index.** When rendering `items.map(...)`, the framework needs to know which child in the new list corresponds to which child in the old. Using array index as the key means inserting at the front shifts every key down one — every element looks "changed" and gets rebuilt. Using a stable id (item.id) means the framework can match `key=42` in the old tree to `key=42` in the new tree, regardless of position, and the DOM node for that item is moved rather than recreated. State inside that child is preserved.
+
+These two rules are why React requires the `key` prop on lists, why Vue's `v-for` warns when keys are missing, and why Svelte compiles keyed `{#each}` blocks differently from unkeyed ones. They are all the same algorithm.
+
+The lifecycle phases — mount, update, unmount — are exactly the three things reconciliation can do to a node:
+
+- **Mount**: a node is in the new tree but not the old. Create the DOM, run setup code (effects, refs), insert.
+- **Update**: a node is at the same position in both trees with the same type. Diff its props, patch the DOM in place, re-run effects whose dependencies changed.
+- **Unmount**: a node is in the old tree but not the new (or its type changed). Run cleanup, remove the DOM.
+
+Every "lifecycle hook" in every framework is just a callback the runtime fires at one of these three transitions.
 
 Every component goes through three phases:
 

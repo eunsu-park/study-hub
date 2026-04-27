@@ -16,8 +16,6 @@
 
 ## Table of Contents
 
-Before the framework tour, read [**Theory & Principles**](#theory--principles) — the rendering-strategy taxonomy (CSR/SSR/SSG/ISR), the double-render cost of hydration, partial hydration, streaming SSR, and the island architecture.
-
 1. [Rendering Strategies Overview](#1-rendering-strategies-overview)
 2. [Next.js 15 (React)](#2-nextjs-15-react)
 3. [Nuxt 3 (Vue)](#3-nuxt-3-vue)
@@ -28,11 +26,9 @@ Before the framework tour, read [**Theory & Principles**](#theory--principles) �
 
 ---
 
-## Theory & Principles
+## 1. Rendering Strategies Overview
 
-A web page can be assembled in many places: in the browser after JavaScript runs (CSR), on the server for each request (SSR), at build time (SSG), or in a hybrid that re-generates pages on a schedule (ISR). The strategies trade off **time-to-first-byte (TTFB)**, **time-to-interactive (TTI)**, **cacheability**, **personalization**, and **infrastructure cost**. This section names the four pure strategies, walks through hydration's double-render cost, and explains the modern responses: streaming SSR, partial/selective hydration, React Server Components, and the island architecture.
-
-### A. The Four Rendering Strategies
+### Theory: The Four Rendering Strategies
 
 ```
 Strategy | When HTML built       | When JS runs        | Notes
@@ -64,30 +60,7 @@ ISR           render some pages   re-render stale pages    download → hydrate
 
 There is no single best — most apps mix per route. A blog: SSG for posts, ISR for the homepage, CSR for the comment form. A SaaS dashboard: SSR for personalized pages, CSR for in-app interactions.
 
-### B. Hydration: the Double-Render Cost
-
-Server-rendered HTML is *passive*. It looks right but cannot respond to clicks, manage state, or run effects. To make it interactive, the client downloads the JavaScript bundle, runs the same component tree it would have in CSR, and *attaches* the resulting event handlers and state to the existing DOM nodes. This process is **hydration**.
-
-```
-1. Server: build VDOM → serialize to HTML → send
-2. Client: receive HTML → render visually (no interactivity yet)
-3. Client: download JS bundle
-4. Client: run component tree → produce VDOM
-5. Client: walk VDOM and existing DOM in parallel,
-           attach event handlers, restore state, run effects
-6. Page is now interactive
-```
-
-The cost is real:
-
-- **The component tree runs *twice*** — once on the server (for HTML) and once on the client (for hydration). Both runs do the same work.
-- **The full JS bundle must download before hydration can begin.** A 200 KB framework + 300 KB app code = 500 KB to parse before the page is interactive.
-- **Hydration is synchronous in classic React (pre-18).** A long tree blocks the main thread.
-- **Hydration mismatches throw warnings.** If the server-rendered HTML differs from what the client would render (timezone-dependent values, randomness, conditional based on `window`), React reports an error and may re-render the affected subtree.
-
-The interval between "I see content" (HTML arrived) and "I can click anything" (hydration done) is the **TTI gap**. SSR's selling point — fast paint — is paid for in this gap.
-
-### C. Streaming SSR (React 18+)
+### Theory: Streaming SSR (React 18+)
 
 Classic SSR builds the full HTML on the server, then sends it. If any data fetch is slow, the entire response is held back. **Streaming SSR** lets the server send HTML in chunks as components finish:
 
@@ -115,99 +88,6 @@ The mechanism requires:
 - Components that explicitly mark async boundaries (`<Suspense>` in React, `<Suspense>` in Vue 3, equivalent constructs in SvelteKit).
 
 The result: TTFB is unchanged, but **content above the fold paints fast** even if data lower on the page is slow, and **interactivity arrives in pieces** instead of one big blocking commit.
-
-### D. Partial Hydration and React Server Components
-
-A further insight: **most components don't need to be interactive**. A blog post body, a static header, a marketing footer — these have no event handlers, no state, no client-side behavior. Sending their JavaScript to the client and re-running them during hydration is pure waste.
-
-**Partial hydration** ships JS only for components that need interactivity. **React Server Components (RSC)**, the model behind Next.js 15's App Router, formalize this:
-
-```
-Component types in RSC:
-  - Server Components: run on server, never on client. Can read DB,
-    use Node APIs, accept props but no event handlers, no state.
-    Their output is serialized as a tree of "RSC payload" — not HTML
-    but a structured description that interpolates with client components.
-  - Client Components: marked with "use client" directive. Run on both
-    server (for SSR) and client (for hydration). Have hooks, event
-    handlers, browser APIs.
-
-A page's tree:
-  ServerLayout (server)
-    ServerSidebar (server)
-    ClientForm "use client" (server-rendered HTML + client JS)
-      ServerLabel (server, rendered into the form's children)
-```
-
-The net effect:
-
-- The server component code never reaches the browser. Bundle size drops.
-- Server components can directly access databases, file systems, secrets — there is no fetch indirection.
-- The boundary between server and client is explicit (`"use client"`), making it easy to reason about what runs where.
-
-Vue 3 has analogous patterns (`<script setup>` with `useAsyncData`, server-only components in Nuxt) and Svelte has SvelteKit's load functions. The shapes differ but the principle is identical: only ship JS for what needs to be interactive.
-
-### E. Island Architecture
-
-Astro popularized the **island architecture**: the page is a static HTML document with isolated interactive "islands" sprinkled throughout. Each island can be authored in any framework (React, Vue, Svelte, Solid, Preact) and hydrates independently — or not at all if the island has no client directive.
-
-```
-Static HTML page (no JS):
-  <header>...</header>
-  <article>... text content ...</article>
-  <CommentForm client:load />     ← React island, hydrates immediately
-  <Cart client:visible />          ← Svelte island, hydrates when scrolled into view
-  <Newsletter client:idle />       ← Vue island, hydrates when browser idle
-  <footer>...</footer>
-```
-
-The wins:
-
-- **Zero JS for static parts.** The article body ships no framework code.
-- **Per-island hydration scheduling** (`client:load`, `client:visible`, `client:idle`) lets you defer islands that aren't immediately needed.
-- **Multiple frameworks coexist.** Migrating one island at a time is feasible.
-
-The cost:
-
-- **Islands are independent.** They don't share state or props as a normal component tree would. Communication happens via DOM events, URL state, or external stores.
-- **Build complexity.** Each framework must be bundled and rendered separately on the server.
-
-Island architecture is the most aggressive form of partial hydration — the default is "no JS" and you opt in to interactivity per island.
-
-### F. Choosing a Strategy: a Decision Tree
-
-```
-Does the page need to be unique per user (logged-in, personalized)?
-  yes → SSR or CSR (hybrid: SSR shell, CSR interactions)
-  no  → continue
-
-Does the content change rarely (e.g., daily blog post)?
-  yes → SSG
-  no  → continue
-
-Does the content change but you can tolerate stale-by-N-minutes?
-  yes → ISR (or SSG with frequent rebuilds)
-  no  → SSR
-
-Are large parts of the page non-interactive?
-  yes → consider partial hydration (RSC, Astro islands, SvelteKit)
-  no  → standard SSR + hydration is fine
-```
-
-Most production apps mix all four. Next.js, Nuxt, and SvelteKit all let you pick per route — the decision is per page, not per app.
-
-### From Theory to the Sections Below
-
-- §1 *Rendering Strategies Overview* — (A) made operational with diagrams and use cases.
-- §2 *Next.js 15 (React)* — App Router, Server Components (D), server actions, `generateStaticParams` (SSG).
-- §3 *Nuxt 3 (Vue)* — universal rendering, `useFetch`, server routes; the Vue equivalent of (A) through (E).
-- §4 *SvelteKit (Svelte)* — load functions, `+page.server.ts`, form actions, deployment adapters; SvelteKit's take on the same trade-offs.
-- §5 *Hydration Deep Dive* — (B), (C), (D); the mechanics of the second render and the modern reductions.
-- §6 *Framework Comparison* — which framework gives you which strategies out of the box, and where each shines.
-
----
-
-## 1. Rendering Strategies Overview
 
 Where and when HTML is generated determines your application's performance characteristics, SEO behavior, and infrastructure requirements.
 
@@ -311,6 +191,37 @@ Render main content  →          Replace fallback with content
 ---
 
 ## 2. Next.js 15 (React)
+
+### Theory: Partial Hydration and React Server Components
+
+A further insight: **most components don't need to be interactive**. A blog post body, a static header, a marketing footer — these have no event handlers, no state, no client-side behavior. Sending their JavaScript to the client and re-running them during hydration is pure waste.
+
+**Partial hydration** ships JS only for components that need interactivity. **React Server Components (RSC)**, the model behind Next.js 15's App Router, formalize this:
+
+```
+Component types in RSC:
+  - Server Components: run on server, never on client. Can read DB,
+    use Node APIs, accept props but no event handlers, no state.
+    Their output is serialized as a tree of "RSC payload" — not HTML
+    but a structured description that interpolates with client components.
+  - Client Components: marked with "use client" directive. Run on both
+    server (for SSR) and client (for hydration). Have hooks, event
+    handlers, browser APIs.
+
+A page's tree:
+  ServerLayout (server)
+    ServerSidebar (server)
+    ClientForm "use client" (server-rendered HTML + client JS)
+      ServerLabel (server, rendered into the form's children)
+```
+
+The net effect:
+
+- The server component code never reaches the browser. Bundle size drops.
+- Server components can directly access databases, file systems, secrets — there is no fetch indirection.
+- The boundary between server and client is explicit (`"use client"`), making it easy to reason about what runs where.
+
+Vue 3 has analogous patterns (`<script setup>` with `useAsyncData`, server-only components in Nuxt) and Svelte has SvelteKit's load functions. The shapes differ but the principle is identical: only ship JS for what needs to be interactive.
 
 Next.js is the most popular React meta-framework. Version 15 uses the App Router by default, with React Server Components (RSC) as the foundation.
 
@@ -909,6 +820,56 @@ export default {
 
 ## 5. Hydration Deep Dive
 
+### Theory: Hydration: the Double-Render Cost
+
+Server-rendered HTML is *passive*. It looks right but cannot respond to clicks, manage state, or run effects. To make it interactive, the client downloads the JavaScript bundle, runs the same component tree it would have in CSR, and *attaches* the resulting event handlers and state to the existing DOM nodes. This process is **hydration**.
+
+```
+1. Server: build VDOM → serialize to HTML → send
+2. Client: receive HTML → render visually (no interactivity yet)
+3. Client: download JS bundle
+4. Client: run component tree → produce VDOM
+5. Client: walk VDOM and existing DOM in parallel,
+           attach event handlers, restore state, run effects
+6. Page is now interactive
+```
+
+The cost is real:
+
+- **The component tree runs *twice*** — once on the server (for HTML) and once on the client (for hydration). Both runs do the same work.
+- **The full JS bundle must download before hydration can begin.** A 200 KB framework + 300 KB app code = 500 KB to parse before the page is interactive.
+- **Hydration is synchronous in classic React (pre-18).** A long tree blocks the main thread.
+- **Hydration mismatches throw warnings.** If the server-rendered HTML differs from what the client would render (timezone-dependent values, randomness, conditional based on `window`), React reports an error and may re-render the affected subtree.
+
+The interval between "I see content" (HTML arrived) and "I can click anything" (hydration done) is the **TTI gap**. SSR's selling point — fast paint — is paid for in this gap.
+
+### Theory: Island Architecture
+
+Astro popularized the **island architecture**: the page is a static HTML document with isolated interactive "islands" sprinkled throughout. Each island can be authored in any framework (React, Vue, Svelte, Solid, Preact) and hydrates independently — or not at all if the island has no client directive.
+
+```
+Static HTML page (no JS):
+  <header>...</header>
+  <article>... text content ...</article>
+  <CommentForm client:load />     ← React island, hydrates immediately
+  <Cart client:visible />          ← Svelte island, hydrates when scrolled into view
+  <Newsletter client:idle />       ← Vue island, hydrates when browser idle
+  <footer>...</footer>
+```
+
+The wins:
+
+- **Zero JS for static parts.** The article body ships no framework code.
+- **Per-island hydration scheduling** (`client:load`, `client:visible`, `client:idle`) lets you defer islands that aren't immediately needed.
+- **Multiple frameworks coexist.** Migrating one island at a time is feasible.
+
+The cost:
+
+- **Islands are independent.** They don't share state or props as a normal component tree would. Communication happens via DOM events, URL state, or external stores.
+- **Build complexity.** Each framework must be bundled and rendered separately on the server.
+
+Island architecture is the most aggressive form of partial hydration — the default is "no JS" and you opt in to interactivity per island.
+
 ### What Is Hydration?
 
 When the server sends pre-rendered HTML, the browser displays it immediately — but it is static (buttons do not click, forms do not submit). **Hydration** is the process of attaching JavaScript event handlers to the existing HTML, making it interactive.
@@ -1074,6 +1035,28 @@ export const load = async ({ fetch }) => {
 ---
 
 ## 7. Choosing a Rendering Strategy
+
+### Theory: Choosing a Strategy: a Decision Tree
+
+```
+Does the page need to be unique per user (logged-in, personalized)?
+  yes → SSR or CSR (hybrid: SSR shell, CSR interactions)
+  no  → continue
+
+Does the content change rarely (e.g., daily blog post)?
+  yes → SSG
+  no  → continue
+
+Does the content change but you can tolerate stale-by-N-minutes?
+  yes → ISR (or SSG with frequent rebuilds)
+  no  → SSR
+
+Are large parts of the page non-interactive?
+  yes → consider partial hydration (RSC, Astro islands, SvelteKit)
+  no  → standard SSR + hydration is fine
+```
+
+Most production apps mix all four. Next.js, Nuxt, and SvelteKit all let you pick per route — the decision is per page, not per app.
 
 Use this decision tree for each page or route in your application:
 

@@ -16,8 +16,6 @@
 
 ## 목차
 
-프레임워크별 절들에 들어가기 전에 [**이론과 원리**](#이론과-원리)를 먼저 읽어보세요. TypeScript의 구조적 타입 시스템(structural typing), 컴포넌트 props에서의 제네릭, 그리고 프레임워크 API와 타입 지정된 호출 지점을 연결하는 유틸리티 타입(`ReturnType`, `Parameters`)을 다룹니다.
-
 1. [프론트엔드 프레임워크에서 TypeScript를 사용하는 이유](#1-프론트엔드-프레임워크에서-typescript를-사용하는-이유)
 2. [TypeScript 설정](#2-typescript-설정)
 3. [React + TypeScript](#3-react--typescript)
@@ -29,13 +27,9 @@
 
 ---
 
-## 이론과 원리
+## 1. 프론트엔드 프레임워크에서 TypeScript를 사용하는 이유
 
-TypeScript는 "타입 어노테이션이 붙은 JavaScript"처럼 보이지만, 그 타입 시스템은 그 이상의 일을 합니다. **구조적(structural)** 타입 시스템(Java/C#처럼 nominal하지 않음)이며, 이는 프론트엔드 프레임워크와 놀라운 방식으로 상호작용합니다 — 컴포넌트는 그렇게 선언되어서가 아니라 prop 모양이 일치하기 때문에 합성됩니다. **매개변수 다형성(parametric polymorphism, 제네릭)** 을 지원해 단일 컴포넌트가 여러 원소 타입에 작동할 수 있습니다. 그리고 기존 함수나 타입을 파생 타입으로 변환하는 **타입 레벨 함수(`ReturnType`, `Parameters`, `Pick`, `Omit`)** 를 제공합니다 — `defineProps`, `useReducer`, `createSlice` 같은 프레임워크 API가 추론된 타입을 전달하는 방법이 바로 이것입니다.
-
-이 절은 그 세 토대를 설명하고, 각 프레임워크가 어떻게 거기에 후킹되는지 보여 줍니다.
-
-### A. 구조적 타이핑: 이름이 아니라 모양
+### 이론: 구조적 타이핑: 이름이 아니라 모양
 
 **Nominal** 타입 시스템에서는 두 타입이 이름을 공유할 때만(또는 명시적 `extends`/`implements` 관계가 있을 때만) 호환됩니다. `class Dog`와 `class Cat`은 동일한 필드를 가져도 이름이 다르니 호환되지 않습니다.
 
@@ -57,86 +51,7 @@ const v: Vec     = p;  // OK — 같은 모양
 
 TypeScript는 또한 *선언된 것보다 좁은* 할당을 assignability 규칙으로 지원합니다. `(e: MouseEvent) => void` 함수는 `(e: Event) => void` 슬롯에 할당 *불가능*합니다 — 함수가 일반 `Event`를 받아 MouseEvent 전용 메서드를 호출할 수 있기 때문입니다(함수 매개변수는 contravariant). 반대 방향 할당은 가능합니다. 이 contravariance 때문에 `onClick: (e: MouseEvent) => void` props가 흔하면서도 할당 지점에서 타입 에러를 거의 일으키지 않습니다.
 
-### B. 제네릭: 컴포넌트를 위한 매개변수 다형성
-
-제네릭은 또 다른 타입을 매개변수로 받는 타입입니다.
-
-```ts
-type Box<T> = { value: T };
-
-const a: Box<number> = { value: 42 };
-const b: Box<string> = { value: 'hello' };
-```
-
-`Box`는 단일 타입이 아니라, 인자가 주어졌을 때 구체적 타입을 만드는 *타입 레벨 함수*입니다.
-
-컴포넌트에서 제네릭은 단일 컴포넌트가 타입 안전성을 잃지 않고 여러 원소 타입을 다루게 해 줍니다.
-
-```tsx
-// React: 타입 지정된 리스트 컴포넌트
-type ListProps<T> = {
-  items: T[];
-  renderItem: (item: T) => React.ReactNode;
-};
-
-function List<T>({ items, renderItem }: ListProps<T>) {
-  return <ul>{items.map(renderItem)}</ul>;
-}
-
-// 사용: T는 items에서 추론
-<List items={users} renderItem={(u) => <li>{u.name}</li>} />
-//      ↑ users: User[]    ↑ u는 User로 추론
-```
-
-제네릭이 없으면 `items`는 `any[]` 또는 `unknown[]`이어야 하고, `renderItem`은 원소 타입과 매개변수 타입의 연결을 잃습니다. 제네릭이 있으면 컴파일러가 호출 지점에서 `T`를 한 번 결합하고, props 안의 `T`의 다른 모든 사용이 일관성을 가집니다.
-
-같은 패턴이 Vue(`defineProps<Props<T>>`)와 Svelte(`<script lang="ts" generics="T">`)에 있습니다 — 다른 문법, 같은 기계. 제네릭은 "이 컴포넌트는 모양 다형적이다"를 말하는 프레임워크 무관한 방법입니다.
-
-#### B.1 제약(Constraint)
-
-제네릭은 제약될 수 있습니다.
-
-```ts
-function getId<T extends { id: string | number }>(item: T): T['id'] {
-  return item.id;
-}
-```
-
-`T extends { id: ... }`는 "이 타입의 `id` 필드를 적어도 가진 어떤 타입이든"을 뜻합니다. 함수 안에서 `item.id`가 존재함이 알려져 있습니다. 반환 타입 `T['id']` 자체가 타입 레벨 표현식 — "T의 `id` 필드의 타입"입니다. 호출자는 자기가 전달한 것에 따라 string이나 number를 돌려받습니다.
-
-### C. 유틸리티 타입: 다른 타입에 대한 타입 레벨 함수
-
-TypeScript는 타입을 받아 파생 타입을 만드는 내장 타입 레벨 함수 세트를 제공합니다. 프레임워크 API가 타입을 두 번 작성하지 않고 추론된 타입을 전달하는 방법입니다.
-
-| 유틸리티 | 하는 일 |
-|----------|---------|
-| `ReturnType<F>` | 함수 타입 `F`의 반환 타입 |
-| `Parameters<F>` | `F`의 매개변수 타입들의 튜플 |
-| `Awaited<P>` | Promise 타입 안의 해소된 타입 |
-| `Pick<T, K>` | `T`에서 키 `K`만 가진 타입 |
-| `Omit<T, K>` | `T`에서 키 `K`를 *제외한* 타입 |
-| `Partial<T>` | `T`의 모든 필드를 선택적으로 |
-| `Required<T>` | `T`의 모든 필드를 필수로 |
-| `Readonly<T>` | 모든 필드를 readonly로 |
-
-프레임워크 코드에 반복 등장하는 두 예시:
-
-```ts
-// "이 초기값으로 호출된 useRef가 반환하는 ref의 타입"
-const ref = useRef<HTMLInputElement>(null);
-type RefType = typeof ref; // React.RefObject<HTMLInputElement>
-
-// "Pinia 스토어의 값 타입, 그 정의에서 파생"
-const useUserStore = defineStore('user', () => ({ ... }));
-type UserStoreType = ReturnType<typeof useUserStore>;
-//   ↑ 스토어의 인터페이스를 수동 작성할 필요 없음. 파생됨
-```
-
-제네릭과 결합하면, 이 유틸리티들은 프레임워크 코드가 *타입이 여러분의 코드에서 파생되는* API를 노출하게 해 줍니다 — 별도로 선언되는 게 아니라. 사용자가 스토어 본문을 작성하면 프레임워크가 공개 타입을 도출. 사용자가 Zod 스키마를 작성하면 `z.infer<typeof schema>`가 TypeScript 타입을 돌려줌.
-
-이것이 사람들이 모던 프레임워크 코드의 "타입 추론"이라 부르는 것입니다 — 툴팁에서 보는 타입은 손으로 작성한 게 아니라, 이 규칙들을 따라 타입 시스템이 코드에서 계산한 것입니다.
-
-### D. "타입 레벨 vs 값 레벨" 구분
+### 이론: "타입 레벨 vs 값 레벨" 구분
 
 TypeScript는 두 평행 namespace를 가집니다. **값**(변수, 함수, 클래스)과 **타입**(인터페이스, 타입 별칭). 둘은 *컴파일 타임에 반대 방향으로 erase*됩니다.
 
@@ -153,28 +68,6 @@ type Config = typeof config; // { host: string; port: number }
 값 레벨의 `typeof` 연산자는 문자열("number", "string" 등)을 반환하는 런타임 검사입니다. 같은 키워드를 공유하면서 각자의 namespace에서 작동합니다.
 
 이 이중성이 프레임워크 에러 메시지가 초보자를 혼란스럽게 하는 이유입니다 — "Foo를 타입으로 썼지만 Foo는 값입니다." 해법은 보통 `typeof Foo`(값을 타입 공간으로 투사)이거나 올바른 이름을 import(`import { Foo }`는 값, `import type { Foo }`는 타입 전용)하는 것.
-
-### E. 각 프레임워크가 어떻게 플러그인되는가
-
-- **React**: 타입이 어디에나 있음 — `useState<T>`, `useReducer<S, A>`, `React.FC<P>`(deprecated), `React.ComponentProps<typeof Button>`. JSX 자체가 타입 지정됨 — `<button onClick={...} />`은 `JSX.IntrinsicElements['button']`에 대해 검사. 커스텀 컴포넌트: `function Foo(props: FooProps)`이고 JSX 호출 지점이 `FooProps`에 대해 타입 검사.
-- **Vue**: SFC `<script setup lang="ts">`이 `defineProps<{...}>()`, `defineEmits<{...}>()`을 컴파일 타임 매크로로 노출. 컴파일러가 타입 인자를 읽고 런타임 prop validator를 emit. 템플릿은 Volar(Vue 언어 도구)를 통해 타입 검사되며, props와 템플릿 참조 사이의 연결을 이해합니다.
-- **Svelte**: `<script lang="ts">`가 스크립트 블록 안의 TypeScript를 활성화. props는 `Props` 인터페이스나 `$props<{...}>()` rune으로 타입 지정. 이벤트는 dispatcher 타입이나 `$emit`. 템플릿은 `svelte-check`나 언어 서버를 통해 추론된 타입을 사용.
-
-어휘는 다르지만 기반 메커니즘은 같습니다 — 프레임워크 특유의 문법(매크로, 특별한 prop 문법, 제네릭)이 TypeScript의 structural/generic/utility-type 기계를 감쌉니다.
-
-### 이론에서 아래 절들로
-
-- §1 *프론트엔드 프레임워크에서 TypeScript를 사용하는 이유* — 도입 사례. 타입 안전성 이야기는 (A), 가볍게 유지하는 추론의 역할은 (C) 참조.
-- §2 *TypeScript 설정* — `tsconfig.json` 설정. 프레임워크별 항목(`jsx`, `moduleResolution`, `paths`).
-- §3 *React + TypeScript* — 함수 컴포넌트, 훅, ref, 이벤트 타입 지정. (B)와 (E)의 React 부분.
-- §4 *Vue + TypeScript* — `defineProps<T>` 등. (E)의 Vue 부분.
-- §5 *Svelte + TypeScript* — `lang="ts"`, prop 타입, 제네릭 컴포넌트. (E)의 Svelte 부분.
-- §6 *프레임워크 간 공통 패턴* — 판별 유니온, 조건부 타입, (C)의 유틸리티 타입 관용구 — 세 프레임워크 모두에 동일하게 적용.
-- §7 *흔한 함정* — (D)의 값/타입 혼동, (A)의 excess-property check, variance 함정, `as` 캐스트 탈출구.
-
----
-
-## 1. 프론트엔드 프레임워크에서 TypeScript를 사용하는 이유
 
 TypeScript는 JavaScript 위에 컴파일 타임 타입 레이어를 추가합니다. 프론트엔드 개발에서 이는 세 가지 핵심 이점을 제공합니다.
 
@@ -302,6 +195,14 @@ declare module "*.vue" {
 ---
 
 ## 3. React + TypeScript
+
+### 이론: 각 프레임워크가 어떻게 플러그인되는가
+
+- **React**: 타입이 어디에나 있음 — `useState<T>`, `useReducer<S, A>`, `React.FC<P>`(deprecated), `React.ComponentProps<typeof Button>`. JSX 자체가 타입 지정됨 — `<button onClick={...} />`은 `JSX.IntrinsicElements['button']`에 대해 검사. 커스텀 컴포넌트: `function Foo(props: FooProps)`이고 JSX 호출 지점이 `FooProps`에 대해 타입 검사.
+- **Vue**: SFC `<script setup lang="ts">`이 `defineProps<{...}>()`, `defineEmits<{...}>()`을 컴파일 타임 매크로로 노출. 컴파일러가 타입 인자를 읽고 런타임 prop validator를 emit. 템플릿은 Volar(Vue 언어 도구)를 통해 타입 검사되며, props와 템플릿 참조 사이의 연결을 이해합니다.
+- **Svelte**: `<script lang="ts">`가 스크립트 블록 안의 TypeScript를 활성화. props는 `Props` 인터페이스나 `$props<{...}>()` rune으로 타입 지정. 이벤트는 dispatcher 타입이나 `$emit`. 템플릿은 `svelte-check`나 언어 서버를 통해 추론된 타입을 사용.
+
+어휘는 다르지만 기반 메커니즘은 같습니다 — 프레임워크 특유의 문법(매크로, 특별한 prop 문법, 제네릭)이 TypeScript의 structural/generic/utility-type 기계를 감쌉니다.
 
 ### Props 타입 지정
 
@@ -806,6 +707,85 @@ export function toggleTodo(id: string): void {
 ---
 
 ## 6. 프레임워크 간 공통 패턴
+
+### 이론: 제네릭: 컴포넌트를 위한 매개변수 다형성
+
+제네릭은 또 다른 타입을 매개변수로 받는 타입입니다.
+
+```ts
+type Box<T> = { value: T };
+
+const a: Box<number> = { value: 42 };
+const b: Box<string> = { value: 'hello' };
+```
+
+`Box`는 단일 타입이 아니라, 인자가 주어졌을 때 구체적 타입을 만드는 *타입 레벨 함수*입니다.
+
+컴포넌트에서 제네릭은 단일 컴포넌트가 타입 안전성을 잃지 않고 여러 원소 타입을 다루게 해 줍니다.
+
+```tsx
+// React: 타입 지정된 리스트 컴포넌트
+type ListProps<T> = {
+  items: T[];
+  renderItem: (item: T) => React.ReactNode;
+};
+
+function List<T>({ items, renderItem }: ListProps<T>) {
+  return <ul>{items.map(renderItem)}</ul>;
+}
+
+// 사용: T는 items에서 추론
+<List items={users} renderItem={(u) => <li>{u.name}</li>} />
+//      ↑ users: User[]    ↑ u는 User로 추론
+```
+
+제네릭이 없으면 `items`는 `any[]` 또는 `unknown[]`이어야 하고, `renderItem`은 원소 타입과 매개변수 타입의 연결을 잃습니다. 제네릭이 있으면 컴파일러가 호출 지점에서 `T`를 한 번 결합하고, props 안의 `T`의 다른 모든 사용이 일관성을 가집니다.
+
+같은 패턴이 Vue(`defineProps<Props<T>>`)와 Svelte(`<script lang="ts" generics="T">`)에 있습니다 — 다른 문법, 같은 기계. 제네릭은 "이 컴포넌트는 모양 다형적이다"를 말하는 프레임워크 무관한 방법입니다.
+
+#### B.1 제약(Constraint)
+
+제네릭은 제약될 수 있습니다.
+
+```ts
+function getId<T extends { id: string | number }>(item: T): T['id'] {
+  return item.id;
+}
+```
+
+`T extends { id: ... }`는 "이 타입의 `id` 필드를 적어도 가진 어떤 타입이든"을 뜻합니다. 함수 안에서 `item.id`가 존재함이 알려져 있습니다. 반환 타입 `T['id']` 자체가 타입 레벨 표현식 — "T의 `id` 필드의 타입"입니다. 호출자는 자기가 전달한 것에 따라 string이나 number를 돌려받습니다.
+
+### 이론: 유틸리티 타입: 다른 타입에 대한 타입 레벨 함수
+
+TypeScript는 타입을 받아 파생 타입을 만드는 내장 타입 레벨 함수 세트를 제공합니다. 프레임워크 API가 타입을 두 번 작성하지 않고 추론된 타입을 전달하는 방법입니다.
+
+| 유틸리티 | 하는 일 |
+|----------|---------|
+| `ReturnType<F>` | 함수 타입 `F`의 반환 타입 |
+| `Parameters<F>` | `F`의 매개변수 타입들의 튜플 |
+| `Awaited<P>` | Promise 타입 안의 해소된 타입 |
+| `Pick<T, K>` | `T`에서 키 `K`만 가진 타입 |
+| `Omit<T, K>` | `T`에서 키 `K`를 *제외한* 타입 |
+| `Partial<T>` | `T`의 모든 필드를 선택적으로 |
+| `Required<T>` | `T`의 모든 필드를 필수로 |
+| `Readonly<T>` | 모든 필드를 readonly로 |
+
+프레임워크 코드에 반복 등장하는 두 예시:
+
+```ts
+// "이 초기값으로 호출된 useRef가 반환하는 ref의 타입"
+const ref = useRef<HTMLInputElement>(null);
+type RefType = typeof ref; // React.RefObject<HTMLInputElement>
+
+// "Pinia 스토어의 값 타입, 그 정의에서 파생"
+const useUserStore = defineStore('user', () => ({ ... }));
+type UserStoreType = ReturnType<typeof useUserStore>;
+//   ↑ 스토어의 인터페이스를 수동 작성할 필요 없음. 파생됨
+```
+
+제네릭과 결합하면, 이 유틸리티들은 프레임워크 코드가 *타입이 여러분의 코드에서 파생되는* API를 노출하게 해 줍니다 — 별도로 선언되는 게 아니라. 사용자가 스토어 본문을 작성하면 프레임워크가 공개 타입을 도출. 사용자가 Zod 스키마를 작성하면 `z.infer<typeof schema>`가 TypeScript 타입을 돌려줌.
+
+이것이 사람들이 모던 프레임워크 코드의 "타입 추론"이라 부르는 것입니다 — 툴팁에서 보는 타입은 손으로 작성한 게 아니라, 이 규칙들을 따라 타입 시스템이 코드에서 계산한 것입니다.
 
 이러한 TypeScript 패턴은 React, Vue, Svelte에서 동일하게 동작합니다.
 

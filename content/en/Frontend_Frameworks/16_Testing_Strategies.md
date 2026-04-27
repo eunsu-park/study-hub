@@ -16,8 +16,6 @@
 
 ## Table of Contents
 
-Before the tooling tour, read [**Theory & Principles**](#theory--principles) — the testing pyramid as a cost/coverage trade, the render-then-query philosophy of Testing Library, and what to mock vs what to leave real.
-
 1. [The Testing Pyramid](#1-the-testing-pyramid)
 2. [Vitest: Unit Testing](#2-vitest-unit-testing)
 3. [Testing Library Philosophy](#3-testing-library-philosophy)
@@ -31,11 +29,9 @@ Before the tooling tour, read [**Theory & Principles**](#theory--principles) —
 
 ---
 
-## Theory & Principles
+## 1. The Testing Pyramid
 
-Frontend tests share a common failure mode: tests pass, app breaks. Tests that assert on implementation details (which CSS class is applied, which prop went where, which function was called inside a component) lock the implementation in place — refactor anything and the tests fail without revealing a real bug. The Testing Library family was designed to fix this by enforcing a discipline: **test the user-visible behavior, not the internals.** This section covers the testing pyramid as a cost model, the "render-then-query" philosophy that operationalizes the discipline, and the mocking trade-offs that decide whether your tests are useful or theater.
-
-### A. The Testing Pyramid: Cost vs Coverage
+### Theory: The Testing Pyramid: Cost vs Coverage
 
 ```
                        ▲
@@ -58,130 +54,6 @@ Each tier trades **fidelity** (how close to real user experience) against **cost
 3. **Pyramid for confidence, not coverage.** 100% line coverage with bad tests is worse than 60% coverage with good tests. Coverage tells you *what wasn't tested*, not whether the tests are good.
 
 The "ice cream cone" anti-pattern (lots of e2e, few unit) emerges when teams skip unit tests because "they don't catch real bugs." The reality is that unit tests *prevent* introducing bugs that would have to be caught at e2e level — they shift the failure leftward where it's cheap to fix.
-
-### B. The Render-then-Query Philosophy
-
-Testing Library (React, Vue, Svelte versions) makes one design call: **the test should interact with the rendered output the way a user would.** Concretely:
-
-- Find elements by *what's visible* (text content, ARIA role, label) rather than by *how they're built* (`data-testid`, class name, component name).
-- Trigger interactions through user-style events (`click`, `type`) rather than calling component methods directly.
-- Assert on what the user would observe (text in the DOM, presence of an element) rather than on internal state.
-
-```jsx
-// BAD: tests implementation
-const wrapper = shallowMount(LoginForm);
-expect(wrapper.vm.isSubmitting).toBe(false);
-wrapper.vm.handleSubmit();
-expect(wrapper.vm.isSubmitting).toBe(true);
-
-// GOOD: tests behavior
-render(<LoginForm />);
-await user.type(screen.getByLabelText('Email'), 'test@example.com');
-await user.type(screen.getByLabelText('Password'), 'secret');
-await user.click(screen.getByRole('button', { name: /sign in/i }));
-expect(await screen.findByText(/signing in/i)).toBeInTheDocument();
-```
-
-Why this matters:
-
-1. **Refactor freedom.** Switch the form from useState to useReducer? The test still passes — neither implementation is referenced.
-2. **Accessibility cross-check.** If the test can't find a label for an input, neither can a screen reader. The query API forces you to write accessible HTML.
-3. **Tests double as documentation.** Reading the test tells you what the component does for users, not what it does internally.
-
-The query API has a deliberate priority order:
-
-```
-1. getByRole         — what assistive tech sees
-2. getByLabelText    — what screen-reader users hear for inputs
-3. getByPlaceholderText
-4. getByText         — what sighted users see
-5. getByDisplayValue — for inputs with set values
-6. getByAltText      — for images
-7. getByTitle        — last-resort visible info
-8. getByTestId       — escape hatch when nothing above works
-```
-
-Reaching for `getByTestId` is a signal that the component might not be accessible — the test is admitting "users can't find this either."
-
-### C. What to Mock and What to Keep Real
-
-The decision rule: **mock things you don't own; keep real the things you do.** Concretely:
-
-- **Always mock**: network requests (use MSW or `vi.fn()` for fetch), browser APIs you can't run in jsdom (geolocation, IntersectionObserver), timers (`vi.useFakeTimers()`), randomness (`vi.spyOn(Math, 'random')`).
-- **Almost never mock**: your own components, your own utility functions, the framework itself.
-- **Sometimes mock**: external libraries with side effects (analytics, error reporting), heavy components that are tested separately (a giant `<DataGrid>` mounted in a test that's not about the grid).
-
-Why "don't mock your own code":
-
-1. **Mocks freeze the contract.** If `<Button>` changes its prop signature, the mock still uses the old one — your test passes while the real call site is broken.
-2. **Mocks miss the integration.** A test that mocks the child component is no longer testing whether the parent passes the right props.
-3. **Mocks accumulate.** Every mock is a place where the test diverges from production. A test with five mocks is partially testing five fictional pieces of code.
-
-The `MSW` (Mock Service Worker) approach for network: it intercepts at the network layer, so your code under test still calls `fetch(...)` exactly as it does in production. The mock controls only what the network returns. This keeps the test honest about whether the production code uses the API correctly.
-
-### D. Component Tests vs E2E Tests: a Drawing of the Line
-
-A **component test** mounts a single component (or a small subtree) in jsdom, queries it, and asserts. Network is mocked (MSW), the rest of the app doesn't exist. Fast, cheap, focused.
-
-An **e2e test** boots the real app in a real browser (Playwright, Cypress), navigates through pages, interacts, and asserts on the visible UI. Network may be real (against a test backend) or mocked (Playwright's route interception).
-
-The right tool per scenario:
-
-| Scenario | Best tier |
-|----------|-----------|
-| "Does this form validate as I type?" | Component (Testing Library) |
-| "Does the menu open on click?" | Component |
-| "Does logging in route to the dashboard?" | E2E |
-| "Does the checkout flow work end to end?" | E2E |
-| "Does the cart icon update when items are added?" | Integration (mount cart icon + product page together) |
-| "Does this utility function compute the right tax?" | Unit |
-
-### E. Snapshot Testing: the Sharp Knife
-
-A snapshot test serializes the rendered output and compares it to a saved file. First run: save. Subsequent runs: assert equal.
-
-The promise: catch unintended visual changes "for free" — no manual assertions needed.
-
-The reality: any HTML change (a className tweak, an attribute reorder, a child component refactor) triggers a snapshot diff. Developers learn to "just update the snapshot" without reading the diff carefully. The snapshot becomes a check-the-box ritual rather than a meaningful assertion.
-
-Snapshots earn their keep when:
-
-- The output is small and tightly defined (a markdown→HTML converter, a date-formatting util's output).
-- The change rate is low.
-- The reviewer is required to inspect the diff carefully.
-
-They harm when:
-
-- The output is a 500-line component tree.
-- The component changes weekly for legitimate reasons.
-- "Just update the snapshot" becomes the default response.
-
-Use them sparingly and never for whole-page renders.
-
-### F. Test Doubles: a Vocabulary Sketch
-
-Common terms, often used loosely:
-
-- **Stub**: returns a canned answer to a call. No verification of how it was called.
-- **Spy**: records calls so the test can verify them.
-- **Mock**: a stub + spy + behavioral expectations (e.g., "should be called exactly twice").
-- **Fake**: a working but simplified implementation (an in-memory database instead of Postgres).
-
-Vitest's `vi.fn()` creates a spy by default; chained with `.mockReturnValue(...)` it becomes a stub; with `.toHaveBeenCalledWith(...)` assertions it's used as a mock. The terminology distinction matters less than understanding *what each accomplishes*.
-
-### From Theory to the Sections Below
-
-- §1 *The Testing Pyramid* — (A); the cost/fidelity diagram and the rules for filling it.
-- §2 *Vitest: Unit Testing* — the test runner, with `vi.fn()`, fake timers, coverage; the unit-tier tooling.
-- §3 *Testing Library Philosophy* — (B); the query API and the user-event simulation.
-- §4-§6 *React/Vue/Svelte Testing Library* — the same philosophy, three framework adapters.
-- §7 *Playwright* — (D)'s e2e half; real browser, real navigation.
-- §8 *Snapshot Testing* — (E); the cases where it earns its keep.
-- §9 *Testing Patterns and Anti-Patterns* — concrete examples of (B) done right and wrong.
-
----
-
-## 1. The Testing Pyramid
 
 The testing pyramid illustrates the ideal distribution of tests in a project. The base is wide (many fast, cheap unit tests), and the top is narrow (few slow, expensive e2e tests).
 
@@ -209,6 +81,22 @@ A healthy frontend project might have a ratio like **70% unit, 20% integration, 
 ---
 
 ## 2. Vitest: Unit Testing
+
+### Theory: What to Mock and What to Keep Real
+
+The decision rule: **mock things you don't own; keep real the things you do.** Concretely:
+
+- **Always mock**: network requests (use MSW or `vi.fn()` for fetch), browser APIs you can't run in jsdom (geolocation, IntersectionObserver), timers (`vi.useFakeTimers()`), randomness (`vi.spyOn(Math, 'random')`).
+- **Almost never mock**: your own components, your own utility functions, the framework itself.
+- **Sometimes mock**: external libraries with side effects (analytics, error reporting), heavy components that are tested separately (a giant `<DataGrid>` mounted in a test that's not about the grid).
+
+Why "don't mock your own code":
+
+1. **Mocks freeze the contract.** If `<Button>` changes its prop signature, the mock still uses the old one — your test passes while the real call site is broken.
+2. **Mocks miss the integration.** A test that mocks the child component is no longer testing whether the parent passes the right props.
+3. **Mocks accumulate.** Every mock is a place where the test diverges from production. A test with five mocks is partially testing five fictional pieces of code.
+
+The `MSW` (Mock Service Worker) approach for network: it intercepts at the network layer, so your code under test still calls `fetch(...)` exactly as it does in production. The mock controls only what the network returns. This keeps the test honest about whether the production code uses the API correctly.
 
 [Vitest](https://vitest.dev) is a fast unit testing framework built on Vite. It shares Vite's config, supports TypeScript and JSX out of the box, and runs tests in parallel.
 
@@ -368,6 +256,50 @@ npx vitest -t "formats cents"
 ---
 
 ## 3. Testing Library Philosophy
+
+### Theory: The Render-then-Query Philosophy
+
+Testing Library (React, Vue, Svelte versions) makes one design call: **the test should interact with the rendered output the way a user would.** Concretely:
+
+- Find elements by *what's visible* (text content, ARIA role, label) rather than by *how they're built* (`data-testid`, class name, component name).
+- Trigger interactions through user-style events (`click`, `type`) rather than calling component methods directly.
+- Assert on what the user would observe (text in the DOM, presence of an element) rather than on internal state.
+
+```jsx
+// BAD: tests implementation
+const wrapper = shallowMount(LoginForm);
+expect(wrapper.vm.isSubmitting).toBe(false);
+wrapper.vm.handleSubmit();
+expect(wrapper.vm.isSubmitting).toBe(true);
+
+// GOOD: tests behavior
+render(<LoginForm />);
+await user.type(screen.getByLabelText('Email'), 'test@example.com');
+await user.type(screen.getByLabelText('Password'), 'secret');
+await user.click(screen.getByRole('button', { name: /sign in/i }));
+expect(await screen.findByText(/signing in/i)).toBeInTheDocument();
+```
+
+Why this matters:
+
+1. **Refactor freedom.** Switch the form from useState to useReducer? The test still passes — neither implementation is referenced.
+2. **Accessibility cross-check.** If the test can't find a label for an input, neither can a screen reader. The query API forces you to write accessible HTML.
+3. **Tests double as documentation.** Reading the test tells you what the component does for users, not what it does internally.
+
+The query API has a deliberate priority order:
+
+```
+1. getByRole         — what assistive tech sees
+2. getByLabelText    — what screen-reader users hear for inputs
+3. getByPlaceholderText
+4. getByText         — what sighted users see
+5. getByDisplayValue — for inputs with set values
+6. getByAltText      — for images
+7. getByTitle        — last-resort visible info
+8. getByTestId       — escape hatch when nothing above works
+```
+
+Reaching for `getByTestId` is a signal that the component might not be accessible — the test is admitting "users can't find this either."
 
 [Testing Library](https://testing-library.com) is built on a single guiding principle:
 
@@ -741,6 +673,23 @@ describe("SearchBar", () => {
 
 ## 7. Playwright: End-to-End Testing
 
+### Theory: Component Tests vs E2E Tests: a Drawing of the Line
+
+A **component test** mounts a single component (or a small subtree) in jsdom, queries it, and asserts. Network is mocked (MSW), the rest of the app doesn't exist. Fast, cheap, focused.
+
+An **e2e test** boots the real app in a real browser (Playwright, Cypress), navigates through pages, interacts, and asserts on the visible UI. Network may be real (against a test backend) or mocked (Playwright's route interception).
+
+The right tool per scenario:
+
+| Scenario | Best tier |
+|----------|-----------|
+| "Does this form validate as I type?" | Component (Testing Library) |
+| "Does the menu open on click?" | Component |
+| "Does logging in route to the dashboard?" | E2E |
+| "Does the checkout flow work end to end?" | E2E |
+| "Does the cart icon update when items are added?" | Integration (mount cart icon + product page together) |
+| "Does this utility function compute the right tax?" | Unit |
+
 [Playwright](https://playwright.dev) tests your application as a real user would — opening a browser, navigating pages, clicking buttons, and verifying results. It supports Chromium, Firefox, and WebKit.
 
 ### Configuration
@@ -890,6 +839,28 @@ test("button states match screenshots", async ({ page }) => {
 
 ## 8. Snapshot Testing
 
+### Theory: Snapshot Testing: the Sharp Knife
+
+A snapshot test serializes the rendered output and compares it to a saved file. First run: save. Subsequent runs: assert equal.
+
+The promise: catch unintended visual changes "for free" — no manual assertions needed.
+
+The reality: any HTML change (a className tweak, an attribute reorder, a child component refactor) triggers a snapshot diff. Developers learn to "just update the snapshot" without reading the diff carefully. The snapshot becomes a check-the-box ritual rather than a meaningful assertion.
+
+Snapshots earn their keep when:
+
+- The output is small and tightly defined (a markdown→HTML converter, a date-formatting util's output).
+- The change rate is low.
+- The reviewer is required to inspect the diff carefully.
+
+They harm when:
+
+- The output is a 500-line component tree.
+- The component changes weekly for legitimate reasons.
+- "Just update the snapshot" becomes the default response.
+
+Use them sparingly and never for whole-page renders.
+
 Snapshot testing captures a component's rendered output and compares it against a stored baseline. If the output changes, the test fails — you then review the diff and either accept the change or fix a bug.
 
 ### When Snapshots Help
@@ -946,6 +917,17 @@ it("formats user display name", () => {
 ---
 
 ## 9. Testing Patterns and Anti-Patterns
+
+### Theory: Test Doubles: a Vocabulary Sketch
+
+Common terms, often used loosely:
+
+- **Stub**: returns a canned answer to a call. No verification of how it was called.
+- **Spy**: records calls so the test can verify them.
+- **Mock**: a stub + spy + behavioral expectations (e.g., "should be called exactly twice").
+- **Fake**: a working but simplified implementation (an in-memory database instead of Postgres).
+
+Vitest's `vi.fn()` creates a spy by default; chained with `.mockReturnValue(...)` it becomes a stub; with `.toHaveBeenCalledWith(...)` assertions it's used as a mock. The terminology distinction matters less than understanding *what each accomplishes*.
 
 ### Patterns (Do This)
 

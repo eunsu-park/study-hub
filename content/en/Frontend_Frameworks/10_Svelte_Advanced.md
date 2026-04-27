@@ -21,8 +21,6 @@ With Svelte's fundamentals in place, this lesson covers the patterns that make S
 
 ## Table of Contents
 
-Before the API tour, read [**Theory & Principles**](#theory--principles) — the observer pattern behind stores, the `subscribe` contract that makes any object a store, the `$store` autosubscribe sugar, and Svelte 5 runes as a reframing of the same ideas.
-
 1. [Svelte Stores](#1-svelte-stores)
 2. [Custom Stores](#2-custom-stores)
 3. [Store Auto-Subscription](#3-store-auto-subscription)
@@ -33,11 +31,9 @@ Before the API tour, read [**Theory & Principles**](#theory--principles) — the
 
 ---
 
-## Theory & Principles
+## 1. Svelte Stores
 
-Lesson 9's reactivity stops at the component boundary: `let count = 0` is reactive *inside* the component that declares it but cannot be shared across components. Svelte's solution is the **store** — a small, well-defined contract that turns any object into a reactive value source. This section pulls apart the contract, shows how the framework's autosubscribe sugar works, and reframes the same ideas in the Svelte 5 runes vocabulary that is replacing the `$:`/store split.
-
-### A. The Observer Pattern, Distilled
+### Theory: The Observer Pattern, Distilled
 
 A store is any object that satisfies a tiny interface:
 
@@ -58,7 +54,7 @@ The contract has three implicit guarantees:
 
 This contract is exactly the **observer pattern** from Gang-of-Four design patterns: a subject (the store) maintains a list of observers (listeners) and notifies them of changes. Svelte stores are observers wearing a TypeScript-friendly hat.
 
-### B. The Three Built-In Stores
+### Theory: The Three Built-In Stores
 
 `writable`, `readable`, and `derived` are convenience constructors over the contract.
 
@@ -87,155 +83,6 @@ Three observations:
 1. **`readable`'s second argument is a `start` function.** It runs when the store gains its first subscriber and returns a cleanup that runs when the last subscriber unsubscribes. This is how a store can manage its own lifecycle (timers, websockets, event listeners) without leaking when nobody is watching.
 2. **`derived` re-runs its function whenever any source store updates** and pushes the result to its own subscribers. The function can be sync (return a value) or async (use a `set` second arg) — both compose with the same subscriber chain.
 3. **All three return objects matching the `Store` contract.** You can pass them around, store them in arrays, build higher-order stores — they are first-class values.
-
-### C. Custom Stores: Hide Internals, Expose Methods
-
-Because the contract is just `subscribe`, you can wrap a `writable` and only re-export the methods you want consumers to call:
-
-```js
-function createCounter() {
-  const { subscribe, set, update } = writable(0);
-  return {
-    subscribe,                               // expose for autosubscribe
-    increment: () => update(n => n + 1),
-    decrement: () => update(n => n - 1),
-    reset: () => set(0)
-  };
-}
-
-export const counter = createCounter();
-```
-
-Consumers see `counter.subscribe`, `counter.increment`, `counter.decrement`, `counter.reset` — they cannot call `set` with arbitrary values. This is the equivalent of a class with private state and public methods, but built from a single function and a small object literal.
-
-This pattern is how Svelte's ecosystem builds typed, intent-revealing stores: a `useCounter`-style API on the outside, a `writable` on the inside, with the rules of mutation enforced by what is exported.
-
-### D. Autosubscribe: `$store` Is Compiler Sugar
-
-Reading a store inside a component is verbose:
-
-```svelte
-<script>
-  import { onDestroy } from 'svelte';
-  import { count } from './store';
-
-  let value;
-  const unsub = count.subscribe(v => value = v);
-  onDestroy(unsub);
-</script>
-
-<p>{value}</p>
-```
-
-Svelte's compiler reads `$count` (the `$` prefix on a store-typed variable) and emits all of that boilerplate for you:
-
-```svelte
-<script>
-  import { count } from './store';
-</script>
-
-<p>{$count}</p>
-```
-
-The compiler:
-
-1. Sees the `$` prefix and looks up `count` to confirm it is a store.
-2. Emits `let $count;` and a subscription that writes to it.
-3. Emits an `onDestroy` that unsubscribes when the component unmounts.
-4. Treats `$count` as a reactive variable everywhere it is read in the script and template.
-
-The same `$count = 5` syntax in a script is sugar for `count.set(5)` (only valid for stores that have `set`). The autosubscribe is purely a compiler feature — at runtime, Svelte still uses the bare `subscribe`/`unsubscribe` calls.
-
-### E. Context vs Stores: Tree-Scoped Singletons
-
-Stores are module-level singletons: import them anywhere and you get the same instance. That is wrong for cases where you want a *fresh* shared value per component subtree (e.g., a `Tabs` component holding a "current tab" value shared with its descendant `Tab` components, but independent across multiple `Tabs` instances on the page).
-
-`setContext` and `getContext` solve this:
-
-```svelte
-<!-- Tabs.svelte -->
-<script>
-  import { setContext, writable } from 'svelte';
-  const current = writable(0);
-  setContext('tabs', current);
-</script>
-
-<!-- Tab.svelte -->
-<script>
-  import { getContext } from 'svelte';
-  const current = getContext('tabs');
-</script>
-```
-
-Each `<Tabs>` instance creates its own `current` store and provides it to descendants. The Context API **provides per-instance scoping**; stores **provide global scoping**. They compose: a context can hold a store, giving you per-instance reactive values.
-
-### F. Actions: Reusable DOM Behavior
-
-Most framework constructs (components, stores, contexts) operate on values. **Actions** are the escape hatch for *direct DOM behavior*:
-
-```js
-// tooltip action
-export function tooltip(node, params) {
-  const tip = document.createElement('div');
-  tip.textContent = params.text;
-  tip.style.cssText = 'position:absolute; background:black; color:white;';
-
-  function show() { document.body.appendChild(tip); }
-  function hide() { tip.remove(); }
-
-  node.addEventListener('mouseenter', show);
-  node.addEventListener('mouseleave', hide);
-
-  return {
-    update(newParams) { tip.textContent = newParams.text; },
-    destroy() { node.removeEventListener('mouseenter', show); node.removeEventListener('mouseleave', hide); hide(); }
-  };
-}
-```
-
-Used as:
-
-```svelte
-<button use:tooltip={{ text: 'Save your work' }}>Save</button>
-```
-
-The compiler calls `tooltip(buttonNode, { text: ... })` after the button mounts, calls `update` if the params change, and calls `destroy` on unmount. Actions are the right tool for: third-party JS library integration (a chart library that mutates a DOM node), low-level event handling that doesn't fit a Svelte event modifier, and reusable lifecycle-bound behavior.
-
-### G. Svelte 5 Runes: Reframing the Same Ideas
-
-Svelte 5 introduces **runes** that replace the implicit `$:` reactivity and the separate stores library with one unified vocabulary:
-
-```svelte
-<script>
-  let count = $state(0);                    // was: let count = 0
-  let doubled = $derived(count * 2);        // was: $: doubled = count * 2
-  $effect(() => {                           // was: $: console.log(...)
-    console.log(`count is ${count}`);
-  });
-</script>
-```
-
-The compile-time-reactivity machinery is the same; what changes is the surface:
-
-- **`$state(initial)`** marks a variable as reactive at any depth in the script (not only top-level).
-- **`$derived(expr)`** is `derived` for any value, with explicit dependency tracking via the expression.
-- **`$effect(fn)`** is `watchEffect` from Vue / `useEffect` from React — runs the function whenever its dependencies change.
-
-The point of runes is uniformity: one mechanism (function calls returning reactive handles) covers what previously required `let` + `$:` + `writable` + `derived`. The `$store` autosubscribe still works for legacy stores, but new code is expected to use runes throughout.
-
-### From Theory to the Sections Below
-
-- §1 *Svelte Stores* — (B); the three built-in store constructors.
-- §2 *Custom Stores* — (C); wrap a writable, expose only methods that match your domain.
-- §3 *Store Auto-Subscription* — (D); `$store` is compiler sugar for the manual subscribe/unsubscribe pair.
-- §4 *Context API* — (E); per-instance scoping via `setContext`/`getContext`, complementary to stores.
-- §5 *Component Composition: Slots* — slots are how a parent passes a chunk of template (with optional data) to a child; the analog of React's `children` and Vue's `<slot>`.
-- §6 *Actions* — (F); the `use:directive` syntax for attaching reusable DOM behavior.
-- §7 *SvelteKit Basics* — file-based routing, `+page.svelte` / `+layout.svelte` / `+page.server.ts` conventions; brings the routing and SSR ideas from earlier lessons into Svelte's idiom.
-
----
-
-## 1. Svelte Stores
 
 Svelte stores solve the problem of sharing state between components that do not have a direct parent-child relationship. A store is any object with a `subscribe` method that notifies listeners when the value changes.
 
@@ -391,6 +238,28 @@ export const userData = derived(userId, ($userId, set) => {
 
 ## 2. Custom Stores
 
+### Theory: Custom Stores: Hide Internals, Expose Methods
+
+Because the contract is just `subscribe`, you can wrap a `writable` and only re-export the methods you want consumers to call:
+
+```js
+function createCounter() {
+  const { subscribe, set, update } = writable(0);
+  return {
+    subscribe,                               // expose for autosubscribe
+    increment: () => update(n => n + 1),
+    decrement: () => update(n => n - 1),
+    reset: () => set(0)
+  };
+}
+
+export const counter = createCounter();
+```
+
+Consumers see `counter.subscribe`, `counter.increment`, `counter.decrement`, `counter.reset` — they cannot call `set` with arbitrary values. This is the equivalent of a class with private state and public methods, but built from a single function and a small object literal.
+
+This pattern is how Svelte's ecosystem builds typed, intent-revealing stores: a `useCounter`-style API on the outside, a `writable` on the inside, with the rules of mutation enforced by what is exported.
+
 A custom store is any object with a `subscribe` method. This lets you encapsulate business logic while maintaining the store contract. The pattern is to wrap a `writable` store and expose a controlled API.
 
 ### 2.1 Basic Custom Store
@@ -532,6 +401,42 @@ export const settings = persistent('settings', {
 
 ## 3. Store Auto-Subscription
 
+### Theory: Autosubscribe: `$store` Is Compiler Sugar
+
+Reading a store inside a component is verbose:
+
+```svelte
+<script>
+  import { onDestroy } from 'svelte';
+  import { count } from './store';
+
+  let value;
+  const unsub = count.subscribe(v => value = v);
+  onDestroy(unsub);
+</script>
+
+<p>{value}</p>
+```
+
+Svelte's compiler reads `$count` (the `$` prefix on a store-typed variable) and emits all of that boilerplate for you:
+
+```svelte
+<script>
+  import { count } from './store';
+</script>
+
+<p>{$count}</p>
+```
+
+The compiler:
+
+1. Sees the `$` prefix and looks up `count` to confirm it is a store.
+2. Emits `let $count;` and a subscription that writes to it.
+3. Emits an `onDestroy` that unsubscribes when the component unmounts.
+4. Treats `$count` as a reactive variable everywhere it is read in the script and template.
+
+The same `$count = 5` syntax in a script is sugar for `count.set(5)` (only valid for stores that have `set`). The autosubscribe is purely a compiler feature — at runtime, Svelte still uses the bare `subscribe`/`unsubscribe` calls.
+
 The `$` prefix is Svelte's most ergonomic feature for stores. Prefixing a store variable with `$` in a component automatically subscribes and unsubscribes.
 
 ### 3.1 The $ Syntax
@@ -615,6 +520,29 @@ Always use `$` in components. Manual subscription is needed only in plain `.ts` 
 ---
 
 ## 4. Context API
+
+### Theory: Context vs Stores: Tree-Scoped Singletons
+
+Stores are module-level singletons: import them anywhere and you get the same instance. That is wrong for cases where you want a *fresh* shared value per component subtree (e.g., a `Tabs` component holding a "current tab" value shared with its descendant `Tab` components, but independent across multiple `Tabs` instances on the page).
+
+`setContext` and `getContext` solve this:
+
+```svelte
+<!-- Tabs.svelte -->
+<script>
+  import { setContext, writable } from 'svelte';
+  const current = writable(0);
+  setContext('tabs', current);
+</script>
+
+<!-- Tab.svelte -->
+<script>
+  import { getContext } from 'svelte';
+  const current = getContext('tabs');
+</script>
+```
+
+Each `<Tabs>` instance creates its own `current` store and provides it to descendants. The Context API **provides per-instance scoping**; stores **provide global scoping**. They compose: a context can hold a store, giving you per-instance reactive values.
 
 The Context API provides scoped state within a component subtree. Unlike stores (which are global singletons), context is tied to a specific component instance and its descendants.
 
@@ -924,6 +852,38 @@ Slots can pass data back to the parent via slot props, enabling the "render prop
 
 ## 6. Actions
 
+### Theory: Actions: Reusable DOM Behavior
+
+Most framework constructs (components, stores, contexts) operate on values. **Actions** are the escape hatch for *direct DOM behavior*:
+
+```js
+// tooltip action
+export function tooltip(node, params) {
+  const tip = document.createElement('div');
+  tip.textContent = params.text;
+  tip.style.cssText = 'position:absolute; background:black; color:white;';
+
+  function show() { document.body.appendChild(tip); }
+  function hide() { tip.remove(); }
+
+  node.addEventListener('mouseenter', show);
+  node.addEventListener('mouseleave', hide);
+
+  return {
+    update(newParams) { tip.textContent = newParams.text; },
+    destroy() { node.removeEventListener('mouseenter', show); node.removeEventListener('mouseleave', hide); hide(); }
+  };
+}
+```
+
+Used as:
+
+```svelte
+<button use:tooltip={{ text: 'Save your work' }}>Save</button>
+```
+
+The compiler calls `tooltip(buttonNode, { text: ... })` after the button mounts, calls `update` if the params change, and calls `destroy` on unmount. Actions are the right tool for: third-party JS library integration (a chart library that mutates a DOM node), low-level event handling that doesn't fit a Svelte event modifier, and reusable lifecycle-bound behavior.
+
 Actions are reusable DOM behavior that can be attached to any element with `use:`. They are Svelte's answer to custom directives. An action is a function that receives the DOM node and optional parameters, and optionally returns `update` and `destroy` methods.
 
 ### 6.1 Basic Action
@@ -1127,6 +1087,28 @@ export function focusTrap(node: HTMLElement) {
 ---
 
 ## 7. SvelteKit Basics
+
+### Theory: Svelte 5 Runes: Reframing the Same Ideas
+
+Svelte 5 introduces **runes** that replace the implicit `$:` reactivity and the separate stores library with one unified vocabulary:
+
+```svelte
+<script>
+  let count = $state(0);                    // was: let count = 0
+  let doubled = $derived(count * 2);        // was: $: doubled = count * 2
+  $effect(() => {                           // was: $: console.log(...)
+    console.log(`count is ${count}`);
+  });
+</script>
+```
+
+The compile-time-reactivity machinery is the same; what changes is the surface:
+
+- **`$state(initial)`** marks a variable as reactive at any depth in the script (not only top-level).
+- **`$derived(expr)`** is `derived` for any value, with explicit dependency tracking via the expression.
+- **`$effect(fn)`** is `watchEffect` from Vue / `useEffect` from React — runs the function whenever its dependencies change.
+
+The point of runes is uniformity: one mechanism (function calls returning reactive handles) covers what previously required `let` + `$:` + `writable` + `derived`. The `$store` autosubscribe still works for legacy stores, but new code is expected to use runes throughout.
 
 SvelteKit is the official application framework for Svelte, providing file-based routing, server-side rendering, code splitting, and more. It is to Svelte what Next.js is to React or Nuxt is to Vue.
 

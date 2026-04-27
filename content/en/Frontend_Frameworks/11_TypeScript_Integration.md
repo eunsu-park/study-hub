@@ -16,8 +16,6 @@
 
 ## Table of Contents
 
-Before the framework-specific sections, read [**Theory & Principles**](#theory--principles) — TypeScript's structural type system, generics in component props, and the utility types (`ReturnType`, `Parameters`) that connect framework APIs to typed call sites.
-
 1. [Why TypeScript in Frontend Frameworks?](#1-why-typescript-in-frontend-frameworks)
 2. [TypeScript Configuration](#2-typescript-configuration)
 3. [React + TypeScript](#3-react--typescript)
@@ -29,13 +27,9 @@ Before the framework-specific sections, read [**Theory & Principles**](#theory--
 
 ---
 
-## Theory & Principles
+## 1. Why TypeScript in Frontend Frameworks?
 
-TypeScript looks like "JavaScript with type annotations," but its type system is doing more than that. It is a **structural** type system (not nominal like Java/C#), which interacts with frontend frameworks in surprising ways: components compose because their prop shapes match, not because they are declared to. It supports **parametric polymorphism** (generics) so a single component can work over many element types. And it provides **type-level functions** (`ReturnType`, `Parameters`, `Pick`, `Omit`) that turn an existing function or type into a derived one — which is how framework APIs like `defineProps`, `useReducer`, and `createSlice` deliver their inferred types.
-
-This section explains those three foundations, then shows how each framework hooks into them.
-
-### A. Structural Typing: Shapes, Not Names
+### Theory: Structural Typing: Shapes, Not Names
 
 In a **nominal** type system, two types are compatible only if they share a name (or an explicit `extends`/`implements` relationship). `class Dog` and `class Cat` are incompatible even if they have identical fields, because the names differ.
 
@@ -57,86 +51,7 @@ Three frontend consequences:
 
 TypeScript also supports *narrower-than-declared* assignment via assignability rules. A function typed `(e: MouseEvent) => void` is assignable to a slot typed `(e: Event) => void` is *not* — because the function would receive a generic `Event` and call MouseEvent-specific methods. (Function parameters are contravariant.) But assigning the other direction *is* OK. This contravariance is why `onClick: (e: MouseEvent) => void` props are common but rarely cause type errors at the assignment site.
 
-### B. Generics: Parametric Polymorphism for Components
-
-A generic is a type that takes another type as a parameter:
-
-```ts
-type Box<T> = { value: T };
-
-const a: Box<number> = { value: 42 };
-const b: Box<string> = { value: 'hello' };
-```
-
-`Box` is not a single type — it's a *type-level function* that produces a concrete type when given an argument.
-
-In components, generics let one component handle many element types without losing type safety:
-
-```tsx
-// React: a typed list component
-type ListProps<T> = {
-  items: T[];
-  renderItem: (item: T) => React.ReactNode;
-};
-
-function List<T>({ items, renderItem }: ListProps<T>) {
-  return <ul>{items.map(renderItem)}</ul>;
-}
-
-// Usage: T is inferred from items
-<List items={users} renderItem={(u) => <li>{u.name}</li>} />
-//      ↑ users: User[]    ↑ u is inferred as User
-```
-
-Without generics, `items` would have to be `any[]` or `unknown[]`, and `renderItem` would lose the connection between the element type and the parameter type. With generics, the compiler binds `T` once at the call site, and every other use of `T` in the props is consistent.
-
-The same pattern in Vue (`defineProps<Props<T>>`) and Svelte (`<script lang="ts" generics="T">`) — different syntax, same machinery. Generics are the framework-agnostic way to say "this component is shape-polymorphic."
-
-#### B.1 Constraints
-
-Generics can be constrained:
-
-```ts
-function getId<T extends { id: string | number }>(item: T): T['id'] {
-  return item.id;
-}
-```
-
-`T extends { id: ... }` means "any type, as long as it has at least an `id` field of this type." Inside the function, `item.id` is known to exist. The return type `T['id']` is itself a type-level expression — "the type of the `id` field of T." The caller gets back a string or number depending on what they passed in.
-
-### C. Utility Types: Type-Level Functions Over Other Types
-
-TypeScript ships with a set of built-in type-level functions that take a type and produce a derived type. They are how framework APIs deliver inferred types without you writing the types twice.
-
-| Utility | What it does |
-|---------|--------------|
-| `ReturnType<F>` | The return type of function type `F` |
-| `Parameters<F>` | A tuple of `F`'s parameter types |
-| `Awaited<P>` | The resolved type inside a Promise type |
-| `Pick<T, K>` | A type with only the keys `K` from `T` |
-| `Omit<T, K>` | A type with all keys *except* `K` from `T` |
-| `Partial<T>` | All fields of `T` made optional |
-| `Required<T>` | All fields of `T` made required |
-| `Readonly<T>` | All fields marked readonly |
-
-Two examples that show up repeatedly in framework code:
-
-```ts
-// "the type of the ref returned by useRef when called with this initial value"
-const ref = useRef<HTMLInputElement>(null);
-type RefType = typeof ref; // React.RefObject<HTMLInputElement>
-
-// "the type of the value of a Pinia store, derived from its definition"
-const useUserStore = defineStore('user', () => ({ ... }));
-type UserStoreType = ReturnType<typeof useUserStore>;
-//   ↑ no need to write the store's interface manually; it's derived
-```
-
-Combined with generics, these utilities let framework code expose APIs whose *types are derived from your code*, not declared separately. The user writes a store body; the framework derives the public type. The user writes a Zod schema; `z.infer<typeof schema>` gives back the TypeScript type.
-
-This is what people mean by "type inference" in modern framework code: the types you see in tooltips were not handwritten — they were computed from your code by the type system following these rules.
-
-### D. The "Type-Level vs Value-Level" Distinction
+### Theory: The "Type-Level vs Value-Level" Distinction
 
 TypeScript has two parallel namespaces: **values** (variables, functions, classes) and **types** (interfaces, type aliases). They are *erased at compile time* in opposite ways:
 
@@ -153,28 +68,6 @@ type Config = typeof config; // { host: string; port: number }
 But the `typeof` operator at the value level is a runtime check returning a string ("number", "string", etc.). They share a keyword and operate in their respective namespaces.
 
 This duality is why framework error messages can confuse beginners: "you used `Foo` as a type, but `Foo` is a value." The fix is usually `typeof Foo` (project value into type space) or to import the right name (`import { Foo } from ...` for value, `import type { Foo } from ...` for type-only).
-
-### E. How Each Framework Plugs In
-
-- **React**: types are everywhere — `useState<T>`, `useReducer<S, A>`, `React.FC<P>` (deprecated), `React.ComponentProps<typeof Button>`. JSX itself is typed: `<button onClick={...} />` is checked against `JSX.IntrinsicElements['button']`. Custom components: `function Foo(props: FooProps)` and the JSX call site type-checks against `FooProps`.
-- **Vue**: SFC `<script setup lang="ts">` exposes `defineProps<{...}>()`, `defineEmits<{...}>()` as compile-time macros. The compiler reads the type argument and emits the runtime prop validators. Templates are type-checked via Volar (the Vue language tooling), which understands the link between props and template references.
-- **Svelte**: `<script lang="ts">` enables TypeScript inside the script block. Props are typed via the `Props` interface or `$props<{...}>()` rune; events via the dispatcher type or `$emit`. Templates use the inferred types via `svelte-check` or the language server.
-
-The vocabulary differs, but the underlying mechanism is the same: a framework-specific syntax (a macro, a special prop syntax, a generic) wraps TypeScript's structural/generic/utility-type machinery.
-
-### From Theory to the Sections Below
-
-- §1 *Why TypeScript in Frontend Frameworks?* — the case for adoption; refer to (A) for the type-safety story and (C) for inference's role in keeping it light.
-- §2 *TypeScript Configuration* — `tsconfig.json` settings; the framework-specific ones (`jsx`, `moduleResolution`, `paths`).
-- §3 *React + TypeScript* — typing function components, hooks, refs, and events; (B) and (E)'s React part.
-- §4 *Vue + TypeScript* — `defineProps<T>` and friends; (E)'s Vue part.
-- §5 *Svelte + TypeScript* — `lang="ts"`, prop types, generic components; (E)'s Svelte part.
-- §6 *Shared Patterns Across Frameworks* — discriminated unions, conditional types, and the utility-type idioms from (C) — applied identically across all three frameworks.
-- §7 *Common Pitfalls* — the value/type confusion from (D), excess-property checks from (A), variance gotchas, and the `as` cast escape hatch.
-
----
-
-## 1. Why TypeScript in Frontend Frameworks?
 
 TypeScript adds a compile-time type layer on top of JavaScript. In frontend development, this provides three key advantages:
 
@@ -302,6 +195,14 @@ Key differences:
 ---
 
 ## 3. React + TypeScript
+
+### Theory: How Each Framework Plugs In
+
+- **React**: types are everywhere — `useState<T>`, `useReducer<S, A>`, `React.FC<P>` (deprecated), `React.ComponentProps<typeof Button>`. JSX itself is typed: `<button onClick={...} />` is checked against `JSX.IntrinsicElements['button']`. Custom components: `function Foo(props: FooProps)` and the JSX call site type-checks against `FooProps`.
+- **Vue**: SFC `<script setup lang="ts">` exposes `defineProps<{...}>()`, `defineEmits<{...}>()` as compile-time macros. The compiler reads the type argument and emits the runtime prop validators. Templates are type-checked via Volar (the Vue language tooling), which understands the link between props and template references.
+- **Svelte**: `<script lang="ts">` enables TypeScript inside the script block. Props are typed via the `Props` interface or `$props<{...}>()` rune; events via the dispatcher type or `$emit`. Templates use the inferred types via `svelte-check` or the language server.
+
+The vocabulary differs, but the underlying mechanism is the same: a framework-specific syntax (a macro, a special prop syntax, a generic) wraps TypeScript's structural/generic/utility-type machinery.
 
 ### Typing Props
 
@@ -806,6 +707,85 @@ Usage in a component:
 ---
 
 ## 6. Shared Patterns Across Frameworks
+
+### Theory: Generics: Parametric Polymorphism for Components
+
+A generic is a type that takes another type as a parameter:
+
+```ts
+type Box<T> = { value: T };
+
+const a: Box<number> = { value: 42 };
+const b: Box<string> = { value: 'hello' };
+```
+
+`Box` is not a single type — it's a *type-level function* that produces a concrete type when given an argument.
+
+In components, generics let one component handle many element types without losing type safety:
+
+```tsx
+// React: a typed list component
+type ListProps<T> = {
+  items: T[];
+  renderItem: (item: T) => React.ReactNode;
+};
+
+function List<T>({ items, renderItem }: ListProps<T>) {
+  return <ul>{items.map(renderItem)}</ul>;
+}
+
+// Usage: T is inferred from items
+<List items={users} renderItem={(u) => <li>{u.name}</li>} />
+//      ↑ users: User[]    ↑ u is inferred as User
+```
+
+Without generics, `items` would have to be `any[]` or `unknown[]`, and `renderItem` would lose the connection between the element type and the parameter type. With generics, the compiler binds `T` once at the call site, and every other use of `T` in the props is consistent.
+
+The same pattern in Vue (`defineProps<Props<T>>`) and Svelte (`<script lang="ts" generics="T">`) — different syntax, same machinery. Generics are the framework-agnostic way to say "this component is shape-polymorphic."
+
+#### B.1 Constraints
+
+Generics can be constrained:
+
+```ts
+function getId<T extends { id: string | number }>(item: T): T['id'] {
+  return item.id;
+}
+```
+
+`T extends { id: ... }` means "any type, as long as it has at least an `id` field of this type." Inside the function, `item.id` is known to exist. The return type `T['id']` is itself a type-level expression — "the type of the `id` field of T." The caller gets back a string or number depending on what they passed in.
+
+### Theory: Utility Types: Type-Level Functions Over Other Types
+
+TypeScript ships with a set of built-in type-level functions that take a type and produce a derived type. They are how framework APIs deliver inferred types without you writing the types twice.
+
+| Utility | What it does |
+|---------|--------------|
+| `ReturnType<F>` | The return type of function type `F` |
+| `Parameters<F>` | A tuple of `F`'s parameter types |
+| `Awaited<P>` | The resolved type inside a Promise type |
+| `Pick<T, K>` | A type with only the keys `K` from `T` |
+| `Omit<T, K>` | A type with all keys *except* `K` from `T` |
+| `Partial<T>` | All fields of `T` made optional |
+| `Required<T>` | All fields of `T` made required |
+| `Readonly<T>` | All fields marked readonly |
+
+Two examples that show up repeatedly in framework code:
+
+```ts
+// "the type of the ref returned by useRef when called with this initial value"
+const ref = useRef<HTMLInputElement>(null);
+type RefType = typeof ref; // React.RefObject<HTMLInputElement>
+
+// "the type of the value of a Pinia store, derived from its definition"
+const useUserStore = defineStore('user', () => ({ ... }));
+type UserStoreType = ReturnType<typeof useUserStore>;
+//   ↑ no need to write the store's interface manually; it's derived
+```
+
+Combined with generics, these utilities let framework code expose APIs whose *types are derived from your code*, not declared separately. The user writes a store body; the framework derives the public type. The user writes a Zod schema; `z.infer<typeof schema>` gives back the TypeScript type.
+
+This is what people mean by "type inference" in modern framework code: the types you see in tooltips were not handwritten — they were computed from your code by the type system following these rules.
 
 These TypeScript patterns work identically in React, Vue, and Svelte.
 

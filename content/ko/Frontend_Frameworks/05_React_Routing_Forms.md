@@ -16,8 +16,6 @@
 
 ## 목차
 
-API 투어에 들어가기 전에 [**이론과 원리**](#이론과-원리)를 먼저 읽어보세요. History API가 어떻게 페이지 리로드 없이 클라이언트 사이드 라우팅을 가능하게 하는지, 폼 입력의 controlled vs uncontrolled 구분, 선언적 스키마 검증이 명령형 검증보다 나은 이유를 다룹니다.
-
 1. [React Router v7 기초](#1-react-router-v7-기초)
 2. [동적 및 중첩 라우트](#2-동적-및-중첩-라우트)
 3. [로더를 이용한 데이터 로딩](#3-로더를-이용한-데이터-로딩)
@@ -29,11 +27,9 @@ API 투어에 들어가기 전에 [**이론과 원리**](#이론과-원리)를 �
 
 ---
 
-## 이론과 원리
+## 1. React Router v7 기초
 
-라우팅과 폼은 우연히 같은 레슨에 묶인 두 무관한 주제처럼 보입니다. 사실 둘은 더 깊은 구조를 공유합니다. 둘 다 **애플리케이션 상태를 느리고 브라우저가 소유한 진실 원천에 동기화**하는 일입니다 — 한쪽은 URL 바, 다른 쪽은 입력 요소의 내부 값. 이 절은 그 동기화를 명시적으로 드러내고, 같은 트레이드오프(controlled vs uncontrolled, 선언적 vs 명령형)가 두 세계에서 어떻게 반복되는지 보여 줍니다.
-
-### A. 클라이언트 사이드 라우팅: History API와 페이지가 리로드되지 않는 이유
+### 이론: 클라이언트 사이드 라우팅: History API와 페이지가 리로드되지 않는 이유
 
 전통적인 웹은 전체 페이지 내비게이션으로 동작합니다. 링크 클릭 → 브라우저가 새 요청 전송 → 서버가 새 HTML 반환 → 이전 JavaScript 힙과 DOM이 폐기되고 새로 빌드. 신뢰할 만하지만 느리고 시각적으로 단절적입니다.
 
@@ -69,124 +65,6 @@ React Router v7(그리고 Vue, Svelte의 동등물)은 `pushState`와 `popstate`
 
 - **History 모드 vs Hash 모드.** History 모드는 진짜 경로(`/users/42`)를 사용합니다. 서버는 알 수 없는 경로에 대해서도 SPA의 `index.html`을 서빙하도록 구성되어야 합니다. Hash 모드는 `#/users/42`를 사용합니다. `#` 뒤의 부분은 서버에 보이지 않으므로 서버 구성이 필요 없습니다. Hash 모드는 보기 흉하지만 어떤 정적 호스트에서도 작동합니다.
 - **코드 분할된 라우트.** 각 라우트는 lazy 로딩(`lazy: () => import('./ProductPage')`) 가능합니다. 초기 번들에는 사용자가 즉시 봐야 하는 라우트만 들어갑니다. 사용자는 한 번에 하나의 라우트만 볼 수 있으므로, 라우트는 자연스러운 코드 분할 경계입니다.
-
-### B. Controlled vs Uncontrolled 폼 입력
-
-HTML `<input>`은 이미 내부 상태(사용자가 타이핑한 값. DOM 노드에 보존됨)를 가집니다. React는 또 다른 진실 원천 후보(`useState` 값)를 추가합니다. 둘 중 하나를 권위 있는 것으로 골라야 합니다. 두 개를 조용히 섞거나 둘 다 사용하려 하면 버그가 생깁니다.
-
-**Uncontrolled**: DOM이 진실 원천. React는 값을 추적하지 않습니다. submit 시점에 ref나 `event.target.value`로 읽습니다.
-
-```jsx
-function Form() {
-  const inputRef = useRef<HTMLInputElement>(null);
-  return (
-    <form onSubmit={(e) => {
-      e.preventDefault();
-      console.log(inputRef.current!.value); // submit 시 읽기
-    }}>
-      <input ref={inputRef} defaultValue="initial" />
-      <button>Submit</button>
-    </form>
-  );
-}
-```
-
-- 키 입력마다 리렌더 없음.
-- React가 타이핑 중인 값을 검증, 포맷, 변환할 수 없음.
-- `defaultValue`(`value` 아님)가 초기값을 설정. 이후로 DOM이 소유.
-
-**Controlled**: React 상태가 진실 원천. 입력의 `value`는 상태에 바인딩되고, `onChange` 핸들러가 키 입력마다 상태를 갱신합니다.
-
-```jsx
-function Form() {
-  const [name, setName] = useState('');
-  return (
-    <form onSubmit={(e) => { e.preventDefault(); console.log(name); }}>
-      <input value={name} onChange={(e) => setName(e.target.value)} />
-      <button>Submit</button>
-    </form>
-  );
-}
-```
-
-- 키 입력마다 폼(과 그 자손) 전체가 리렌더됨.
-- React가 즉시 포맷 가능(대문자화, 전화번호 마스킹, 숫자 외 제거).
-- 검증을 타이핑 중에 수행 가능, 메시지가 라이브로 갱신.
-- `value`(`defaultValue` 아님). `value`가 설정되면 입력은 그 값에 잠김. `onChange`를 제공하지 않으면 read-only 필드와 경고가 발생.
-
-성능 트레이드오프는 실제로 존재합니다. controlled 입력이 많은 긴 폼은 키 입력마다 폼 전체를 리렌더합니다. **React Hook Form**이 인기 있는 탈출구입니다 — 내부적으로는 uncontrolled 입력(ref)을 사용하면서 controlled처럼 느껴지는 API를 노출합니다. 검증은 submit 시점(또는 blur, change 시점, 설정 가능)에 실행됩니다. 폼은 키 입력마다 리렌더되지 않고, 에러 상태가 바뀐 필드만 리렌더됩니다. 입력 5개짜리 폼에서는 거의 무관하지만, 50개짜리 폼에서는 쾌적함과 사용 불가의 차이입니다.
-
-### C. 폼 검증: 명령형 vs 선언적
-
-명령형 검증은 검사 로직을 submit 처리에 끼워 넣습니다.
-
-```jsx
-function handleSubmit(values) {
-  const errors = {};
-  if (!values.email) errors.email = 'Required';
-  else if (!/^[^@]+@[^@]+$/.test(values.email)) errors.email = 'Invalid email';
-  if (values.password.length < 8) errors.password = 'Too short';
-  if (errors.email || errors.password) { setErrors(errors); return; }
-  // submit
-}
-```
-
-작은 폼에서는 작동합니다. 잘 확장되지 않습니다 — 검증 규칙이 절차적 코드 곳곳에 흩어지고, 에러 키가 타입 검사되지 않으며, 폼 간 규칙 재사용에는 수동 추출이 필요합니다.
-
-선언적 검증은 데이터가 만족해야 할 *모양*을 submit 로직과 별도로 정의하고, 검증기를 단일 단계로 실행합니다.
-
-```jsx
-const schema = z.object({
-  email: z.string().email(),
-  password: z.string().min(8),
-});
-
-function handleSubmit(values) {
-  const result = schema.safeParse(values);
-  if (!result.success) { setErrors(result.error.format()); return; }
-  // submit result.data — 타입 지정됨
-}
-```
-
-세 가지가 바뀝니다.
-
-1. **검증 규칙이 한 객체에 산다.** export, 재사용, 합성(`schema.extend({...})`), 단독 테스트가 가능.
-2. **타입 추론이 공짜.** `z.infer<typeof schema>`가 스키마와 일치하는 TypeScript 타입을 만들어 줍니다. submit 핸들러는 이제 알려진 모양의 값을 받습니다 — `as` 캐스트도, 수동 인터페이스도 없음.
-3. **"필드별로 어떤 메시지를"의 매핑을 라이브러리가 처리.** 필드별·검사별 문자열을 작성하지 않습니다. 스키마가 제약을 선언하면 라이브러리가 메시지를 만듭니다.
-
-Zod는 React 생태계에서 가장 흔한 선택입니다. 같은 패턴이 Vue(`vee-validate` + Zod 또는 Yup), Svelte(`sveltekit-superforms`), 그리고 어떤 프레임워크 바깥에서도 작동합니다. 원칙은 라이브러리보다 더 넓습니다. **유효한 데이터가 어떻게 생겼는지를 한 번 기술하고, 필요한 곳마다 "이게 유효한가?"를 물어라.**
-
-### D. 스키마에서 타입을 거쳐 submit 핸들러로
-
-(B)와 (C)가 잘 합성되면 사슬은 다음과 같습니다.
-
-```
-Zod 스키마  ──z.infer──>  TypeScript 타입
-    │                            │
-    ▼                            ▼
-Resolver를 React        폼의 handleSubmit이
-Hook Form에 전달        타입 지정된 값을 받음
-    │
-    ▼
-react-hook-form이 submit 시 스키마 실행
-에러는 formState.errors로 흐름
-필드 컴포넌트는 자기 에러만 구독
-```
-
-사용자는 타이핑하고, 폼은 전역으로 리렌더되지 않으며, 스키마가 검증하고, 타입 지정된 데이터가 submit 핸들러에 도달합니다. 각 조각이 자기 일을 합니다. 폼 라이브러리는 상태와 리렌더 최소화. 스키마 라이브러리는 검증과 타입 도출. React는 렌더링. 어느 것도 다른 것의 내부를 알 필요가 없습니다 — 작은 선언된 경계에서 만납니다.
-
-### 이론에서 아래 절들로
-
-- §1 *React Router v7 기초*와 §2 *동적 및 중첩 라우트*는 (A)를 JSX 컴포넌트와 라우트 객체로 만든 것.
-- §3 *로더를 이용한 데이터 로딩*은 (A)의 "라우트 정의의 일부로서의 loader" 발상 — 패칭은 라우트 매칭의 일부이지 렌더링의 일부가 아닙니다.
-- §4 *탐색*은 `useNavigate`와 `<Link>`로 `pushState`/`popstate`를 노출 — 같은 프리미티브의 명령형/선언적 양 끝.
-- §5 *React Hook Form*은 (B). 내부적으로 uncontrolled, 외부에는 controlled처럼 느껴지는 API로 키 입력당 리렌더 비용을 회피.
-- §6 *Zod 스키마 유효성 검사*는 (C). 스키마가 검증기, 타입, 문서를 겸합니다.
-- §7 *통합 예제*는 (D) — 스키마에서 submit까지의 통합된 사슬. 작은 합성 가능한 조각들이 거의 글루 코드 없이 안정적인 폼 워크플로를 만듭니다.
-
----
-
-## 1. React Router v7 기초
 
 React Router v7(2024~)은 React SPA의 표준 라우팅 라이브러리다. 라우트를 로더(Loader)와 액션(Action)을 가진 객체로 정의하는 **데이터 라우터(Data Router)** 아키텍처를 사용하며, 이전의 JSX 기반 `<Routes>` / `<Route>` 방식을 대체한다.
 
@@ -578,6 +456,52 @@ function ProductListPage() {
 
 ## 5. React Hook Form
 
+### 이론: Controlled vs Uncontrolled 폼 입력
+
+HTML `<input>`은 이미 내부 상태(사용자가 타이핑한 값. DOM 노드에 보존됨)를 가집니다. React는 또 다른 진실 원천 후보(`useState` 값)를 추가합니다. 둘 중 하나를 권위 있는 것으로 골라야 합니다. 두 개를 조용히 섞거나 둘 다 사용하려 하면 버그가 생깁니다.
+
+**Uncontrolled**: DOM이 진실 원천. React는 값을 추적하지 않습니다. submit 시점에 ref나 `event.target.value`로 읽습니다.
+
+```jsx
+function Form() {
+  const inputRef = useRef<HTMLInputElement>(null);
+  return (
+    <form onSubmit={(e) => {
+      e.preventDefault();
+      console.log(inputRef.current!.value); // submit 시 읽기
+    }}>
+      <input ref={inputRef} defaultValue="initial" />
+      <button>Submit</button>
+    </form>
+  );
+}
+```
+
+- 키 입력마다 리렌더 없음.
+- React가 타이핑 중인 값을 검증, 포맷, 변환할 수 없음.
+- `defaultValue`(`value` 아님)가 초기값을 설정. 이후로 DOM이 소유.
+
+**Controlled**: React 상태가 진실 원천. 입력의 `value`는 상태에 바인딩되고, `onChange` 핸들러가 키 입력마다 상태를 갱신합니다.
+
+```jsx
+function Form() {
+  const [name, setName] = useState('');
+  return (
+    <form onSubmit={(e) => { e.preventDefault(); console.log(name); }}>
+      <input value={name} onChange={(e) => setName(e.target.value)} />
+      <button>Submit</button>
+    </form>
+  );
+}
+```
+
+- 키 입력마다 폼(과 그 자손) 전체가 리렌더됨.
+- React가 즉시 포맷 가능(대문자화, 전화번호 마스킹, 숫자 외 제거).
+- 검증을 타이핑 중에 수행 가능, 메시지가 라이브로 갱신.
+- `value`(`defaultValue` 아님). `value`가 설정되면 입력은 그 값에 잠김. `onChange`를 제공하지 않으면 read-only 필드와 경고가 발생.
+
+성능 트레이드오프는 실제로 존재합니다. controlled 입력이 많은 긴 폼은 키 입력마다 폼 전체를 리렌더합니다. **React Hook Form**이 인기 있는 탈출구입니다 — 내부적으로는 uncontrolled 입력(ref)을 사용하면서 controlled처럼 느껴지는 API를 노출합니다. 검증은 submit 시점(또는 blur, change 시점, 설정 가능)에 실행됩니다. 폼은 키 입력마다 리렌더되지 않고, 에러 상태가 바뀐 필드만 리렌더됩니다. 입력 5개짜리 폼에서는 거의 무관하지만, 50개짜리 폼에서는 쾌적함과 사용 불가의 차이입니다.
+
 [React Hook Form](https://react-hook-form.com/) (RHF)은 가장 인기 있는 React 폼 라이브러리다. 기본적으로 **비제어 입력(Uncontrolled Inputs)**을 사용한다(상태가 아닌 ref를 통해 값에 접근). 이로 인해 대형 폼에서 제어 입력(Controlled Input) 방식보다 훨씬 빠르다.
 
 ### 설치
@@ -727,6 +651,46 @@ function PasswordForm() {
 ---
 
 ## 6. Zod 스키마 유효성 검사
+
+### 이론: 폼 검증: 명령형 vs 선언적
+
+명령형 검증은 검사 로직을 submit 처리에 끼워 넣습니다.
+
+```jsx
+function handleSubmit(values) {
+  const errors = {};
+  if (!values.email) errors.email = 'Required';
+  else if (!/^[^@]+@[^@]+$/.test(values.email)) errors.email = 'Invalid email';
+  if (values.password.length < 8) errors.password = 'Too short';
+  if (errors.email || errors.password) { setErrors(errors); return; }
+  // submit
+}
+```
+
+작은 폼에서는 작동합니다. 잘 확장되지 않습니다 — 검증 규칙이 절차적 코드 곳곳에 흩어지고, 에러 키가 타입 검사되지 않으며, 폼 간 규칙 재사용에는 수동 추출이 필요합니다.
+
+선언적 검증은 데이터가 만족해야 할 *모양*을 submit 로직과 별도로 정의하고, 검증기를 단일 단계로 실행합니다.
+
+```jsx
+const schema = z.object({
+  email: z.string().email(),
+  password: z.string().min(8),
+});
+
+function handleSubmit(values) {
+  const result = schema.safeParse(values);
+  if (!result.success) { setErrors(result.error.format()); return; }
+  // submit result.data — 타입 지정됨
+}
+```
+
+세 가지가 바뀝니다.
+
+1. **검증 규칙이 한 객체에 산다.** export, 재사용, 합성(`schema.extend({...})`), 단독 테스트가 가능.
+2. **타입 추론이 공짜.** `z.infer<typeof schema>`가 스키마와 일치하는 TypeScript 타입을 만들어 줍니다. submit 핸들러는 이제 알려진 모양의 값을 받습니다 — `as` 캐스트도, 수동 인터페이스도 없음.
+3. **"필드별로 어떤 메시지를"의 매핑을 라이브러리가 처리.** 필드별·검사별 문자열을 작성하지 않습니다. 스키마가 제약을 선언하면 라이브러리가 메시지를 만듭니다.
+
+Zod는 React 생태계에서 가장 흔한 선택입니다. 같은 패턴이 Vue(`vee-validate` + Zod 또는 Yup), Svelte(`sveltekit-superforms`), 그리고 어떤 프레임워크 바깥에서도 작동합니다. 원칙은 라이브러리보다 더 넓습니다. **유효한 데이터가 어떻게 생겼는지를 한 번 기술하고, 필요한 곳마다 "이게 유효한가?"를 물어라.**
 
 [Zod](https://zod.dev/)는 TypeScript 우선 스키마 유효성 검사 라이브러리다. `@hookform/resolvers`를 통해 React Hook Form과 결합하면, 프론트엔드와 백엔드 간에 공유할 수 있는 **선언적이고 재사용 가능한 유효성 검사**를 제공한다.
 
@@ -923,6 +887,25 @@ const registerSchema = z.object({
 ---
 
 ## 7. 통합 예제: 완전한 폼 페이지
+
+### 이론: 스키마에서 타입을 거쳐 submit 핸들러로
+
+(B)와 (C)가 잘 합성되면 사슬은 다음과 같습니다.
+
+```
+Zod 스키마  ──z.infer──>  TypeScript 타입
+    │                            │
+    ▼                            ▼
+Resolver를 React        폼의 handleSubmit이
+Hook Form에 전달        타입 지정된 값을 받음
+    │
+    ▼
+react-hook-form이 submit 시 스키마 실행
+에러는 formState.errors로 흐름
+필드 컴포넌트는 자기 에러만 구독
+```
+
+사용자는 타이핑하고, 폼은 전역으로 리렌더되지 않으며, 스키마가 검증하고, 타입 지정된 데이터가 submit 핸들러에 도달합니다. 각 조각이 자기 일을 합니다. 폼 라이브러리는 상태와 리렌더 최소화. 스키마 라이브러리는 검증과 타입 도출. React는 렌더링. 어느 것도 다른 것의 내부를 알 필요가 없습니다 — 작은 선언된 경계에서 만납니다.
 
 React Router와 React Hook Form, Zod를 결합한 현실적인 예제 — 사용자 설정 페이지다:
 

@@ -16,8 +16,6 @@
 
 ## Table of Contents
 
-Before the catalog of patterns, read [**Theory & Principles**](#theory--principles) — composition over inheritance, the four reuse axes (data, layout, behavior, state), and how render props, HOCs, slots, and hooks each occupy a different point on those axes.
-
 1. [Why Component Patterns Matter](#1-why-component-patterns-matter)
 2. [Compound Components](#2-compound-components)
 3. [Render Props and Scoped Slots](#3-render-props-and-scoped-slots)
@@ -30,11 +28,9 @@ Before the catalog of patterns, read [**Theory & Principles**](#theory--principl
 
 ---
 
-## Theory & Principles
+## 1. Why Component Patterns Matter
 
-The patterns in this lesson — compound components, render props, HOCs, headless components, controlled vs uncontrolled — look like a heterogeneous bag of tricks. They are unified by a single design principle (**composition over inheritance**) and differentiated by *which axis of reuse* they address. This section makes both ideas explicit so the catalog below is not a list to memorize but a decision tree you can navigate.
-
-### A. Composition Over Inheritance: a Principle, Not a Style Choice
+### Theory: Composition Over Inheritance: a Principle, Not a Style Choice
 
 Class-based UI frameworks (Backbone, ExtJS, early Angular) used inheritance to share behavior: a `BaseFormComponent` with subclasses for each form type, each subclass overriding methods. The problems are familiar:
 
@@ -50,7 +46,7 @@ Composition replaces inheritance with **assembly from independent pieces**. Thre
 
 Each delivers reuse without the diamond problem. You can call multiple hooks in one component, accept multiple children, wrap with multiple HOCs. The combination space is multiplicative, not exclusive.
 
-### B. The Four Axes of Reuse
+### Theory: The Four Axes of Reuse
 
 When a piece of UI work needs to be reused, ask: *what is being reused?* There are four common answers:
 
@@ -75,160 +71,6 @@ Controlled/Uncontrolled   ░░░     ░░░       ▓▓▓     ░░░ 
 ```
 
 This is not a strict taxonomy — patterns blend — but it tells you why two patterns might both "do the same thing" and when one is preferred. Hooks and HOCs occupy the same cell; hooks won the modern era because the wrapping cost (extra component instances, prop name collisions) was higher than the function-composition cost.
-
-### C. Render Props and Slots: Inverting Control of Rendering
-
-A normal component renders its own UI: `<Tabs items={...} />` decides how each tab looks. A **render prop** (React) or **scoped slot** (Vue) inverts that — the component computes data and exposes it, while the *parent* decides how to render:
-
-```jsx
-// React: render prop
-<DataLoader url="/api/users">
-  {(state) => state.loading ? <Spinner /> : <UserList users={state.data} />}
-</DataLoader>
-
-// Vue: scoped slot
-<DataLoader url="/api/users">
-  <template #default="{ state }">
-    <Spinner v-if="state.loading" />
-    <UserList v-else :users="state.data" />
-  </template>
-</DataLoader>
-```
-
-The pattern works because **the child returns a function instead of returning JSX**. The parent's caller fills in the function with rendering logic. This is the simplest possible inversion: the component owns *behavior* (data fetching), the consumer owns *presentation*.
-
-Svelte's slot props serve the same role with `<slot {state} />`.
-
-The trade-off: render props create a closure-heavy nested structure (deeply nested `{(s) => {(t) => ...}}` in React). Hooks and composables emerged partly to fix this — they let you achieve the same inversion as **plain function calls** rather than callback nesting.
-
-### D. Headless Components: Behavior Without Markup
-
-A headless component takes the render-props idea further: it provides *no* default markup, only props or hooks for the consumer to drive their own markup. Libraries like Headless UI, Radix UI, and TanStack Table follow this model.
-
-```jsx
-// useCombobox returns refs, handlers, and state
-const { getInputProps, getMenuProps, getItemProps, isOpen, items } = useCombobox({...});
-
-return (
-  <div>
-    <input {...getInputProps()} />
-    <ul {...getMenuProps()}>
-      {isOpen && items.map((item, i) => (
-        <li {...getItemProps({ item, index: i })}>{item.label}</li>
-      ))}
-    </ul>
-  </div>
-);
-```
-
-The library handles keyboard navigation, ARIA attributes, focus management, and combobox state. The consumer brings their own DOM and styling. The *library code is the same across every project*; the *visual implementation is unique to each project*.
-
-This is composition over inheritance applied to the *behavior/layout* split. By owning none of the layout, the library is reusable across every design system.
-
-### E. HOCs vs Hooks: Why the Industry Migrated
-
-A higher-order component takes a component and returns a new component:
-
-```jsx
-const withAuth = (Component) => (props) => {
-  const user = useAuth(); // pretend
-  if (!user) return <Login />;
-  return <Component {...props} user={user} />;
-};
-
-const ProtectedPage = withAuth(MyPage);
-```
-
-This worked but had three sharp edges:
-
-1. **Prop name collisions.** `withAuth(withTheme(withLogger(Page)))` injects `user`, `theme`, `log` — if any of those names collide with a real prop or with each other, the inner component sees the wrong value.
-2. **Wrapper hell in React DevTools.** Each HOC adds a wrapper component to the tree. A real component nested inside five HOCs shows up as six components.
-3. **No way to use multiple of the same kind.** You cannot wrap a component with `withApiData` twice to fetch two URLs — both will write to the same prop name.
-
-Hooks (and composables, and runes) replace HOCs by **letting you call the same logic multiple times in one component, naming the results yourself**:
-
-```jsx
-function ProtectedPage() {
-  const user = useAuth();
-  const theme = useTheme();
-  const log = useLogger();
-  const userData = useApiData('/api/user');
-  const orderData = useApiData('/api/orders');
-  if (!user) return <Login />;
-  // ... use everything by name
-}
-```
-
-No collisions, no extra component instances, multiple instances of the same hook. The migration from HOCs to hooks (React 16.8+) is one of the largest API redesigns in framework history precisely because the win is so clear.
-
-### F. Controlled vs Uncontrolled: Who Owns the State
-
-Lesson 5 covered this for forms; the principle generalizes. *Any* stateful component can be:
-
-- **Uncontrolled**: the component owns its own state, exposes it via callbacks. The parent reads but doesn't write.
-- **Controlled**: the parent owns the state, passes it in, receives change requests via callbacks.
-
-```jsx
-// Uncontrolled <Tabs/>:
-<Tabs defaultValue="overview">
-  <Tab value="overview">...</Tab>
-  <Tab value="settings">...</Tab>
-</Tabs>
-// the Tabs component holds activeTab internally
-
-// Controlled <Tabs/>:
-const [tab, setTab] = useState('overview');
-<Tabs value={tab} onChange={setTab}>...</Tabs>
-// the parent holds activeTab and decides what 'change' means
-```
-
-Three rules:
-
-1. **Pick one per piece of state.** A component that has both `value` and `defaultValue` props is asking to be controlled or uncontrolled but not both. Switching modes mid-life is a bug source.
-2. **Default to uncontrolled.** Less ceremony for the consumer. They opt into controlled when they need synchronization with external state.
-3. **A controlled component is more flexible.** Anything you can do uncontrolled, you can do controlled by adding the state — but not the reverse.
-
-Most well-designed library components support both modes by checking which props are passed.
-
-### G. Container/Presentational: a Modular Decomposition
-
-The container/presentational pattern (popularized by Dan Abramov, later somewhat retracted because hooks made the boundary fuzzier) splits each "feature component" into:
-
-- A **container** that fetches data, holds state, dispatches actions.
-- A **presentational** component that receives the data as props and renders.
-
-```jsx
-// container
-function UserListContainer() {
-  const { data: users, isLoading } = useApiData('/users');
-  if (isLoading) return <Spinner />;
-  return <UserList users={users} />;
-}
-
-// presentational
-function UserList({ users }) {
-  return <ul>{users.map(u => <li key={u.id}>{u.name}</li>)}</ul>;
-}
-```
-
-The presentational component is trivially testable (pass mock users, snapshot the output) and reusable in different contexts (e.g., a Storybook story doesn't need a network). The container is where the framework-specific logic lives.
-
-Hooks blurred the line because a single component could have its data-fetching pulled into a hook (`useUsers()`) without splitting into two components. The pattern is still useful as a *decomposition heuristic*: "is this component doing both?"
-
-### From Theory to the Sections Below
-
-- §1 *Why Component Patterns Matter* — names the problem space (B): which axis of reuse you're addressing.
-- §2 *Compound Components* — multi-component APIs that share state via Context/provide-inject; high-axis pattern combining behavior, state, and implicit layout.
-- §3 *Render Props and Scoped Slots* — (C); inversion of rendering control.
-- §4 *Headless Components* — (D); behavior with zero layout, the modern way to ship a "widget" without locking the consumer's design.
-- §5 *Higher-Order Components vs Hooks/Composables* — (E); the historical migration and why hooks won.
-- §6 *Container and Presentational Components* — (G); a decomposition principle that survives the hooks era.
-- §7 *Controlled vs Uncontrolled Components* — (F); the state-ownership axis.
-- §8 *Pattern Selection Guide* — the decision tree from (B): which axis of reuse → which pattern.
-
----
-
-## 1. Why Component Patterns Matter
 
 Every frontend application starts simple: a few components, straightforward props, and local state. But as applications grow, you encounter recurring design challenges:
 
@@ -451,6 +293,31 @@ Usage in Vue:
 
 ## 3. Render Props and Scoped Slots
 
+### Theory: Render Props and Slots: Inverting Control of Rendering
+
+A normal component renders its own UI: `<Tabs items={...} />` decides how each tab looks. A **render prop** (React) or **scoped slot** (Vue) inverts that — the component computes data and exposes it, while the *parent* decides how to render:
+
+```jsx
+// React: render prop
+<DataLoader url="/api/users">
+  {(state) => state.loading ? <Spinner /> : <UserList users={state.data} />}
+</DataLoader>
+
+// Vue: scoped slot
+<DataLoader url="/api/users">
+  <template #default="{ state }">
+    <Spinner v-if="state.loading" />
+    <UserList v-else :users="state.data" />
+  </template>
+</DataLoader>
+```
+
+The pattern works because **the child returns a function instead of returning JSX**. The parent's caller fills in the function with rendering logic. This is the simplest possible inversion: the component owns *behavior* (data fetching), the consumer owns *presentation*.
+
+Svelte's slot props serve the same role with `<slot {state} />`.
+
+The trade-off: render props create a closure-heavy nested structure (deeply nested `{(s) => {(t) => ...}}` in React). Hooks and composables emerged partly to fix this — they let you achieve the same inversion as **plain function calls** rather than callback nesting.
+
 The render prop pattern lets a parent component control *what* a child renders, while the child controls *when* and *with what data* to render it. This inverts the normal parent-child relationship.
 
 ### React: Render Props
@@ -610,6 +477,30 @@ Svelte uses `<slot>` with prop passing, similar to Vue:
 ---
 
 ## 4. Headless Components
+
+### Theory: Headless Components: Behavior Without Markup
+
+A headless component takes the render-props idea further: it provides *no* default markup, only props or hooks for the consumer to drive their own markup. Libraries like Headless UI, Radix UI, and TanStack Table follow this model.
+
+```jsx
+// useCombobox returns refs, handlers, and state
+const { getInputProps, getMenuProps, getItemProps, isOpen, items } = useCombobox({...});
+
+return (
+  <div>
+    <input {...getInputProps()} />
+    <ul {...getMenuProps()}>
+      {isOpen && items.map((item, i) => (
+        <li {...getItemProps({ item, index: i })}>{item.label}</li>
+      ))}
+    </ul>
+  </div>
+);
+```
+
+The library handles keyboard navigation, ARIA attributes, focus management, and combobox state. The consumer brings their own DOM and styling. The *library code is the same across every project*; the *visual implementation is unique to each project*.
+
+This is composition over inheritance applied to the *behavior/layout* split. By owning none of the layout, the library is reusable across every design system.
 
 A headless component contains **logic without UI**. It exposes state and behavior, and the consumer provides all the rendering. This pattern maximizes reusability because the same logic can be rendered with completely different visual designs.
 
@@ -782,6 +673,42 @@ export function createToggle(initialOpen = false) {
 
 ## 5. Higher-Order Components vs Hooks/Composables
 
+### Theory: HOCs vs Hooks: Why the Industry Migrated
+
+A higher-order component takes a component and returns a new component:
+
+```jsx
+const withAuth = (Component) => (props) => {
+  const user = useAuth(); // pretend
+  if (!user) return <Login />;
+  return <Component {...props} user={user} />;
+};
+
+const ProtectedPage = withAuth(MyPage);
+```
+
+This worked but had three sharp edges:
+
+1. **Prop name collisions.** `withAuth(withTheme(withLogger(Page)))` injects `user`, `theme`, `log` — if any of those names collide with a real prop or with each other, the inner component sees the wrong value.
+2. **Wrapper hell in React DevTools.** Each HOC adds a wrapper component to the tree. A real component nested inside five HOCs shows up as six components.
+3. **No way to use multiple of the same kind.** You cannot wrap a component with `withApiData` twice to fetch two URLs — both will write to the same prop name.
+
+Hooks (and composables, and runes) replace HOCs by **letting you call the same logic multiple times in one component, naming the results yourself**:
+
+```jsx
+function ProtectedPage() {
+  const user = useAuth();
+  const theme = useTheme();
+  const log = useLogger();
+  const userData = useApiData('/api/user');
+  const orderData = useApiData('/api/orders');
+  if (!user) return <Login />;
+  // ... use everything by name
+}
+```
+
+No collisions, no extra component instances, multiple instances of the same hook. The migration from HOCs to hooks (React 16.8+) is one of the largest API redesigns in framework history precisely because the win is so clear.
+
 A **Higher-Order Component (HOC)** is a function that takes a component and returns a new component with enhanced behavior. HOCs were the primary reuse pattern in React class component era.
 
 ### The HOC Pattern (Legacy)
@@ -867,6 +794,31 @@ const { theme } = useTheme();
 ---
 
 ## 6. Container and Presentational Components
+
+### Theory: Container/Presentational: a Modular Decomposition
+
+The container/presentational pattern (popularized by Dan Abramov, later somewhat retracted because hooks made the boundary fuzzier) splits each "feature component" into:
+
+- A **container** that fetches data, holds state, dispatches actions.
+- A **presentational** component that receives the data as props and renders.
+
+```jsx
+// container
+function UserListContainer() {
+  const { data: users, isLoading } = useApiData('/users');
+  if (isLoading) return <Spinner />;
+  return <UserList users={users} />;
+}
+
+// presentational
+function UserList({ users }) {
+  return <ul>{users.map(u => <li key={u.id}>{u.name}</li>)}</ul>;
+}
+```
+
+The presentational component is trivially testable (pass mock users, snapshot the output) and reusable in different contexts (e.g., a Storybook story doesn't need a network). The container is where the framework-specific logic lives.
+
+Hooks blurred the line because a single component could have its data-fetching pulled into a hook (`useUsers()`) without splitting into two components. The pattern is still useful as a *decomposition heuristic*: "is this component doing both?"
 
 This pattern separates **what data to fetch** (container) from **how to display it** (presentational). The container handles side effects, state, and data transformations. The presentational component receives everything through props and renders pure UI.
 
@@ -975,6 +927,35 @@ function UserList() {
 ---
 
 ## 7. Controlled vs Uncontrolled Components
+
+### Theory: Controlled vs Uncontrolled: Who Owns the State
+
+Lesson 5 covered this for forms; the principle generalizes. *Any* stateful component can be:
+
+- **Uncontrolled**: the component owns its own state, exposes it via callbacks. The parent reads but doesn't write.
+- **Controlled**: the parent owns the state, passes it in, receives change requests via callbacks.
+
+```jsx
+// Uncontrolled <Tabs/>:
+<Tabs defaultValue="overview">
+  <Tab value="overview">...</Tab>
+  <Tab value="settings">...</Tab>
+</Tabs>
+// the Tabs component holds activeTab internally
+
+// Controlled <Tabs/>:
+const [tab, setTab] = useState('overview');
+<Tabs value={tab} onChange={setTab}>...</Tabs>
+// the parent holds activeTab and decides what 'change' means
+```
+
+Three rules:
+
+1. **Pick one per piece of state.** A component that has both `value` and `defaultValue` props is asking to be controlled or uncontrolled but not both. Switching modes mid-life is a bug source.
+2. **Default to uncontrolled.** Less ceremony for the consumer. They opt into controlled when they need synchronization with external state.
+3. **A controlled component is more flexible.** Anything you can do uncontrolled, you can do controlled by adding the state — but not the reverse.
+
+Most well-designed library components support both modes by checking which props are passed.
 
 A **controlled** component has its value managed by the parent through props. An **uncontrolled** component manages its own value internally, and the parent reads it on demand (typically via a ref).
 

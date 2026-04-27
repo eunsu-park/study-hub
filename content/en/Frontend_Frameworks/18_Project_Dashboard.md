@@ -16,8 +16,6 @@
 
 ## Table of Contents
 
-Before the build steps, read [**Theory & Principles**](#theory--principles) — the architectural decisions behind this dashboard, traced back to the trade-offs from earlier lessons (which state library, which router, which form lib, which test layer, which deploy target).
-
 1. [Project Overview](#1-project-overview)
 2. [Project Setup](#2-project-setup)
 3. [Architecture and Folder Structure](#3-architecture-and-folder-structure)
@@ -31,119 +29,6 @@ Before the build steps, read [**Theory & Principles**](#theory--principles) — 
 11. [Testing](#11-testing)
 12. [Deployment](#12-deployment)
 13. [Extensions](#13-extensions)
-
----
-
-## Theory & Principles
-
-This is a project lesson, not a concept lesson. The "theory" here is the **set of decisions** that shape the dashboard, each of which was discussed abstractly in earlier lessons. A real application is a stack of trade-offs, and the value of going through them deliberately — instead of copying a starter — is that you can defend each choice and substitute alternatives when your context differs.
-
-This section walks through the architectural decisions in order, names the trade-off each resolves, and points to the lesson that covered the alternatives.
-
-### A. Framework: React + TypeScript
-
-**Why this**: largest ecosystem of dashboard-shaped libraries (TanStack Table, TanStack Query, Recharts, Headless UI), broadest hiring market, mature TypeScript support.
-
-**Why not Vue/Svelte**: both are perfectly capable; the choice here is ecosystem-driven, not technical. A Vue version would substitute Pinia for Zustand and Naive UI / Element Plus for Radix; a Svelte version would substitute SvelteKit's stores and skeleton.dev components. The architectural shape is identical.
-
-**Reference**: lessons 2-3 (React fundamentals), 11 (TypeScript integration).
-
-### B. State: Zustand for Client + TanStack Query for Server
-
-**Why split**: server state and client state have fundamentally different needs (lesson 13.F). Trying to handle "list of users from API" with the same tool that handles "is the sidebar collapsed?" leads to either reinventing caching or dragging in unnecessary complexity.
-
-**Why Zustand for client**: minimal API (no provider, no Context), good DevTools, scales from one store to many (lesson 4.D, lesson 13.D). For an admin dashboard with maybe 5-10 stores total (theme, sidebar, user, notifications, modals), Zustand is the right granularity.
-
-**Why TanStack Query for server**: caching, background refetch, optimistic updates, dedup — the things lesson 4.F and lesson 13.F say not to write yourself. TanStack Query gives you all of them with a single `useQuery` hook.
-
-**Why not Redux Toolkit**: more ceremony than this app needs. Justifiable when audit logs and time-travel are required (large enterprise apps); overkill here.
-
-**Reference**: lessons 4 (state management), 13 (state library comparison).
-
-### C. Routing: React Router v7 with Data Routers
-
-**Why**: protected routes, nested layouts (sidebar + topbar + content area), and per-route data loading are exactly what data routers were designed for. Loaders mean each route's data fetching is co-located with the route definition rather than scattered across `useEffect`.
-
-**Why not Next.js App Router**: a dashboard is a single-page app behind a login wall — SEO doesn't matter, the user is logged in, server components don't help. The CSR-first SPA model is a cleaner fit. Next.js is the right call for content sites and marketing pages, not for in-app dashboards.
-
-**Reference**: lessons 5 (routing and forms), 14 (when to use SSR vs CSR).
-
-### D. Forms: React Hook Form + Zod
-
-**Why**: lessons 5.B and 5.C cover the per-keystroke re-render problem and the schema-validation pattern. For a dashboard with many forms (user edit, settings, role assignment, filters), the cumulative re-render cost matters, and the schema-as-source-of-truth pattern keeps validation messages consistent.
-
-**Why this combination**: Zod's TypeScript inference plus RHF's resolver glue mean one source of truth for both runtime validation and compile-time types. Zero duplication.
-
-**Reference**: lesson 5 (routing and forms).
-
-### E. Component Library: Headless (Radix or Headless UI) + Tailwind
-
-**Why headless**: a dashboard's design system is opinionated and project-specific. Pre-styled libraries (MUI, Chakra) lock you into their visual decisions — fine for prototypes, painful when the design lead wants their own look. Headless components give you the keyboard navigation, ARIA, focus management, and state machines for free, while leaving the markup to you (lesson 12.D).
-
-**Why Tailwind**: utility CSS keeps styling co-located with markup, no name-collision risk, and a small bundle (Tailwind purges unused classes at build time). For a small team building a single app, Tailwind's productivity wins outweigh the readability cost some find in long class strings.
-
-**Reference**: lesson 12 (component patterns), specifically headless components.
-
-### F. Tables and Charts
-
-**TanStack Table** (formerly React Table): headless, supports sorting, filtering, pagination, virtualization. For a dashboard, the table is often the most-rendered component, and TanStack Table's focused API + virtualization support handles 10,000+ row tables without ceremony.
-
-**Recharts**: declarative React-style charts, good defaults, decent TypeScript types. Alternatives are D3 (more powerful, much more code) and Chart.js (canvas-based, less React-idiomatic). Recharts is the right balance for the most common dashboard needs (line, bar, pie).
-
-**Reference**: lesson 15 (performance — virtualization).
-
-### G. Authentication
-
-**Why JWT in HttpOnly cookies**: tokens in localStorage are vulnerable to XSS (any script on the page can read them). HttpOnly cookies are not exposed to JavaScript and are sent automatically by the browser, which means CSRF protection is the remaining concern (handled by SameSite=strict + CSRF tokens). The combination is the modern best practice.
-
-**Why role-based access control (RBAC)**: scales better than per-user permissions for organizations with structured roles (admin, editor, viewer). The lesson's implementation reads roles from the JWT and gates routes/components based on them.
-
-### H. Dark Mode
-
-**Why CSS variables + class-based switching**: Tailwind's `dark:` prefix toggles styles based on a `dark` class on `<html>`. The toggle stores user preference in `localStorage` and reads it on first render to avoid a flash of unstyled content (FOUC). System preference (`prefers-color-scheme`) is read as the default.
-
-This is a small detail in a big project but it touches: state management (where does the theme live?), persistence (localStorage), SSR considerations (none here, since this is CSR), and CSS architecture (Tailwind dark mode).
-
-### I. Testing Layout
-
-**Component tests with Testing Library** (lesson 16) for: data table sort/filter, form validation, dark mode toggle, modal open/close. These are unit-testable in jsdom and run in seconds.
-
-**E2E tests with Playwright** for: login flow, full CRUD round-trip, role-based access (admin sees admin pages, viewer doesn't). These are slow but cover the cross-component flows that integration tests miss.
-
-**No snapshot tests** for components: too brittle for a dashboard whose layout changes frequently (lesson 16.E).
-
-### J. Deployment
-
-**Why Vercel**: the project is React + SPA + serverless API routes (if needed). Vercel's preview deployments per PR (lesson 17.D) are invaluable for design review and stakeholder sign-off. The build is just `vite build`; the deploy is `git push`.
-
-**Why GitHub Actions for CI**: same vendor as the code repo, free tier covers a small project, the YAML config lives in the repo (`.github/workflows/`). Lint → test → build, with deploy gated on all three (lesson 17.E).
-
-### K. What This Stack Does Not Include
-
-Equally important for design literacy: things deliberately omitted.
-
-- **No Server-Side Rendering**: this is an authenticated app; the SEO win of SSR is irrelevant.
-- **No micro-frontends**: a single team building a single app — composition complexity unjustified.
-- **No GraphQL**: REST is fine for the scale; GraphQL's complexity wins only at larger scope.
-- **No state management library on top of Zustand**: the app is small enough that a few stores cover everything.
-
-The point of these omissions is to demonstrate that the stack is sized to the problem. Adding pieces "because they're modern" without a corresponding need is the most common architectural mistake.
-
-### From Theory to the Build Steps Below
-
-- §1 *Project Overview* — feature list and the system's user stories.
-- §2 *Project Setup* — Vite + React + TypeScript scaffold (lesson 17's build process).
-- §3 *Architecture and Folder Structure* — the layout that supports (B), (C), (E).
-- §4 *Authentication* — (G) implemented end to end.
-- §5 *Layout and Navigation* — sidebar, topbar, dark mode toggle.
-- §6 *Data Table Component* — (F)'s TanStack Table integration.
-- §7 *Charts with Recharts* — (F)'s charting half.
-- §8 *CRUD Operations* — forms (D) + mutations via (B)'s TanStack Query.
-- §9 *Dark Mode* — (H).
-- §10 *API Layer with TanStack Query* — (B)'s server-state half, including custom hooks per resource.
-- §11 *Testing* — (I)'s component + E2E tests.
-- §12 *Deployment* — (J)'s Vercel + GitHub Actions pipeline.
-- §13 *Extensions* — directions to take the project further; each extension corresponds to relaxing one of the omissions in (K).
 
 ---
 
@@ -181,6 +66,14 @@ This capstone project ties together everything from the course: component archit
 ---
 
 ## 2. Project Setup
+
+### Theory: Framework: React + TypeScript
+
+**Why this**: largest ecosystem of dashboard-shaped libraries (TanStack Table, TanStack Query, Recharts, Headless UI), broadest hiring market, mature TypeScript support.
+
+**Why not Vue/Svelte**: both are perfectly capable; the choice here is ecosystem-driven, not technical. A Vue version would substitute Pinia for Zustand and Naive UI / Element Plus for Radix; a Svelte version would substitute SvelteKit's stores and skeleton.dev components. The architectural shape is identical.
+
+**Reference**: lessons 2-3 (React fundamentals), 11 (TypeScript integration).
 
 ```bash
 # Create the project with Vite
@@ -250,6 +143,14 @@ export default defineConfig({
 
 ## 3. Architecture and Folder Structure
 
+### Theory: Routing: React Router v7 with Data Routers
+
+**Why**: protected routes, nested layouts (sidebar + topbar + content area), and per-route data loading are exactly what data routers were designed for. Loaders mean each route's data fetching is co-located with the route definition rather than scattered across `useEffect`.
+
+**Why not Next.js App Router**: a dashboard is a single-page app behind a login wall — SEO doesn't matter, the user is logged in, server components don't help. The CSR-first SPA model is a cleaner fit. Next.js is the right call for content sites and marketing pages, not for in-app dashboards.
+
+**Reference**: lessons 5 (routing and forms), 14 (when to use SSR vs CSR).
+
 ```
 src/
 ├── components/           # Reusable UI components
@@ -293,6 +194,12 @@ The project follows a **feature-based** organization. Each feature (auth, users,
 ---
 
 ## 4. Authentication
+
+### Theory: Authentication
+
+**Why JWT in HttpOnly cookies**: tokens in localStorage are vulnerable to XSS (any script on the page can read them). HttpOnly cookies are not exposed to JavaScript and are sent automatically by the browser, which means CSRF protection is the remaining concern (handled by SameSite=strict + CSRF tokens). The combination is the modern best practice.
+
+**Why role-based access control (RBAC)**: scales better than per-user permissions for organizations with structured roles (admin, editor, viewer). The lesson's implementation reads roles from the JWT and gates routes/components based on them.
 
 ### Auth Store
 
@@ -535,6 +442,14 @@ export default function App() {
 
 ## 5. Layout and Navigation
 
+### Theory: Component Library: Headless (Radix or Headless UI) + Tailwind
+
+**Why headless**: a dashboard's design system is opinionated and project-specific. Pre-styled libraries (MUI, Chakra) lock you into their visual decisions — fine for prototypes, painful when the design lead wants their own look. Headless components give you the keyboard navigation, ARIA, focus management, and state machines for free, while leaving the markup to you (lesson 12.D).
+
+**Why Tailwind**: utility CSS keeps styling co-located with markup, no name-collision risk, and a small bundle (Tailwind purges unused classes at build time). For a small team building a single app, Tailwind's productivity wins outweigh the readability cost some find in long class strings.
+
+**Reference**: lesson 12 (component patterns), specifically headless components.
+
 ### Sidebar Component
 
 ```tsx
@@ -663,6 +578,14 @@ export function Header() {
 ---
 
 ## 6. Data Table Component
+
+### Theory: Tables and Charts
+
+**TanStack Table** (formerly React Table): headless, supports sorting, filtering, pagination, virtualization. For a dashboard, the table is often the most-rendered component, and TanStack Table's focused API + virtualization support handles 10,000+ row tables without ceremony.
+
+**Recharts**: declarative React-style charts, good defaults, decent TypeScript types. Alternatives are D3 (more powerful, much more code) and Chart.js (canvas-based, less React-idiomatic). Recharts is the right balance for the most common dashboard needs (line, bar, pie).
+
+**Reference**: lesson 15 (performance — virtualization).
 
 A reusable data table is the backbone of any admin dashboard. This component supports sorting, filtering, and pagination through a clean props interface.
 
@@ -1028,6 +951,14 @@ export function StatCard({ title, value, change }: StatCardProps) {
 
 ## 8. CRUD Operations
 
+### Theory: Forms: React Hook Form + Zod
+
+**Why**: lessons 5.B and 5.C cover the per-keystroke re-render problem and the schema-validation pattern. For a dashboard with many forms (user edit, settings, role assignment, filters), the cumulative re-render cost matters, and the schema-as-source-of-truth pattern keeps validation messages consistent.
+
+**Why this combination**: Zod's TypeScript inference plus RHF's resolver glue mean one source of truth for both runtime validation and compile-time types. Zero duplication.
+
+**Reference**: lesson 5 (routing and forms).
+
 ### User Form with Validation
 
 ```tsx
@@ -1160,6 +1091,12 @@ export function UserFormPage() {
 
 ## 9. Dark Mode
 
+### Theory: Dark Mode
+
+**Why CSS variables + class-based switching**: Tailwind's `dark:` prefix toggles styles based on a `dark` class on `<html>`. The toggle stores user preference in `localStorage` and reads it on first render to avoid a flash of unstyled content (FOUC). System preference (`prefers-color-scheme`) is read as the default.
+
+This is a small detail in a big project but it touches: state management (where does the theme live?), persistence (localStorage), SSR considerations (none here, since this is CSR), and CSS architecture (Tailwind dark mode).
+
 ### Theme Store
 
 ```ts
@@ -1245,6 +1182,18 @@ Tailwind's `dark:` variant works with the `dark` class on the root element. This
 ---
 
 ## 10. API Layer with TanStack Query
+
+### Theory: State: Zustand for Client + TanStack Query for Server
+
+**Why split**: server state and client state have fundamentally different needs (lesson 13.F). Trying to handle "list of users from API" with the same tool that handles "is the sidebar collapsed?" leads to either reinventing caching or dragging in unnecessary complexity.
+
+**Why Zustand for client**: minimal API (no provider, no Context), good DevTools, scales from one store to many (lesson 4.D, lesson 13.D). For an admin dashboard with maybe 5-10 stores total (theme, sidebar, user, notifications, modals), Zustand is the right granularity.
+
+**Why TanStack Query for server**: caching, background refetch, optimistic updates, dedup — the things lesson 4.F and lesson 13.F say not to write yourself. TanStack Query gives you all of them with a single `useQuery` hook.
+
+**Why not Redux Toolkit**: more ceremony than this app needs. Justifiable when audit logs and time-travel are required (large enterprise apps); overkill here.
+
+**Reference**: lessons 4 (state management), 13 (state library comparison).
 
 ### Base API Client
 
@@ -1402,6 +1351,14 @@ export function useDeleteUser() {
 
 ## 11. Testing
 
+### Theory: Testing Layout
+
+**Component tests with Testing Library** (lesson 16) for: data table sort/filter, form validation, dark mode toggle, modal open/close. These are unit-testable in jsdom and run in seconds.
+
+**E2E tests with Playwright** for: login flow, full CRUD round-trip, role-based access (admin sees admin pages, viewer doesn't). These are slow but cover the cross-component flows that integration tests miss.
+
+**No snapshot tests** for components: too brittle for a dashboard whose layout changes frequently (lesson 16.E).
+
 ### Testing the Login Flow
 
 ```tsx
@@ -1557,6 +1514,12 @@ describe("DataTable", () => {
 
 ## 12. Deployment
 
+### Theory: Deployment
+
+**Why Vercel**: the project is React + SPA + serverless API routes (if needed). Vercel's preview deployments per PR (lesson 17.D) are invaluable for design review and stakeholder sign-off. The build is just `vite build`; the deploy is `git push`.
+
+**Why GitHub Actions for CI**: same vendor as the code repo, free tier covers a small project, the YAML config lives in the repo (`.github/workflows/`). Lint → test → build, with deploy gated on all three (lesson 17.E).
+
 ### GitHub Actions CI/CD
 
 ```yaml
@@ -1621,6 +1584,17 @@ jobs:
 ---
 
 ## 13. Extensions
+
+### Theory: What This Stack Does Not Include
+
+Equally important for design literacy: things deliberately omitted.
+
+- **No Server-Side Rendering**: this is an authenticated app; the SEO win of SSR is irrelevant.
+- **No micro-frontends**: a single team building a single app — composition complexity unjustified.
+- **No GraphQL**: REST is fine for the scale; GraphQL's complexity wins only at larger scope.
+- **No state management library on top of Zustand**: the app is small enough that a few stores cover everything.
+
+The point of these omissions is to demonstrate that the stack is sized to the problem. Adding pieces "because they're modern" without a corresponding need is the most common architectural mistake.
 
 Once the core dashboard is working, consider adding these features to deepen your learning:
 

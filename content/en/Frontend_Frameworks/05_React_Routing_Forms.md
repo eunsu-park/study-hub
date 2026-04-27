@@ -16,8 +16,6 @@
 
 ## Table of Contents
 
-Before the API tour, read [**Theory & Principles**](#theory--principles) — how the History API enables client-side routing without a page reload, the controlled-vs-uncontrolled split for form inputs, and why declarative schema validation beats imperative checks.
-
 1. [React Router v7 Fundamentals](#1-react-router-v7-fundamentals)
 2. [Dynamic and Nested Routes](#2-dynamic-and-nested-routes)
 3. [Data Loading with Loaders](#3-data-loading-with-loaders)
@@ -29,11 +27,9 @@ Before the API tour, read [**Theory & Principles**](#theory--principles) — how
 
 ---
 
-## Theory & Principles
+## 1. React Router v7 Fundamentals
 
-Routing and forms look like two unrelated topics that happen to share a lesson. They actually share a deeper structure: both are about **synchronizing application state with a slow, browser-owned source of truth** — the URL bar in one case, the input element's internal value in the other. This section makes that synchronization explicit and shows how the same tradeoffs (controlled vs uncontrolled, declarative vs imperative) repeat in both worlds.
-
-### A. Client-Side Routing: the History API and Why a Page Doesn't Reload
+### Theory: Client-Side Routing: the History API and Why a Page Doesn't Reload
 
 The traditional web works by full-page navigation. Click a link → the browser sends a new request → the server returns new HTML → the previous JavaScript heap and DOM are thrown away and a new one is built. This is reliable but slow and visually disruptive.
 
@@ -69,124 +65,6 @@ Two related concepts:
 
 - **History mode vs hash mode.** History mode uses real paths (`/users/42`); the server must be configured to serve the SPA's `index.html` for any unknown path. Hash mode uses `#/users/42`; the part after `#` is invisible to the server, so no server config is needed. Hash mode is uglier but works on any static host.
 - **Code-split routes.** Each route can be lazy-loaded (`lazy: () => import('./ProductPage')`), so the initial bundle contains only the routes the user needs to see immediately. Routes are a natural code-splitting boundary because the user can only see one at a time.
-
-### B. Controlled vs Uncontrolled Form Inputs
-
-An HTML `<input>` already has internal state (the user's typed value, kept in the DOM node). React adds another candidate source of truth (a `useState` value). You must pick one as authoritative; mixing them silently or trying to use both causes bugs.
-
-**Uncontrolled**: the DOM is the source of truth. React does not track the value; you read it on submit via a ref or `event.target.value`.
-
-```jsx
-function Form() {
-  const inputRef = useRef<HTMLInputElement>(null);
-  return (
-    <form onSubmit={(e) => {
-      e.preventDefault();
-      console.log(inputRef.current!.value); // read on submit
-    }}>
-      <input ref={inputRef} defaultValue="initial" />
-      <button>Submit</button>
-    </form>
-  );
-}
-```
-
-- No re-render per keystroke.
-- React cannot validate, format, or transform the value as it is typed.
-- `defaultValue` (not `value`) sets the initial; the DOM owns it after that.
-
-**Controlled**: React state is the source of truth. The input's `value` is bound to state; an `onChange` handler updates state on every keystroke.
-
-```jsx
-function Form() {
-  const [name, setName] = useState('');
-  return (
-    <form onSubmit={(e) => { e.preventDefault(); console.log(name); }}>
-      <input value={name} onChange={(e) => setName(e.target.value)} />
-      <button>Submit</button>
-    </form>
-  );
-}
-```
-
-- Every keystroke triggers a re-render of the form (and its descendants).
-- React can format on the fly (uppercase, mask phone numbers, strip non-digits).
-- Validation can happen as the user types, with messages that update live.
-- `value` (not `defaultValue`) — and once `value` is set, the input is locked to that value; failing to provide an `onChange` produces a read-only field and a warning.
-
-The performance trade-off is real: a long form with many controlled inputs re-renders the entire form on every keystroke. **React Hook Form** is the popular escape hatch — it uses uncontrolled inputs internally (refs) but exposes a controlled-feeling API. Validation is run on submit (or on blur, or on change, configurably). The form does not re-render on every keystroke; only the field whose error state changed re-renders. For 5-input forms this hardly matters; for 50-input forms it is the difference between snappy and unusable.
-
-### C. Form Validation: Imperative vs Declarative
-
-Imperative validation interleaves checks with submit handling:
-
-```jsx
-function handleSubmit(values) {
-  const errors = {};
-  if (!values.email) errors.email = 'Required';
-  else if (!/^[^@]+@[^@]+$/.test(values.email)) errors.email = 'Invalid email';
-  if (values.password.length < 8) errors.password = 'Too short';
-  if (errors.email || errors.password) { setErrors(errors); return; }
-  // submit
-}
-```
-
-This works for tiny forms. It scales poorly because the validation rules are scattered through procedural code, the error keys are not type-checked, and reusing rules across forms requires manual extraction.
-
-Declarative validation defines the *shape* the data must satisfy, separately from the submit logic, and runs the validator as a single step:
-
-```jsx
-const schema = z.object({
-  email: z.string().email(),
-  password: z.string().min(8),
-});
-
-function handleSubmit(values) {
-  const result = schema.safeParse(values);
-  if (!result.success) { setErrors(result.error.format()); return; }
-  // submit result.data — typed
-}
-```
-
-Three things change:
-
-1. **Validation rules live in one object.** They can be exported, reused, composed (`schema.extend({...})`), and tested in isolation.
-2. **Type inference comes for free.** `z.infer<typeof schema>` produces a TypeScript type matching the schema. The submit handler now receives a value with a known shape — no `as` casts, no manual interfaces.
-3. **The library handles the "for each field, what's the message" mapping.** You do not write a string per field per check; the schema declares the constraint and the library produces the message.
-
-Zod is the most common choice in the React ecosystem. The same pattern works in Vue (`vee-validate` + Zod or Yup), in Svelte (`sveltekit-superforms`), and outside any framework. The principle is wider than the library: **describe what valid data looks like once, then ask "is this valid?" wherever you need to.**
-
-### D. From Schema to Type to Submit Handler
-
-When (B) and (C) compose well, the chain is:
-
-```
-Zod schema  ──z.infer──>  TypeScript type
-    │                            │
-    ▼                            ▼
-Resolver passed       Form's handleSubmit
-to React Hook Form    receives typed values
-    │
-    ▼
-react-hook-form runs the schema on submit
-errors flow into formState.errors
-field components subscribe to their own error
-```
-
-The user types, the form does not re-render globally, the schema validates, the typed data reaches the submit handler. Each piece is doing its one job: the form library handles state and re-render minimization; the schema library handles validation and type derivation; React handles rendering. None of them needs to know about the others' internals — they meet at a small, declared boundary.
-
-### From Theory to the Sections Below
-
-- §1 *React Router v7 Fundamentals* and §2 *Dynamic and Nested Routes* are (A) made into JSX components and route objects.
-- §3 *Data Loading with Loaders* is (A)'s "loader as part of route definition" idea — fetching is part of route matching, not part of rendering.
-- §4 *Navigation* exposes `pushState`/`popstate` through `useNavigate` and `<Link>` — the imperative and declarative ends of the same primitive.
-- §5 *React Hook Form* is (B): an uncontrolled-internally, controlled-feeling form API that avoids the per-keystroke re-render cost.
-- §6 *Zod Schema Validation* is (C): the schema becomes the validator, the type, and the documentation.
-- §7 *Putting It Together* is (D) — the integrated chain from schema to submit, demonstrating that small composable pieces produce a stable form workflow with very little glue code.
-
----
-
-## 1. React Router v7 Fundamentals
 
 React Router v7 (2024~) is the standard routing library for React SPAs. It uses a **data router** architecture where routes are defined as objects with loaders and actions, replacing the older JSX-based `<Routes>` / `<Route>` approach.
 
@@ -578,6 +456,52 @@ function ProductListPage() {
 
 ## 5. React Hook Form
 
+### Theory: Controlled vs Uncontrolled Form Inputs
+
+An HTML `<input>` already has internal state (the user's typed value, kept in the DOM node). React adds another candidate source of truth (a `useState` value). You must pick one as authoritative; mixing them silently or trying to use both causes bugs.
+
+**Uncontrolled**: the DOM is the source of truth. React does not track the value; you read it on submit via a ref or `event.target.value`.
+
+```jsx
+function Form() {
+  const inputRef = useRef<HTMLInputElement>(null);
+  return (
+    <form onSubmit={(e) => {
+      e.preventDefault();
+      console.log(inputRef.current!.value); // read on submit
+    }}>
+      <input ref={inputRef} defaultValue="initial" />
+      <button>Submit</button>
+    </form>
+  );
+}
+```
+
+- No re-render per keystroke.
+- React cannot validate, format, or transform the value as it is typed.
+- `defaultValue` (not `value`) sets the initial; the DOM owns it after that.
+
+**Controlled**: React state is the source of truth. The input's `value` is bound to state; an `onChange` handler updates state on every keystroke.
+
+```jsx
+function Form() {
+  const [name, setName] = useState('');
+  return (
+    <form onSubmit={(e) => { e.preventDefault(); console.log(name); }}>
+      <input value={name} onChange={(e) => setName(e.target.value)} />
+      <button>Submit</button>
+    </form>
+  );
+}
+```
+
+- Every keystroke triggers a re-render of the form (and its descendants).
+- React can format on the fly (uppercase, mask phone numbers, strip non-digits).
+- Validation can happen as the user types, with messages that update live.
+- `value` (not `defaultValue`) — and once `value` is set, the input is locked to that value; failing to provide an `onChange` produces a read-only field and a warning.
+
+The performance trade-off is real: a long form with many controlled inputs re-renders the entire form on every keystroke. **React Hook Form** is the popular escape hatch — it uses uncontrolled inputs internally (refs) but exposes a controlled-feeling API. Validation is run on submit (or on blur, or on change, configurably). The form does not re-render on every keystroke; only the field whose error state changed re-renders. For 5-input forms this hardly matters; for 50-input forms it is the difference between snappy and unusable.
+
 [React Hook Form](https://react-hook-form.com/) (RHF) is the most popular React form library. It uses **uncontrolled inputs** by default (accessing values via refs rather than state), which makes it significantly faster than controlled-input approaches for large forms.
 
 ### Installation
@@ -727,6 +651,46 @@ function PasswordForm() {
 ---
 
 ## 6. Zod Schema Validation
+
+### Theory: Form Validation: Imperative vs Declarative
+
+Imperative validation interleaves checks with submit handling:
+
+```jsx
+function handleSubmit(values) {
+  const errors = {};
+  if (!values.email) errors.email = 'Required';
+  else if (!/^[^@]+@[^@]+$/.test(values.email)) errors.email = 'Invalid email';
+  if (values.password.length < 8) errors.password = 'Too short';
+  if (errors.email || errors.password) { setErrors(errors); return; }
+  // submit
+}
+```
+
+This works for tiny forms. It scales poorly because the validation rules are scattered through procedural code, the error keys are not type-checked, and reusing rules across forms requires manual extraction.
+
+Declarative validation defines the *shape* the data must satisfy, separately from the submit logic, and runs the validator as a single step:
+
+```jsx
+const schema = z.object({
+  email: z.string().email(),
+  password: z.string().min(8),
+});
+
+function handleSubmit(values) {
+  const result = schema.safeParse(values);
+  if (!result.success) { setErrors(result.error.format()); return; }
+  // submit result.data — typed
+}
+```
+
+Three things change:
+
+1. **Validation rules live in one object.** They can be exported, reused, composed (`schema.extend({...})`), and tested in isolation.
+2. **Type inference comes for free.** `z.infer<typeof schema>` produces a TypeScript type matching the schema. The submit handler now receives a value with a known shape — no `as` casts, no manual interfaces.
+3. **The library handles the "for each field, what's the message" mapping.** You do not write a string per field per check; the schema declares the constraint and the library produces the message.
+
+Zod is the most common choice in the React ecosystem. The same pattern works in Vue (`vee-validate` + Zod or Yup), in Svelte (`sveltekit-superforms`), and outside any framework. The principle is wider than the library: **describe what valid data looks like once, then ask "is this valid?" wherever you need to.**
 
 [Zod](https://zod.dev/) is a TypeScript-first schema validation library. Combined with React Hook Form via `@hookform/resolvers`, it provides **declarative, reusable validation** that can be shared between frontend and backend.
 
@@ -923,6 +887,25 @@ const registerSchema = z.object({
 ---
 
 ## 7. Putting It Together: A Complete Form Page
+
+### Theory: From Schema to Type to Submit Handler
+
+When (B) and (C) compose well, the chain is:
+
+```
+Zod schema  ──z.infer──>  TypeScript type
+    │                            │
+    ▼                            ▼
+Resolver passed       Form's handleSubmit
+to React Hook Form    receives typed values
+    │
+    ▼
+react-hook-form runs the schema on submit
+errors flow into formState.errors
+field components subscribe to their own error
+```
+
+The user types, the form does not re-render globally, the schema validates, the typed data reaches the submit handler. Each piece is doing its one job: the form library handles state and re-render minimization; the schema library handles validation and type derivation; React handles rendering. None of them needs to know about the others' internals — they meet at a small, declared boundary.
 
 Here is a realistic example combining React Router and React Hook Form with Zod — a user settings page:
 
