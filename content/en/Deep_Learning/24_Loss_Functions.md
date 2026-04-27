@@ -14,85 +14,6 @@
 
 **Difficulty**: ⭐⭐⭐
 
----
-
-## Theory & Principles
-
-A loss function is the *only* place where the network is told what "good" means. Every architectural choice optimizes for whatever the loss is, so picking the right loss is at least as important as picking the right architecture. This section gives the math behind why each loss family fits its task class — and why mismatches (e.g., MSE for classification, cross-entropy for regression) are silently catastrophic.
-
-This section covers:
-
-- **A.** Cross-entropy and the maximum-likelihood foundation
-- **B.** MSE vs MAE vs Huber: outlier sensitivity
-- **C.** Focal loss for class imbalance
-- **D.** Contrastive losses (InfoNCE) for representation learning
-
-### A. Cross-Entropy as Maximum Likelihood
-
-For a classification problem with categorical target `y` and predicted distribution `p_\theta`, the cross-entropy loss is:
-
-```
-L_CE = -sum_i y_i log p_\theta(i) = -log p_\theta(y_true)         (one-hot y)
-```
-
-This is exactly the **negative log-likelihood** under the model. Minimizing it is maximum-likelihood estimation: find parameters that make the observed labels most probable. Two information-theoretic readings:
-
-- **Coding cost**: `L_CE` is the average number of nats (bits if you use `log_2`) needed to encode the true labels using the predicted distribution.
-- **KL plus entropy**: `H(y, p) = H(y) + KL(y || p)`. Since `H(y)` is fixed by the data, minimizing `H(y, p)` is equivalent to minimizing `KL(y || p)` — the divergence between the true and predicted distributions.
-
-This is why cross-entropy is the canonical classification loss: it is theoretically grounded, has clean gradients (`p - y_onehot`), and corresponds exactly to a probabilistic objective.
-
-### B. Regression Losses: MSE, MAE, Huber
-
-For continuous targets, three common choices and their NLL interpretations:
-
-- **MSE = mean squared error**: assumes Gaussian noise. Penalizes errors quadratically — very sensitive to outliers (one prediction off by 10 contributes the same as 100 predictions off by 1).
-- **MAE = mean absolute error**: assumes Laplace noise. Penalizes errors linearly — robust to outliers but the gradient at zero is undefined; in practice it leads to slightly slower convergence.
-- **Huber loss**: quadratic near zero, linear far from zero. Combines MSE's smooth gradient with MAE's outlier robustness, controlled by a threshold `\delta`:
-
-```
-Huber(x) = 0.5 * x^2          if |x| <= \delta
-         = \delta * (|x| - 0.5 * \delta)   else
-```
-
-The choice depends on what your data looks like. Clean labels with Gaussian noise: MSE. Heavy-tailed errors or outliers: MAE or Huber. For object detection bounding-box regression, smooth-L1 (essentially Huber with `\delta = 1`) is standard.
-
-### C. Focal Loss for Class Imbalance
-
-In tasks like dense object detection, 99% of examples are easy (background) and 1% are hard (foreground). Cross-entropy trains slowly on the hard examples because the easy ones swamp the gradient. **Focal loss** (Lin et al. 2017) reweights:
-
-```
-L_focal = -(1 - p_t)^\gamma * log(p_t)
-```
-
-where `p_t = p` if `y = 1`, else `1 - p`. The factor `(1 - p_t)^\gamma` suppresses well-classified examples (`p_t \to 1` makes the factor `\to 0`). With `\gamma = 2`, an example correctly classified at 90% confidence contributes only `(0.1)^2 = 1%` of its standard cross-entropy gradient; an example wrongly classified at 10% contributes `(0.9)^2 = 81%`.
-
-This shifts the network's attention to the rare hard examples without explicit resampling — essential for the effectiveness of single-stage detectors like RetinaNet and YOLO.
-
-### D. Contrastive Losses: InfoNCE
-
-For metric / representation learning, you want similar items to have nearby embeddings and dissimilar ones to be far apart. **InfoNCE** (van den Oord 2018) frames this as a classification problem with one positive and `N-1` negatives:
-
-```
-L_InfoNCE = -log( exp(sim(q, k+) / \tau) / sum_i exp(sim(q, k_i) / \tau) )
-```
-
-This is exactly cross-entropy where the "classes" are which key is the positive. The temperature `\tau` controls how peaked the softmax is — small `\tau` heavily penalizes near-positive negatives, large `\tau` is more permissive. Used in CLIP, SimCLR, MoCo — essentially every modern self-supervised vision model.
-
-The connection to mutual information: minimizing InfoNCE lower-bounds `I(q, k+)` — the model is trained to maximize the dependency between query and positive representations. This is the theoretical justification for why contrastive learning produces useful representations.
-
-### From Theory to the Code Below
-
-| Theory concept | Code construct in this lesson |
-|----------------|-------------------------------|
-| Cross-entropy = NLL | `nn.CrossEntropyLoss()`, `F.cross_entropy(logits, y)` |
-| MSE / MAE / Huber | `nn.MSELoss`, `nn.L1Loss`, `nn.SmoothL1Loss` |
-| Focal loss | Manual `(1 - p_t)**gamma * F.binary_cross_entropy(...)` |
-| InfoNCE | `F.cross_entropy(sim_matrix / tau, labels)` |
-
----
-
-
 ## 1. Introduction to Loss Functions
 
 ### 1.1 Role in Neural Network Training
@@ -187,6 +108,22 @@ Different loss functions create different optimization challenges:
 ## 2. Regression Losses
 
 Regression losses are used when predicting continuous values (e.g., house prices, temperatures, coordinates).
+
+### Theory: Regression Losses: MSE, MAE, Huber
+
+For continuous targets, three common choices and their NLL interpretations:
+
+- **MSE = mean squared error**: assumes Gaussian noise. Penalizes errors quadratically — very sensitive to outliers (one prediction off by 10 contributes the same as 100 predictions off by 1).
+- **MAE = mean absolute error**: assumes Laplace noise. Penalizes errors linearly — robust to outliers but the gradient at zero is undefined; in practice it leads to slightly slower convergence.
+- **Huber loss**: quadratic near zero, linear far from zero. Combines MSE's smooth gradient with MAE's outlier robustness, controlled by a threshold `\delta`:
+
+```
+Huber(x) = 0.5 * x^2          if |x| <= \delta
+         = \delta * (|x| - 0.5 * \delta)   else
+```
+
+The choice depends on what your data looks like. Clean labels with Gaussian noise: MSE. Heavy-tailed errors or outliers: MAE or Huber. For object detection bounding-box regression, smooth-L1 (essentially Huber with `\delta = 1`) is standard.
+
 
 ### 2.1 Mean Squared Error (L2 Loss)
 
@@ -418,6 +355,22 @@ compare_regression_losses()
 ## 3. Classification Losses
 
 Classification losses are used for discrete label prediction tasks.
+
+### Theory: Cross-Entropy as Maximum Likelihood
+
+For a classification problem with categorical target `y` and predicted distribution `p_\theta`, the cross-entropy loss is:
+
+```
+L_CE = -sum_i y_i log p_\theta(i) = -log p_\theta(y_true)         (one-hot y)
+```
+
+This is exactly the **negative log-likelihood** under the model. Minimizing it is maximum-likelihood estimation: find parameters that make the observed labels most probable. Two information-theoretic readings:
+
+- **Coding cost**: `L_CE` is the average number of nats (bits if you use `log_2`) needed to encode the true labels using the predicted distribution.
+- **KL plus entropy**: `H(y, p) = H(y) + KL(y || p)`. Since `H(y)` is fixed by the data, minimizing `H(y, p)` is equivalent to minimizing `KL(y || p)` — the divergence between the true and predicted distributions.
+
+This is why cross-entropy is the canonical classification loss: it is theoretically grounded, has clean gradients (`p - y_onehot`), and corresponds exactly to a probabilistic objective.
+
 
 ### 3.1 Binary Cross-Entropy (BCE)
 
@@ -866,6 +819,19 @@ print(f"Multi-Label Loss: {loss.item():.4f}")
 
 These losses learn embeddings where similar items are close and dissimilar items are far apart.
 
+### Theory: Contrastive Losses: InfoNCE
+
+For metric / representation learning, you want similar items to have nearby embeddings and dissimilar ones to be far apart. **InfoNCE** (van den Oord 2018) frames this as a classification problem with one positive and `N-1` negatives:
+
+```
+L_InfoNCE = -log( exp(sim(q, k+) / \tau) / sum_i exp(sim(q, k_i) / \tau) )
+```
+
+This is exactly cross-entropy where the "classes" are which key is the positive. The temperature `\tau` controls how peaked the softmax is — small `\tau` heavily penalizes near-positive negatives, large `\tau` is more permissive. Used in CLIP, SimCLR, MoCo — essentially every modern self-supervised vision model.
+
+The connection to mutual information: minimizing InfoNCE lower-bounds `I(q, k+)` — the model is trained to maximize the dependency between query and positive representations. This is the theoretical justification for why contrastive learning produces useful representations.
+
+
 ### 4.1 Contrastive Loss
 
 **Formula:**
@@ -1199,6 +1165,19 @@ print(f"InfoNCE Loss: {loss.item():.4f}")
 ---
 
 ## 5. Segmentation and Detection Losses
+
+### Theory: Focal Loss for Class Imbalance
+
+In tasks like dense object detection, 99% of examples are easy (background) and 1% are hard (foreground). Cross-entropy trains slowly on the hard examples because the easy ones swamp the gradient. **Focal loss** (Lin et al. 2017) reweights:
+
+```
+L_focal = -(1 - p_t)^\gamma * log(p_t)
+```
+
+where `p_t = p` if `y = 1`, else `1 - p`. The factor `(1 - p_t)^\gamma` suppresses well-classified examples (`p_t \to 1` makes the factor `\to 0`). With `\gamma = 2`, an example correctly classified at 90% confidence contributes only `(0.1)^2 = 1%` of its standard cross-entropy gradient; an example wrongly classified at 10% contributes `(0.9)^2 = 81%`.
+
+This shifts the network's attention to the rare hard examples without explicit resampling — essential for the effectiveness of single-stage detectors like RetinaNet and YOLO.
+
 
 ### 5.1 Dice Loss
 

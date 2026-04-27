@@ -11,86 +11,6 @@
 - Understand Transformer architecture
 - Implement with PyTorch
 
----
-
-## Theory & Principles
-
-The Transformer (Vaswani et al. 2017) replaced the entire RNN family in NLP within roughly two years. The reason is not that attention is a "smarter" mechanism than recurrence — it is that attention enables full parallelism across the sequence axis while preserving (and improving) long-range dependency modeling. This section walks through the math of scaled dot-product attention, why the `sqrt(d_k)` normalization is not optional, and what multi-head buys beyond a single attention head.
-
-This section covers:
-
-- **A.** Attention as a soft, content-addressed lookup
-- **B.** Scaled dot-product attention derived from query/key/value
-- **C.** Why `sqrt(d_k)` matters: variance preservation
-- **D.** Multi-head attention as subspace decomposition
-
-### A. Attention as Soft Lookup
-
-A hash table is a hard lookup: `lookup(query) -> value` where `query` must exactly match a key. Attention generalizes this to a *soft* lookup over real-valued vectors:
-
-```
-attention(query, keys, values) = sum_i softmax(score(query, k_i)) * v_i
-```
-
-The output is a convex combination of all values, weighted by how well each key matches the query. As `score` peaks more sharply on one key, attention approaches a hard lookup; as it flattens, attention approaches an average. The mechanism is fully differentiable, which is why it can be trained end-to-end inside a neural network.
-
-This view also clarifies what a Transformer layer is doing: each token issues a query, every other token offers a key+value pair, and the layer rewrites each token as a weighted blend of all values.
-
-### B. Scaled Dot-Product Attention
-
-Vaswani et al. chose the simplest possible scoring function: scaled dot product. Pack queries, keys, values into matrices `Q in R^{n x d_k}`, `K in R^{n x d_k}`, `V in R^{n x d_v}`. Then:
-
-```
-Attention(Q, K, V) = softmax( Q K^T / sqrt(d_k) ) V
-```
-
-Dimensions:
-
-- `Q K^T` is `n x n`, the **attention score matrix**: `(QK^T)_{ij}` measures how strongly query `i` matches key `j`.
-- `softmax(... / sqrt(d_k))` row-wise yields the **attention weights**, each row summing to 1.
-- Multiplying by `V` gives the per-query output: a weighted sum of value vectors.
-
-The whole computation is two matrix multiplications and a softmax — perfectly suited to GPUs, and (crucially) parallelizable across all `n` query positions. RNNs are inherently sequential; attention is inherently parallel.
-
-### C. Why `sqrt(d_k)`: Variance Preservation
-
-Suppose `q` and `k` are vectors with i.i.d. components, each with mean 0 and variance 1. Their dot product is:
-
-```
-q . k = sum_{i=1}^{d_k} q_i k_i
-```
-
-Each term has mean 0 and variance 1, so `Var(q . k) = d_k` (independence) and `std(q . k) = sqrt(d_k)`. Without rescaling, attention scores have standard deviation that grows with `d_k`. For typical `d_k = 64`, the scores can easily reach magnitudes of 8 or more.
-
-Now plug those into softmax: `softmax([8, 0, 0]) ≈ [0.9997, 0.00015, 0.00015]`. The softmax saturates almost completely on the largest score. Worse, its gradient becomes near-zero — the softmax derivative includes `p_i (1 - p_i)`, which vanishes when `p_i \approx 1`. **Saturated softmax means dead gradients**, which means the attention layer cannot learn.
-
-Dividing by `sqrt(d_k)` rescales the scores back to `O(1)` standard deviation regardless of `d_k`, keeping softmax in its non-saturated regime. This is not a heuristic; it is a *necessary* design choice that the original paper found through exactly this analysis.
-
-### D. Multi-Head: Subspace Decomposition
-
-Single-head attention forces all relationships in a sequence into one attention pattern. Multi-head attention runs `h` parallel attention layers, each on a *projected subspace*:
-
-```
-head_i = Attention(Q W_i^Q, K W_i^K, V W_i^V)        with W_i^Q, W_i^K in R^{d_model x d_k}, etc.
-MultiHead(Q, K, V) = Concat(head_1, ..., head_h) W^O
-```
-
-Each head sees a different `d_k`-dimensional projection of the input. With `h` heads and `d_k = d_model / h`, total parameter count is the same as one head with full dimensionality — the multi-head structure is a way of *factoring* one big attention into `h` smaller specialized ones, not adding more parameters.
-
-Empirically, different heads learn different relationships: some attend to syntactic dependencies, some to coreference, some to position-relative patterns. Forcing all of these into a single attention pattern is strictly less expressive than letting them coexist as separate heads.
-
-### From Theory to the Code Below
-
-| Theory concept | Code construct in this lesson |
-|----------------|-------------------------------|
-| Soft lookup | `softmax(QK^T) V` |
-| Scaled dot product | The `/ sqrt(d_k)` divisor in the attention formula |
-| Saturated softmax avoidance | Why removing the `/ sqrt(d_k)` would break training |
-| Multi-head subspace | `Q.view(B, n, h, d_k).transpose(1, 2)` then per-head attention |
-
----
-
-
 ## 1. Need for Attention
 
 ### Seq2Seq Limitations
@@ -116,6 +36,51 @@ Generating "school" → High attention on "hakgyo" (= "school" in Korean)
 ---
 
 ## 2. Attention Mechanism
+
+### Theory: Why `sqrt(d_k)`: Variance Preservation
+
+Suppose `q` and `k` are vectors with i.i.d. components, each with mean 0 and variance 1. Their dot product is:
+
+```
+q . k = sum_{i=1}^{d_k} q_i k_i
+```
+
+Each term has mean 0 and variance 1, so `Var(q . k) = d_k` (independence) and `std(q . k) = sqrt(d_k)`. Without rescaling, attention scores have standard deviation that grows with `d_k`. For typical `d_k = 64`, the scores can easily reach magnitudes of 8 or more.
+
+Now plug those into softmax: `softmax([8, 0, 0]) ≈ [0.9997, 0.00015, 0.00015]`. The softmax saturates almost completely on the largest score. Worse, its gradient becomes near-zero — the softmax derivative includes `p_i (1 - p_i)`, which vanishes when `p_i \approx 1`. **Saturated softmax means dead gradients**, which means the attention layer cannot learn.
+
+Dividing by `sqrt(d_k)` rescales the scores back to `O(1)` standard deviation regardless of `d_k`, keeping softmax in its non-saturated regime. This is not a heuristic; it is a *necessary* design choice that the original paper found through exactly this analysis.
+
+
+### Theory: Scaled Dot-Product Attention
+
+Vaswani et al. chose the simplest possible scoring function: scaled dot product. Pack queries, keys, values into matrices `Q in R^{n x d_k}`, `K in R^{n x d_k}`, `V in R^{n x d_v}`. Then:
+
+```
+Attention(Q, K, V) = softmax( Q K^T / sqrt(d_k) ) V
+```
+
+Dimensions:
+
+- `Q K^T` is `n x n`, the **attention score matrix**: `(QK^T)_{ij}` measures how strongly query `i` matches key `j`.
+- `softmax(... / sqrt(d_k))` row-wise yields the **attention weights**, each row summing to 1.
+- Multiplying by `V` gives the per-query output: a weighted sum of value vectors.
+
+The whole computation is two matrix multiplications and a softmax — perfectly suited to GPUs, and (crucially) parallelizable across all `n` query positions. RNNs are inherently sequential; attention is inherently parallel.
+
+
+### Theory: Attention as Soft Lookup
+
+A hash table is a hard lookup: `lookup(query) -> value` where `query` must exactly match a key. Attention generalizes this to a *soft* lookup over real-valued vectors:
+
+```
+attention(query, keys, values) = sum_i softmax(score(query, k_i)) * v_i
+```
+
+The output is a convex combination of all values, weighted by how well each key matches the query. As `score` peaks more sharply on one key, attention approaches a hard lookup; as it flattens, attention approaches an average. The mechanism is fully differentiable, which is why it can be trained end-to-end inside a neural network.
+
+This view also clarifies what a Transformer layer is doing: each token issues a query, every other token offers a key+value pair, and the layer rewrites each token as a weighted blend of all values.
+
 
 ### Formula
 
@@ -177,6 +142,20 @@ output = attention(Q, K, V)
 ---
 
 ## 4. Multi-Head Attention
+
+### Theory: Multi-Head: Subspace Decomposition
+
+Single-head attention forces all relationships in a sequence into one attention pattern. Multi-head attention runs `h` parallel attention layers, each on a *projected subspace*:
+
+```
+head_i = Attention(Q W_i^Q, K W_i^K, V W_i^V)        with W_i^Q, W_i^K in R^{d_model x d_k}, etc.
+MultiHead(Q, K, V) = Concat(head_1, ..., head_h) W^O
+```
+
+Each head sees a different `d_k`-dimensional projection of the input. With `h` heads and `d_k = d_model / h`, total parameter count is the same as one head with full dimensionality — the multi-head structure is a way of *factoring* one big attention into `h` smaller specialized ones, not adding more parameters.
+
+Empirically, different heads learn different relationships: some attend to syntactic dependencies, some to coreference, some to position-relative patterns. Forcing all of these into a single attention pattern is strictly less expressive than letting them coexist as separate heads.
+
 
 ### Idea
 

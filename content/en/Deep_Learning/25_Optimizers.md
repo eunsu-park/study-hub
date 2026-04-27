@@ -14,113 +14,6 @@
 
 **Difficulty**: ⭐⭐⭐
 
----
-
-## Theory & Principles
-
-This lesson is the optimizer survey: SGD → Momentum → Nesterov → Adagrad → RMSprop → Adam → AdamW → LAMB → Lion. Each new optimizer fixed something the previous one got wrong, and the chain forms a coherent story about what "adaptive" really means and where it can fail. Understanding this story tells you which optimizer to reach for in which situation.
-
-This section covers:
-
-- **A.** SGD, Momentum, Nesterov: the velocity-based view
-- **B.** Adagrad → RMSprop → Adam: per-parameter adaptivity
-- **C.** Why AdamW exists and what L2-in-the-loss got wrong
-- **D.** Modern optimizers (LAMB, Lion) and where they win
-
-### A. SGD, Momentum, Nesterov
-
-**SGD**: `\theta <- \theta - \eta g`. Pure gradient descent on a noisy estimate.
-
-**Momentum** accumulates a velocity:
-
-```
-v <- \mu v + g
-\theta <- \theta - \eta v
-```
-
-The velocity `v` is an exponentially weighted average of past gradients (`\mu = 0.9` is standard). This dampens oscillations along high-curvature directions and accelerates along consistent ones.
-
-**Nesterov** ("look ahead" momentum) computes the gradient at the *projected* future position rather than the current one:
-
-```
-v <- \mu v + g(\theta - \mu v)
-\theta <- \theta - \eta v
-```
-
-Theoretically faster convergence on smooth convex functions; in deep learning the difference vs plain momentum is small but consistent.
-
-### B. Adagrad → RMSprop → Adam
-
-The next idea is per-parameter learning rates: parameters with consistently large gradients should take smaller steps.
-
-**Adagrad** (Duchi 2011) accumulates squared gradients without decay:
-
-```
-G <- G + g^2
-\theta <- \theta - \eta * g / (sqrt(G) + \epsilon)
-```
-
-Works well early but `G` only grows, so the effective learning rate decays to zero. Useless for long training.
-
-**RMSprop** (Hinton 2012) replaces the cumulative sum with an exponentially weighted average:
-
-```
-v <- \beta v + (1 - \beta) g^2
-\theta <- \theta - \eta * g / (sqrt(v) + \epsilon)
-```
-
-`v` no longer monotonically grows; the optimizer can keep adapting indefinitely.
-
-**Adam** (Kingma & Ba 2014) combines RMSprop with momentum and adds bias correction:
-
-```
-m <- \beta_1 m + (1 - \beta_1) g
-v <- \beta_2 v + (1 - \beta_2) g^2
-hat_m = m / (1 - \beta_1^t),  hat_v = v / (1 - \beta_2^t)
-\theta <- \theta - \eta * hat_m / (sqrt(hat_v) + \epsilon)
-```
-
-Defaults `\beta_1 = 0.9, \beta_2 = 0.999, \epsilon = 1e-8` work for an enormous range of tasks. This is why Adam became the default optimizer for almost everything that is not vanilla supervised vision (where SGD+momentum often still wins).
-
-### C. AdamW: Decoupled Weight Decay
-
-Standard L2 regularization adds `\lambda \theta` to the gradient. With Adam's adaptive scaling, this regularization is *divided* by `sqrt(v)`, so parameters with large gradient magnitudes get under-regularized and small ones over-regularized. The fix (Loshchilov & Hutter 2019, **AdamW**): apply weight decay *outside* the gradient update:
-
-```
-\theta <- \theta - \eta * (hat_m / sqrt(hat_v) + \lambda \theta)        (decoupled)
-```
-
-This is mathematically different from L2-in-the-loss for adaptive optimizers, and consistently better. Modern transformer training universally uses AdamW.
-
-### D. LAMB and Lion
-
-**LAMB** (You et al. 2019) extends Adam with a per-layer learning-rate scaling, normalizing by the layer's weight norm. Designed for very large batch sizes (32k+); used in BERT-large training.
-
-**Lion** (Chen et al. 2023) is a sign-based optimizer:
-
-```
-update = sign(\beta_1 m + (1 - \beta_1) g)
-\theta <- \theta - \eta * (update + \lambda \theta)
-m <- \beta_2 m + (1 - \beta_2) g
-```
-
-The `sign(...)` makes every update of equal magnitude per parameter — surprisingly competitive with Adam at much lower memory cost (only the momentum buffer, not `v`). Used in some recent large-scale training runs.
-
-The trend: simpler, more memory-efficient optimizers as model size grows past where Adam's memory overhead matters.
-
-### From Theory to the Code Below
-
-| Theory concept | Code construct in this lesson |
-|----------------|-------------------------------|
-| SGD + Momentum | `torch.optim.SGD(..., momentum=0.9)` |
-| Nesterov | `torch.optim.SGD(..., momentum=0.9, nesterov=True)` |
-| Adam | `torch.optim.Adam(..., betas=(0.9, 0.999))` |
-| AdamW | `torch.optim.AdamW(..., weight_decay=0.01)` |
-| Cosine + warmup scheduler | `torch.optim.lr_scheduler.OneCycleLR` etc. |
-
----
-
-
 ## 1. Gradient Descent Fundamentals
 
 ### 1.1 Variants of Gradient Descent
@@ -303,6 +196,29 @@ adam_traj = optimize_trajectory(lambda p: optim.Adam(p, lr=0.1))
 
 ## 2. Classic Optimizers
 
+### Theory: SGD, Momentum, Nesterov
+
+**SGD**: `\theta <- \theta - \eta g`. Pure gradient descent on a noisy estimate.
+
+**Momentum** accumulates a velocity:
+
+```
+v <- \mu v + g
+\theta <- \theta - \eta v
+```
+
+The velocity `v` is an exponentially weighted average of past gradients (`\mu = 0.9` is standard). This dampens oscillations along high-curvature directions and accelerates along consistent ones.
+
+**Nesterov** ("look ahead" momentum) computes the gradient at the *projected* future position rather than the current one:
+
+```
+v <- \mu v + g(\theta - \mu v)
+\theta <- \theta - \eta v
+```
+
+Theoretically faster convergence on smooth convex functions; in deep learning the difference vs plain momentum is small but consistent.
+
+
 ### 2.1 Stochastic Gradient Descent (SGD)
 
 Basic SGD update rule:
@@ -464,6 +380,51 @@ compare_sgd_variants()
 ---
 
 ## 3. Adaptive Learning Rate Methods
+
+### Theory: AdamW: Decoupled Weight Decay
+
+Standard L2 regularization adds `\lambda \theta` to the gradient. With Adam's adaptive scaling, this regularization is *divided* by `sqrt(v)`, so parameters with large gradient magnitudes get under-regularized and small ones over-regularized. The fix (Loshchilov & Hutter 2019, **AdamW**): apply weight decay *outside* the gradient update:
+
+```
+\theta <- \theta - \eta * (hat_m / sqrt(hat_v) + \lambda \theta)        (decoupled)
+```
+
+This is mathematically different from L2-in-the-loss for adaptive optimizers, and consistently better. Modern transformer training universally uses AdamW.
+
+
+### Theory: Adagrad → RMSprop → Adam
+
+The next idea is per-parameter learning rates: parameters with consistently large gradients should take smaller steps.
+
+**Adagrad** (Duchi 2011) accumulates squared gradients without decay:
+
+```
+G <- G + g^2
+\theta <- \theta - \eta * g / (sqrt(G) + \epsilon)
+```
+
+Works well early but `G` only grows, so the effective learning rate decays to zero. Useless for long training.
+
+**RMSprop** (Hinton 2012) replaces the cumulative sum with an exponentially weighted average:
+
+```
+v <- \beta v + (1 - \beta) g^2
+\theta <- \theta - \eta * g / (sqrt(v) + \epsilon)
+```
+
+`v` no longer monotonically grows; the optimizer can keep adapting indefinitely.
+
+**Adam** (Kingma & Ba 2014) combines RMSprop with momentum and adds bias correction:
+
+```
+m <- \beta_1 m + (1 - \beta_1) g
+v <- \beta_2 v + (1 - \beta_2) g^2
+hat_m = m / (1 - \beta_1^t),  hat_v = v / (1 - \beta_2^t)
+\theta <- \theta - \eta * hat_m / (sqrt(hat_v) + \epsilon)
+```
+
+Defaults `\beta_1 = 0.9, \beta_2 = 0.999, \epsilon = 1e-8` work for an enormous range of tasks. This is why Adam became the default optimizer for almost everything that is not vanilla supervised vision (where SGD+momentum often still wins).
+
 
 ### 3.1 Adagrad
 
@@ -739,6 +700,23 @@ compare_adam_adamw()
 ---
 
 ## 4. Modern Optimizers
+
+### Theory: LAMB and Lion
+
+**LAMB** (You et al. 2019) extends Adam with a per-layer learning-rate scaling, normalizing by the layer's weight norm. Designed for very large batch sizes (32k+); used in BERT-large training.
+
+**Lion** (Chen et al. 2023) is a sign-based optimizer:
+
+```
+update = sign(\beta_1 m + (1 - \beta_1) g)
+\theta <- \theta - \eta * (update + \lambda \theta)
+m <- \beta_2 m + (1 - \beta_2) g
+```
+
+The `sign(...)` makes every update of equal magnitude per parameter — surprisingly competitive with Adam at much lower memory cost (only the momentum buffer, not `v`). Used in some recent large-scale training runs.
+
+The trend: simpler, more memory-efficient optimizers as model size grows past where Adam's memory overhead matters.
+
 
 ### 4.1 LAMB (Layer-wise Adaptive Moments optimizer for Batch training)
 

@@ -13,77 +13,6 @@
 - Understand Latent Consistency Models (LCM) for fast diffusion sampling
 - Apply pretrained modern architectures using timm and transformers libraries
 
----
-
-## Theory & Principles
-
-The "modern architectures" of 2020-2024 (ConvNeXt, EfficientNetV2, DINOv2, LCM) are best understood as a re-equilibration of the field after the Transformer's vision conquest. Each one answers a specific question: can pure ConvNets still compete (ConvNeXt)? Can we train more efficiently (EfficientNetV2)? Can SSL produce better visual features than supervised (DINOv2)? Can diffusion sample faster (LCM)?
-
-This section covers:
-
-- **A.** ConvNeXt: revisiting ConvNets in the Transformer era
-- **B.** EfficientNetV2 and progressive resizing
-- **C.** DINOv2 as the SSL endgame
-- **D.** Latent Consistency Models for fast diffusion sampling
-
-### A. ConvNeXt: ConvNets Reloaded
-
-Liu et al. (2022) asked: how much of ViT's advantage over ResNet is *the architecture* and how much is *the training recipe*? Answer: most of it is the recipe. They modernized ResNet with the same ingredients used in ViT-L training:
-
-- Depth and width scaled to match ViT's parameter count
-- AdamW + cosine schedule + 300-epoch training
-- LayerNorm replacing BatchNorm
-- GELU replacing ReLU
-- Inverted-bottleneck (depthwise conv at higher channel count)
-- 7x7 depthwise conv (mimicking ViT's larger receptive field per layer)
-
-The result, ConvNeXt, *matched ViT* on ImageNet at the same parameter count, ending the "Transformers always win" narrative. The lesson: architecture choices and training recipes are *coupled*; comparing across years is unfair without recipe matching.
-
-### B. EfficientNetV2: Progressive Training
-
-EfficientNet (2019) introduced compound scaling — jointly scaling depth, width, and resolution by a constant ratio. EfficientNetV2 (2021) added two innovations to make training itself faster:
-
-- **Fused-MBConv blocks** at early stages: replace depthwise + pointwise with a regular conv where depthwise is expensive on small spatial dimensions.
-- **Progressive resolution training**: train at smaller image size first, gradually increase. Combined with regularization that grows with resolution (dropout, RandAugment magnitude), this halves training time without quality loss.
-
-The progressive resizing idea generalizes: any time training has multiple resolutions or task complexities, training "easy first" then "hard" usually helps.
-
-### C. DINOv2: Foundation-Model SSL
-
-DINOv2 (Oquab et al. 2023) is essentially: take DINO (a self-distillation contrastive method), train at 1B+ parameter scale on 142M curated images, dump it on the world. The result: visual features that beat supervised ImageNet pretraining on dozens of downstream tasks, with no labels.
-
-Architectural and training innovations:
-
-- **Curated unlabeled data**: 142M images filtered for diversity and quality, not random web scraping.
-- **Multi-crop teacher-student**: same loss as DINO but with multiple crops of various sizes; the student matches the teacher's *average* across crops.
-- **Stable training at scale**: techniques like KoLeo regularization (uniformity of the embedding distribution), batch norm with very large batches, etc.
-
-The feature space DINOv2 produces is so general that "frozen feature + linear head" matches "fine-tuned ImageNet model" on most tasks. This is the SSL equivalent of CLIP, but vision-only.
-
-### D. Latent Consistency Models (LCM)
-
-Diffusion models are slow at inference: 20-50 sampling steps even with DDIM. LCM (Luo et al. 2023) trains a *consistency model* that maps any point on the diffusion trajectory directly to the final clean image:
-
-```
-f_\theta(x_t, t) ≈ x_0   for any t
-```
-
-The training enforces consistency: `f(x_t, t) ≈ f(x_{t'}, t')` for two timesteps `t, t'` along the same trajectory. Once trained, sampling can be done in **1-4 steps** with quality comparable to 50-step DDIM.
-
-This is achieved by *distilling* a pretrained diffusion model into the consistency model — a smaller training cost than training from scratch, but yielding a sampler that is 10-50x faster. LCM is the basis of "real-time" image generation in 2023-2024 production systems.
-
-### From Theory to the Code Below
-
-| Theory concept | Code construct in this lesson |
-|----------------|-------------------------------|
-| ConvNeXt block | depthwise conv 7x7 -> LN -> Linear -> GELU -> Linear (inverted bottleneck) |
-| Compound scaling | Multiplying width, depth, resolution by `\phi^k` |
-| DINOv2 features | `model = torch.hub.load('facebookresearch/dinov2', 'dinov2_vitb14')` |
-| LCM sampler | 1-4 step deterministic sampling instead of full reverse process |
-
----
-
-
 ## 1. Architecture Evolution Timeline
 
 The landscape of deep learning architectures has evolved rapidly:
@@ -130,6 +59,20 @@ The landscape of deep learning architectures has evolved rapidly:
 ## 2. ConvNeXt: Modernizing ConvNets
 
 **ConvNeXt** (Liu et al., 2022) demonstrates that pure ConvNets can match Transformers when modernized with recent design choices.
+
+### Theory: ConvNeXt: ConvNets Reloaded
+
+Liu et al. (2022) asked: how much of ViT's advantage over ResNet is *the architecture* and how much is *the training recipe*? Answer: most of it is the recipe. They modernized ResNet with the same ingredients used in ViT-L training:
+
+- Depth and width scaled to match ViT's parameter count
+- AdamW + cosine schedule + 300-epoch training
+- LayerNorm replacing BatchNorm
+- GELU replacing ReLU
+- Inverted-bottleneck (depthwise conv at higher channel count)
+- 7x7 depthwise conv (mimicking ViT's larger receptive field per layer)
+
+The result, ConvNeXt, *matched ViT* on ImageNet at the same parameter count, ending the "Transformers always win" narrative. The lesson: architecture choices and training recipes are *coupled*; comparing across years is unfair without recipe matching.
+
 
 ### 2.1 Design Evolution from ResNet to ConvNeXt
 
@@ -353,6 +296,16 @@ class GRN(nn.Module):
 2. **Progressive training**: gradually increase image size and regularization
 3. **Neural Architecture Search (NAS)**: optimized for training speed
 
+### Theory: EfficientNetV2: Progressive Training
+
+EfficientNet (2019) introduced compound scaling — jointly scaling depth, width, and resolution by a constant ratio. EfficientNetV2 (2021) added two innovations to make training itself faster:
+
+- **Fused-MBConv blocks** at early stages: replace depthwise + pointwise with a regular conv where depthwise is expensive on small spatial dimensions.
+- **Progressive resolution training**: train at smaller image size first, gradually increase. Combined with regularization that grows with resolution (dropout, RandAugment magnitude), this halves training time without quality loss.
+
+The progressive resizing idea generalizes: any time training has multiple resolutions or task complexities, training "easy first" then "hard" usually helps.
+
+
 ### 3.1 Fused-MBConv vs. MBConv
 
 ```
@@ -445,6 +398,19 @@ for idx in top5_idx:
 ## 4. DINOv2: Self-Supervised Vision Foundation Model
 
 **DINOv2** (Oquab et al., 2023) is a self-supervised Vision Transformer pretrained on 142M images without labels.
+
+### Theory: DINOv2: Foundation-Model SSL
+
+DINOv2 (Oquab et al. 2023) is essentially: take DINO (a self-distillation contrastive method), train at 1B+ parameter scale on 142M curated images, dump it on the world. The result: visual features that beat supervised ImageNet pretraining on dozens of downstream tasks, with no labels.
+
+Architectural and training innovations:
+
+- **Curated unlabeled data**: 142M images filtered for diversity and quality, not random web scraping.
+- **Multi-crop teacher-student**: same loss as DINO but with multiple crops of various sizes; the student matches the teacher's *average* across crops.
+- **Stable training at scale**: techniques like KoLeo regularization (uniformity of the embedding distribution), batch norm with very large batches, etc.
+
+The feature space DINOv2 produces is so general that "frozen feature + linear head" matches "fine-tuned ImageNet model" on most tasks. This is the SSL equivalent of CLIP, but vision-only.
+
 
 ### 4.1 Key Innovations
 
@@ -581,6 +547,19 @@ depth_map = depth_head(spatial_features)  # (B, 1, H, W)
 ## 5. Latent Consistency Models (LCM)
 
 **Latent Consistency Models** (Luo et al., 2023) enable fast sampling from diffusion models in 1-4 steps (vs. 25-50 steps for standard diffusion).
+
+### Theory: Latent Consistency Models (LCM)
+
+Diffusion models are slow at inference: 20-50 sampling steps even with DDIM. LCM (Luo et al. 2023) trains a *consistency model* that maps any point on the diffusion trajectory directly to the final clean image:
+
+```
+f_\theta(x_t, t) ≈ x_0   for any t
+```
+
+The training enforces consistency: `f(x_t, t) ≈ f(x_{t'}, t')` for two timesteps `t, t'` along the same trajectory. Once trained, sampling can be done in **1-4 steps** with quality comparable to 50-step DDIM.
+
+This is achieved by *distilling* a pretrained diffusion model into the consistency model — a smaller training cost than training from scratch, but yielding a sampler that is 10-50x faster. LCM is the basis of "real-time" image generation in 2023-2024 production systems.
+
 
 ### 5.1 Consistency Distillation
 

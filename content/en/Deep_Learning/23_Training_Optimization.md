@@ -15,80 +15,6 @@ After completing this lesson, you will be able to:
 5. Accelerate training with `torch.compile()` (PyTorch 2.0+)
 6. Scale training across multiple GPUs with DDP and FSDP
 
----
-
-## Theory & Principles
-
-The training-optimization techniques in this lesson — learning-rate scheduling, mixed precision, gradient accumulation, distributed training — are not isolated tricks. Each one targets a specific bottleneck in the *system* of large-model training: convergence speed, memory, GPU utilization, or scale. Understanding the math behind each lets you reason about which one to reach for when training starts hurting.
-
-This section covers:
-
-- **A.** LR scheduling: warmup and cosine decay
-- **B.** Mixed precision: fp16/bf16 numerics and loss scaling
-- **C.** Gradient accumulation and effective batch size
-- **D.** Data and model parallelism: DDP vs FSDP
-
-### A. Warmup and Cosine Decay
-
-A constant learning rate has two failure modes: too large at the start (the model is far from any minimum and large updates push it further off) or too small at the end (it converges, then crawls). Two near-universal fixes:
-
-**Warmup**: linearly ramp `\eta` from 0 to the target value over the first `T_w` steps. The intuition: at initialization, gradient estimates are noisy and adaptive optimizers' moment estimates `m, v` are unreliable; small steps let them stabilize before taking a full-sized one. Typical `T_w` is 1-5% of total training.
-
-**Cosine decay**: after warmup, decay `\eta` along a cosine curve from peak to a small final value:
-
-```
-\eta(t) = \eta_min + 0.5 * (\eta_max - \eta_min) * (1 + cos(pi * (t - T_w) / (T_total - T_w)))
-```
-
-Smoother than step decay, no discontinuities, no extra hyperparameters. Empirically gives consistently strong results for LLM training (used by GPT-3, LLaMA, etc.).
-
-### B. Mixed Precision
-
-Training in float32 uses 4 bytes per parameter and ~16 bytes per parameter for Adam state (parameter, gradient, two moments, all in fp32). Float16/bfloat16 halves the parameter and gradient memory, doubles the effective compute on tensor cores, and roughly doubles training speed.
-
-Two precision formats:
-
-- **fp16**: 5-bit exponent, 10-bit mantissa. Range `~10^{-5}` to `~10^4`. Underflows on small gradients — needs **loss scaling** (multiply loss by `S = 2^k`, divide gradients by `S` before update) to keep gradients in fp16's representable range.
-- **bf16**: 8-bit exponent (same as fp32), 7-bit mantissa. Range matches fp32, less precision. No loss scaling needed; this is why all modern hardware (TPU, A100, H100) prefers bf16.
-
-PyTorch's `torch.cuda.amp.autocast()` automatically downcasts the forward pass to fp16/bf16 while keeping select operations (loss, layer norm) in fp32 for stability. The model parameters themselves remain in fp32 to preserve gradient updates' precision.
-
-### C. Gradient Accumulation
-
-For a memory-limited GPU, you might only fit batch size 8 — but the optimal effective batch size for your task might be 128. Solution: accumulate gradients over 16 micro-batches, then call `optimizer.step()`:
-
-```
-for i, batch in enumerate(loader):
-    loss = model(batch) / accum_steps
-    loss.backward()
-    if (i + 1) % accum_steps == 0:
-        optimizer.step()
-        optimizer.zero_grad()
-```
-
-Mathematically equivalent to a batch size of `8 * 16 = 128`, at the cost of more sequential forward/backward passes. Crucial detail: divide loss by `accum_steps` (or scale gradients) so the accumulated gradient has the same magnitude as a true large-batch gradient. Forgetting this gives a `16x` larger effective learning rate.
-
-### D. DDP vs FSDP
-
-**Distributed Data Parallel (DDP)** replicates the full model on each GPU and shards the *data*. Each GPU computes gradients on its own micro-batch; an all-reduce sums gradients across GPUs before optimizer step. Memory per GPU is full model size; communication is `O(parameters)` per step.
-
-**Fully Sharded Data Parallel (FSDP)** shards both data and *model parameters* across GPUs. Each GPU stores `1/N` of the parameters; before each layer's forward pass, the missing parameters are gathered, used, and freed. Memory per GPU drops to `~ model_size / N`; communication grows to `O(parameters)` per layer (not just per step).
-
-Use DDP when the model fits per GPU (training is data-bound); use FSDP when the model does not fit per GPU (training is memory-bound). Modern LLMs (10B+ parameters) almost always require FSDP or a similar memory-shard scheme like DeepSpeed ZeRO.
-
-### From Theory to the Code Below
-
-| Theory concept | Code construct in this lesson |
-|----------------|-------------------------------|
-| Cosine + warmup | `torch.optim.lr_scheduler.CosineAnnealingLR` + manual warmup |
-| Mixed precision | `with torch.autocast(device_type='cuda', dtype=torch.bfloat16)` |
-| Gradient accumulation | The `accum_steps` divisor pattern |
-| DDP | `torch.nn.parallel.DistributedDataParallel(model)` |
-| FSDP | `torch.distributed.fsdp.FullyShardedDataParallel` |
-
----
-
-
 ## 1. Hyperparameter Tuning
 
 ### Key Hyperparameters
@@ -145,6 +71,21 @@ print(f"Best accuracy: {study.best_value}")
 
 ## 2. Advanced Learning Rate Scheduling
 
+### Theory: Warmup and Cosine Decay
+
+A constant learning rate has two failure modes: too large at the start (the model is far from any minimum and large updates push it further off) or too small at the end (it converges, then crawls). Two near-universal fixes:
+
+**Warmup**: linearly ramp `\eta` from 0 to the target value over the first `T_w` steps. The intuition: at initialization, gradient estimates are noisy and adaptive optimizers' moment estimates `m, v` are unreliable; small steps let them stabilize before taking a full-sized one. Typical `T_w` is 1-5% of total training.
+
+**Cosine decay**: after warmup, decay `\eta` along a cosine curve from peak to a small final value:
+
+```
+\eta(t) = \eta_min + 0.5 * (\eta_max - \eta_min) * (1 + cos(pi * (t - T_w) / (T_total - T_w)))
+```
+
+Smoother than step decay, no discontinuities, no extra hyperparameters. Empirically gives consistently strong results for LLM training (used by GPT-3, LLaMA, etc.).
+
+
 ### Warmup
 
 ```python
@@ -196,6 +137,18 @@ for batch in train_loader:
 ---
 
 ## 3. Mixed Precision Training
+
+### Theory: Mixed Precision
+
+Training in float32 uses 4 bytes per parameter and ~16 bytes per parameter for Adam state (parameter, gradient, two moments, all in fp32). Float16/bfloat16 halves the parameter and gradient memory, doubles the effective compute on tensor cores, and roughly doubles training speed.
+
+Two precision formats:
+
+- **fp16**: 5-bit exponent, 10-bit mantissa. Range `~10^{-5}` to `~10^4`. Underflows on small gradients — needs **loss scaling** (multiply loss by `S = 2^k`, divide gradients by `S` before update) to keep gradients in fp16's representable range.
+- **bf16**: 8-bit exponent (same as fp32), 7-bit mantissa. Range matches fp32, less precision. No loss scaling needed; this is why all modern hardware (TPU, A100, H100) prefers bf16.
+
+PyTorch's `torch.cuda.amp.autocast()` automatically downcasts the forward pass to fp16/bf16 while keeping select operations (loss, layer norm) in fp32 for stability. The model parameters themselves remain in fp32 to preserve gradient updates' precision.
+
 
 ### Concept
 
@@ -252,6 +205,22 @@ def train_with_amp(model, train_loader, optimizer, epochs):
 ---
 
 ## 4. Gradient Accumulation
+
+### Theory: Gradient Accumulation
+
+For a memory-limited GPU, you might only fit batch size 8 — but the optimal effective batch size for your task might be 128. Solution: accumulate gradients over 16 micro-batches, then call `optimizer.step()`:
+
+```
+for i, batch in enumerate(loader):
+    loss = model(batch) / accum_steps
+    loss.backward()
+    if (i + 1) % accum_steps == 0:
+        optimizer.step()
+        optimizer.zero_grad()
+```
+
+Mathematically equivalent to a batch size of `8 * 16 = 128`, at the cost of more sequential forward/backward passes. Crucial detail: divide loss by `accum_steps` (or scale gradients) so the accumulated gradient has the same magnitude as a true large-batch gradient. Forgetting this gives a `16x` larger effective learning rate.
+
 
 ### Concept
 
@@ -528,6 +497,15 @@ output = compiled_model(sample_input)  # Prints compilation info
 ---
 
 ## 10. Distributed Training (DDP & FSDP)
+
+### Theory: DDP vs FSDP
+
+**Distributed Data Parallel (DDP)** replicates the full model on each GPU and shards the *data*. Each GPU computes gradients on its own micro-batch; an all-reduce sums gradients across GPUs before optimizer step. Memory per GPU is full model size; communication is `O(parameters)` per step.
+
+**Fully Sharded Data Parallel (FSDP)** shards both data and *model parameters* across GPUs. Each GPU stores `1/N` of the parameters; before each layer's forward pass, the missing parameters are gathered, used, and freed. Memory per GPU drops to `~ model_size / N`; communication grows to `O(parameters)` per layer (not just per step).
+
+Use DDP when the model fits per GPU (training is data-bound); use FSDP when the model does not fit per GPU (training is memory-bound). Modern LLMs (10B+ parameters) almost always require FSDP or a similar memory-shard scheme like DeepSpeed ZeRO.
+
 
 ### Data Parallel vs. Distributed Data Parallel
 

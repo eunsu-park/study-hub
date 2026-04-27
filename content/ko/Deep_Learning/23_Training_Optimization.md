@@ -15,80 +15,6 @@
 5. `torch.compile()`로 학습 가속 (PyTorch 2.0+)
 6. DDP와 FSDP로 멀티 GPU 학습 스케일링
 
----
-
-## 이론과 원리
-
-이 레슨의 학습-최적화 기법들 — 학습률 스케줄링, 혼합 정밀도, gradient accumulation, 분산 학습 — 은 분리된 트릭이 아닙니다. 각각은 대규모 모델 학습 *시스템*의 특정 보틀넥을 겨냥합니다: 수렴 속도, 메모리, GPU 활용도, 또는 규모. 각각의 수학을 이해하면 학습이 아프기 시작할 때 어느 것에 손을 뻗을지 추론할 수 있습니다.
-
-이 섹션에서 다루는 내용:
-
-- **A.** LR 스케줄링: 워밍업과 코사인 감소
-- **B.** 혼합 정밀도: fp16/bf16 수치와 loss scaling
-- **C.** Gradient accumulation과 유효 배치 크기
-- **D.** 데이터 및 모델 병렬: DDP vs FSDP
-
-### A. 워밍업과 코사인 감소
-
-상수 학습률은 두 실패 모드를 가집니다: 시작에서 너무 크거나(모델이 어떤 최솟값에서 멀고 큰 업데이트가 더 멀리 밀어냄) 끝에서 너무 작습니다(수렴한 다음 기어감). 두 가지 거의 보편적 해결책:
-
-**워밍업**: 처음 `T_w` 스텝에서 `\eta`를 0에서 목표 값으로 선형 증가. 직관: 초기화 시 그래디언트 추정이 잡음이 있고 적응 옵티마이저의 모멘트 추정 `m, v`가 신뢰할 수 없습니다; 작은 스텝이 풀 사이즈를 취하기 전에 안정되게 합니다. 일반적 `T_w`는 총 학습의 1-5%.
-
-**코사인 감소**: 워밍업 후, `\eta`를 정점에서 작은 최종 값으로 코사인 곡선 따라 감소:
-
-```
-\eta(t) = \eta_min + 0.5 * (\eta_max - \eta_min) * (1 + cos(pi * (t - T_w) / (T_total - T_w)))
-```
-
-스텝 감소보다 부드럽고, 불연속 없으며, 추가 하이퍼파라미터 없음. 실험적으로 LLM 학습에 일관되게 강한 결과를 줍니다(GPT-3, LLaMA 등이 사용).
-
-### B. 혼합 정밀도
-
-float32로 학습은 파라미터당 4바이트, Adam 상태에 파라미터당 ~16바이트(파라미터, 그래디언트, 두 모멘트, 모두 fp32). Float16/bfloat16은 파라미터와 그래디언트 메모리를 절반으로, tensor core에서 유효 계산을 두 배로, 학습 속도를 대략 두 배로 만듭니다.
-
-두 정밀도 포맷:
-
-- **fp16**: 5비트 지수, 10비트 가수. 범위 `~10^{-5}` 에서 `~10^4`. 작은 그래디언트에서 언더플로우 — fp16 표현 가능 범위에 그래디언트를 유지하기 위해 **loss scaling**(손실에 `S = 2^k` 곱하고, 업데이트 전 그래디언트를 `S`로 나누기)이 필요.
-- **bf16**: 8비트 지수(fp32와 동일), 7비트 가수. 범위가 fp32와 일치, 정밀도 적음. Loss scaling 필요 없음; 이것이 모든 현대 하드웨어(TPU, A100, H100)가 bf16을 선호하는 이유.
-
-PyTorch의 `torch.cuda.amp.autocast()`는 안정성을 위해 선택 연산(손실, layer norm)을 fp32로 유지하면서 순전파를 자동으로 fp16/bf16으로 다운캐스트. 모델 파라미터 자체는 그래디언트 업데이트의 정밀도를 보존하기 위해 fp32에 머뭅니다.
-
-### C. Gradient Accumulation
-
-메모리 제한 GPU의 경우, 배치 크기 8만 맞을 수 있지만 — 작업의 최적 유효 배치 크기는 128일 수 있습니다. 해결책: 16개 마이크로 배치에 걸쳐 그래디언트를 누적한 다음 `optimizer.step()` 호출:
-
-```
-for i, batch in enumerate(loader):
-    loss = model(batch) / accum_steps
-    loss.backward()
-    if (i + 1) % accum_steps == 0:
-        optimizer.step()
-        optimizer.zero_grad()
-```
-
-수학적으로 배치 크기 `8 * 16 = 128`과 동등하며, 더 많은 순차 순전파/역전파 비용. 결정적 디테일: 누적된 그래디언트가 진정한 큰 배치 그래디언트와 같은 크기를 가지도록 손실을 `accum_steps`로 나누기(또는 그래디언트 스케일). 이를 잊으면 `16x` 큰 유효 학습률을 줍니다.
-
-### D. DDP vs FSDP
-
-**Distributed Data Parallel (DDP)**는 각 GPU에 전체 모델을 복제하고 *데이터*를 샤딩. 각 GPU가 자체 마이크로 배치에서 그래디언트를 계산; all-reduce가 옵티마이저 스텝 전에 GPU 간 그래디언트를 합산. GPU당 메모리는 전체 모델 크기; 통신은 스텝당 `O(parameters)`.
-
-**Fully Sharded Data Parallel (FSDP)**는 데이터와 *모델 파라미터* 둘 다를 GPU에 걸쳐 샤딩. 각 GPU가 파라미터의 `1/N` 저장; 각 층의 순전파 전에 누락된 파라미터가 모이고, 사용되며, 해제됨. GPU당 메모리는 `~ model_size / N`로 떨어짐; 통신은 (스텝당이 아닌) 층당 `O(parameters)`로 자람.
-
-모델이 GPU당 맞을 때 DDP 사용(학습이 데이터 바운드); 모델이 GPU당 맞지 않을 때 FSDP 사용(학습이 메모리 바운드). 현대 LLM(10B+ 파라미터)은 거의 항상 FSDP 또는 DeepSpeed ZeRO 같은 유사한 메모리 샤드 방식이 필요합니다.
-
-### 이론에서 아래 코드로
-
-| 이론 개념 | 본 레슨의 코드 구성 |
-|-----------|---------------------|
-| 코사인 + 워밍업 | `torch.optim.lr_scheduler.CosineAnnealingLR` + 수동 워밍업 |
-| 혼합 정밀도 | `with torch.autocast(device_type='cuda', dtype=torch.bfloat16)` |
-| Gradient accumulation | `accum_steps` 제수 패턴 |
-| DDP | `torch.nn.parallel.DistributedDataParallel(model)` |
-| FSDP | `torch.distributed.fsdp.FullyShardedDataParallel` |
-
----
-
-
 ## 1. 하이퍼파라미터 튜닝
 
 ### 주요 하이퍼파라미터
@@ -145,6 +71,21 @@ print(f"Best accuracy: {study.best_value}")
 
 ## 2. 학습률 스케줄링 심화
 
+### 이론: 워밍업과 코사인 감소
+
+상수 학습률은 두 실패 모드를 가집니다: 시작에서 너무 크거나(모델이 어떤 최솟값에서 멀고 큰 업데이트가 더 멀리 밀어냄) 끝에서 너무 작습니다(수렴한 다음 기어감). 두 가지 거의 보편적 해결책:
+
+**워밍업**: 처음 `T_w` 스텝에서 `\eta`를 0에서 목표 값으로 선형 증가. 직관: 초기화 시 그래디언트 추정이 잡음이 있고 적응 옵티마이저의 모멘트 추정 `m, v`가 신뢰할 수 없습니다; 작은 스텝이 풀 사이즈를 취하기 전에 안정되게 합니다. 일반적 `T_w`는 총 학습의 1-5%.
+
+**코사인 감소**: 워밍업 후, `\eta`를 정점에서 작은 최종 값으로 코사인 곡선 따라 감소:
+
+```
+\eta(t) = \eta_min + 0.5 * (\eta_max - \eta_min) * (1 + cos(pi * (t - T_w) / (T_total - T_w)))
+```
+
+스텝 감소보다 부드럽고, 불연속 없으며, 추가 하이퍼파라미터 없음. 실험적으로 LLM 학습에 일관되게 강한 결과를 줍니다(GPT-3, LLaMA 등이 사용).
+
+
 ### Warmup
 
 ```python
@@ -196,6 +137,18 @@ for batch in train_loader:
 ---
 
 ## 3. Mixed Precision Training
+
+### 이론: 혼합 정밀도
+
+float32로 학습은 파라미터당 4바이트, Adam 상태에 파라미터당 ~16바이트(파라미터, 그래디언트, 두 모멘트, 모두 fp32). Float16/bfloat16은 파라미터와 그래디언트 메모리를 절반으로, tensor core에서 유효 계산을 두 배로, 학습 속도를 대략 두 배로 만듭니다.
+
+두 정밀도 포맷:
+
+- **fp16**: 5비트 지수, 10비트 가수. 범위 `~10^{-5}` 에서 `~10^4`. 작은 그래디언트에서 언더플로우 — fp16 표현 가능 범위에 그래디언트를 유지하기 위해 **loss scaling**(손실에 `S = 2^k` 곱하고, 업데이트 전 그래디언트를 `S`로 나누기)이 필요.
+- **bf16**: 8비트 지수(fp32와 동일), 7비트 가수. 범위가 fp32와 일치, 정밀도 적음. Loss scaling 필요 없음; 이것이 모든 현대 하드웨어(TPU, A100, H100)가 bf16을 선호하는 이유.
+
+PyTorch의 `torch.cuda.amp.autocast()`는 안정성을 위해 선택 연산(손실, layer norm)을 fp32로 유지하면서 순전파를 자동으로 fp16/bf16으로 다운캐스트. 모델 파라미터 자체는 그래디언트 업데이트의 정밀도를 보존하기 위해 fp32에 머뭅니다.
+
 
 ### 개념
 
@@ -252,6 +205,22 @@ def train_with_amp(model, train_loader, optimizer, epochs):
 ---
 
 ## 4. Gradient Accumulation
+
+### 이론: Gradient Accumulation
+
+메모리 제한 GPU의 경우, 배치 크기 8만 맞을 수 있지만 — 작업의 최적 유효 배치 크기는 128일 수 있습니다. 해결책: 16개 마이크로 배치에 걸쳐 그래디언트를 누적한 다음 `optimizer.step()` 호출:
+
+```
+for i, batch in enumerate(loader):
+    loss = model(batch) / accum_steps
+    loss.backward()
+    if (i + 1) % accum_steps == 0:
+        optimizer.step()
+        optimizer.zero_grad()
+```
+
+수학적으로 배치 크기 `8 * 16 = 128`과 동등하며, 더 많은 순차 순전파/역전파 비용. 결정적 디테일: 누적된 그래디언트가 진정한 큰 배치 그래디언트와 같은 크기를 가지도록 손실을 `accum_steps`로 나누기(또는 그래디언트 스케일). 이를 잊으면 `16x` 큰 유효 학습률을 줍니다.
+
 
 ### 개념
 
@@ -528,6 +497,15 @@ output = compiled_model(sample_input)  # 컴파일 정보 출력
 ---
 
 ## 10. 분산 학습 (DDP & FSDP)
+
+### 이론: DDP vs FSDP
+
+**Distributed Data Parallel (DDP)**는 각 GPU에 전체 모델을 복제하고 *데이터*를 샤딩. 각 GPU가 자체 마이크로 배치에서 그래디언트를 계산; all-reduce가 옵티마이저 스텝 전에 GPU 간 그래디언트를 합산. GPU당 메모리는 전체 모델 크기; 통신은 스텝당 `O(parameters)`.
+
+**Fully Sharded Data Parallel (FSDP)**는 데이터와 *모델 파라미터* 둘 다를 GPU에 걸쳐 샤딩. 각 GPU가 파라미터의 `1/N` 저장; 각 층의 순전파 전에 누락된 파라미터가 모이고, 사용되며, 해제됨. GPU당 메모리는 `~ model_size / N`로 떨어짐; 통신은 (스텝당이 아닌) 층당 `O(parameters)`로 자람.
+
+모델이 GPU당 맞을 때 DDP 사용(학습이 데이터 바운드); 모델이 GPU당 맞지 않을 때 FSDP 사용(학습이 메모리 바운드). 현대 LLM(10B+ 파라미터)은 거의 항상 FSDP 또는 DeepSpeed ZeRO 같은 유사한 메모리 샤드 방식이 필요합니다.
+
 
 ### DataParallel vs. DistributedDataParallel
 

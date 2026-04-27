@@ -20,8 +20,6 @@
 
 ## 목차
 
-참조에 들어가기 전에, [**이론과 원리**](#이론과-원리) 섹션을 먼저 읽어보세요. Transformer의 이차 attention 한계, 연속-이산 SSM 정식화, Mamba의 선택적 상태 공간.
-
 1. [트랜스포머의 한계](#1-트랜스포머의-한계)
 2. [상태 공간 모델: 수학적 기초](#2-상태-공간-모델-수학적-기초)
 3. [S4: 시퀀스를 위한 구조화된 상태 공간](#3-s4-시퀀스를-위한-구조화된-상태-공간)
@@ -32,89 +30,14 @@
 8. [구현 세부 사항과 훈련](#8-구현-세부-사항과-훈련)
 9. [연습문제](#9-연습문제)
 
----
+## 1. 트랜스포머의 한계
 
-## 이론과 원리
-
-State Space Models (SSM) — S4, Mamba, 그리고 후계자들 — 은 시퀀스 모델링에서 Transformer에 대한 진지한 도전자입니다. 그들의 매력은 점근적: 시퀀스 길이에서 O(N) 계산과 메모리, Transformer의 O(N^2) 대. 왜 SSM이 훨씬 나은 복잡도에서 Transformer 품질을 일치시킬 수 있는지의 수학이 이 섹션의 전체 내용이며, 연속 시간 선형 시스템을 통한 우회가 필요합니다.
-
-이 섹션에서 다루는 내용:
-
-- **A.** Transformer의 이차 attention 한계
-- **B.** 연속 SSM과 그 이산화
-- **C.** S4: 효율적 장거리 모델링을 위한 구조화 행렬
-- **D.** Mamba: 입력 의존 동역학이 있는 선택적 SSM
-
-### A. Transformer가 벽에 부딪히는 이유
+### 이론: Transformer가 벽에 부딪히는 이유
 
 표준 attention 층은 `softmax(QK^T / sqrt(d)) V`를 계산. `QK^T` 행렬은 시퀀스 길이 `N`에 대해 `N x N`이며, `O(N^2)` 시간과 메모리를 요구. `N = 100k`(긴 문서)의 경우, fp32에서 10^10 연산과 40 GB 메모리 — 완전히 비실용적.
 
 많은 부분적 수정이 존재(희소 attention, 선형 attention 근사, FlashAttention의 메모리 트릭), 하지만 그것들이 품질 또는 근본적 복잡도를 거래. SSM은 다른 길을 취함: attention을 완전히 떨어뜨리고 구성상 O(N)인 다른 시퀀스 모델링 원시를 사용.
 
-### B. 연속 SSM과 이산화
-
-연속 시간 SSM은 선형 ODE:
-
-```
-\dot{h}(t) = A h(t) + B u(t)
-y(t) = C h(t)
-```
-
-`u(t)`가 입력, `h(t)`가 은닉 상태, `y(t)`가 출력. `A, B, C`가 학습 가능한 행렬. 이는 정확히 제어 이론의 표준 선형 시불변(LTI) 시스템.
-
-이산 시퀀스에 사용하기 위해, 스텝 크기 `\Delta`로 이산화:
-
-```
-h_t = \bar A h_{t-1} + \bar B u_t
-y_t = C h_t
-\bar A = exp(\Delta A),  \bar B = (\Delta A)^{-1} (exp(\Delta A) - I) \cdot \Delta B
-```
-
-이제 선형 점화식 — 비선형성 없는 RNN과 정확히 같음. 두 사실이 이를 딥러닝에 유용하게 만듦:
-
-1. **선형 점화식은 *parallel scan* 알고리즘을 통해 병렬화 가능** — O(N) 작업이지만 O(log N) 깊이, 표준 RNN과 달리 GPU 병렬성 활용.
-2. **점화식이 커널 `K = (CB, CAB, CA^2 B, ...)`를 가진 긴 합성곱으로 표현될 수 있음**, FFT를 통해 O(N log N)에서 계산 가능.
-
-따라서 SSM은 RNN 같은 순차 모델링과 CNN 같은 병렬성을 결합. 트릭은 attention과 경쟁할 만큼 *충분히 표현력 있게* 만드는 것.
-
-### C. S4: 구조화 행렬
-
-전체 `A in R^{d x d}`를 가진 순진한 SSM은 너무 비쌈. S4 (Gu, Goel, Re 2021)는 `A`를 구조화된 형태로 제한: HiPPO-LegS, 다항식으로 연속 함수를 근사하는 데서 유도. 이 특정 구조가 두 결정적 성질을 가짐:
-
-1. **장거리 기억**: 상태가 제어 가능한 망각률로 임의로 먼 과거의 정보를 포착.
-2. **효율적 계산**: Cauchy 커널을 통해 합성곱 커널을 O(N log N)에서 계산 가능.
-
-S4는 장거리 벤치마크(Path-X, Long Range Arena)에서 Transformer 성능을 일치시킨 첫 SSM 변형이었으며, 장거리 컨텍스트 모델링에 O(N^2) attention이 필수가 아님을 증명.
-
-### D. Mamba: 선택적 State Space
-
-S4의 `(A, B, C)`은 *고정*(입력 무관)이며, 이는 특정 입력에 선택적으로 집중할 수 없음을 의미. **Mamba** (Gu & Dao 2023)는 그것들을 *입력 의존*으로 만듦:
-
-```
-B_t = Linear(u_t),  C_t = Linear(u_t),  \Delta_t = softplus(Linear(u_t))
-h_t = \bar A_t h_{t-1} + \bar B_t u_t              (\bar A_t가 \Delta_t에 의존)
-y_t = C_t h_t
-```
-
-이제 SSM은 중요한 토큰을 "확대"(작은 `\Delta`가 상태 유지)하고 중요하지 않은 것을 "건너뜀"(큰 `\Delta`가 감쇠 가속) 가능. 이는 attention의 `softmax(QK^T)`와 유사한 내용 기반 선택 메커니즘이지만, 근본적으로 다른 스케일링.
-
-Mamba는 또한 HBM이 아닌 SRAM에서 parallel scan을 수행하는 **하드웨어 인식 커널**을 도입, 긴 컨텍스트에서 동등 Transformer보다 5배 빠른 학습 달성. 실험적으로, Mamba는 표준 NLP 벤치마크에서 비슷한 크기의 Transformer LM을 일치시키거나 능가.
-
-현재 합의: SSM은 이제 매우 긴 시퀀스에 Transformer의 진짜 대안이며, 하이브리드 아키텍처(Mamba + attention 층)가 점점 인기.
-
-### 이론에서 아래 코드로
-
-| 이론 개념 | 본 레슨의 코드 구성 |
-|-----------|---------------------|
-| 연속 SSM | `dh_dt = A @ h + B @ u; y = C @ h` |
-| 이산화 | `A_bar = expm(delta * A)` |
-| Parallel scan | 커스텀 CUDA 커널 또는 `selective_scan_fn` |
-| Mamba 선택성 | `B_t, C_t, delta_t = self.proj(u_t).split(...)` |
-
----
-
-
-## 1. 트랜스포머의 한계
 
 ### 1.1 이차 어텐션 문제(Quadratic Attention Problem)
 
@@ -178,6 +101,33 @@ KV 캐시 불필요 → 상수 메모리
 ---
 
 ## 2. 상태 공간 모델: 수학적 기초
+
+### 이론: 연속 SSM과 이산화
+
+연속 시간 SSM은 선형 ODE:
+
+```
+\dot{h}(t) = A h(t) + B u(t)
+y(t) = C h(t)
+```
+
+`u(t)`가 입력, `h(t)`가 은닉 상태, `y(t)`가 출력. `A, B, C`가 학습 가능한 행렬. 이는 정확히 제어 이론의 표준 선형 시불변(LTI) 시스템.
+
+이산 시퀀스에 사용하기 위해, 스텝 크기 `\Delta`로 이산화:
+
+```
+h_t = \bar A h_{t-1} + \bar B u_t
+y_t = C h_t
+\bar A = exp(\Delta A),  \bar B = (\Delta A)^{-1} (exp(\Delta A) - I) \cdot \Delta B
+```
+
+이제 선형 점화식 — 비선형성 없는 RNN과 정확히 같음. 두 사실이 이를 딥러닝에 유용하게 만듦:
+
+1. **선형 점화식은 *parallel scan* 알고리즘을 통해 병렬화 가능** — O(N) 작업이지만 O(log N) 깊이, 표준 RNN과 달리 GPU 병렬성 활용.
+2. **점화식이 커널 `K = (CB, CAB, CA^2 B, ...)`를 가진 긴 합성곱으로 표현될 수 있음**, FFT를 통해 O(N log N)에서 계산 가능.
+
+따라서 SSM은 RNN 같은 순차 모델링과 CNN 같은 병렬성을 결합. 트릭은 attention과 경쟁할 만큼 *충분히 표현력 있게* 만드는 것.
+
 
 ### 2.1 연속 상태 공간 모델
 
@@ -328,6 +278,16 @@ class BasicSSM(nn.Module):
 
 ## 3. S4: 시퀀스를 위한 구조화된 상태 공간
 
+### 이론: S4: 구조화 행렬
+
+전체 `A in R^{d x d}`를 가진 순진한 SSM은 너무 비쌈. S4 (Gu, Goel, Re 2021)는 `A`를 구조화된 형태로 제한: HiPPO-LegS, 다항식으로 연속 함수를 근사하는 데서 유도. 이 특정 구조가 두 결정적 성질을 가짐:
+
+1. **장거리 기억**: 상태가 제어 가능한 망각률로 임의로 먼 과거의 정보를 포착.
+2. **효율적 계산**: Cauchy 커널을 통해 합성곱 커널을 O(N log N)에서 계산 가능.
+
+S4는 장거리 벤치마크(Path-X, Long Range Arena)에서 Transformer 성능을 일치시킨 첫 SSM 변형이었으며, 장거리 컨텍스트 모델링에 O(N^2) attention이 필수가 아님을 증명.
+
+
 ### 3.1 장거리 의존성의 과제
 
 위의 나이브 SSM에는 치명적인 문제가 있습니다: 행렬 A_bar^k가 k가 커짐에 따라 감쇠하거나 폭발하여 장거리 의존성 포착이 어렵습니다.
@@ -417,6 +377,23 @@ DPLR A의 경우:
 ---
 
 ## 4. Mamba: 선택적 상태 공간
+
+### 이론: Mamba: 선택적 State Space
+
+S4의 `(A, B, C)`은 *고정*(입력 무관)이며, 이는 특정 입력에 선택적으로 집중할 수 없음을 의미. **Mamba** (Gu & Dao 2023)는 그것들을 *입력 의존*으로 만듦:
+
+```
+B_t = Linear(u_t),  C_t = Linear(u_t),  \Delta_t = softplus(Linear(u_t))
+h_t = \bar A_t h_{t-1} + \bar B_t u_t              (\bar A_t가 \Delta_t에 의존)
+y_t = C_t h_t
+```
+
+이제 SSM은 중요한 토큰을 "확대"(작은 `\Delta`가 상태 유지)하고 중요하지 않은 것을 "건너뜀"(큰 `\Delta`가 감쇠 가속) 가능. 이는 attention의 `softmax(QK^T)`와 유사한 내용 기반 선택 메커니즘이지만, 근본적으로 다른 스케일링.
+
+Mamba는 또한 HBM이 아닌 SRAM에서 parallel scan을 수행하는 **하드웨어 인식 커널**을 도입, 긴 컨텍스트에서 동등 Transformer보다 5배 빠른 학습 달성. 실험적으로, Mamba는 표준 NLP 벤치마크에서 비슷한 크기의 Transformer LM을 일치시키거나 능가.
+
+현재 합의: SSM은 이제 매우 긴 시퀀스에 Transformer의 진짜 대안이며, 하이브리드 아키텍처(Mamba + attention 층)가 점점 인기.
+
 
 ### 4.1 선택성 문제(Selectivity Problem)
 

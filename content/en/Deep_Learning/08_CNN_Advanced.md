@@ -11,20 +11,9 @@
 - Understand training problems of deep networks and solutions
 - Implement with PyTorch
 
----
+## 1. VGG (2014)
 
-## Theory & Principles
-
-The "advanced" CNN topics below — VGG, Inception, ResNet, dilated and transposed convolutions, depthwise separable convolutions — are best understood as a series of answers to one engineering question: how do you scale the receptive field, channel count, and depth of a CNN without blowing up parameter count or breaking gradient flow? Each architectural variant is a different point on that trade-off curve.
-
-This section covers:
-
-- **A.** Stacking small kernels (3x3) instead of large ones (7x7)
-- **B.** Dilated and transposed convolutions: changing the geometry of striding
-- **C.** 1x1 convolutions as channel mixing
-- **D.** Depthwise-separable convolutions and the parameter savings
-
-### A. Why Stack 3x3 Kernels Instead of One 7x7
+### Theory: Why Stack 3x3 Kernels Instead of One 7x7
 
 Two stacked `3x3` convolutions have a `5x5` receptive field with `2 * (3^2 C^2) = 18 C^2` parameters. A single `5x5` convolution has the same RF but `25 C^2` parameters. Three stacked `3x3` convolutions reach `7x7` RF with `27 C^2` parameters versus `49 C^2` for a single `7x7`.
 
@@ -35,53 +24,6 @@ Two wins:
 
 VGG (Simonyan & Zisserman 2014) was the architecture that committed entirely to this principle: every conv is `3x3`, every pool is `2x2`, depth is the only knob.
 
-### B. Dilated and Transposed Convolutions
-
-**Dilated (atrous) convolution** introduces holes in the kernel:
-
-```
-y(i, j) = sum_{m, n} x(i + r * m, j + r * n) * w(m, n)
-```
-
-where `r` is the dilation rate. A `3x3` kernel with `r = 2` covers a `5x5` region but uses only 9 weights. The receptive field grows *exponentially* with depth at fixed parameter count if you use exponentially increasing dilation rates (1, 2, 4, 8, ...). This is essential for semantic segmentation, where you want a large context window without losing resolution.
-
-**Transposed convolution** (also called "deconvolution," misleadingly) implements the *backward pass shape* of a forward convolution. If forward conv maps `H_in -> H_out = (H_in - K) / S + 1` (stride `S`), transposed conv maps `H_in -> H_out = S * (H_in - 1) + K`. It is used to *upsample* feature maps in autoencoders, GAN generators, and segmentation decoders. Note: the term "deconvolution" is mathematically wrong (true deconvolution would invert the convolution operator); transposed conv merely matches the *shape* of the inverse, not the values.
-
-### C. 1x1 Convolutions: Channel Mixing
-
-A `1x1` conv with `C_in` input and `C_out` output channels is equivalent to applying a learned `C_in -> C_out` linear map at every spatial location independently. Spatially, it does nothing; across channels, it mixes everything.
-
-Three uses:
-
-1. **Dimensionality reduction.** Inception (GoogLeNet 2014) places a `1x1` conv before each expensive `3x3` or `5x5` conv to first reduce channel count, drastically cutting the cost of the larger conv that follows.
-2. **Channel re-weighting.** Squeeze-and-excitation modules use `1x1` convs to compute per-channel attention.
-3. **Bottleneck blocks.** ResNet uses `1x1 -> 3x3 -> 1x1` bottlenecks where the first `1x1` reduces channels, the `3x3` does spatial work cheaply, and the last `1x1` restores channel count.
-
-### D. Depthwise-Separable Convolutions
-
-A standard conv with `K x K` kernel, `C_in` input channels, `C_out` output channels has `K^2 * C_in * C_out` parameters and `K^2 * C_in * C_out * H * W` FLOPs.
-
-A **depthwise-separable conv** factorizes this into two cheaper steps:
-
-1. **Depthwise**: one `K x K` filter per input channel, no channel mixing. Parameters: `K^2 * C_in`. FLOPs: `K^2 * C_in * H * W`.
-2. **Pointwise** (a `1x1` conv): mixes channels. Parameters: `C_in * C_out`. FLOPs: `C_in * C_out * H * W`.
-
-Total parameters: `K^2 * C_in + C_in * C_out` instead of `K^2 * C_in * C_out`. The savings ratio is `1 / C_out + 1 / K^2`. For a typical `K=3, C_out=256`, this is roughly 1/8 — almost an order of magnitude. MobileNet (Howard et al. 2017) and Xception (Chollet 2017) are built on this factorization, and it is the reason mobile-deployable CNNs exist at all.
-
-### From Theory to the Code Below
-
-| Theory concept | Code construct in this lesson |
-|----------------|-------------------------------|
-| Stacked 3x3 convs (VGG) | `nn.Conv2d(C, C, 3, padding=1)` x N |
-| Dilated conv | `nn.Conv2d(..., dilation=r)` |
-| Transposed conv | `nn.ConvTranspose2d(...)` |
-| 1x1 channel mixing | `nn.Conv2d(C_in, C_out, kernel_size=1)` |
-| Depthwise separable | `nn.Conv2d(..., groups=C_in)` followed by 1x1 conv |
-
----
-
-
-## 1. VGG (2014)
 
 ### Core Ideas
 
@@ -297,6 +239,42 @@ class SEBlock(nn.Module):
 ---
 
 ## 4. EfficientNet (2019)
+
+### Theory: Depthwise-Separable Convolutions
+
+A standard conv with `K x K` kernel, `C_in` input channels, `C_out` output channels has `K^2 * C_in * C_out` parameters and `K^2 * C_in * C_out * H * W` FLOPs.
+
+A **depthwise-separable conv** factorizes this into two cheaper steps:
+
+1. **Depthwise**: one `K x K` filter per input channel, no channel mixing. Parameters: `K^2 * C_in`. FLOPs: `K^2 * C_in * H * W`.
+2. **Pointwise** (a `1x1` conv): mixes channels. Parameters: `C_in * C_out`. FLOPs: `C_in * C_out * H * W`.
+
+Total parameters: `K^2 * C_in + C_in * C_out` instead of `K^2 * C_in * C_out`. The savings ratio is `1 / C_out + 1 / K^2`. For a typical `K=3, C_out=256`, this is roughly 1/8 — almost an order of magnitude. MobileNet (Howard et al. 2017) and Xception (Chollet 2017) are built on this factorization, and it is the reason mobile-deployable CNNs exist at all.
+
+
+### Theory: 1x1 Convolutions: Channel Mixing
+
+A `1x1` conv with `C_in` input and `C_out` output channels is equivalent to applying a learned `C_in -> C_out` linear map at every spatial location independently. Spatially, it does nothing; across channels, it mixes everything.
+
+Three uses:
+
+1. **Dimensionality reduction.** Inception (GoogLeNet 2014) places a `1x1` conv before each expensive `3x3` or `5x5` conv to first reduce channel count, drastically cutting the cost of the larger conv that follows.
+2. **Channel re-weighting.** Squeeze-and-excitation modules use `1x1` convs to compute per-channel attention.
+3. **Bottleneck blocks.** ResNet uses `1x1 -> 3x3 -> 1x1` bottlenecks where the first `1x1` reduces channels, the `3x3` does spatial work cheaply, and the last `1x1` restores channel count.
+
+
+### Theory: Dilated and Transposed Convolutions
+
+**Dilated (atrous) convolution** introduces holes in the kernel:
+
+```
+y(i, j) = sum_{m, n} x(i + r * m, j + r * n) * w(m, n)
+```
+
+where `r` is the dilation rate. A `3x3` kernel with `r = 2` covers a `5x5` region but uses only 9 weights. The receptive field grows *exponentially* with depth at fixed parameter count if you use exponentially increasing dilation rates (1, 2, 4, 8, ...). This is essential for semantic segmentation, where you want a large context window without losing resolution.
+
+**Transposed convolution** (also called "deconvolution," misleadingly) implements the *backward pass shape* of a forward convolution. If forward conv maps `H_in -> H_out = (H_in - K) / S + 1` (stride `S`), transposed conv maps `H_in -> H_out = S * (H_in - 1) + K`. It is used to *upsample* feature maps in autoencoders, GAN generators, and segmentation decoders. Note: the term "deconvolution" is mathematically wrong (true deconvolution would invert the convolution operator); transposed conv merely matches the *shape* of the inverse, not the values.
+
 
 ### Core Ideas
 

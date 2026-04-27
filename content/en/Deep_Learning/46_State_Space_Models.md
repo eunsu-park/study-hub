@@ -20,8 +20,6 @@ After completing this lesson, you will be able to:
 
 ## Table of Contents
 
-Before the reference, read [**Theory & Principles**](#theory--principles) — Transformer's quadratic-attention limit, the continuous-discrete SSM formulation, and Mamba's selective state space.
-
 1. [Limitations of Transformers](#1-limitations-of-transformers)
 2. [State Space Models: Mathematical Foundation](#2-state-space-models-mathematical-foundation)
 3. [S4: Structured State Spaces for Sequences](#3-s4-structured-state-spaces-for-sequences)
@@ -32,89 +30,14 @@ Before the reference, read [**Theory & Principles**](#theory--principles) — Tr
 8. [Implementation Details and Training](#8-implementation-details-and-training)
 9. [Exercises](#9-exercises)
 
----
+## 1. Limitations of Transformers
 
-## Theory & Principles
-
-State Space Models (SSMs) — S4, Mamba, and successors — are a serious challenger to Transformers for sequence modeling. Their appeal is asymptotic: O(N) compute and memory in sequence length, vs Transformer's O(N^2). The math behind why an SSM can match Transformer quality at much better complexity is the entire content of this section, and it requires a detour through continuous-time linear systems.
-
-This section covers:
-
-- **A.** Transformer's quadratic-attention limit
-- **B.** Continuous SSM and its discretization
-- **C.** S4: structured matrices for efficient long-range modeling
-- **D.** Mamba: selective SSM with input-dependent dynamics
-
-### A. Why Transformers Hit a Wall
+### Theory: Why Transformers Hit a Wall
 
 A standard attention layer computes `softmax(QK^T / sqrt(d)) V`. The `QK^T` matrix is `N x N` for sequence length `N`, requiring `O(N^2)` time and memory. For `N = 100k` (a long document), this is 10^10 operations and 40 GB of memory at fp32 — completely impractical.
 
 Many partial fixes exist (sparse attention, linear attention approximations, FlashAttention's memory tricks), but they trade off either quality or fundamental complexity. SSMs take a different route: drop attention entirely and use a different sequence-modeling primitive that is O(N) by construction.
 
-### B. Continuous SSM and Discretization
-
-A continuous-time SSM is a linear ODE:
-
-```
-\dot{h}(t) = A h(t) + B u(t)
-y(t) = C h(t)
-```
-
-`u(t)` is the input, `h(t)` is the hidden state, `y(t)` is the output. `A, B, C` are learnable matrices. This is exactly the standard linear time-invariant system from control theory.
-
-To use it on discrete sequences, discretize with step size `\Delta`:
-
-```
-h_t = \bar A h_{t-1} + \bar B u_t
-y_t = C h_t
-\bar A = exp(\Delta A),  \bar B = (\Delta A)^{-1} (exp(\Delta A) - I) \cdot \Delta B
-```
-
-Now you have a linear recurrence — exactly like an RNN but without the nonlinearity. Two facts make this useful for deep learning:
-
-1. **Linear recurrence is parallelizable** via the *parallel scan* algorithm — O(N) work but O(log N) depth, exploiting GPU parallelism unlike a standard RNN.
-2. **The recurrence can be expressed as a long convolution** with a kernel `K = (CB, CAB, CA^2 B, ...)`, computable via FFT in O(N log N).
-
-So SSMs combine RNN-like sequential modeling with CNN-like parallelism. The trick is making them *expressive enough* to compete with attention.
-
-### C. S4: Structured Matrices
-
-A naive SSM with full `A in R^{d x d}` is too expensive. S4 (Gu, Goel, Re 2021) restricts `A` to a structured form: HiPPO-LegS, derived from approximating a continuous function by polynomials. This particular structure has two crucial properties:
-
-1. **Long-range memory**: the state captures information from arbitrarily far in the past with controllable forgetting rate.
-2. **Efficient computation**: convolution kernels can be computed in O(N log N) via Cauchy kernels.
-
-S4 was the first SSM variant to match Transformer performance on long-range benchmarks (Path-X, Long Range Arena), proving that O(N^2) attention is not necessary for long-context modeling.
-
-### D. Mamba: Selective State Space
-
-S4's `(A, B, C)` are *fixed* (input-independent), which means it cannot selectively focus on certain inputs. **Mamba** (Gu & Dao 2023) makes them *input-dependent*:
-
-```
-B_t = Linear(u_t),  C_t = Linear(u_t),  \Delta_t = softplus(Linear(u_t))
-h_t = \bar A_t h_{t-1} + \bar B_t u_t              (where \bar A_t depends on \Delta_t)
-y_t = C_t h_t
-```
-
-Now the SSM can "zoom in" on important tokens (small `\Delta` keeps state around) and "skip past" unimportant ones (large `\Delta` accelerates decay). This is a content-based selection mechanism analogous to attention's `softmax(QK^T)`, but with fundamentally different scaling.
-
-Mamba also introduces a **hardware-aware kernel** that performs the parallel scan in SRAM rather than HBM, achieving 5x faster training than equivalent Transformers at long context. Empirically, Mamba matches or exceeds Transformer LMs of comparable size on standard NLP benchmarks.
-
-The current consensus: SSMs are now a real alternative to Transformers for very long sequences, and hybrid architectures (Mamba + attention layers) are increasingly popular.
-
-### From Theory to the Code Below
-
-| Theory concept | Code construct in this lesson |
-|----------------|-------------------------------|
-| Continuous SSM | `dh_dt = A @ h + B @ u; y = C @ h` |
-| Discretization | `A_bar = expm(delta * A)` |
-| Parallel scan | Custom CUDA kernel or `selective_scan_fn` |
-| Mamba selectivity | `B_t, C_t, delta_t = self.proj(u_t).split(...)` |
-
----
-
-
-## 1. Limitations of Transformers
 
 ### 1.1 The Quadratic Attention Problem
 
@@ -178,6 +101,33 @@ No KV cache needed → constant memory
 ---
 
 ## 2. State Space Models: Mathematical Foundation
+
+### Theory: Continuous SSM and Discretization
+
+A continuous-time SSM is a linear ODE:
+
+```
+\dot{h}(t) = A h(t) + B u(t)
+y(t) = C h(t)
+```
+
+`u(t)` is the input, `h(t)` is the hidden state, `y(t)` is the output. `A, B, C` are learnable matrices. This is exactly the standard linear time-invariant system from control theory.
+
+To use it on discrete sequences, discretize with step size `\Delta`:
+
+```
+h_t = \bar A h_{t-1} + \bar B u_t
+y_t = C h_t
+\bar A = exp(\Delta A),  \bar B = (\Delta A)^{-1} (exp(\Delta A) - I) \cdot \Delta B
+```
+
+Now you have a linear recurrence — exactly like an RNN but without the nonlinearity. Two facts make this useful for deep learning:
+
+1. **Linear recurrence is parallelizable** via the *parallel scan* algorithm — O(N) work but O(log N) depth, exploiting GPU parallelism unlike a standard RNN.
+2. **The recurrence can be expressed as a long convolution** with a kernel `K = (CB, CAB, CA^2 B, ...)`, computable via FFT in O(N log N).
+
+So SSMs combine RNN-like sequential modeling with CNN-like parallelism. The trick is making them *expressive enough* to compete with attention.
+
 
 ### 2.1 Continuous State Space Model
 
@@ -328,6 +278,16 @@ class BasicSSM(nn.Module):
 
 ## 3. S4: Structured State Spaces for Sequences
 
+### Theory: S4: Structured Matrices
+
+A naive SSM with full `A in R^{d x d}` is too expensive. S4 (Gu, Goel, Re 2021) restricts `A` to a structured form: HiPPO-LegS, derived from approximating a continuous function by polynomials. This particular structure has two crucial properties:
+
+1. **Long-range memory**: the state captures information from arbitrarily far in the past with controllable forgetting rate.
+2. **Efficient computation**: convolution kernels can be computed in O(N log N) via Cauchy kernels.
+
+S4 was the first SSM variant to match Transformer performance on long-range benchmarks (Path-X, Long Range Arena), proving that O(N^2) attention is not necessary for long-context modeling.
+
+
 ### 3.1 The Challenge of Long-Range Dependencies
 
 The naive SSM above has a critical problem: the matrix A_bar^k decays or explodes as k grows, making it hard to capture long-range dependencies.
@@ -417,6 +377,23 @@ With FFT for convolution: O(L log L) total
 ---
 
 ## 4. Mamba: Selective State Spaces
+
+### Theory: Mamba: Selective State Space
+
+S4's `(A, B, C)` are *fixed* (input-independent), which means it cannot selectively focus on certain inputs. **Mamba** (Gu & Dao 2023) makes them *input-dependent*:
+
+```
+B_t = Linear(u_t),  C_t = Linear(u_t),  \Delta_t = softplus(Linear(u_t))
+h_t = \bar A_t h_{t-1} + \bar B_t u_t              (where \bar A_t depends on \Delta_t)
+y_t = C_t h_t
+```
+
+Now the SSM can "zoom in" on important tokens (small `\Delta` keeps state around) and "skip past" unimportant ones (large `\Delta` accelerates decay). This is a content-based selection mechanism analogous to attention's `softmax(QK^T)`, but with fundamentally different scaling.
+
+Mamba also introduces a **hardware-aware kernel** that performs the parallel scan in SRAM rather than HBM, achieving 5x faster training than equivalent Transformers at long context. Empirically, Mamba matches or exceeds Transformer LMs of comparable size on standard NLP benchmarks.
+
+The current consensus: SSMs are now a real alternative to Transformers for very long sequences, and hybrid architectures (Mamba + attention layers) are increasingly popular.
+
 
 ### 4.1 The Selectivity Problem
 

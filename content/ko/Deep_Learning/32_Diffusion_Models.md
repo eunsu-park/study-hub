@@ -14,20 +14,9 @@
 - Classifier-free Guidance
 - 간단한 DDPM PyTorch 구현
 
----
+## 1. Diffusion Process 개요
 
-## 이론과 원리
-
-Diffusion 모델(Sohl-Dickstein 2015, Ho et al. 2020 DDPM)은 이제 고품질 이미지 합성의 지배적 생성 접근입니다. 수학이 위협적으로 보이지만 단순한 레시피로 환원됩니다: 가우시안 잡음으로 데이터를 점진적으로 파괴하는 마르코프 사슬을 정의한 다음, 한 번에 한 스텝씩 역전시키도록 신경망을 학습. 닫힌 형태의 순방향 과정이 손에 들어오면 나머지가 모두 따라옵니다.
-
-이 섹션에서 다루는 내용:
-
-- **A.** 순방향 과정: 닫힌 형태 `q(x_t | x_0)`을 가진 마르코프 사슬
-- **B.** 역방향 과정: 잡음 제거 스텝을 매개변수화하는 신경망
-- **C.** 단순화된 DDPM 학습 목적 (잡음 예측)
-- **D.** 점수 기반 관점과 SDE 연결
-
-### A. 순방향 Diffusion 과정
+### 이론: 순방향 Diffusion 과정
 
 순방향 과정은 고정 분산 스케줄 `\beta_1, ..., \beta_T`에 따라 `T` 스텝에 걸쳐 데이터에 가우시안 잡음을 점진적으로 추가:
 
@@ -50,67 +39,6 @@ x_t = sqrt(\bar\alpha_t) x_0 + sqrt(1 - \bar\alpha_t) \epsilon,    \epsilon ~ N(
 
 큰 `T`와 잘 선택된 스케줄(선형 또는 코사인)의 경우, `\bar\alpha_T \approx 0`이므로 `x_T \approx N(0, I)` — 순수 잡음. 순방향 과정은 고정, 학습 없음.
 
-### B. 역방향 과정
-
-역방향 `q(x_{t-1} | x_t)`은 일반적으로 다루기 어렵지만, 작은 `\beta_t`에 대해서는 근사적으로 가우시안. 이를 신경망으로 매개변수화:
-
-```
-p_\theta(x_{t-1} | x_t) = N(x_{t-1} ; \mu_\theta(x_t, t), \Sigma_\theta(x_t, t))
-```
-
-DDPM에서 `\Sigma_\theta`는 (학습되지 않고) `\beta_t I` 또는 알려진 상수 `\tilde\beta_t`인 `\tilde\beta_t I`로 고정. `\mu_\theta`만 학습.
-
-생성: `x_T ~ N(0, I)`로 시작하고 `t = T, T-1, ..., 1`에 대해 `x_{t-1} ~ p_\theta(x_{t-1} | x_t)`를 반복. 최종 `x_0`이 샘플.
-
-### C. 단순화된 DDPM 학습 목적
-
-순방향/역방향 과정에 대한 ELBO 최대화는 `T`개 항을 가진 복잡한 손실을 줍니다. Ho et al.은 극적으로 더 단순한 동등물을 유도했습니다. 핵심 재매개변수화: `\mu_\theta`를 예측하는 대신, 추가된 잡음 `\epsilon`을 예측:
-
-```
-\mu_\theta(x_t, t) = (1 / sqrt(\alpha_t)) * (x_t - \beta_t / sqrt(1 - \bar\alpha_t) * \epsilon_\theta(x_t, t))
-```
-
-학습 손실은 다음으로 환원:
-
-```
-L_simple = E_{t, x_0, \epsilon} [|| \epsilon - \epsilon_\theta(sqrt(\bar\alpha_t) x_0 + sqrt(1 - \bar\alpha_t) \epsilon, t) ||^2]
-```
-
-즉: 무작위 시간 스텝 `t`를 선택하고, 실제 이미지에 잡음을 추가하여 `x_t`를 얻고, 네트워크에게 추가된 잡음을 예측하도록 요청, MSE 취함. 이 손실에 대한 세 가지 결정적 사실:
-
-- **KL 항이 남지 않음**(단순화된 버전에서 상수와 상쇄됨).
-- **네트워크는 단지 잡음 제거기**(denoiser) — 어떤 이미지를 만들지가 아니라 어떤 잡음을 제거할지 예측.
-- **MSE가 전체 손실 함수.** 적대적 동역학 없음, 최적화할 변분 하한 없음. 이것이 diffusion 모델이 GAN보다 *훨씬* 안정적으로 학습하는 이유.
-
-네트워크 아키텍처는 일반적으로 self-attention이 있는 U-Net; 시간 스텝 `t`가 내부 특징 맵에 더해지는 sinusoidal 임베딩으로 공급.
-
-### D. 점수 기반 관점과 SDE
-
-Song & Ermon (2019)은 동등한 정식화를 보였습니다: 잡음 데이터 분포의 **점수(score)** `\nabla_x log p_t(x)`를 추정하도록 네트워크를 학습. 그러면 샘플링이 Langevin 스타일 — 점수 방향과 약간의 가우시안 잡음으로 반복적으로 살짝 미는 것.
-
-연속 시간 극한(Song et al. 2021)에서 순방향과 역방향 과정이 **확률 미분 방정식**(stochastic differential equations)이 됨:
-
-```
-순방향:  dx = f(x, t) dt + g(t) dW
-역방향:  dx = (f(x, t) - g(t)^2 \nabla_x log p_t(x)) dt + g(t) d\bar W
-```
-
-이 SDE 관점은 DDPM, score-matching, ODE 기반 샘플링을 하나의 프레임워크로 통합하고, 역방향 SDE를 수치 적분 문제로 다루어 더 빠른 샘플러(DPM-Solver, DDIM)로 이어짐.
-
-### 이론에서 아래 코드로
-
-| 이론 개념 | 본 레슨의 코드 구성 |
-|-----------|---------------------|
-| 순방향 샘플링 | `x_t = sqrt(alpha_bar[t]) * x_0 + sqrt(1 - alpha_bar[t]) * noise` |
-| U-Net 잡음 예측기 | `eps_pred = unet(x_t, t)` |
-| 학습 손실 | `F.mse_loss(eps_pred, noise)` |
-| 역방향 샘플링 | `x_{t-1} = (x_t - beta_t / sqrt(1 - alpha_bar) * eps_pred) / sqrt(alpha_t) + sigma * z` |
-| 스케줄 | 선형 `beta_t = beta_min + (beta_max - beta_min) * t/T` 또는 코사인 |
-
----
-
-
-## 1. Diffusion Process 개요
 
 ### 핵심 아이디어
 
@@ -345,6 +273,29 @@ class SimpleUNet(nn.Module):
 
 ## 4. 학습 과정
 
+### 이론: 단순화된 DDPM 학습 목적
+
+순방향/역방향 과정에 대한 ELBO 최대화는 `T`개 항을 가진 복잡한 손실을 줍니다. Ho et al.은 극적으로 더 단순한 동등물을 유도했습니다. 핵심 재매개변수화: `\mu_\theta`를 예측하는 대신, 추가된 잡음 `\epsilon`을 예측:
+
+```
+\mu_\theta(x_t, t) = (1 / sqrt(\alpha_t)) * (x_t - \beta_t / sqrt(1 - \bar\alpha_t) * \epsilon_\theta(x_t, t))
+```
+
+학습 손실은 다음으로 환원:
+
+```
+L_simple = E_{t, x_0, \epsilon} [|| \epsilon - \epsilon_\theta(sqrt(\bar\alpha_t) x_0 + sqrt(1 - \bar\alpha_t) \epsilon, t) ||^2]
+```
+
+즉: 무작위 시간 스텝 `t`를 선택하고, 실제 이미지에 잡음을 추가하여 `x_t`를 얻고, 네트워크에게 추가된 잡음을 예측하도록 요청, MSE 취함. 이 손실에 대한 세 가지 결정적 사실:
+
+- **KL 항이 남지 않음**(단순화된 버전에서 상수와 상쇄됨).
+- **네트워크는 단지 잡음 제거기**(denoiser) — 어떤 이미지를 만들지가 아니라 어떤 잡음을 제거할지 예측.
+- **MSE가 전체 손실 함수.** 적대적 동역학 없음, 최적화할 변분 하한 없음. 이것이 diffusion 모델이 GAN보다 *훨씬* 안정적으로 학습하는 이유.
+
+네트워크 아키텍처는 일반적으로 self-attention이 있는 U-Net; 시간 스텝 `t`가 내부 특징 맵에 더해지는 sinusoidal 임베딩으로 공급.
+
+
 ### 학습 알고리즘 (DDPM)
 
 ```
@@ -400,6 +351,19 @@ def train_diffusion(model, schedule, dataloader, epochs=100, lr=1e-4):
 ---
 
 ## 5. 샘플링 (Reverse Process)
+
+### 이론: 역방향 과정
+
+역방향 `q(x_{t-1} | x_t)`은 일반적으로 다루기 어렵지만, 작은 `\beta_t`에 대해서는 근사적으로 가우시안. 이를 신경망으로 매개변수화:
+
+```
+p_\theta(x_{t-1} | x_t) = N(x_{t-1} ; \mu_\theta(x_t, t), \Sigma_\theta(x_t, t))
+```
+
+DDPM에서 `\Sigma_\theta`는 (학습되지 않고) `\beta_t I` 또는 알려진 상수 `\tilde\beta_t`인 `\tilde\beta_t I`로 고정. `\mu_\theta`만 학습.
+
+생성: `x_T ~ N(0, I)`로 시작하고 `t = T, T-1, ..., 1`에 대해 `x_{t-1} ~ p_\theta(x_{t-1} | x_t)`를 반복. 최종 `x_0`이 샘플.
+
 
 ### DDPM 샘플링
 
@@ -494,6 +458,20 @@ def sample_ddim(model, schedule, shape, device, num_inference_steps=50, eta=0.0)
 ---
 
 ## 6. Score-based Models
+
+### 이론: 점수 기반 관점과 SDE
+
+Song & Ermon (2019)은 동등한 정식화를 보였습니다: 잡음 데이터 분포의 **점수(score)** `\nabla_x log p_t(x)`를 추정하도록 네트워크를 학습. 그러면 샘플링이 Langevin 스타일 — 점수 방향과 약간의 가우시안 잡음으로 반복적으로 살짝 미는 것.
+
+연속 시간 극한(Song et al. 2021)에서 순방향과 역방향 과정이 **확률 미분 방정식**(stochastic differential equations)이 됨:
+
+```
+순방향:  dx = f(x, t) dt + g(t) dW
+역방향:  dx = (f(x, t) - g(t)^2 \nabla_x log p_t(x)) dt + g(t) d\bar W
+```
+
+이 SDE 관점은 DDPM, score-matching, ODE 기반 샘플링을 하나의 프레임워크로 통합하고, 역방향 SDE를 수치 적분 문제로 다루어 더 빠른 샘플러(DPM-Solver, DDIM)로 이어짐.
+
 
 ### Score Function
 

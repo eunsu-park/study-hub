@@ -12,20 +12,9 @@
 - Implement normalization layers from scratch and understand their computational implications
 - Apply the right normalization technique based on architecture and batch size constraints
 
----
+## 1. Why Normalization?
 
-## Theory & Principles
-
-Normalization layers — BatchNorm, LayerNorm, GroupNorm, RMSNorm — are the deep-learning equivalent of standardizing features in classical ML, applied *between* every layer rather than once at the input. Each variant differs only in *which axes* it averages over. Picking the right one is mostly a question of "what statistics are stable in your setting?" — batch dimension, feature dimension, or some grouping in between.
-
-This section covers:
-
-- **A.** Why normalization helps: loss-landscape smoothing
-- **B.** BN vs LN vs GN vs IN: the axis choice
-- **C.** RMSNorm and why modern LLMs use it
-- **D.** Train vs eval mode and the running-statistics trap
-
-### A. Why Normalization Helps
+### Theory: Why Normalization Helps
 
 Without normalization, each layer's output distribution depends on the cumulative product of upstream weights. Small upstream changes can cause large shifts downstream — making each layer face a moving target. The original "internal covariate shift" hypothesis (Ioffe & Szegedy 2015) framed this as the problem normalization solves.
 
@@ -33,56 +22,6 @@ Later analysis (Santurkar et al. 2018) argued the dominant benefit is **loss-lan
 
 In practice, networks that train *with* normalization and would not train *without* it (e.g., very deep ResNets) are evidence enough that normalization solves something real, regardless of which theoretical explanation you prefer.
 
-### B. The Axis Choice: BN, LN, GN, IN
-
-For input shape `(N, C, H, W)`, normalization computes `(x - \mu) / sqrt(\sigma^2 + \epsilon)` where `\mu` and `\sigma` are computed over different axes:
-
-| Variant | Axes averaged | Mean shape | Where used |
-|---------|---------------|-------------|------------|
-| **BatchNorm**  | N, H, W (per channel) | `(C,)`  | CNNs |
-| **LayerNorm**  | C, H, W (per example) | `(N,)`  | Transformers |
-| **GroupNorm**  | (C/G), H, W (per group, per example) | `(N, G)` | Small batches |
-| **InstanceNorm** | H, W (per channel, per example) | `(N, C)` | Style transfer |
-
-**BatchNorm** averages across the batch — so its statistics depend on batch size, and small batches (1-4) give unreliable statistics. It also requires storing running averages for inference (where there is no batch).
-
-**LayerNorm** averages across all features of one example — entirely independent of batch size. This is why Transformers use it: variable-length sequences and small batches make BN impractical.
-
-**GroupNorm** is a compromise: split channels into `G` groups and normalize within each. Combines BN-like channel awareness with LN-like batch independence.
-
-### C. RMSNorm
-
-LayerNorm centers (subtracts mean) and scales (divides by std). **RMSNorm** (Zhang & Sennrich 2019) drops centering:
-
-```
-RMSNorm(x) = (x / RMS(x)) * \gamma
-RMS(x) = sqrt(mean(x^2) + \epsilon)
-```
-
-Empirically, the centering step adds little benefit but costs computation and memory. Removing it gives ~10-20% speedup with no quality loss. LLaMA, T5, and most modern LLMs use RMSNorm by default.
-
-### D. Train vs Eval Mode
-
-BN's running statistics are accumulated during training (`mean_running = (1 - mom) * mean_running + mom * batch_mean`). At inference, these running stats are used instead of batch stats — because at inference you might be processing one example at a time and there is no meaningful batch.
-
-This is the source of one of PyTorch's most confusing bugs: forgetting `model.eval()` makes BN use the current mini-batch's statistics, which can completely change predictions vs `model.train()` mode. Forgetting `model.train()` after a validation loop locks BN's running stats, causing training to silently fail.
-
-LN, GN, IN, RMSNorm have *no train/eval distinction* — their statistics are always per-example, computed at inference time. This is one practical advantage of these variants: fewer mode-related bugs.
-
-### From Theory to the Code Below
-
-| Theory concept | Code construct in this lesson |
-|----------------|-------------------------------|
-| BatchNorm | `nn.BatchNorm2d(num_features)` |
-| LayerNorm | `nn.LayerNorm(normalized_shape)` |
-| GroupNorm | `nn.GroupNorm(num_groups, num_channels)` |
-| RMSNorm | Custom (`x / x.pow(2).mean(-1, keepdim=True).sqrt() * scale`) |
-| Train vs eval | `model.train()` vs `model.eval()` calls |
-
----
-
-
-## 1. Why Normalization?
 
 ### 1.1 The Problem: Internal Covariate Shift
 
@@ -136,6 +75,15 @@ H, W = spatial dimensions
 ---
 
 ## 2. Batch Normalization
+
+### Theory: Train vs Eval Mode
+
+BN's running statistics are accumulated during training (`mean_running = (1 - mom) * mean_running + mom * batch_mean`). At inference, these running stats are used instead of batch stats — because at inference you might be processing one example at a time and there is no meaningful batch.
+
+This is the source of one of PyTorch's most confusing bugs: forgetting `model.eval()` makes BN use the current mini-batch's statistics, which can completely change predictions vs `model.train()` mode. Forgetting `model.train()` after a validation loop locks BN's running stats, causing training to silently fail.
+
+LN, GN, IN, RMSNorm have *no train/eval distinction* — their statistics are always per-example, computed at inference time. This is one practical advantage of these variants: fewer mode-related bugs.
+
 
 ### 2.1 Core Concept
 
@@ -718,6 +666,18 @@ class FastStyleTransfer(nn.Module):
 
 ## 6. RMSNorm (Root Mean Square Normalization)
 
+### Theory: RMSNorm
+
+LayerNorm centers (subtracts mean) and scales (divides by std). **RMSNorm** (Zhang & Sennrich 2019) drops centering:
+
+```
+RMSNorm(x) = (x / RMS(x)) * \gamma
+RMS(x) = sqrt(mean(x^2) + \epsilon)
+```
+
+Empirically, the centering step adds little benefit but costs computation and memory. Removing it gives ~10-20% speedup with no quality loss. LLaMA, T5, and most modern LLMs use RMSNorm by default.
+
+
 ### 6.1 Core Concept
 
 **RMSNorm** simplifies LayerNorm by removing mean centering, normalizing only by the root mean square.
@@ -1056,6 +1016,24 @@ print(stylized.shape)  # torch.Size([1, 3, 256, 256])
 ---
 
 ## 8. Comprehensive Comparison
+
+### Theory: The Axis Choice: BN, LN, GN, IN
+
+For input shape `(N, C, H, W)`, normalization computes `(x - \mu) / sqrt(\sigma^2 + \epsilon)` where `\mu` and `\sigma` are computed over different axes:
+
+| Variant | Axes averaged | Mean shape | Where used |
+|---------|---------------|-------------|------------|
+| **BatchNorm**  | N, H, W (per channel) | `(C,)`  | CNNs |
+| **LayerNorm**  | C, H, W (per example) | `(N,)`  | Transformers |
+| **GroupNorm**  | (C/G), H, W (per group, per example) | `(N, G)` | Small batches |
+| **InstanceNorm** | H, W (per channel, per example) | `(N, C)` | Style transfer |
+
+**BatchNorm** averages across the batch — so its statistics depend on batch size, and small batches (1-4) give unreliable statistics. It also requires storing running averages for inference (where there is no batch).
+
+**LayerNorm** averages across all features of one example — entirely independent of batch size. This is why Transformers use it: variable-length sequences and small batches make BN impractical.
+
+**GroupNorm** is a compromise: split channels into `G` groups and normalize within each. Combines BN-like channel awareness with LN-like batch independence.
+
 
 ### 8.1 Visual Comparison
 

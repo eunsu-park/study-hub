@@ -15,26 +15,15 @@ After completing this lesson, you will be able to:
 5. Interpret BERT's special tokens ([CLS], [SEP], [MASK]) and explain how they are used during pretraining and fine-tuning.
 6. Compare the BERT-base and BERT-large configurations and evaluate the trade-off between model size and task performance.
 
+## Overview
+
+BERT (Bidirectional Encoder Representations from Transformers) is a model released by Google in 2018 that revolutionized NLP. It uses **bidirectional context** to understand word meanings.
+
 ---
 
-## Theory & Principles
+## Mathematical Background
 
-BERT (Devlin et al. 2018) was the proof that *encoder-only* Transformers, trained with the right self-supervised objective, could dominate downstream NLP tasks via fine-tuning. The architecture is just the Transformer encoder; the new ideas are the pretraining objectives (MLM and NSP), the special tokens (CLS, SEP), and the recipe for adapting one pretrained model to many tasks.
-
-This section covers:
-
-- **A.** Bidirectional self-attention vs left-to-right
-- **B.** Masked Language Modeling (MLM) as denoising autoencoding
-- **C.** Next Sentence Prediction (NSP) and why later models dropped it
-- **D.** The pretrain-then-fine-tune paradigm
-
-### A. Bidirectional Self-Attention
-
-In a standard left-to-right LM (GPT), token `t` attends only to `<= t`. In BERT's encoder, each token attends to *all* tokens in the input — past and future. This bidirectionality is essential for many tasks: classifying sentiment of a sentence requires seeing the whole sentence; named entity recognition often requires later context.
-
-The challenge: how do you train a bidirectional model with a language-modeling-like objective? You cannot just predict the next token, because the model can already see it. The answer is masking.
-
-### B. Masked Language Modeling
+### Theory: Masked Language Modeling
 
 BERT randomly replaces 15% of input tokens and asks the model to reconstruct the original:
 
@@ -48,42 +37,6 @@ Why the random token / unchanged splits? At fine-tuning time, no token will ever
 
 The MLM objective is much harder than next-token prediction (you only get gradients on 15% of positions per example), but it produces representations that transfer remarkably well.
 
-### C. Next Sentence Prediction and Its Decline
-
-BERT was also pretrained on **NSP**: given two sentences A and B, predict whether B actually follows A in the source corpus, or is a random sentence. The CLS token's final hidden state was used as the input to a binary classifier.
-
-Subsequent work (RoBERTa, ALBERT) found NSP added little value and sometimes hurt: the random-sentence negative is too easy because random sentences usually come from a different topic, so the model learns a topic classifier rather than a sentence-relationship classifier. Modern BERT-derivatives drop NSP and rely on MLM alone, often with longer training and bigger batches.
-
-### D. Pretrain-Then-Fine-Tune
-
-The recipe BERT established:
-
-1. **Pretrain** on a huge unlabeled corpus (BooksCorpus + Wikipedia, 3.3B words) with MLM (+ NSP). Cost: ~64 TPUs for 4 days.
-2. **Fine-tune** on a small labeled task dataset by adding a task-specific head and training the whole model end-to-end with a small learning rate (~5e-5). Cost: minutes to hours.
-
-This decoupled the expensive part (representation learning) from the cheap part (task adaptation), and made it economic for individual labs to push the state of the art on many tasks. Every modern Foundation Model — BERT, GPT, T5, LLaMA — descends from this recipe, with only the size and the pretraining objective varying.
-
-The math has not changed; the leverage is entirely from pretraining scale.
-
-### From Theory to the Code Below
-
-| Theory concept | Code construct in this lesson |
-|----------------|-------------------------------|
-| Bidirectional attention | No causal mask in the encoder |
-| MLM corruption | The 80/10/10 token corruption logic |
-| CLS token | A learned `[CLS]` embedding prepended to the input |
-| Fine-tune head | `nn.Linear(d_model, num_classes)` on top of CLS hidden |
-
----
-
-
-## Overview
-
-BERT (Bidirectional Encoder Representations from Transformers) is a model released by Google in 2018 that revolutionized NLP. It uses **bidirectional context** to understand word meanings.
-
----
-
-## Mathematical Background
 
 ### 1. Masked Language Modeling (MLM)
 
@@ -148,6 +101,20 @@ Transformer Encoder × L layers
 [CLS]: classification / Token: token prediction
 ```
 
+### Theory: Next Sentence Prediction and Its Decline
+
+BERT was also pretrained on **NSP**: given two sentences A and B, predict whether B actually follows A in the source corpus, or is a random sentence. The CLS token's final hidden state was used as the input to a binary classifier.
+
+Subsequent work (RoBERTa, ALBERT) found NSP added little value and sometimes hurt: the random-sentence negative is too easy because random sentences usually come from a different topic, so the model learns a topic classifier rather than a sentence-relationship classifier. Modern BERT-derivatives drop NSP and rely on MLM alone, often with longer training and bigger batches.
+
+
+### Theory: Bidirectional Self-Attention
+
+In a standard left-to-right LM (GPT), token `t` attends only to `<= t`. In BERT's encoder, each token attends to *all* tokens in the input — past and future. This bidirectionality is essential for many tasks: classifying sentiment of a sentence requires seeing the whole sentence; named entity recognition often requires later context.
+
+The challenge: how do you train a bidirectional model with a language-modeling-like objective? You cannot just predict the next token, because the model can already see it. The answer is masking.
+
+
 ---
 
 ## File Structure
@@ -167,6 +134,18 @@ Transformer Encoder × L layers
 ---
 
 ## Core Concepts
+
+### Theory: Pretrain-Then-Fine-Tune
+
+The recipe BERT established:
+
+1. **Pretrain** on a huge unlabeled corpus (BooksCorpus + Wikipedia, 3.3B words) with MLM (+ NSP). Cost: ~64 TPUs for 4 days.
+2. **Fine-tune** on a small labeled task dataset by adding a task-specific head and training the whole model end-to-end with a small learning rate (~5e-5). Cost: minutes to hours.
+
+This decoupled the expensive part (representation learning) from the cheap part (task adaptation), and made it economic for individual labs to push the state of the art on many tasks. Every modern Foundation Model — BERT, GPT, T5, LLaMA — descends from this recipe, with only the size and the pretraining objective varying.
+
+The math has not changed; the leverage is entirely from pretraining scale.
+
 
 ### 1. Bidirectional Context
 

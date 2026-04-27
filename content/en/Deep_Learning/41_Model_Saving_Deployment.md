@@ -15,20 +15,9 @@ After completing this lesson, you will be able to:
 5. Apply inference optimization techniques (quantization, compilation)
 6. Deploy models via REST API, Docker, mobile, and cloud platforms
 
----
+## 1. PyTorch Model Saving
 
-## Theory & Principles
-
-Deploying a model is fundamentally about *separating training-time concerns from inference-time concerns*. At training, you want flexibility (Python, eager mode, full autograd). At inference, you want speed and portability (compiled graphs, fixed shapes, no Python). This section explains the math/CS underneath each export and optimization step: graph capture, quantization, and the speed/accuracy trade-offs.
-
-This section covers:
-
-- **A.** State dict vs full checkpoint
-- **B.** Graph capture: TorchScript vs ONNX vs torch.export
-- **C.** Quantization: int8, mixed precision, what is sacrificed
-- **D.** Inference optimization: compilation, batching, kernel fusion
-
-### A. State Dict vs Full Checkpoint
+### Theory: State Dict vs Full Checkpoint
 
 Two ways to save a model:
 
@@ -48,56 +37,6 @@ State dict wins because it is *future-proof*: you can change the Python class im
 
 Beyond parameters, a "checkpoint" usually includes optimizer state (`optimizer.state_dict()`), epoch number, scheduler state, and best-validation metrics — everything needed to *resume* training from where it left off. This is what `torch.save({"model": ..., "opt": ..., "epoch": ...}, "ckpt.pt")` typically holds.
 
-### B. Graph Capture: TorchScript, ONNX, torch.export
-
-Pytorch by default runs in *eager mode*: every operation is dispatched immediately, and Python is in the loop. For deployment, you usually want a *captured graph*: a static representation of the computation that can be optimized, serialized, and run without Python.
-
-Three capture approaches:
-
-- **TorchScript tracing** (`torch.jit.trace`): run the model on example inputs, record the operations. Cannot capture data-dependent control flow (`if x.sum() > 0:`).
-- **TorchScript scripting** (`torch.jit.script`): static analysis of the Python source code, supports control flow but only a Python subset.
-- **ONNX export** (`torch.onnx.export`): traces and exports to a cross-framework format. Can run in ONNX Runtime, TensorRT, mobile, etc.
-- **torch.export** (PyTorch 2.x): the new official capture, FX-graph-based, with more reliable handling of dynamic shapes.
-
-The captured graph is what you ship. The Python script that *built* the graph is no longer needed at inference time.
-
-### C. Quantization
-
-Quantization reduces parameter precision from fp32 (4 bytes) to int8 (1 byte) or even int4. Three flavors:
-
-- **Post-training static quantization (PTQ)**: train in fp32, then convert weights and activations to int8. Calibrate with a small dataset to find activation ranges. Usually loses 0.5-2% accuracy.
-- **Quantization-aware training (QAT)**: simulate int8 effects during training (fake-quantize, then fp32 update). Typically gives back most of the accuracy loss vs PTQ.
-- **Dynamic quantization**: weights stored in int8, activations quantized on-the-fly. Less memory savings, less speedup, easier to apply.
-
-The math: int8 has 256 values. Mapping fp32 to int8 requires `quantize(x) = round(x / scale + zero_point)`. Per-tensor or per-channel scales are picked to minimize quantization error. Modern hardware (NVIDIA Tensor Cores, mobile NPUs) is much faster on int8 than fp32 — typical 2-4x inference speedup.
-
-For LLMs, **4-bit quantization** (GPTQ, AWQ) has become standard: 8x memory savings vs fp32 with very small quality loss, enabling 70B-parameter models on consumer GPUs.
-
-### D. Inference Optimization
-
-Beyond quantization, several techniques speed up inference:
-
-- **Kernel fusion**: combine multiple ops (e.g., LayerNorm + Linear + GELU) into one CUDA kernel, reducing memory traffic. `torch.compile()` does this automatically.
-- **Batching**: process multiple requests together. Throughput scales nearly linearly with batch size up to GPU saturation.
-- **KV-caching** (for autoregressive LMs): cache the keys/values from previous tokens so they don't get recomputed. Reduces per-token cost from O(T^2) to O(T).
-- **Speculative decoding**: a small "draft" model generates K tokens; the big model verifies them in parallel. If accepted, you got K tokens for one big-model pass.
-
-For production, the order of importance is usually: batching first (free), then quantization (small accuracy cost), then compilation (free), then KV-cache for LMs (essential), then advanced tricks like speculative decoding.
-
-### From Theory to the Code Below
-
-| Theory concept | Code construct in this lesson |
-|----------------|-------------------------------|
-| State dict save/load | `torch.save(model.state_dict(), ...); model.load_state_dict(...)` |
-| TorchScript trace | `torch.jit.trace(model, example_input)` |
-| ONNX export | `torch.onnx.export(model, example, "model.onnx")` |
-| Dynamic quantization | `torch.quantization.quantize_dynamic(model, {nn.Linear}, dtype=torch.qint8)` |
-| Compilation | `model = torch.compile(model)` |
-
----
-
-
-## 1. PyTorch Model Saving
 
 ### Saving state_dict (Recommended)
 
@@ -195,6 +134,20 @@ scripted_model.save('model_scripted.pt')
 ---
 
 ## 3. ONNX Conversion
+
+### Theory: Graph Capture: TorchScript, ONNX, torch.export
+
+Pytorch by default runs in *eager mode*: every operation is dispatched immediately, and Python is in the loop. For deployment, you usually want a *captured graph*: a static representation of the computation that can be optimized, serialized, and run without Python.
+
+Three capture approaches:
+
+- **TorchScript tracing** (`torch.jit.trace`): run the model on example inputs, record the operations. Cannot capture data-dependent control flow (`if x.sum() > 0:`).
+- **TorchScript scripting** (`torch.jit.script`): static analysis of the Python source code, supports control flow but only a Python subset.
+- **ONNX export** (`torch.onnx.export`): traces and exports to a cross-framework format. Can run in ONNX Runtime, TensorRT, mobile, etc.
+- **torch.export** (PyTorch 2.x): the new official capture, FX-graph-based, with more reliable handling of dynamic shapes.
+
+The captured graph is what you ship. The Python script that *built* the graph is no longer needed at inference time.
+
 
 ### Conversion
 
@@ -319,6 +272,31 @@ output = loaded.module()(input_data)
 ---
 
 ## 5. Inference Optimization
+
+### Theory: Inference Optimization
+
+Beyond quantization, several techniques speed up inference:
+
+- **Kernel fusion**: combine multiple ops (e.g., LayerNorm + Linear + GELU) into one CUDA kernel, reducing memory traffic. `torch.compile()` does this automatically.
+- **Batching**: process multiple requests together. Throughput scales nearly linearly with batch size up to GPU saturation.
+- **KV-caching** (for autoregressive LMs): cache the keys/values from previous tokens so they don't get recomputed. Reduces per-token cost from O(T^2) to O(T).
+- **Speculative decoding**: a small "draft" model generates K tokens; the big model verifies them in parallel. If accepted, you got K tokens for one big-model pass.
+
+For production, the order of importance is usually: batching first (free), then quantization (small accuracy cost), then compilation (free), then KV-cache for LMs (essential), then advanced tricks like speculative decoding.
+
+
+### Theory: Quantization
+
+Quantization reduces parameter precision from fp32 (4 bytes) to int8 (1 byte) or even int4. Three flavors:
+
+- **Post-training static quantization (PTQ)**: train in fp32, then convert weights and activations to int8. Calibrate with a small dataset to find activation ranges. Usually loses 0.5-2% accuracy.
+- **Quantization-aware training (QAT)**: simulate int8 effects during training (fake-quantize, then fp32 update). Typically gives back most of the accuracy loss vs PTQ.
+- **Dynamic quantization**: weights stored in int8, activations quantized on-the-fly. Less memory savings, less speedup, easier to apply.
+
+The math: int8 has 256 values. Mapping fp32 to int8 requires `quantize(x) = round(x / scale + zero_point)`. Per-tensor or per-channel scales are picked to minimize quantization error. Modern hardware (NVIDIA Tensor Cores, mobile NPUs) is much faster on int8 than fp32 — typical 2-4x inference speedup.
+
+For LLMs, **4-bit quantization** (GPTQ, AWQ) has become standard: 8x memory savings vs fp32 with very small quality loss, enabling 70B-parameter models on consumer GPUs.
+
 
 ### eval Mode
 

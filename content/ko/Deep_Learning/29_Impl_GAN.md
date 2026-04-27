@@ -15,61 +15,15 @@
 5. 이미지 데이터셋에서 GAN을 훈련하고, 시각적 검사와 프레쳇 인셉션 거리(Fréchet Inception Distance, FID) 지표를 사용하여 생성 샘플 품질을 평가합니다.
 6. GAN 변형(DCGAN, WGAN, 조건부 GAN)을 비교하고, 각각이 학습 안정성 향상을 위해 도입한 아키텍처 또는 손실 수정 사항을 설명합니다.
 
+## 개요
+
+생성적 적대 신경망(Generative Adversarial Networks, GAN)은 생성자(Generator)와 판별자(Discriminator) 간의 적대적 게임을 통해 현실적인 데이터를 생성하는 방법을 학습합니다. "Generative Adversarial Networks" (Goodfellow et al., 2014)
+
 ---
 
-## 이론과 원리
+## 수학적 배경
 
-DCGAN 구현은 이전 레슨의 GAN 이론 위에 구축됩니다. 이 섹션은 *구현* 진실에 집중합니다: 실전에서 GAN 학습을 작동하게 하는 아키텍처 규칙, FID 메트릭의 수학적 내용, 그리고 각 WGAN/WGAN-GP 코드 변경이 실제로 무엇을 계산하는지.
-
-이 섹션에서 다루는 내용:
-
-- **A.** DCGAN 아키텍처 가이드라인과 그것이 존재하는 이유
-- **B.** 다운샘플링과 업샘플링을 위한 strided / transposed 합성곱
-- **C.** FID: Inception 특징을 통한 분포 비교
-- **D.** WGAN-GP: gradient penalty 항이 어디서 오는가
-
-### A. DCGAN 아키텍처 가이드라인
-
-Radford et al. (2016)은 합성곱 GAN이 안정적으로 학습되도록 실험적으로 만드는 한 줌의 아키텍처 규칙을 정리:
-
-1. **완전 연결층 없음**, G의 입력 투영과 D의 출력 분류 제외.
-2. **G와 D 둘 다에 BatchNorm 사용**, G의 출력 층과 D의 입력 층 제외.
-3. **G에서 풀링을 strided transposed 합성곱으로 대체.** D에서 풀링을 strided 합성곱으로 대체. 네트워크가 자체 업/다운 샘플링을 학습.
-4. **G에 ReLU(출력 Tanh 제외), D에 Leaky ReLU.** Tanh 출력은 생성기 출력을 정규화된 이미지 범위와 일치하는 `[-1, 1]`에 유지; Leaky ReLU는 초기 학습 조건에서 판별기의 dying-ReLU 회피.
-5. **완전 연결 은닉층 없음** 어디에도.
-
-이는 유도가 아닙니다; 통합된 실험적 지혜입니다. 각각이 *왜* 도움 되는지 이해하면 규칙을 깰 수 있는 때를 알게 됩니다 — 예를 들어, D의 BatchNorm은 WGAN-GP와 충돌(gradient penalty가 개별 예제에서 계산되므로), 그래서 WGAN-GP는 거기서 LayerNorm이나 norm 없음을 사용.
-
-### B. Strided와 Transposed 합성곱
-
-D에서 다운샘플링: `Conv2d(in, out, kernel=4, stride=2, padding=1)`이 공간 크기를 절반으로. G에서 업샘플링: `ConvTranspose2d(in, out, kernel=4, stride=2, padding=1)`이 두 배로. 출력 크기 공식:
-
-```
-Strided conv:        H_out = floor((H_in + 2P - K) / S) + 1
-Transposed conv:     H_out = (H_in - 1) * S - 2P + K
-```
-
-흔한 DCGAN 패턴: G가 transposed conv 체인을 통해 `1x1` 잠재 코드에서 `4x4 -> 8x8 -> 16x16 -> 32x32 -> 64x64`로 업샘플; D가 `64 -> 32 -> 16 -> 8 -> 4 -> 1`로 가는 strided conv로 이를 미러링.
-
-커널-4 / 스트라이드-2 / 패딩-1 선택은 커널-3 / 스트라이드-2 transposed conv를 괴롭히는 "체커보드 아티팩트"를 회피(스트라이드가 커널 크기를 깔끔히 나누지 않기 때문).
-
-### C. Fréchet Inception Distance (FID)
-
-FID는 사람 평가 없이 GAN 출력 품질을 측정:
-
-1. 사전학습된 Inception-v3를 실제 이미지와 생성 이미지에 실행, 최종 풀링 층에서 2048-d 특징 벡터 추출.
-2. 각 집합의 특징에 다변량 가우시안 적합: `N(\mu_real, \Sigma_real)`과 `N(\mu_gen, \Sigma_gen)`.
-3. 두 가우시안 사이의 **Fréchet 거리** 계산:
-
-```
-FID = ||\mu_real - \mu_gen||^2 + Tr(\Sigma_real + \Sigma_gen - 2 (\Sigma_real \Sigma_gen)^{1/2})
-```
-
-낮은 FID = 생성 특징이 실제 것처럼 더 분포. 합리적 스케일: 일반 이미지 데이터셋의 경우 FID < 10이 우수, > 50이 빈약.
-
-Inception 특징 선택은 다소 임의적이지만 문헌 전반에 표준화. 흔한 비판: Inception이 ImageNet에서 학습되었으므로, FID가 ImageNet 같은 특징에 편향. 비자연 이미지(의료, 위성)의 경우, 도메인 특이적 특징 추출기가 더 의미 있는 비교를 제공.
-
-### D. Gradient Penalty 유도
+### 이론: Gradient Penalty 유도
 
 WGAN-GP는 그래디언트 크기를 벌하여 critic에 1-Lipschitz 제약을 강제:
 
@@ -81,25 +35,6 @@ L_GP = E_{\hat{x}} [(||\nabla_{\hat{x}} D(\hat{x})||_2 - 1)^2]
 
 구현 노트: `torch.autograd.grad(D(x_hat).sum(), x_hat, create_graph=True)`이 입력별 그래디언트를 줌; `create_graph=True`이 필수인데 D 업데이트 시 이 그래디언트를 통해 역전파해야 하기 때문.
 
-### 이론에서 아래 코드로
-
-| 이론 개념 | 본 레슨의 코드 구성 |
-|-----------|---------------------|
-| DCGAN G | BN + ReLU, Tanh 출력의 `ConvTranspose2d` 체인 |
-| DCGAN D | 스트라이드 2 + LeakyReLU, sigmoid(WGAN은 없음)의 `Conv2d` 체인 |
-| FID | `pytorch_fid` 패키지 또는 수동 `mu`/`sigma` 계산 |
-| Gradient penalty | `(grads.norm(2, dim=1) - 1).pow(2).mean()` |
-
----
-
-
-## 개요
-
-생성적 적대 신경망(Generative Adversarial Networks, GAN)은 생성자(Generator)와 판별자(Discriminator) 간의 적대적 게임을 통해 현실적인 데이터를 생성하는 방법을 학습합니다. "Generative Adversarial Networks" (Goodfellow et al., 2014)
-
----
-
-## 수학적 배경
 
 ### 1. 미니맥스 게임(Minimax Game)
 
@@ -184,6 +119,33 @@ L_G = -D(G(z))
 ## DCGAN 아키텍처
 
 심층 합성곱 GAN(Deep Convolutional GAN, Radford et al., 2015) - 안정적인 학습 가이드라인
+
+### 이론: Strided와 Transposed 합성곱
+
+D에서 다운샘플링: `Conv2d(in, out, kernel=4, stride=2, padding=1)`이 공간 크기를 절반으로. G에서 업샘플링: `ConvTranspose2d(in, out, kernel=4, stride=2, padding=1)`이 두 배로. 출력 크기 공식:
+
+```
+Strided conv:        H_out = floor((H_in + 2P - K) / S) + 1
+Transposed conv:     H_out = (H_in - 1) * S - 2P + K
+```
+
+흔한 DCGAN 패턴: G가 transposed conv 체인을 통해 `1x1` 잠재 코드에서 `4x4 -> 8x8 -> 16x16 -> 32x32 -> 64x64`로 업샘플; D가 `64 -> 32 -> 16 -> 8 -> 4 -> 1`로 가는 strided conv로 이를 미러링.
+
+커널-4 / 스트라이드-2 / 패딩-1 선택은 커널-3 / 스트라이드-2 transposed conv를 괴롭히는 "체커보드 아티팩트"를 회피(스트라이드가 커널 크기를 깔끔히 나누지 않기 때문).
+
+
+### 이론: DCGAN 아키텍처 가이드라인
+
+Radford et al. (2016)은 합성곱 GAN이 안정적으로 학습되도록 실험적으로 만드는 한 줌의 아키텍처 규칙을 정리:
+
+1. **완전 연결층 없음**, G의 입력 투영과 D의 출력 분류 제외.
+2. **G와 D 둘 다에 BatchNorm 사용**, G의 출력 층과 D의 입력 층 제외.
+3. **G에서 풀링을 strided transposed 합성곱으로 대체.** D에서 풀링을 strided 합성곱으로 대체. 네트워크가 자체 업/다운 샘플링을 학습.
+4. **G에 ReLU(출력 Tanh 제외), D에 Leaky ReLU.** Tanh 출력은 생성기 출력을 정규화된 이미지 범위와 일치하는 `[-1, 1]`에 유지; Leaky ReLU는 초기 학습 조건에서 판별기의 dying-ReLU 회피.
+5. **완전 연결 은닉층 없음** 어디에도.
+
+이는 유도가 아닙니다; 통합된 실험적 지혜입니다. 각각이 *왜* 도움 되는지 이해하면 규칙을 깰 수 있는 때를 알게 됩니다 — 예를 들어, D의 BatchNorm은 WGAN-GP와 충돌(gradient penalty가 개별 예제에서 계산되므로), 그래서 WGAN-GP는 거기서 LayerNorm이나 norm 없음을 사용.
+
 
 ### 생성자(Generator, 64×64 RGB 이미지)
 
@@ -396,6 +358,23 @@ ProGAN, StyleGAN에서 사용
 ---
 
 ## 핵심 개념
+
+### 이론: Fréchet Inception Distance (FID)
+
+FID는 사람 평가 없이 GAN 출력 품질을 측정:
+
+1. 사전학습된 Inception-v3를 실제 이미지와 생성 이미지에 실행, 최종 풀링 층에서 2048-d 특징 벡터 추출.
+2. 각 집합의 특징에 다변량 가우시안 적합: `N(\mu_real, \Sigma_real)`과 `N(\mu_gen, \Sigma_gen)`.
+3. 두 가우시안 사이의 **Fréchet 거리** 계산:
+
+```
+FID = ||\mu_real - \mu_gen||^2 + Tr(\Sigma_real + \Sigma_gen - 2 (\Sigma_real \Sigma_gen)^{1/2})
+```
+
+낮은 FID = 생성 특징이 실제 것처럼 더 분포. 합리적 스케일: 일반 이미지 데이터셋의 경우 FID < 10이 우수, > 50이 빈약.
+
+Inception 특징 선택은 다소 임의적이지만 문헌 전반에 표준화. 흔한 비판: Inception이 ImageNet에서 학습되었으므로, FID가 ImageNet 같은 특징에 편향. 비자연 이미지(의료, 위성)의 경우, 도메인 특이적 특징 추출기가 더 의미 있는 비교를 제공.
+
 
 ### 1. GAN 변형
 

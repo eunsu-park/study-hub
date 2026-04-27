@@ -13,20 +13,9 @@
 - Beta-VAE와 Disentanglement
 - PyTorch 구현 및 시각화
 
----
+## 1. VAE 이론
 
-## 이론과 원리
-
-변분 오토인코더(VAE; Kingma & Welling 2014)는 확률적 딥러닝의 가장 깔끔한 예입니다: 변분 추론으로 학습된 잠재 변수 모델, *의미 있고*(보간 작동) *샘플링 가능한* 연속 잠재 공간. 레슨의 모든 개념 — encoder, decoder, ELBO, KL 발산, 재매개변수화 — 은 한 줄의 수학에서 옵니다: 한계 우도(marginal likelihood)에 대한 변분 하한.
-
-이 섹션에서 다루는 내용:
-
-- **A.** 잠재 변수 모델과 다루기 어려운 한계 우도
-- **B.** 변분 추론과 ELBO 유도
-- **C.** 재매개변수화 트릭: 샘플링을 통해 역전파하는 방법
-- **D.** Beta-VAE와 disentanglement 트레이드오프
-
-### A. 잠재 변수 모델
+### 이론: 잠재 변수 모델
 
 VAE는 데이터가 다음으로 생성된다고 가정:
 
@@ -43,70 +32,6 @@ p_\theta(x) = integral p_\theta(x | z) p(z) dz
 
 이 적분은 고차원 `z`에 대해 **다루기 어렵습니다**. 최대 우도 `max_\theta sum_i log p_\theta(x_i)`를 직접 계산할 수 없음. 근사가 필요.
 
-### B. 변분 추론과 ELBO
-
-변분 추론은 진정한 사후 `p(z | x)`에 다루기 쉬운 근사 `q_\phi(z | x)`를 도입하고 로그 우도를 한정:
-
-```
-log p_\theta(x) >= E_{q_\phi(z | x)} [log p_\theta(x | z)] - KL(q_\phi(z | x) || p(z))
-                = ELBO
-```
-
-두 항이 직관적 의미를 가짐:
-
-- **재구성 항** `E_{q}[log p_\theta(x | z)]`: decoder가 encoder에서 샘플링된 잠재 코드에서 `x`를 얼마나 잘 재구성하는가?
-- **KL 항** `KL(q_\phi(z | x) || p(z))`: encoder의 사후가 사전 `N(0, I)`에서 얼마나 벗어나는가?
-
-ELBO 최대화는 균형: 잘 재구성 *그리고* 잠재 코드를 표준 정규에 가깝게 유지. 두 번째 조건이 잠재 공간을 *생성에 사용 가능하게* 만듦 — `z ~ N(0, I)` 샘플링이 decoder가 샘플로 변환할 수 있는 그럴듯한 코드를 만듦.
-
-가우시안 `q_\phi(z | x) = N(\mu_\phi(x), \sigma_\phi^2(x))`와 가우시안 사전 `p(z) = N(0, I)`의 경우, KL이 닫힌 형태를 가짐:
-
-```
-KL = 0.5 * sum_j [\mu_j^2 + \sigma_j^2 - log \sigma_j^2 - 1]
-```
-
-이것이 (음수화된) 전체 VAE 손실: 재구성 MSE + KL.
-
-### C. 재매개변수화 트릭
-
-`E_{q_\phi}[...]`를 계산하려면 `z ~ q_\phi(z | x)`를 샘플링. 하지만 샘플링은 미분 불가능 — `\phi`에 대한 "샘플 그리기"의 그래디언트가 존재하지 않음.
-
-재매개변수화 트릭은 샘플링을 외생적 잡음 변수의 결정적 변환으로 다시 씀:
-
-```
-z = \mu_\phi(x) + \sigma_\phi(x) \odot \epsilon,   \epsilon ~ N(0, I)
-```
-
-이제 `z`는 `\phi`와 `\epsilon`의 *함수*. 그래디언트가 `\mu_\phi`와 `\sigma_\phi`를 통해 정확히 흐름. 무작위성이 `\epsilon`에 살며, 미분할 파라미터가 없음.
-
-이 트릭이 VAE 학습을 가능하게 하는 단일 재료입니다. 그것 없이는 점수 함수 추정기(REINFORCE)가 필요한데, 이는 자릿수만큼 큰 분산을 가지고 고차원 잠재 공간에 거의 작동하지 않습니다.
-
-### D. Beta-VAE와 Disentanglement
-
-Higgins et al. (2017)는 KL 항에 가중치를 두는 하이퍼파라미터 `\beta`를 추가:
-
-```
-ELBO_\beta = E_{q}[log p(x | z)] - \beta * KL(q || p)
-```
-
-`\beta = 1`이 표준 VAE. `\beta > 1`은 KL을 과가중하여, encoder가 등방성 가우시안 *과 같은* 잠재 코드를 사용하도록 강제. 실험적 효과: 각 잠재 차원이 *변동의 한 독립 요소*(얼굴 데이터셋의 경우 얼굴 각도, 조명, 표정)를 포착하는 경향. 이것이 **disentanglement**.
-
-트레이드오프는 재구성 품질: 무거운 KL 압력이 잠재 코드를 특정에 대해 덜 정보적으로 만들어 출력을 흐리게. 해석 가능성이 중요할 때(잠재가 무엇을 표현하는지 분석) Beta-VAE 선호; 샘플 품질이 더 중요할 때 평이한 VAE.
-
-### 이론에서 아래 코드로
-
-| 이론 개념 | 본 레슨의 코드 구성 |
-|-----------|---------------------|
-| Encoder가 `\mu, \log \sigma^2` 만듦 | `mu, log_var = self.encoder(x).chunk(2, dim=-1)` |
-| 재매개변수화 | `z = mu + (0.5 * log_var).exp() * torch.randn_like(mu)` |
-| Decoder | `recon = self.decoder(z)` |
-| ELBO 손실 | `recon_loss + kl_loss` (KL 닫힌 형태와) |
-| Beta 가중 | `recon_loss + beta * kl_loss` |
-
----
-
-
-## 1. VAE 이론
 
 ### Autoencoder vs VAE
 
@@ -153,6 +78,31 @@ VAE의 해결:
 ---
 
 ## 2. ELBO 손실 함수
+
+### 이론: 변분 추론과 ELBO
+
+변분 추론은 진정한 사후 `p(z | x)`에 다루기 쉬운 근사 `q_\phi(z | x)`를 도입하고 로그 우도를 한정:
+
+```
+log p_\theta(x) >= E_{q_\phi(z | x)} [log p_\theta(x | z)] - KL(q_\phi(z | x) || p(z))
+                = ELBO
+```
+
+두 항이 직관적 의미를 가짐:
+
+- **재구성 항** `E_{q}[log p_\theta(x | z)]`: decoder가 encoder에서 샘플링된 잠재 코드에서 `x`를 얼마나 잘 재구성하는가?
+- **KL 항** `KL(q_\phi(z | x) || p(z))`: encoder의 사후가 사전 `N(0, I)`에서 얼마나 벗어나는가?
+
+ELBO 최대화는 균형: 잘 재구성 *그리고* 잠재 코드를 표준 정규에 가깝게 유지. 두 번째 조건이 잠재 공간을 *생성에 사용 가능하게* 만듦 — `z ~ N(0, I)` 샘플링이 decoder가 샘플로 변환할 수 있는 그럴듯한 코드를 만듦.
+
+가우시안 `q_\phi(z | x) = N(\mu_\phi(x), \sigma_\phi^2(x))`와 가우시안 사전 `p(z) = N(0, I)`의 경우, KL이 닫힌 형태를 가짐:
+
+```
+KL = 0.5 * sum_j [\mu_j^2 + \sigma_j^2 - log \sigma_j^2 - 1]
+```
+
+이것이 (음수화된) 전체 VAE 손실: 재구성 MSE + KL.
+
 
 ### 유도
 
@@ -215,6 +165,21 @@ def vae_loss(x, x_recon, mu, log_var):
 ---
 
 ## 3. Reparameterization Trick
+
+### 이론: 재매개변수화 트릭
+
+`E_{q_\phi}[...]`를 계산하려면 `z ~ q_\phi(z | x)`를 샘플링. 하지만 샘플링은 미분 불가능 — `\phi`에 대한 "샘플 그리기"의 그래디언트가 존재하지 않음.
+
+재매개변수화 트릭은 샘플링을 외생적 잡음 변수의 결정적 변환으로 다시 씀:
+
+```
+z = \mu_\phi(x) + \sigma_\phi(x) \odot \epsilon,   \epsilon ~ N(0, I)
+```
+
+이제 `z`는 `\phi`와 `\epsilon`의 *함수*. 그래디언트가 `\mu_\phi`와 `\sigma_\phi`를 통해 정확히 흐름. 무작위성이 `\epsilon`에 살며, 미분할 파라미터가 없음.
+
+이 트릭이 VAE 학습을 가능하게 하는 단일 재료입니다. 그것 없이는 점수 함수 추정기(REINFORCE)가 필요한데, 이는 자릿수만큼 큰 분산을 가지고 고차원 잠재 공간에 거의 작동하지 않습니다.
+
 
 ### 문제점
 
@@ -408,6 +373,19 @@ def train_vae(model, dataloader, epochs=50, lr=1e-3):
 ---
 
 ## 6. Beta-VAE
+
+### 이론: Beta-VAE와 Disentanglement
+
+Higgins et al. (2017)는 KL 항에 가중치를 두는 하이퍼파라미터 `\beta`를 추가:
+
+```
+ELBO_\beta = E_{q}[log p(x | z)] - \beta * KL(q || p)
+```
+
+`\beta = 1`이 표준 VAE. `\beta > 1`은 KL을 과가중하여, encoder가 등방성 가우시안 *과 같은* 잠재 코드를 사용하도록 강제. 실험적 효과: 각 잠재 차원이 *변동의 한 독립 요소*(얼굴 데이터셋의 경우 얼굴 각도, 조명, 표정)를 포착하는 경향. 이것이 **disentanglement**.
+
+트레이드오프는 재구성 품질: 무거운 KL 압력이 잠재 코드를 특정에 대해 덜 정보적으로 만들어 출력을 흐리게. 해석 가능성이 중요할 때(잠재가 무엇을 표현하는지 분석) Beta-VAE 선호; 샘플 품질이 더 중요할 때 평이한 VAE.
+
 
 ### 아이디어
 

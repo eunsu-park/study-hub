@@ -15,85 +15,6 @@
 5. 노이즈 스케줄(선형 및 코사인)을 구현하고 비교하며, 스케줄 선택이 생성 품질에 어떤 영향을 미치는지 설명합니다.
 6. 샘플 품질, 학습 안정성, 추론 속도, 우도 추정 측면에서 DDPM과 GAN, VAE를 비교합니다.
 
----
-
-## 이론과 원리
-
-DDPM 구현은 처음부터 작성하기에 가장 보람 있는 것 중 하나입니다 — 수학이 우아하고, 코드가 짧으며, 네트워크가 점진적으로 잡음 제거를 학습하는 것을 볼 수 있습니다. 이 섹션은 구현 현실을 강조합니다: 샘플 품질에 대한 잡음 스케줄의 효과, U-Net의 역할과 시간 스텝 조건화, 샘플링 vs 학습을 위한 관리.
-
-이 섹션에서 다루는 내용:
-
-- **A.** 잡음 스케줄 선택: 선형 vs 코사인
-- **B.** U-Net 아키텍처와 시간 스텝 임베딩
-- **C.** 학습 루프: 시간 스텝 샘플링과 잡음 예측 MSE
-- **D.** 샘플링: 결정적 vs 확률적, 그리고 지름길로서의 DDIM
-
-### A. 잡음 스케줄
-
-스케줄 `\beta_1, ..., \beta_T`은 정보가 얼마나 빨리 파괴되는지 제어. 두 흔한 선택:
-
-**선형**: `\beta_t = \beta_{min} + (\beta_{max} - \beta_{min}) * (t / T)`. 원본 DDPM은 `\beta_{min} = 1e-4, \beta_{max} = 0.02, T = 1000` 사용. 단순하지만 끝에 너무 빨리 잡음 추가(`x_T`가 너무 빨리 순수 잡음이 되어, 모델이 낮은 잡음 수준에서 미세 디테일을 학습할 능력 상실).
-
-**코사인** (Nichol & Dhariwal 2021): 코사인 곡선을 통해 `\bar\alpha_t`를 직접 정의:
-
-```
-\bar\alpha_t = cos^2( ((t / T) + s) / (1 + s) * pi / 2 )
-```
-
-`t = 0`에서 특이점 회피를 위해 작은 `s`. 이는 더 점진적인 정보 파괴를 만듦 — `x_t`가 더 오래 구조를 유지하고, 네트워크가 더 어려운 중간 잡음 수준에 더 많은 용량을 씀. 실험적으로 작은 이미지(CIFAR-10)에서 눈에 띄게 더 나은 샘플, 더 높은 해상도에서 작은 개선.
-
-### B. U-Net + 시간 스텝 임베딩
-
-잡음 제거기 `\epsilon_\theta(x_t, t)`는 일반적으로 U-Net (Ronneberger et al. 2015): 각 encoder 수준에서 일치하는 decoder 수준으로의 스킵 연결이 있는 encoder-decoder. U-Net이 diffusion에 적합한 세 이유:
-
-1. **다중 스케일 특징**: 잡음이 여러 스케일에서 구조를 파괴; U-Net의 encoder가 그것들을 포착, decoder가 재구성.
-2. **스킵 연결**: 저수준 디테일(에지, 텍스처)이 encoder에서 decoder로 직접 흐르므로, 네트워크가 보틀넥을 통해 압축하고 재확장할 필요 없음.
-3. **출력 형상이 입력과 일치**: 픽셀당 잡음 예측에 편리.
-
-시간 스텝 `t`는 sinusoidal 임베딩(Transformer 위치 인코딩과 같은 아이디어)으로 인코딩되고 작은 MLP를 통해 투영. 결과가 중간 특징 맵에 더해지거나 AdaGN 변조되어, U-Net에게 "당신은 잡음 수준 t에 있다"고 말함. 시간 스텝 조건화 없이는 같은 네트워크가 같은 파라미터로 모든 잡음 수준을 잡음 제거해야 함 — 훨씬 어려움.
-
-현대 변형은 일관된 이미지 생성에 필수적인 장거리 의존성 포착을 위해 가장 낮은 해상도 수준에 self-attention 층을 추가.
-
-### C. 학습 루프
-
-```
-for batch in loader:
-    x_0 = batch
-    t = torch.randint(0, T, (B,))                # 균등하게 시간 스텝 샘플링
-    noise = torch.randn_like(x_0)
-    x_t = sqrt(alpha_bar[t]) * x_0 + sqrt(1 - alpha_bar[t]) * noise
-    noise_pred = model(x_t, t)
-    loss = F.mse_loss(noise_pred, noise)
-    loss.backward(); optimizer.step()
-```
-
-세 핵심 선택:
-
-- **시간 스텝이 균등 샘플링**: 각 예제가 스텝당 하나의 잡음 수준에 기여. 일부 변형은 분산 감소를 위해 비균등 가중(중요도 샘플링).
-- **`x_0`이 아닌 잡음에 MSE**: 잡음 예측이 모든 잡음 수준에서 깨끗한 타겟을 줌.
-- **정규화 항이나 KL 손실 없음**: 단순화된 ELBO가 그것들을 떨어뜨림.
-
-### D. 샘플링: DDPM vs DDIM
-
-표준 DDPM 샘플링은 `T`개 역방향 스텝을 반복하며, 각각이 약간의 확률적 잡음 추가. 느림(원본 DDPM의 샘플당 1000번의 순전파).
-
-**DDIM** (Song et al. 2020)은 역방향 과정을 훨씬 큰 스텝으로 적분할 수 있는 결정적 ODE로 재정식화. 수학: 같은 잡음 예측기, 다른 샘플러. 1000 대신 `T_sample = 50`으로, DDIM 샘플이 비슷한 품질로 20배 빠름. 샘플러는 또한 단일 하이퍼파라미터 `\eta`로 결정적(DDIM)과 확률적(DDPM) 극단 사이를 보간할 수 있음.
-
-DPM-Solver, DPM-Solver++, Euler-A 등은 모두 같은 역방향 SDE/ODE의 고차 수치 해법으로, 10-20 스텝에서 좋은 품질 달성.
-
-### 이론에서 아래 코드로
-
-| 이론 개념 | 본 레슨의 코드 구성 |
-|-----------|---------------------|
-| 스케줄 사전 계산 | `betas = linear_schedule(T); alphas = 1 - betas; alpha_bars = torch.cumprod(alphas, 0)` |
-| 잡음 샘플 공식 | `x_t = sqrt_ab[t] * x_0 + sqrt_omab[t] * noise` |
-| t-임베딩이 있는 U-Net | 특징 맵에 더해지는 `t_emb = sinusoidal_embed(t)` |
-| 학습 MSE | `F.mse_loss(model(x_t, t), noise)` |
-| DDIM 샘플러 | `\sigma * z` 항이 없는 결정적 업데이트 `x_{t-1} = ...` |
-
----
-
-
 ## 개요
 
 디노이징 확산 확률 모델(Denoising Diffusion Probabilistic Models, DDPM)은 점진적인 노이즈 추가 과정을 역전시켜 데이터를 생성하는 강력한 생성 모델입니다. "Denoising Diffusion Probabilistic Models" (Ho et al., 2020)
@@ -187,6 +108,19 @@ t = T, T-1, ..., 1에 대해:
 
 ## DDPM 아키텍처
 
+### 이론: U-Net + 시간 스텝 임베딩
+
+잡음 제거기 `\epsilon_\theta(x_t, t)`는 일반적으로 U-Net (Ronneberger et al. 2015): 각 encoder 수준에서 일치하는 decoder 수준으로의 스킵 연결이 있는 encoder-decoder. U-Net이 diffusion에 적합한 세 이유:
+
+1. **다중 스케일 특징**: 잡음이 여러 스케일에서 구조를 파괴; U-Net의 encoder가 그것들을 포착, decoder가 재구성.
+2. **스킵 연결**: 저수준 디테일(에지, 텍스처)이 encoder에서 decoder로 직접 흐르므로, 네트워크가 보틀넥을 통해 압축하고 재확장할 필요 없음.
+3. **출력 형상이 입력과 일치**: 픽셀당 잡음 예측에 편리.
+
+시간 스텝 `t`는 sinusoidal 임베딩(Transformer 위치 인코딩과 같은 아이디어)으로 인코딩되고 작은 MLP를 통해 투영. 결과가 중간 특징 맵에 더해지거나 AdaGN 변조되어, U-Net에게 "당신은 잡음 수준 t에 있다"고 말함. 시간 스텝 조건화 없이는 같은 네트워크가 같은 파라미터로 모든 잡음 수준을 잡음 제거해야 함 — 훨씬 어려움.
+
+현대 변형은 일관된 이미지 생성에 필수적인 장거리 의존성 포착을 위해 가장 낮은 해상도 수준에 self-attention 층을 추가.
+
+
 ### 시간 임베딩을 갖는 UNet(UNet with Time Embedding)
 
 ```
@@ -256,6 +190,21 @@ x, time_emb → ResBlock → out
 ---
 
 ## 노이즈 스케줄(Noise Schedule)
+
+### 이론: 잡음 스케줄
+
+스케줄 `\beta_1, ..., \beta_T`은 정보가 얼마나 빨리 파괴되는지 제어. 두 흔한 선택:
+
+**선형**: `\beta_t = \beta_{min} + (\beta_{max} - \beta_{min}) * (t / T)`. 원본 DDPM은 `\beta_{min} = 1e-4, \beta_{max} = 0.02, T = 1000` 사용. 단순하지만 끝에 너무 빨리 잡음 추가(`x_T`가 너무 빨리 순수 잡음이 되어, 모델이 낮은 잡음 수준에서 미세 디테일을 학습할 능력 상실).
+
+**코사인** (Nichol & Dhariwal 2021): 코사인 곡선을 통해 `\bar\alpha_t`를 직접 정의:
+
+```
+\bar\alpha_t = cos^2( ((t / T) + s) / (1 + s) * pi / 2 )
+```
+
+`t = 0`에서 특이점 회피를 위해 작은 `s`. 이는 더 점진적인 정보 파괴를 만듦 — `x_t`가 더 오래 구조를 유지하고, 네트워크가 더 어려운 중간 잡음 수준에 더 많은 용량을 씀. 실험적으로 작은 이미지(CIFAR-10)에서 눈에 띄게 더 나은 샘플, 더 높은 해상도에서 작은 개선.
+
 
 ### 선형 스케줄(Linear Schedule)
 
@@ -428,6 +377,26 @@ for epoch in epochs:
         optimizer.step()
 ```
 
+### 이론: 학습 루프
+
+```
+for batch in loader:
+    x_0 = batch
+    t = torch.randint(0, T, (B,))                # 균등하게 시간 스텝 샘플링
+    noise = torch.randn_like(x_0)
+    x_t = sqrt(alpha_bar[t]) * x_0 + sqrt(1 - alpha_bar[t]) * noise
+    noise_pred = model(x_t, t)
+    loss = F.mse_loss(noise_pred, noise)
+    loss.backward(); optimizer.step()
+```
+
+세 핵심 선택:
+
+- **시간 스텝이 균등 샘플링**: 각 예제가 스텝당 하나의 잡음 수준에 기여. 일부 변형은 분산 감소를 위해 비균등 가중(중요도 샘플링).
+- **`x_0`이 아닌 잡음에 MSE**: 잡음 예측이 모든 잡음 수준에서 깨끗한 타겟을 줌.
+- **정규화 항이나 KL 손실 없음**: 단순화된 ELBO가 그것들을 떨어뜨림.
+
+
 ---
 
 ## 샘플링 루프
@@ -456,6 +425,15 @@ for t in reversed(range(1, T+1)):
 
 # x는 생성된 이미지
 ```
+
+### 이론: 샘플링: DDPM vs DDIM
+
+표준 DDPM 샘플링은 `T`개 역방향 스텝을 반복하며, 각각이 약간의 확률적 잡음 추가. 느림(원본 DDPM의 샘플당 1000번의 순전파).
+
+**DDIM** (Song et al. 2020)은 역방향 과정을 훨씬 큰 스텝으로 적분할 수 있는 결정적 ODE로 재정식화. 수학: 같은 잡음 예측기, 다른 샘플러. 1000 대신 `T_sample = 50`으로, DDIM 샘플이 비슷한 품질로 20배 빠름. 샘플러는 또한 단일 하이퍼파라미터 `\eta`로 결정적(DDIM)과 확률적(DDPM) 극단 사이를 보간할 수 있음.
+
+DPM-Solver, DPM-Solver++, Euler-A 등은 모두 같은 역방향 SDE/ODE의 고차 수치 해법으로, 10-20 스텝에서 좋은 품질 달성.
+
 
 ---
 

@@ -15,48 +15,15 @@ After completing this lesson, you will be able to:
 5. Train LeNet-5 on the MNIST dataset and evaluate classification performance using accuracy and loss metrics.
 6. Analyze the learned convolutional filters and feature maps to develop intuition about what each layer represents.
 
+## Overview
+
+LeNet-5 is the first successful Convolutional Neural Network proposed by Yann LeCun in 1998. It showed excellent performance on handwritten digit recognition (MNIST) and laid the foundation for modern CNNs.
+
 ---
 
-## Theory & Principles
+## Mathematical Background
 
-LeNet-5 (LeCun et al. 1998) is the original convolutional network. Re-implementing it today is partly a history lesson and partly a useful baseline — every concept that later networks add (ReLU, BN, residuals, attention) can be measured against this starting point. The architecture is also small enough that you can derive its parameter count and per-layer activation shapes by hand, which is the right exercise for understanding any CNN.
-
-This section covers:
-
-- **A.** LeNet-5's design choices and what 1998 looked like
-- **B.** Why subsampling (pooling) was non-trivial then and now
-- **C.** The math of parameter counting in convolutional networks
-- **D.** What replaced LeNet's choices in modern CNNs (and why)
-
-### A. LeNet-5 Design
-
-LeNet-5 was designed for `32 x 32` grayscale digits (MNIST). Its layer plan:
-
-```
-Input  32 x 32 x 1
-C1     6 maps,  5x5 conv, no padding   ->  28 x 28 x 6
-S2     2x2 average pool, stride 2      ->  14 x 14 x 6
-C3     16 maps, 5x5 conv               ->  10 x 10 x 16
-S4     2x2 average pool, stride 2      ->   5 x  5 x 16
-C5     120 maps, 5x5 conv (=fully connected on 5x5 input)
-F6     84 fully-connected units
-Out    10 RBF units (softmax-equivalent)
-```
-
-Activations were **tanh** (not ReLU; ReLU would not become standard until 2010). The optimizer was a careful hand-tuned SGD with momentum. The total parameter count is around 60,000 — three to four orders of magnitude less than even the smallest modern CNN.
-
-### B. Subsampling (Pooling) Then and Now
-
-LeNet's S2 and S4 layers did *trainable* subsampling: each `2x2` patch was averaged, then multiplied by a learnable scalar and added to a learnable bias before tanh. Modern architectures simplified this to plain max- or average-pooling with no parameters, because experiments showed the trainable subsampling provided little benefit and cost extra parameters. This decision saved nothing in 1998 (the network was tiny anyway) but mattered a lot later, when deep CNNs needed every parameter to do real work.
-
-The deeper question — what should subsampling do — has multiple modern answers:
-
-- **Max pooling**: keep the strongest activation in each patch (robust to noise).
-- **Average pooling**: keep the mean (smoother, less spiky).
-- **Strided convolution**: learn the downsampling filter (most expressive, used in ResNet).
-- **Attention pooling / global average pooling**: aggregate spatially in a learned weighted way (used in modern classifiers and ViT's CLS token).
-
-### C. Parameter Counting
+### Theory: Parameter Counting
 
 For a convolutional layer with `C_in` input channels, `C_out` output channels, kernel `K x K`, the parameter count is:
 
@@ -70,38 +37,6 @@ For LeNet's C1: `5 * 5 * 1 * 6 + 6 = 156`. C3: `5 * 5 * 6 * 16 + 16 = 2,416`. C5
 
 This is a recurring pattern: the parameter count is dominated by the layers that mix many channels, not by the early layers with few channels.
 
-### D. What Replaced LeNet's Choices
-
-| LeNet (1998) | Modern Replacement | Why |
-|--------------|--------------------|-----|
-| tanh activation | ReLU / GELU | Non-saturating, avoids vanishing gradients |
-| Trainable pooling | Max / strided conv | Simpler, no benefit from extra parameters |
-| Hand-tuned SGD | Adam / AdamW | Adaptive per-parameter learning rates |
-| No regularization | Dropout, BN, weight decay | Needed once networks grew larger |
-| 5x5 kernels | Stacks of 3x3 | More expressive per parameter |
-| RBF output | Softmax + cross-entropy | Better-behaved gradients |
-
-Each of these is a topic in later lessons. LeNet is the baseline against which all of them are measured.
-
-### From Theory to the Code Below
-
-| Theory concept | Code construct in this lesson |
-|----------------|-------------------------------|
-| LeNet layer plan | The `nn.Sequential` of Conv2d / AvgPool / Linear |
-| Modernized activations | Substituting `nn.ReLU()` for tanh |
-| Parameter counting | `sum(p.numel() for p in model.parameters())` |
-| Training recipe | `Adam` + cross-entropy + (no need for) careful init |
-
----
-
-
-## Overview
-
-LeNet-5 is the first successful Convolutional Neural Network proposed by Yann LeCun in 1998. It showed excellent performance on handwritten digit recognition (MNIST) and laid the foundation for modern CNNs.
-
----
-
-## Mathematical Background
 
 ### 1. Convolution Operation
 
@@ -182,6 +117,24 @@ Parameters:
 - Total: ~61,706 parameters
 ```
 
+### Theory: LeNet-5 Design
+
+LeNet-5 was designed for `32 x 32` grayscale digits (MNIST). Its layer plan:
+
+```
+Input  32 x 32 x 1
+C1     6 maps,  5x5 conv, no padding   ->  28 x 28 x 6
+S2     2x2 average pool, stride 2      ->  14 x 14 x 6
+C3     16 maps, 5x5 conv               ->  10 x 10 x 16
+S4     2x2 average pool, stride 2      ->   5 x  5 x 16
+C5     120 maps, 5x5 conv (=fully connected on 5x5 input)
+F6     84 fully-connected units
+Out    10 RBF units (softmax-equivalent)
+```
+
+Activations were **tanh** (not ReLU; ReLU would not become standard until 2010). The optimizer was a careful hand-tuned SGD with momentum. The total parameter count is around 60,000 — three to four orders of magnitude less than even the smallest modern CNN.
+
+
 ---
 
 ## File Structure
@@ -205,6 +158,32 @@ Parameters:
 ---
 
 ## Core Concepts
+
+### Theory: What Replaced LeNet's Choices
+
+| LeNet (1998) | Modern Replacement | Why |
+|--------------|--------------------|-----|
+| tanh activation | ReLU / GELU | Non-saturating, avoids vanishing gradients |
+| Trainable pooling | Max / strided conv | Simpler, no benefit from extra parameters |
+| Hand-tuned SGD | Adam / AdamW | Adaptive per-parameter learning rates |
+| No regularization | Dropout, BN, weight decay | Needed once networks grew larger |
+| 5x5 kernels | Stacks of 3x3 | More expressive per parameter |
+| RBF output | Softmax + cross-entropy | Better-behaved gradients |
+
+Each of these is a topic in later lessons. LeNet is the baseline against which all of them are measured.
+
+
+### Theory: Subsampling (Pooling) Then and Now
+
+LeNet's S2 and S4 layers did *trainable* subsampling: each `2x2` patch was averaged, then multiplied by a learnable scalar and added to a learnable bias before tanh. Modern architectures simplified this to plain max- or average-pooling with no parameters, because experiments showed the trainable subsampling provided little benefit and cost extra parameters. This decision saved nothing in 1998 (the network was tiny anyway) but mattered a lot later, when deep CNNs needed every parameter to do real work.
+
+The deeper question — what should subsampling do — has multiple modern answers:
+
+- **Max pooling**: keep the strongest activation in each patch (robust to noise).
+- **Average pooling**: keep the mean (smoother, less spiky).
+- **Strided convolution**: learn the downsampling filter (most expressive, used in ResNet).
+- **Attention pooling / global average pooling**: aggregate spatially in a learned weighted way (used in modern classifiers and ViT's CLS token).
+
 
 ### 1. Local Connectivity
 

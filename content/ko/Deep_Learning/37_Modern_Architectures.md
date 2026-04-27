@@ -13,77 +13,6 @@
 - 빠른 확산 샘플링을 위한 잠재 일관성 모델(Latent Consistency Models, LCM) 이해하기
 - timm 및 transformers 라이브러리를 사용한 사전학습된 현대 아키텍처 적용하기
 
----
-
-## 이론과 원리
-
-2020-2024년의 "현대 아키텍처"(ConvNeXt, EfficientNetV2, DINOv2, LCM)는 Transformer의 비전 정복 이후 분야의 재평형으로 가장 잘 이해됩니다. 각각이 특정 질문에 답합니다: 순수 ConvNet이 여전히 경쟁할 수 있는가(ConvNeXt)? 더 효율적으로 학습할 수 있는가(EfficientNetV2)? SSL이 지도보다 더 나은 시각적 특징을 만들 수 있는가(DINOv2)? Diffusion이 더 빠르게 샘플링할 수 있는가(LCM)?
-
-이 섹션에서 다루는 내용:
-
-- **A.** ConvNeXt: Transformer 시대의 ConvNet 재방문
-- **B.** EfficientNetV2와 점진적 리사이징
-- **C.** SSL 엔드게임으로서의 DINOv2
-- **D.** 빠른 diffusion 샘플링을 위한 Latent Consistency Models
-
-### A. ConvNeXt: 다시 장전된 ConvNet
-
-Liu et al. (2022)는 물었습니다: ResNet 대비 ViT 우위 중 얼마가 *아키텍처*이고 얼마가 *학습 레시피*인가? 답: 대부분 레시피입니다. 그들은 ViT-L 학습에 사용된 같은 재료로 ResNet을 현대화했습니다:
-
-- ViT 파라미터 수와 일치하도록 깊이와 너비 스케일
-- AdamW + 코사인 스케줄 + 300 에폭 학습
-- BatchNorm 대신 LayerNorm
-- ReLU 대신 GELU
-- Inverted-bottleneck (더 높은 채널 수의 depthwise conv)
-- 7x7 depthwise conv (층당 ViT의 더 큰 수용 영역 모방)
-
-결과 ConvNeXt는 같은 파라미터 수에서 ImageNet에서 *ViT를 일치시켜*, "Transformer가 항상 이긴다" 서사를 끝냈습니다. 교훈: 아키텍처 선택과 학습 레시피가 *결합*되어 있다; 레시피 일치 없이 해를 가로질러 비교하는 것은 불공평.
-
-### B. EfficientNetV2: 점진적 학습
-
-EfficientNet (2019)은 compound scaling을 도입 — 일정 비율로 깊이, 너비, 해상도를 공동 스케일. EfficientNetV2 (2021)는 학습 자체를 더 빠르게 하기 위해 두 혁신을 추가:
-
-- **초기 단계의 Fused-MBConv 블록**: 작은 공간 차원에서 depthwise가 비싼 곳에서 depthwise + pointwise를 일반 conv로 대체.
-- **점진적 해상도 학습**: 더 작은 이미지 크기로 먼저 학습, 점진적으로 증가. 해상도와 함께 자라는 정규화(dropout, RandAugment 강도)와 결합하여, 품질 손실 없이 학습 시간을 절반으로.
-
-점진적 리사이징 아이디어는 일반화: 학습이 다중 해상도나 작업 복잡도를 가질 때마다, "쉬운 것 먼저" 그 다음 "어려운 것"으로 학습이 보통 도움.
-
-### C. DINOv2: Foundation-Model SSL
-
-DINOv2 (Oquab et al. 2023)는 본질적으로: DINO(자기 증류 contrastive 방법)를 가져와 142M 큐레이션된 이미지에서 1B+ 파라미터 규모로 학습, 세상에 던짐. 결과: 라벨 없이 수십 다운스트림 작업에서 지도 ImageNet 사전학습을 이기는 시각적 특징.
-
-아키텍처와 학습 혁신:
-
-- **큐레이션된 비레이블 데이터**: 무작위 웹 스크레이핑이 아닌 다양성과 품질을 위해 필터링된 142M 이미지.
-- **Multi-crop teacher-student**: DINO와 같은 손실이지만 다양한 크기의 여러 크롭; 학생이 크롭에 걸쳐 교사의 *평균*에 일치.
-- **규모에서 안정 학습**: KoLeo 정규화(임베딩 분포의 균일성), 매우 큰 배치의 batch norm 등 기법.
-
-DINOv2가 만드는 특징 공간은 너무 일반적이어서 "동결된 특징 + linear 헤드"가 대부분 작업에서 "파인튜닝된 ImageNet 모델"과 일치. 이것이 CLIP의 SSL 등가물, 하지만 비전 전용.
-
-### D. Latent Consistency Models (LCM)
-
-Diffusion 모델은 추론에서 느림: DDIM에서도 20-50 샘플링 스텝. LCM (Luo et al. 2023)은 diffusion 궤적의 임의의 점을 최종 깨끗한 이미지로 직접 매핑하는 *consistency 모델*을 학습:
-
-```
-f_\theta(x_t, t) ≈ x_0   임의의 t에 대해
-```
-
-학습은 일관성을 강제: 같은 궤적 따라 두 시간 스텝 `t, t'`에 대해 `f(x_t, t) ≈ f(x_{t'}, t')`. 학습 후, 50-스텝 DDIM에 비교 가능한 품질로 **1-4 스텝**에서 샘플링 가능.
-
-이는 사전학습된 diffusion 모델을 consistency 모델로 *증류*하여 달성 — 처음부터 학습하는 것보다 작은 학습 비용이지만 10-50배 빠른 샘플러를 산출. LCM은 2023-2024년 프로덕션 시스템의 "실시간" 이미지 생성의 기반.
-
-### 이론에서 아래 코드로
-
-| 이론 개념 | 본 레슨의 코드 구성 |
-|-----------|---------------------|
-| ConvNeXt 블록 | depthwise conv 7x7 -> LN -> Linear -> GELU -> Linear (inverted bottleneck) |
-| Compound scaling | 너비, 깊이, 해상도를 `\phi^k`로 곱함 |
-| DINOv2 특징 | `model = torch.hub.load('facebookresearch/dinov2', 'dinov2_vitb14')` |
-| LCM 샘플러 | 전체 역방향 과정 대신 1-4 스텝 결정적 샘플링 |
-
----
-
-
 ## 1. 아키텍처 진화 타임라인
 
 딥러닝 아키텍처 환경은 빠르게 진화해왔습니다:
@@ -130,6 +59,20 @@ f_\theta(x_t, t) ≈ x_0   임의의 t에 대해
 ## 2. ConvNeXt: ConvNet의 현대화
 
 **ConvNeXt** (Liu et al., 2022)는 순수 ConvNet이 최신 설계 선택으로 현대화될 때 Transformer와 경쟁할 수 있음을 보여줍니다.
+
+### 이론: ConvNeXt: 다시 장전된 ConvNet
+
+Liu et al. (2022)는 물었습니다: ResNet 대비 ViT 우위 중 얼마가 *아키텍처*이고 얼마가 *학습 레시피*인가? 답: 대부분 레시피입니다. 그들은 ViT-L 학습에 사용된 같은 재료로 ResNet을 현대화했습니다:
+
+- ViT 파라미터 수와 일치하도록 깊이와 너비 스케일
+- AdamW + 코사인 스케줄 + 300 에폭 학습
+- BatchNorm 대신 LayerNorm
+- ReLU 대신 GELU
+- Inverted-bottleneck (더 높은 채널 수의 depthwise conv)
+- 7x7 depthwise conv (층당 ViT의 더 큰 수용 영역 모방)
+
+결과 ConvNeXt는 같은 파라미터 수에서 ImageNet에서 *ViT를 일치시켜*, "Transformer가 항상 이긴다" 서사를 끝냈습니다. 교훈: 아키텍처 선택과 학습 레시피가 *결합*되어 있다; 레시피 일치 없이 해를 가로질러 비교하는 것은 불공평.
+
 
 ### 2.1 ResNet에서 ConvNeXt로의 설계 진화
 
@@ -353,6 +296,16 @@ class GRN(nn.Module):
 2. **점진적 학습(Progressive training)**: 이미지 크기와 정규화를 점진적으로 증가
 3. **신경망 아키텍처 탐색(Neural Architecture Search, NAS)**: 학습 속도에 최적화
 
+### 이론: EfficientNetV2: 점진적 학습
+
+EfficientNet (2019)은 compound scaling을 도입 — 일정 비율로 깊이, 너비, 해상도를 공동 스케일. EfficientNetV2 (2021)는 학습 자체를 더 빠르게 하기 위해 두 혁신을 추가:
+
+- **초기 단계의 Fused-MBConv 블록**: 작은 공간 차원에서 depthwise가 비싼 곳에서 depthwise + pointwise를 일반 conv로 대체.
+- **점진적 해상도 학습**: 더 작은 이미지 크기로 먼저 학습, 점진적으로 증가. 해상도와 함께 자라는 정규화(dropout, RandAugment 강도)와 결합하여, 품질 손실 없이 학습 시간을 절반으로.
+
+점진적 리사이징 아이디어는 일반화: 학습이 다중 해상도나 작업 복잡도를 가질 때마다, "쉬운 것 먼저" 그 다음 "어려운 것"으로 학습이 보통 도움.
+
+
 ### 3.1 Fused-MBConv vs. MBConv
 
 ```
@@ -445,6 +398,19 @@ for idx in top5_idx:
 ## 4. DINOv2: 자기지도 학습 비전 파운데이션 모델
 
 **DINOv2** (Oquab et al., 2023)는 레이블 없이 1억 4200만 이미지로 사전학습된 자기지도 학습 Vision Transformer입니다.
+
+### 이론: DINOv2: Foundation-Model SSL
+
+DINOv2 (Oquab et al. 2023)는 본질적으로: DINO(자기 증류 contrastive 방법)를 가져와 142M 큐레이션된 이미지에서 1B+ 파라미터 규모로 학습, 세상에 던짐. 결과: 라벨 없이 수십 다운스트림 작업에서 지도 ImageNet 사전학습을 이기는 시각적 특징.
+
+아키텍처와 학습 혁신:
+
+- **큐레이션된 비레이블 데이터**: 무작위 웹 스크레이핑이 아닌 다양성과 품질을 위해 필터링된 142M 이미지.
+- **Multi-crop teacher-student**: DINO와 같은 손실이지만 다양한 크기의 여러 크롭; 학생이 크롭에 걸쳐 교사의 *평균*에 일치.
+- **규모에서 안정 학습**: KoLeo 정규화(임베딩 분포의 균일성), 매우 큰 배치의 batch norm 등 기법.
+
+DINOv2가 만드는 특징 공간은 너무 일반적이어서 "동결된 특징 + linear 헤드"가 대부분 작업에서 "파인튜닝된 ImageNet 모델"과 일치. 이것이 CLIP의 SSL 등가물, 하지만 비전 전용.
+
 
 ### 4.1 주요 혁신
 
@@ -581,6 +547,19 @@ depth_map = depth_head(spatial_features)  # (B, 1, H, W)
 ## 5. 잠재 일관성 모델(Latent Consistency Models, LCM)
 
 **잠재 일관성 모델(Latent Consistency Models)** (Luo et al., 2023)은 확산 모델에서 1-4 단계로 빠른 샘플링을 가능하게 합니다 (표준 확산의 25-50 단계 vs.).
+
+### 이론: Latent Consistency Models (LCM)
+
+Diffusion 모델은 추론에서 느림: DDIM에서도 20-50 샘플링 스텝. LCM (Luo et al. 2023)은 diffusion 궤적의 임의의 점을 최종 깨끗한 이미지로 직접 매핑하는 *consistency 모델*을 학습:
+
+```
+f_\theta(x_t, t) ≈ x_0   임의의 t에 대해
+```
+
+학습은 일관성을 강제: 같은 궤적 따라 두 시간 스텝 `t, t'`에 대해 `f(x_t, t) ≈ f(x_{t'}, t')`. 학습 후, 50-스텝 DDIM에 비교 가능한 품질로 **1-4 스텝**에서 샘플링 가능.
+
+이는 사전학습된 diffusion 모델을 consistency 모델로 *증류*하여 달성 — 처음부터 학습하는 것보다 작은 학습 비용이지만 10-50배 빠른 샘플러를 산출. LCM은 2023-2024년 프로덕션 시스템의 "실시간" 이미지 생성의 기반.
+
 
 ### 5.1 일관성 증류(Consistency Distillation)
 

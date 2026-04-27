@@ -11,20 +11,9 @@
 - 깊은 네트워크의 학습 문제와 해결책
 - PyTorch로 구현
 
----
+## 1. VGG (2014)
 
-## 이론과 원리
-
-아래의 "고급" CNN 주제 — VGG, Inception, ResNet, dilated 및 transposed 합성곱, depthwise separable 합성곱 — 는 하나의 엔지니어링 질문에 대한 일련의 답으로 가장 잘 이해됩니다: CNN의 수용 영역, 채널 수, 깊이를 파라미터 수를 폭발시키거나 그래디언트 흐름을 깨뜨리지 않고 어떻게 확장할 것인가? 각 아키텍처 변형은 그 트레이드오프 곡선 위의 다른 점입니다.
-
-이 섹션에서 다루는 내용:
-
-- **A.** 큰 커널(7x7) 대신 작은 커널(3x3) 적층
-- **B.** Dilated 및 transposed 합성곱: 스트라이딩 기하 변경
-- **C.** 채널 혼합으로서의 1x1 합성곱
-- **D.** Depthwise-separable 합성곱과 파라미터 절약
-
-### A. 단일 7x7 대신 3x3 커널을 쌓는 이유
+### 이론: 단일 7x7 대신 3x3 커널을 쌓는 이유
 
 두 개 적층된 `3x3` 합성곱은 `2 * (3^2 C^2) = 18 C^2`개 파라미터로 `5x5` 수용 영역을 가집니다. 단일 `5x5` 합성곱은 같은 RF에 `25 C^2`개 파라미터를 가집니다. 세 개 적층된 `3x3` 합성곱은 `27 C^2`개 파라미터로 `7x7` RF에 도달하는 반면 단일 `7x7`은 `49 C^2`입니다.
 
@@ -35,53 +24,6 @@
 
 VGG (Simonyan & Zisserman 2014)는 이 원리에 완전히 헌신한 아키텍처였습니다: 모든 conv는 `3x3`, 모든 pool은 `2x2`, 깊이가 유일한 노브.
 
-### B. Dilated 및 Transposed 합성곱
-
-**Dilated (atrous) 합성곱**은 커널에 구멍을 도입합니다:
-
-```
-y(i, j) = sum_{m, n} x(i + r * m, j + r * n) * w(m, n)
-```
-
-여기서 `r`은 dilation rate입니다. `r = 2`인 `3x3` 커널은 `5x5` 영역을 덮지만 9개 가중치만 사용합니다. 지수적으로 증가하는 dilation rate(1, 2, 4, 8, ...)를 사용하면 고정 파라미터 수에서 깊이에 따라 수용 영역이 *지수적*으로 자랍니다. 해상도를 잃지 않고 큰 컨텍스트 윈도가 필요한 의미 분할(semantic segmentation)에 필수적입니다.
-
-**Transposed 합성곱**(오해를 부르게 "deconvolution"이라 불리기도 함)은 순전파 합성곱의 *역전파 형상*을 구현합니다. 순전파 conv가 `H_in -> H_out = (H_in - K) / S + 1` (스트라이드 `S`)을 매핑한다면, transposed conv는 `H_in -> H_out = S * (H_in - 1) + K`를 매핑합니다. 오토인코더, GAN 생성기, 분할 디코더에서 특징 맵을 *업샘플*하는 데 사용됩니다. 주의: "deconvolution"이라는 용어는 수학적으로 틀립니다(진정한 deconvolution은 합성곱 연산자를 역전시킬 것). Transposed conv는 단지 역의 *형상*만 일치시킬 뿐 값은 일치시키지 않습니다.
-
-### C. 1x1 합성곱: 채널 혼합
-
-`C_in` 입력과 `C_out` 출력 채널의 `1x1` conv는 모든 공간 위치에서 학습된 `C_in -> C_out` 선형 매핑을 독립적으로 적용하는 것과 동등합니다. 공간적으로는 아무것도 안 하고, 채널 간에는 모든 것을 혼합합니다.
-
-세 가지 용도:
-
-1. **차원 축소.** Inception (GoogLeNet 2014)은 비싼 `3x3`이나 `5x5` conv 앞에 `1x1` conv를 두어 먼저 채널 수를 줄여, 뒤따르는 더 큰 conv의 비용을 극적으로 절감합니다.
-2. **채널 재가중.** Squeeze-and-excitation 모듈은 `1x1` conv로 채널별 attention을 계산합니다.
-3. **보틀넥 블록.** ResNet은 `1x1 -> 3x3 -> 1x1` 보틀넥을 사용하는데, 첫 `1x1`이 채널을 줄이고, `3x3`이 공간 작업을 저렴하게 하며, 마지막 `1x1`이 채널 수를 복원합니다.
-
-### D. Depthwise-Separable 합성곱
-
-`K x K` 커널, `C_in` 입력 채널, `C_out` 출력 채널의 표준 conv는 `K^2 * C_in * C_out`개 파라미터와 `K^2 * C_in * C_out * H * W` FLOPs를 가집니다.
-
-**Depthwise-separable conv**는 이를 두 더 저렴한 단계로 인수분해합니다:
-
-1. **Depthwise**: 입력 채널당 하나의 `K x K` 필터, 채널 혼합 없음. 파라미터: `K^2 * C_in`. FLOPs: `K^2 * C_in * H * W`.
-2. **Pointwise** (`1x1` conv): 채널 혼합. 파라미터: `C_in * C_out`. FLOPs: `C_in * C_out * H * W`.
-
-총 파라미터: `K^2 * C_in * C_out` 대신 `K^2 * C_in + C_in * C_out`. 절약 비율은 `1 / C_out + 1 / K^2`입니다. 일반적인 `K=3, C_out=256`의 경우 약 1/8 — 거의 한 자릿수입니다. MobileNet (Howard et al. 2017)과 Xception (Chollet 2017)은 이 인수분해 위에 구축되며, 모바일에 배포 가능한 CNN이 애초에 존재하는 이유입니다.
-
-### 이론에서 아래 코드로
-
-| 이론 개념 | 본 레슨의 코드 구성 |
-|-----------|---------------------|
-| 적층된 3x3 conv (VGG) | `nn.Conv2d(C, C, 3, padding=1)` x N |
-| Dilated conv | `nn.Conv2d(..., dilation=r)` |
-| Transposed conv | `nn.ConvTranspose2d(...)` |
-| 1x1 채널 혼합 | `nn.Conv2d(C_in, C_out, kernel_size=1)` |
-| Depthwise separable | `nn.Conv2d(..., groups=C_in)` 후 1x1 conv |
-
----
-
-
-## 1. VGG (2014)
 
 ### 핵심 아이디어
 
@@ -297,6 +239,42 @@ class SEBlock(nn.Module):
 ---
 
 ## 4. EfficientNet (2019)
+
+### 이론: Depthwise-Separable 합성곱
+
+`K x K` 커널, `C_in` 입력 채널, `C_out` 출력 채널의 표준 conv는 `K^2 * C_in * C_out`개 파라미터와 `K^2 * C_in * C_out * H * W` FLOPs를 가집니다.
+
+**Depthwise-separable conv**는 이를 두 더 저렴한 단계로 인수분해합니다:
+
+1. **Depthwise**: 입력 채널당 하나의 `K x K` 필터, 채널 혼합 없음. 파라미터: `K^2 * C_in`. FLOPs: `K^2 * C_in * H * W`.
+2. **Pointwise** (`1x1` conv): 채널 혼합. 파라미터: `C_in * C_out`. FLOPs: `C_in * C_out * H * W`.
+
+총 파라미터: `K^2 * C_in * C_out` 대신 `K^2 * C_in + C_in * C_out`. 절약 비율은 `1 / C_out + 1 / K^2`입니다. 일반적인 `K=3, C_out=256`의 경우 약 1/8 — 거의 한 자릿수입니다. MobileNet (Howard et al. 2017)과 Xception (Chollet 2017)은 이 인수분해 위에 구축되며, 모바일에 배포 가능한 CNN이 애초에 존재하는 이유입니다.
+
+
+### 이론: 1x1 합성곱: 채널 혼합
+
+`C_in` 입력과 `C_out` 출력 채널의 `1x1` conv는 모든 공간 위치에서 학습된 `C_in -> C_out` 선형 매핑을 독립적으로 적용하는 것과 동등합니다. 공간적으로는 아무것도 안 하고, 채널 간에는 모든 것을 혼합합니다.
+
+세 가지 용도:
+
+1. **차원 축소.** Inception (GoogLeNet 2014)은 비싼 `3x3`이나 `5x5` conv 앞에 `1x1` conv를 두어 먼저 채널 수를 줄여, 뒤따르는 더 큰 conv의 비용을 극적으로 절감합니다.
+2. **채널 재가중.** Squeeze-and-excitation 모듈은 `1x1` conv로 채널별 attention을 계산합니다.
+3. **보틀넥 블록.** ResNet은 `1x1 -> 3x3 -> 1x1` 보틀넥을 사용하는데, 첫 `1x1`이 채널을 줄이고, `3x3`이 공간 작업을 저렴하게 하며, 마지막 `1x1`이 채널 수를 복원합니다.
+
+
+### 이론: Dilated 및 Transposed 합성곱
+
+**Dilated (atrous) 합성곱**은 커널에 구멍을 도입합니다:
+
+```
+y(i, j) = sum_{m, n} x(i + r * m, j + r * n) * w(m, n)
+```
+
+여기서 `r`은 dilation rate입니다. `r = 2`인 `3x3` 커널은 `5x5` 영역을 덮지만 9개 가중치만 사용합니다. 지수적으로 증가하는 dilation rate(1, 2, 4, 8, ...)를 사용하면 고정 파라미터 수에서 깊이에 따라 수용 영역이 *지수적*으로 자랍니다. 해상도를 잃지 않고 큰 컨텍스트 윈도가 필요한 의미 분할(semantic segmentation)에 필수적입니다.
+
+**Transposed 합성곱**(오해를 부르게 "deconvolution"이라 불리기도 함)은 순전파 합성곱의 *역전파 형상*을 구현합니다. 순전파 conv가 `H_in -> H_out = (H_in - K) / S + 1` (스트라이드 `S`)을 매핑한다면, transposed conv는 `H_in -> H_out = S * (H_in - 1) + K`를 매핑합니다. 오토인코더, GAN 생성기, 분할 디코더에서 특징 맵을 *업샘플*하는 데 사용됩니다. 주의: "deconvolution"이라는 용어는 수학적으로 틀립니다(진정한 deconvolution은 합성곱 연산자를 역전시킬 것). Transposed conv는 단지 역의 *형상*만 일치시킬 뿐 값은 일치시키지 않습니다.
+
 
 ### 핵심 아이디어
 

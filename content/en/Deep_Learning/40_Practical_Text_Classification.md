@@ -11,20 +11,9 @@
 - LSTM/Transformer-based classifiers
 - Sentiment analysis project
 
----
+## 1. Text Preprocessing
 
-## Theory & Principles
-
-A practical text-classification project introduces three pieces of NLP machinery: tokenization (turning strings into integer sequences), embedding (turning integers into vectors), and pooling/classification on top of a sequence encoder. This section explains why each step is what it is — including why subword tokenization (BPE, WordPiece) won out over word-level and why the choice of pooling matters for variable-length inputs.
-
-This section covers:
-
-- **A.** Tokenization: characters vs words vs subwords
-- **B.** Word and subword embeddings
-- **C.** Sequence encoding: pooling for variable-length inputs
-- **D.** LSTM-based vs Transformer-based classifiers
-
-### A. Tokenization
+### Theory: Tokenization
 
 Three strategies for splitting text into discrete units:
 
@@ -34,56 +23,6 @@ Three strategies for splitting text into discrete units:
 
 Subword tokenization is now universal: BERT uses WordPiece, GPT-2/3 use BPE, multilingual models use SentencePiece. The vocabulary is *learned from data* (not designed): start with characters, repeatedly merge the most frequent adjacent pair, until you have the desired vocab size.
 
-### B. Embeddings
-
-After tokenization, integer tokens are mapped to dense vectors:
-
-```
-token_id (int)  ---> embedding (d-dim vector)
-```
-
-This is `nn.Embedding(vocab_size, d_model)` — a learned `vocab x d` lookup table. Two key properties:
-
-1. **Dimension `d`** typically matches the rest of the model (768 for BERT-base, 4096 for LLaMA-7B).
-2. **The embedding is learned end-to-end** with the rest of the network. Pre-trained embeddings (Word2Vec, GloVe) were popular pre-2018 but have been largely replaced by jointly-trained embeddings inside larger models.
-
-Embeddings produced inside Transformer-style models capture remarkable structure: `embed("king") - embed("man") + embed("woman") ≈ embed("queen")`, polysemy resolved by context, etc. This emergent structure is the basis of most modern NLP.
-
-### C. Pooling for Variable-Length Inputs
-
-A sequence encoder produces `(seq_len, d)` features, but classification needs a fixed-size vector. Three pooling strategies:
-
-- **Mean pooling**: average across the sequence dimension. Simple, ignores token importance.
-- **Max pooling**: max over each feature dimension. Picks the strongest activations; can be brittle to outliers.
-- **CLS token / first-token pooling**: prepend a `[CLS]` token, use its final hidden state. The encoder learns to aggregate relevant info into this token's representation; standard in BERT.
-- **Attention pooling**: use a learned query vector to attention-weight the tokens. Most expressive; what modern fine-tuned classifiers often use.
-
-The choice matters. CLS pooling works well for BERT (which was pretrained with CLS doing NSP). For models pretrained without CLS (e.g., RoBERTa with NSP dropped), mean or attention pooling often outperforms.
-
-### D. LSTM vs Transformer
-
-For text classification specifically:
-
-- **LSTM (or BiLSTM)**: sequential, O(T * d^2) compute per layer. Limited context; bigger context only by stacking layers. Often sufficient for short texts (sentences).
-- **Transformer**: parallel, O(T^2 * d) compute per layer (T^2 from attention). Strong at long-context. Can use pretrained weights (BERT, RoBERTa) for zero-cost feature extraction.
-
-For "production" text classification today, the recipe is almost always: take a pretrained Transformer, add a pooling+classifier head, fine-tune end-to-end on the task. LSTMs are educational but rarely the best choice on real datasets — pretrained Transformers usually win even on small datasets, because their features are so much better.
-
-### From Theory to the Code Below
-
-| Theory concept | Code construct in this lesson |
-|----------------|-------------------------------|
-| Subword tokenization | `tokenizer = AutoTokenizer.from_pretrained("bert-base-uncased")` |
-| Embedding lookup | `nn.Embedding(vocab_size, d_model)` |
-| BiLSTM encoder | `nn.LSTM(d_model, hidden, bidirectional=True)` |
-| Mean / max pooling | `output.mean(dim=1)`, `output.max(dim=1).values` |
-| CLS pooling | `output[:, 0]` (first token) |
-| Transformer fine-tuning | `model = AutoModelForSequenceClassification.from_pretrained(...)` |
-
----
-
-
-## 1. Text Preprocessing
 
 ### Tokenization
 
@@ -131,6 +70,22 @@ def collate_fn(batch):
 ---
 
 ## 2. Embedding Layer
+
+### Theory: Embeddings
+
+After tokenization, integer tokens are mapped to dense vectors:
+
+```
+token_id (int)  ---> embedding (d-dim vector)
+```
+
+This is `nn.Embedding(vocab_size, d_model)` — a learned `vocab x d` lookup table. Two key properties:
+
+1. **Dimension `d`** typically matches the rest of the model (768 for BERT-base, 4096 for LLaMA-7B).
+2. **The embedding is learned end-to-end** with the rest of the network. Pre-trained embeddings (Word2Vec, GloVe) were popular pre-2018 but have been largely replaced by jointly-trained embeddings inside larger models.
+
+Embeddings produced inside Transformer-style models capture remarkable structure: `embed("king") - embed("man") + embed("woman") ≈ embed("queen")`, polysemy resolved by context, etc. This emergent structure is the basis of most modern NLP.
+
 
 ### Basic Embedding
 
@@ -209,6 +164,18 @@ class LSTMClassifier(nn.Module):
         return self.fc(hidden)
 ```
 
+### Theory: Pooling for Variable-Length Inputs
+
+A sequence encoder produces `(seq_len, d)` features, but classification needs a fixed-size vector. Three pooling strategies:
+
+- **Mean pooling**: average across the sequence dimension. Simple, ignores token importance.
+- **Max pooling**: max over each feature dimension. Picks the strongest activations; can be brittle to outliers.
+- **CLS token / first-token pooling**: prepend a `[CLS]` token, use its final hidden state. The encoder learns to aggregate relevant info into this token's representation; standard in BERT.
+- **Attention pooling**: use a learned query vector to attention-weight the tokens. Most expressive; what modern fine-tuned classifiers often use.
+
+The choice matters. CLS pooling works well for BERT (which was pretrained with CLS doing NSP). For models pretrained without CLS (e.g., RoBERTa with NSP dropped), mean or attention pooling often outperforms.
+
+
 ---
 
 ## 4. Transformer Classifier
@@ -248,6 +215,16 @@ class TransformerClassifier(nn.Module):
         pooled = output.mean(dim=1)
         return self.fc(pooled)
 ```
+
+### Theory: LSTM vs Transformer
+
+For text classification specifically:
+
+- **LSTM (or BiLSTM)**: sequential, O(T * d^2) compute per layer. Limited context; bigger context only by stacking layers. Often sufficient for short texts (sentences).
+- **Transformer**: parallel, O(T^2 * d) compute per layer (T^2 from attention). Strong at long-context. Can use pretrained weights (BERT, RoBERTa) for zero-cost feature extraction.
+
+For "production" text classification today, the recipe is almost always: take a pretrained Transformer, add a pooling+classifier head, fine-tune end-to-end on the task. LSTMs are educational but rarely the best choice on real datasets — pretrained Transformers usually win even on small datasets, because their features are so much better.
+
 
 ---
 

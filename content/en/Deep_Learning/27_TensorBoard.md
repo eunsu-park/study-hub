@@ -11,70 +11,6 @@
 - Visualize training metrics, model graphs, and embeddings
 - Compare and analyze hyperparameter tuning results
 
----
-
-## Theory & Principles
-
-TensorBoard is a visualization tool, not a deep-learning concept — but the *practice* of looking at training is itself a discipline with theory behind it. This section covers what the standard charts (loss curves, gradient norms, activation histograms) actually tell you about model health, and what the diagnostic patterns mean.
-
-This section covers:
-
-- **A.** Loss curves: train vs validation, the four diagnostic shapes
-- **B.** Gradient norm tracking and the "gradient explosion" alarm
-- **C.** Activation and weight histograms: dead units, saturated layers
-- **D.** Embedding visualization: t-SNE, UMAP, and what they hide
-
-### A. Loss Curve Diagnostics
-
-The plot of train/validation loss vs steps is the single most informative chart in deep learning. Four common shapes:
-
-1. **Both curves smoothly decrease, validation slightly higher**: healthy training. Continue.
-2. **Train decreases, validation flat or rising**: overfitting. Add regularization, more data, or stop earlier.
-3. **Both flat or both noisy with no trend**: not learning. Check learning rate (likely too small), data pipeline (likely wrong labels), or model capacity (likely too small).
-4. **Loss spikes / NaN**: gradient explosion or numerical issue. Lower LR, add gradient clipping, check for divisions by zero.
-
-A trained eye reads these patterns in seconds. TensorBoard's smoothing slider helps — raw losses are noisy, but the smoothed curve reveals trend.
-
-### B. Gradient Norm
-
-Logging `||\nabla L||` per step (or per layer) catches several problems:
-
-- **Exploding**: norm grows unbounded. Apply `clip_grad_norm_`. If it explodes immediately even with clipping, your LR is too high.
-- **Vanishing**: norm decays to zero. Check initialization, replace tanh/sigmoid with ReLU, add residual connections, or use BN/LN.
-- **Per-layer pattern**: if early layers have much smaller gradients than late layers, you have classic vanishing through depth — residuals or BN are needed.
-
-The single number `||\nabla||_2` over all parameters is the simplest diagnostic; per-layer norms tell you where the trouble lives.
-
-### C. Activation and Weight Histograms
-
-Plot the histogram of each layer's *activations* and *weights* every N steps. Three pathologies these reveal:
-
-- **Dead ReLU**: a large fraction of activations are stuck at zero. Often visible as a spike at zero in the histogram. Fix: reduce LR, switch to Leaky ReLU/GELU, or check for negative-bias initialization.
-- **Saturated sigmoid/tanh**: histogram has spikes at -1 / +1 (tanh) or 0 / 1 (sigmoid). Gradients there are near zero, killing learning. Fix: use ReLU/GELU, or normalize inputs more aggressively.
-- **Weight drift**: weights' histogram shifts substantially over training, suggesting too-high LR or inadequate regularization. Healthy training shows weights centered near zero with growing-but-bounded variance.
-
-### D. Embedding Visualization
-
-For learned representations, projecting them to 2D with **t-SNE** or **UMAP** lets you see whether semantically similar inputs cluster. Useful checks:
-
-- After training, do same-class examples cluster together?
-- Are linguistically synonymous words / visually similar images near each other?
-- Do interpolations between two points pass through meaningful intermediate examples (a sign of a smooth, well-formed manifold)?
-
-A caveat: both t-SNE and UMAP are **non-linear** and **non-isometric**. Distances in the 2D plot are not faithful to distances in the original space, and apparent cluster sizes/separations are partially artifacts of the algorithm's hyperparameters. Use these visualizations for qualitative confirmation, not quantitative claims.
-
-### From Theory to the Code Below
-
-| Theory concept | Code construct in this lesson |
-|----------------|-------------------------------|
-| Scalar logging | `writer.add_scalar('loss/train', loss, step)` |
-| Histogram logging | `writer.add_histogram('weights/conv1', model.conv1.weight, step)` |
-| Gradient norm | `writer.add_scalar('grad_norm', total_norm, step)` |
-| Embedding projector | `writer.add_embedding(embeddings, metadata=labels)` |
-
----
-
-
 ## 1. Introduction to TensorBoard
 
 ### 1.1 What is TensorBoard?
@@ -162,6 +98,18 @@ writer = create_writer('mnist_cnn', 'lr_0.001_batch_32')
 ---
 
 ## 3. Scalar Logging
+
+### Theory: Loss Curve Diagnostics
+
+The plot of train/validation loss vs steps is the single most informative chart in deep learning. Four common shapes:
+
+1. **Both curves smoothly decrease, validation slightly higher**: healthy training. Continue.
+2. **Train decreases, validation flat or rising**: overfitting. Add regularization, more data, or stop earlier.
+3. **Both flat or both noisy with no trend**: not learning. Check learning rate (likely too small), data pipeline (likely wrong labels), or model capacity (likely too small).
+4. **Loss spikes / NaN**: gradient explosion or numerical issue. Lower LR, add gradient clipping, check for divisions by zero.
+
+A trained eye reads these patterns in seconds. TensorBoard's smoothing slider helps — raw losses are noisy, but the smoothed curve reveals trend.
+
 
 ### 3.1 Recording Training/Validation Metrics
 
@@ -441,6 +389,26 @@ def log_gradcam(writer, model, image, target_layer, step):
 
 ## 5. Histograms
 
+### Theory: Activation and Weight Histograms
+
+Plot the histogram of each layer's *activations* and *weights* every N steps. Three pathologies these reveal:
+
+- **Dead ReLU**: a large fraction of activations are stuck at zero. Often visible as a spike at zero in the histogram. Fix: reduce LR, switch to Leaky ReLU/GELU, or check for negative-bias initialization.
+- **Saturated sigmoid/tanh**: histogram has spikes at -1 / +1 (tanh) or 0 / 1 (sigmoid). Gradients there are near zero, killing learning. Fix: use ReLU/GELU, or normalize inputs more aggressively.
+- **Weight drift**: weights' histogram shifts substantially over training, suggesting too-high LR or inadequate regularization. Healthy training shows weights centered near zero with growing-but-bounded variance.
+
+
+### Theory: Gradient Norm
+
+Logging `||\nabla L||` per step (or per layer) catches several problems:
+
+- **Exploding**: norm grows unbounded. Apply `clip_grad_norm_`. If it explodes immediately even with clipping, your LR is too high.
+- **Vanishing**: norm decays to zero. Check initialization, replace tanh/sigmoid with ReLU, add residual connections, or use BN/LN.
+- **Per-layer pattern**: if early layers have much smaller gradients than late layers, you have classic vanishing through depth — residuals or BN are needed.
+
+The single number `||\nabla||_2` over all parameters is the simplest diagnostic; per-layer norms tell you where the trouble lives.
+
+
 ### 5.1 Visualizing Weight Distributions
 
 ```python
@@ -557,6 +525,17 @@ writer.add_graph(model, dummy_input)
 ---
 
 ## 7. Embedding Visualization
+
+### Theory: Embedding Visualization
+
+For learned representations, projecting them to 2D with **t-SNE** or **UMAP** lets you see whether semantically similar inputs cluster. Useful checks:
+
+- After training, do same-class examples cluster together?
+- Are linguistically synonymous words / visually similar images near each other?
+- Do interpolations between two points pass through meaningful intermediate examples (a sign of a smooth, well-formed manifold)?
+
+A caveat: both t-SNE and UMAP are **non-linear** and **non-isometric**. Distances in the 2D plot are not faithful to distances in the original space, and apparent cluster sizes/separations are partially artifacts of the algorithm's hyperparameters. Use these visualizations for qualitative confirmation, not quantitative claims.
+
 
 ### 7.1 Visualizing Embeddings with t-SNE/PCA
 

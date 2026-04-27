@@ -14,56 +14,9 @@
 - Attention visualization techniques
 - Efficient PyTorch implementation
 
----
+## 1. Multi-Head Attention Mathematics
 
-## Theory & Principles
-
-The "deep dive" into attention covers the supporting structures that make a Transformer block actually work: positional encoding (so the model knows where each token is), layer normalization (so training is stable across depth), residual connections around attention (so deep stacks don't collapse), and the feed-forward sub-layer (so the model has per-token nonlinear capacity). Each of these is a deliberate choice with mathematical justification.
-
-This section covers:
-
-- **A.** Positional encoding: sinusoidal vs learned vs relative
-- **B.** Pre-LN vs Post-LN and why the order matters
-- **C.** Residual connections in attention blocks
-- **D.** The feed-forward (FFN) sub-layer as per-token MLP
-
-### A. Positional Encoding
-
-Attention is **permutation-invariant** by construction: if you shuffle the input tokens, you get the same shuffled output. Sequences need an extra signal to distinguish positions. Three approaches:
-
-**Sinusoidal (Vaswani 2017)**: a fixed function of position:
-
-```
-PE(pos, 2i)   = sin(pos / 10000^{2i/d_model})
-PE(pos, 2i+1) = cos(pos / 10000^{2i/d_model})
-```
-
-The frequencies span a geometric progression from `1` to `10^{-4}` Hz. Each dimension behaves like a clock running at a different rate. The benefit: relative position can be expressed as a linear function of absolute position (because `sin(a + b)` and `cos(a + b)` decompose into combinations of `sin(a), cos(a), sin(b), cos(b)`), which lets the model in principle learn relative relationships from absolute encodings.
-
-**Learned**: an `nn.Embedding(max_len, d_model)`. Simpler, often slightly better in-distribution, but cannot extrapolate to sequences longer than seen at training time.
-
-**Relative / Rotary (RoPE)**: encode position by *rotating* query and key vectors in 2D subspaces. Two vectors at positions `m` and `n` interact through a function of their difference `m - n`. Used in modern LLMs (LLaMA, GPT-NeoX) because it generalizes much better to longer contexts than absolute encodings.
-
-### B. Pre-LN vs Post-LN
-
-The original Transformer was **Post-LN**: `x + Sublayer(x)` followed by LayerNorm. Modern Transformers use **Pre-LN**: LayerNorm first, then `x + Sublayer(LN(x))`. The order matters for gradient flow.
-
-In Post-LN, the residual stream goes through a LayerNorm at every layer; the gradient must traverse all those LNs in reverse. With deep stacks (24+ layers), this requires careful learning-rate warmup to avoid divergence.
-
-In Pre-LN, the residual stream is *untouched* — `x_{l+1} = x_l + F_l(LN(x_l))`. The gradient flows through identity skip connections directly to the bottom, just like ResNet. Training is much more stable, larger learning rates work, warmup is less critical. This is one reason GPT-2 (Pre-LN) trained to 1.5B parameters easily while many Post-LN attempts at similar scale failed.
-
-### C. Residual Connections in Attention Blocks
-
-Every Transformer sub-layer wraps in a residual:
-
-```
-y = x + MultiHeadAttention(LN(x))           (attention block)
-z = y + FFN(LN(y))                          (FFN block)
-```
-
-The residual stream is the persistent identity of each token through the network; sub-layers *add* refinements to it. This is the same constant-error-carousel idea as LSTM and ResNet — gradient flows through addition, not multiplication, avoiding the deep-network gradient pathology.
-
-### D. The FFN Sub-Layer
+### Theory: The FFN Sub-Layer
 
 After multi-head attention, each token is independently transformed by a position-wise feed-forward network:
 
@@ -78,19 +31,27 @@ Typically `W_1 in R^{d_model x 4 d_model}` and `W_2 in R^{4 d_model x d_model}` 
 
 Together they alternate, giving each token both context-dependent updates (from attention) and content-dependent processing (from FFN). The 4x hidden expansion in the FFN is empirically justified: most of a Transformer's parameters live there (typical breakdown is ~2/3 in FFNs, ~1/3 in attention).
 
-### From Theory to the Code Below
 
-| Theory concept | Code construct in this lesson |
-|----------------|-------------------------------|
-| Sinusoidal PE | `pe = torch.zeros(max_len, d_model); pe[:, 0::2] = sin(...); pe[:, 1::2] = cos(...)` |
-| Pre-LN order | `x + sublayer(self.norm(x))` (not `self.norm(x + sublayer(x))`) |
-| Residual stream | The persistent `x` that every block adds to |
-| FFN with 4x expansion | `nn.Linear(d, 4*d) -> ReLU -> nn.Linear(4*d, d)` |
+### Theory: Residual Connections in Attention Blocks
 
----
+Every Transformer sub-layer wraps in a residual:
+
+```
+y = x + MultiHeadAttention(LN(x))           (attention block)
+z = y + FFN(LN(y))                          (FFN block)
+```
+
+The residual stream is the persistent identity of each token through the network; sub-layers *add* refinements to it. This is the same constant-error-carousel idea as LSTM and ResNet — gradient flows through addition, not multiplication, avoiding the deep-network gradient pathology.
 
 
-## 1. Multi-Head Attention Mathematics
+### Theory: Pre-LN vs Post-LN
+
+The original Transformer was **Post-LN**: `x + Sublayer(x)` followed by LayerNorm. Modern Transformers use **Pre-LN**: LayerNorm first, then `x + Sublayer(LN(x))`. The order matters for gradient flow.
+
+In Post-LN, the residual stream goes through a LayerNorm at every layer; the gradient must traverse all those LNs in reverse. With deep stacks (24+ layers), this requires careful learning-rate warmup to avoid divergence.
+
+In Pre-LN, the residual stream is *untouched* — `x_{l+1} = x_l + F_l(LN(x_l))`. The gradient flows through identity skip connections directly to the bottom, just like ResNet. Training is much more stable, larger learning rates work, warmup is less critical. This is one reason GPT-2 (Pre-LN) trained to 1.5B parameters easily while many Post-LN attempts at similar scale failed.
+
 
 ### Formula Review
 
@@ -522,6 +483,24 @@ class LongformerAttention(nn.Module):
 ---
 
 ## 5. Advanced Positional Encoding
+
+### Theory: Positional Encoding
+
+Attention is **permutation-invariant** by construction: if you shuffle the input tokens, you get the same shuffled output. Sequences need an extra signal to distinguish positions. Three approaches:
+
+**Sinusoidal (Vaswani 2017)**: a fixed function of position:
+
+```
+PE(pos, 2i)   = sin(pos / 10000^{2i/d_model})
+PE(pos, 2i+1) = cos(pos / 10000^{2i/d_model})
+```
+
+The frequencies span a geometric progression from `1` to `10^{-4}` Hz. Each dimension behaves like a clock running at a different rate. The benefit: relative position can be expressed as a linear function of absolute position (because `sin(a + b)` and `cos(a + b)` decompose into combinations of `sin(a), cos(a), sin(b), cos(b)`), which lets the model in principle learn relative relationships from absolute encodings.
+
+**Learned**: an `nn.Embedding(max_len, d_model)`. Simpler, often slightly better in-distribution, but cannot extrapolate to sequences longer than seen at training time.
+
+**Relative / Rotary (RoPE)**: encode position by *rotating* query and key vectors in 2D subspaces. Two vectors at positions `m` and `n` interact through a function of their difference `m - n`. Used in modern LLMs (LLaMA, GPT-NeoX) because it generalizes much better to longer contexts than absolute encodings.
+
 
 ### Sinusoidal (Original Transformer)
 

@@ -11,20 +11,9 @@
 - LSTM/Transformer 기반 분류기
 - 감성 분석 프로젝트
 
----
+## 1. 텍스트 전처리
 
-## 이론과 원리
-
-실용적 텍스트 분류 프로젝트는 NLP 메커니즘의 세 조각을 도입합니다: 토크나이제이션(문자열을 정수 시퀀스로), 임베딩(정수를 벡터로), 그리고 시퀀스 encoder 위의 풀링/분류. 이 섹션은 각 단계가 왜 그것인지 설명합니다 — 서브워드 토크나이제이션(BPE, WordPiece)이 단어 수준을 이긴 이유와 가변 길이 입력에 풀링 선택이 중요한 이유 포함.
-
-이 섹션에서 다루는 내용:
-
-- **A.** 토크나이제이션: 문자 vs 단어 vs 서브워드
-- **B.** 단어와 서브워드 임베딩
-- **C.** 시퀀스 인코딩: 가변 길이 입력을 위한 풀링
-- **D.** LSTM 기반 vs Transformer 기반 분류기
-
-### A. 토크나이제이션
+### 이론: 토크나이제이션
 
 텍스트를 이산 단위로 분할하는 세 전략:
 
@@ -34,56 +23,6 @@
 
 서브워드 토크나이제이션은 이제 보편적: BERT는 WordPiece, GPT-2/3는 BPE, 다국어 모델은 SentencePiece 사용. 어휘는 (설계되지 않고) *데이터에서 학습*: 문자로 시작, 가장 빈번한 인접 쌍을 반복적으로 병합, 원하는 어휘 크기까지.
 
-### B. 임베딩
-
-토크나이제이션 후, 정수 토큰이 밀집 벡터로 매핑:
-
-```
-token_id (int)  ---> embedding (d-차원 벡터)
-```
-
-이는 `nn.Embedding(vocab_size, d_model)` — 학습된 `vocab x d` 룩업 테이블. 두 핵심 속성:
-
-1. **차원 `d`**가 일반적으로 모델의 나머지와 일치(BERT-base의 768, LLaMA-7B의 4096).
-2. **임베딩이 네트워크의 나머지와 종단간으로 학습**. 사전학습된 임베딩(Word2Vec, GloVe)은 2018년 이전 인기 있었지만 더 큰 모델 안에서 공동 학습된 임베딩으로 크게 대체.
-
-Transformer 스타일 모델 안에서 만들어진 임베딩은 놀라운 구조를 포착: `embed("king") - embed("man") + embed("woman") ≈ embed("queen")`, 컨텍스트로 해소된 다의성 등. 이 출현 구조가 대부분 현대 NLP의 기반.
-
-### C. 가변 길이 입력을 위한 풀링
-
-시퀀스 encoder는 `(seq_len, d)` 특징을 만들지만 분류는 고정 크기 벡터 필요. 세 풀링 전략:
-
-- **평균 풀링**: 시퀀스 차원에 걸쳐 평균. 단순, 토큰 중요도 무시.
-- **Max 풀링**: 각 특징 차원에 대한 max. 가장 강한 활성화 선택; 이상치에 취약할 수 있음.
-- **CLS 토큰 / 첫 토큰 풀링**: `[CLS]` 토큰을 앞에 추가, 그 최종 은닉 상태 사용. Encoder가 관련 정보를 이 토큰 표현으로 집계하도록 학습; BERT의 표준.
-- **Attention 풀링**: 학습된 query 벡터로 토큰을 attention 가중. 가장 표현력; 현대 파인튜닝된 분류기가 종종 사용.
-
-선택이 중요. CLS 풀링은 BERT(CLS가 NSP 하도록 사전학습됨)에 잘 작동. CLS 없이 사전학습된 모델(예: NSP 떨어진 RoBERTa)의 경우, 평균이나 attention 풀링이 종종 능가.
-
-### D. LSTM vs Transformer
-
-텍스트 분류 특정의 경우:
-
-- **LSTM (또는 BiLSTM)**: 순차적, 층당 O(T * d^2) 계산. 제한된 컨텍스트; 더 큰 컨텍스트는 층 적층으로만. 짧은 텍스트(문장)에 종종 충분.
-- **Transformer**: 병렬, 층당 O(T^2 * d) 계산(attention에서 T^2). 긴 컨텍스트에 강함. 무비용 특징 추출을 위해 사전학습된 가중치(BERT, RoBERTa) 사용 가능.
-
-오늘의 "프로덕션" 텍스트 분류의 경우, 레시피는 거의 항상: 사전학습된 Transformer를 가져와, 풀링+분류기 헤드를 추가, 작업에서 종단간 파인튜닝. LSTM은 교육적이지만 실제 데이터셋에서 거의 최선의 선택이 아님 — 사전학습된 Transformer가 보통 작은 데이터셋에서도 이김, 특징이 훨씬 더 좋기 때문.
-
-### 이론에서 아래 코드로
-
-| 이론 개념 | 본 레슨의 코드 구성 |
-|-----------|---------------------|
-| 서브워드 토크나이제이션 | `tokenizer = AutoTokenizer.from_pretrained("bert-base-uncased")` |
-| 임베딩 룩업 | `nn.Embedding(vocab_size, d_model)` |
-| BiLSTM encoder | `nn.LSTM(d_model, hidden, bidirectional=True)` |
-| 평균 / max 풀링 | `output.mean(dim=1)`, `output.max(dim=1).values` |
-| CLS 풀링 | `output[:, 0]` (첫 토큰) |
-| Transformer 파인튜닝 | `model = AutoModelForSequenceClassification.from_pretrained(...)` |
-
----
-
-
-## 1. 텍스트 전처리
 
 ### 토큰화
 
@@ -131,6 +70,22 @@ def collate_fn(batch):
 ---
 
 ## 2. 임베딩 레이어
+
+### 이론: 임베딩
+
+토크나이제이션 후, 정수 토큰이 밀집 벡터로 매핑:
+
+```
+token_id (int)  ---> embedding (d-차원 벡터)
+```
+
+이는 `nn.Embedding(vocab_size, d_model)` — 학습된 `vocab x d` 룩업 테이블. 두 핵심 속성:
+
+1. **차원 `d`**가 일반적으로 모델의 나머지와 일치(BERT-base의 768, LLaMA-7B의 4096).
+2. **임베딩이 네트워크의 나머지와 종단간으로 학습**. 사전학습된 임베딩(Word2Vec, GloVe)은 2018년 이전 인기 있었지만 더 큰 모델 안에서 공동 학습된 임베딩으로 크게 대체.
+
+Transformer 스타일 모델 안에서 만들어진 임베딩은 놀라운 구조를 포착: `embed("king") - embed("man") + embed("woman") ≈ embed("queen")`, 컨텍스트로 해소된 다의성 등. 이 출현 구조가 대부분 현대 NLP의 기반.
+
 
 ### 기본 임베딩
 
@@ -209,6 +164,18 @@ class LSTMClassifier(nn.Module):
         return self.fc(hidden)
 ```
 
+### 이론: 가변 길이 입력을 위한 풀링
+
+시퀀스 encoder는 `(seq_len, d)` 특징을 만들지만 분류는 고정 크기 벡터 필요. 세 풀링 전략:
+
+- **평균 풀링**: 시퀀스 차원에 걸쳐 평균. 단순, 토큰 중요도 무시.
+- **Max 풀링**: 각 특징 차원에 대한 max. 가장 강한 활성화 선택; 이상치에 취약할 수 있음.
+- **CLS 토큰 / 첫 토큰 풀링**: `[CLS]` 토큰을 앞에 추가, 그 최종 은닉 상태 사용. Encoder가 관련 정보를 이 토큰 표현으로 집계하도록 학습; BERT의 표준.
+- **Attention 풀링**: 학습된 query 벡터로 토큰을 attention 가중. 가장 표현력; 현대 파인튜닝된 분류기가 종종 사용.
+
+선택이 중요. CLS 풀링은 BERT(CLS가 NSP 하도록 사전학습됨)에 잘 작동. CLS 없이 사전학습된 모델(예: NSP 떨어진 RoBERTa)의 경우, 평균이나 attention 풀링이 종종 능가.
+
+
 ---
 
 ## 4. Transformer 분류기
@@ -248,6 +215,16 @@ class TransformerClassifier(nn.Module):
         pooled = output.mean(dim=1)
         return self.fc(pooled)
 ```
+
+### 이론: LSTM vs Transformer
+
+텍스트 분류 특정의 경우:
+
+- **LSTM (또는 BiLSTM)**: 순차적, 층당 O(T * d^2) 계산. 제한된 컨텍스트; 더 큰 컨텍스트는 층 적층으로만. 짧은 텍스트(문장)에 종종 충분.
+- **Transformer**: 병렬, 층당 O(T^2 * d) 계산(attention에서 T^2). 긴 컨텍스트에 강함. 무비용 특징 추출을 위해 사전학습된 가중치(BERT, RoBERTa) 사용 가능.
+
+오늘의 "프로덕션" 텍스트 분류의 경우, 레시피는 거의 항상: 사전학습된 Transformer를 가져와, 풀링+분류기 헤드를 추가, 작업에서 종단간 파인튜닝. LSTM은 교육적이지만 실제 데이터셋에서 거의 최선의 선택이 아님 — 사전학습된 Transformer가 보통 작은 데이터셋에서도 이김, 특징이 훨씬 더 좋기 때문.
+
 
 ---
 

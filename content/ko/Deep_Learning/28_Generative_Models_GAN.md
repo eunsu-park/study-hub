@@ -13,20 +13,9 @@
 - 학습 안정화 기법 적용
 - StyleGAN 개념 이해
 
----
+## 1. GAN 기초 이론
 
-## 이론과 원리
-
-생성적 적대 신경망(Generative Adversarial Network; Goodfellow et al. 2014)은 생성 모델링을 *게임*으로 구성합니다: 두 네트워크, 생성기 G와 판별기 D, 대립하는 목적. 이 게임 뒤의 수학 — 미니맥스 목적, JS 발산과의 동등성, 실패 모드(mode collapse, 그래디언트 소실) — 가 이 섹션의 전체 내용입니다. 이를 이해하는 것이 본 레슨의 나머지가 제시하는 손실 곡선과 안정화 트릭을 해석할 유일한 방법입니다.
-
-이 섹션에서 다루는 내용:
-
-- **A.** GAN 미니맥스 목적
-- **B.** 최적 D와 JS 발산 동등성
-- **C.** Vanilla GAN이 학습이 나쁜 이유: 그래디언트 소실과 mode collapse
-- **D.** Wasserstein GAN과 Earth-Mover 거리 수정
-
-### A. 미니맥스 목적
+### 이론: 미니맥스 목적
 
 GAN 학습은 두 플레이어 영합 게임을 최적화:
 
@@ -39,64 +28,6 @@ min_G max_D V(G, D) = E_{x ~ p_data} [log D(x)] + E_{z ~ p_z} [log(1 - D(G(z)))]
 
 실전에서 미니맥스는 교대 업데이트로 구현: D 스텝 한 번(또는 여러 번), 그 다음 G 스텝 한 번. 수학적으로 이는 결합 미니맥스 풀이와 같지 않지만, 교대가 경사 하강 학습 루프에 맞는 유일한 것.
 
-### B. 최적 D와 JS 발산
-
-고정 G에 대해, 최적 D는 닫힌 형태:
-
-```
-D*(x) = p_data(x) / (p_data(x) + p_G(x))
-```
-
-(각 `x`에 대해 `D(x)`에 대한 `V` 최대화로 유도.) 다시 대입:
-
-```
-V(G, D*) = -log(4) + 2 * JS(p_data || p_G)
-```
-
-여기서 JS는 **Jensen-Shannon 발산**. 그래서 최적에서 GAN 학습은 **JS(p_data || p_G) 최소화**와 동등 — 생성기가 JS 발산으로 측정된 데이터 분포와 일치하도록 밀림.
-
-JS는 대칭이고 `[0, log 2]`로 제한 — 매력적이지만 — 트러블이 시작되는 곳이기도.
-
-### C. 그래디언트 소실과 Mode Collapse
-
-**그래디언트 소실**: D가 너무 좋아지면(거의 모든 샘플을 올바르게 분류), `log(1 - D(G(z)))`가 0 근처에서 포화되고 G에 대한 그래디언트가 소실. G가 p_data에서 멀어도 개선을 멈춤. 이는 근본적으로 `p_G`와 `p_data`가 서로소 지지(disjoint support)를 가질 때 JS 발산이 상수 값(`log 2`)을 가지기 때문 — 판별기에는 완벽한 소식, D의 그래디언트에서 학습하려는 생성기에는 끔찍한 소식.
-
-**Mode collapse**: G가 D를 속이는 몇몇 출력만 만들도록 학습, 대부분 데이터 분포 무시. 미니맥스 목적은 이를 벌하지 않음 — D는 G의 출력 분포가 모든 모드를 덮는지가 아니라 각 *개별* 샘플이 실제인지만 확인.
-
-원본 논문의 "비포화" 손실은 G 업데이트에 `log(1 - D(G(z)))`를 `-log(D(G(z)))`로 대체, 이는 더 강한 그래디언트를 주지만 기저 불안정성을 해결하지 않음.
-
-### D. Wasserstein GAN
-
-**Wasserstein GAN** (Arjovsky et al. 2017)은 JS 발산을 **Earth-Mover 거리**(Wasserstein-1)로 대체:
-
-```
-W(p_data, p_G) = inf_{\gamma in \Pi(p_data, p_G)} E_{(x, y) ~ \gamma} [||x - y||]
-```
-
-직관적으로, 확률 질량을 이동시켜 `p_G`를 `p_data`로 변형하는 최소 "비용". 결정적으로, EMD는 지지가 서로소일 때도 잘 정의되고 — JS와 달리, 이는 상수 — 연속적이고 유용한 그래디언트를 제공.
-
-W를 직접 계산하는 것은 다루기 어렵지만, 그 쌍대 형태가 다룰 수 있는 목적을 줌:
-
-```
-W(p_data, p_G) = sup_{||f||_L <= 1} E_{p_data}[f(x)] - E_{p_G}[f(x)]
-```
-
-모든 1-Lipschitz 함수 `f`에 대해. WGAN은 `f`를 신경망("critic", D를 대체)으로 매개변수화하고 가중치 클리핑(원본) 또는 gradient penalty(WGAN-GP, Gulrajani et al. 2017)를 통해 Lipschitz 제약을 강제. 이 레시피가 학습을 엄청나게 안정화하며 대부분 현대 GAN 학습의 기반.
-
-### 이론에서 아래 코드로
-
-| 이론 개념 | 본 레슨의 코드 구성 |
-|-----------|---------------------|
-| 미니맥스 / 비포화 G 손실 | `loss_G = -log(D(G(z))).mean()` |
-| D 손실 | `loss_D = -(log(D(x)) + log(1 - D(G(z)))).mean()` |
-| Mode collapse 증상 | 모든 생성 샘플이 같아 보임 |
-| WGAN critic | D 출력에 sigmoid 없음; W 손실 = `D(x).mean() - D(G(z)).mean()` |
-| Gradient penalty | `||grad_D(interpolated)||_2 - 1)^2` 항 |
-
----
-
-
-## 1. GAN 기초 이론
 
 ### 개념
 
@@ -277,6 +208,44 @@ def train_gan(generator, discriminator, dataloader, epochs=100, latent_dim=100):
 ---
 
 ## 3. 손실 함수
+
+### 이론: Wasserstein GAN
+
+**Wasserstein GAN** (Arjovsky et al. 2017)은 JS 발산을 **Earth-Mover 거리**(Wasserstein-1)로 대체:
+
+```
+W(p_data, p_G) = inf_{\gamma in \Pi(p_data, p_G)} E_{(x, y) ~ \gamma} [||x - y||]
+```
+
+직관적으로, 확률 질량을 이동시켜 `p_G`를 `p_data`로 변형하는 최소 "비용". 결정적으로, EMD는 지지가 서로소일 때도 잘 정의되고 — JS와 달리, 이는 상수 — 연속적이고 유용한 그래디언트를 제공.
+
+W를 직접 계산하는 것은 다루기 어렵지만, 그 쌍대 형태가 다룰 수 있는 목적을 줌:
+
+```
+W(p_data, p_G) = sup_{||f||_L <= 1} E_{p_data}[f(x)] - E_{p_G}[f(x)]
+```
+
+모든 1-Lipschitz 함수 `f`에 대해. WGAN은 `f`를 신경망("critic", D를 대체)으로 매개변수화하고 가중치 클리핑(원본) 또는 gradient penalty(WGAN-GP, Gulrajani et al. 2017)를 통해 Lipschitz 제약을 강제. 이 레시피가 학습을 엄청나게 안정화하며 대부분 현대 GAN 학습의 기반.
+
+
+### 이론: 최적 D와 JS 발산
+
+고정 G에 대해, 최적 D는 닫힌 형태:
+
+```
+D*(x) = p_data(x) / (p_data(x) + p_G(x))
+```
+
+(각 `x`에 대해 `D(x)`에 대한 `V` 최대화로 유도.) 다시 대입:
+
+```
+V(G, D*) = -log(4) + 2 * JS(p_data || p_G)
+```
+
+여기서 JS는 **Jensen-Shannon 발산**. 그래서 최적에서 GAN 학습은 **JS(p_data || p_G) 최소화**와 동등 — 생성기가 JS 발산으로 측정된 데이터 분포와 일치하도록 밀림.
+
+JS는 대칭이고 `[0, log 2]`로 제한 — 매력적이지만 — 트러블이 시작되는 곳이기도.
+
 
 ### Vanilla GAN Loss (BCE)
 
@@ -484,6 +453,15 @@ class DCGANDiscriminator(nn.Module):
 ---
 
 ## 5. 학습 안정화 기법
+
+### 이론: 그래디언트 소실과 Mode Collapse
+
+**그래디언트 소실**: D가 너무 좋아지면(거의 모든 샘플을 올바르게 분류), `log(1 - D(G(z)))`가 0 근처에서 포화되고 G에 대한 그래디언트가 소실. G가 p_data에서 멀어도 개선을 멈춤. 이는 근본적으로 `p_G`와 `p_data`가 서로소 지지(disjoint support)를 가질 때 JS 발산이 상수 값(`log 2`)을 가지기 때문 — 판별기에는 완벽한 소식, D의 그래디언트에서 학습하려는 생성기에는 끔찍한 소식.
+
+**Mode collapse**: G가 D를 속이는 몇몇 출력만 만들도록 학습, 대부분 데이터 분포 무시. 미니맥스 목적은 이를 벌하지 않음 — D는 G의 출력 분포가 모든 모드를 덮는지가 아니라 각 *개별* 샘플이 실제인지만 확인.
+
+원본 논문의 "비포화" 손실은 G 업데이트에 `log(1 - D(G(z)))`를 `-log(D(G(z)))`로 대체, 이는 더 강한 그래디언트를 주지만 기저 불안정성을 해결하지 않음.
+
 
 ### Spectral Normalization
 

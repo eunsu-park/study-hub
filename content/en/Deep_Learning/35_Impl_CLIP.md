@@ -15,20 +15,15 @@ After completing this lesson, you will be able to:
 5. Apply CLIP embeddings for downstream tasks such as image retrieval, semantic image search, and as frozen features for few-shot classification.
 6. Analyze the role of temperature scaling in the InfoNCE loss and explain how data scale and prompt engineering affect CLIP's zero-shot performance.
 
+## Overview
+
+CLIP maps images and text to the same embedding space, enabling zero-shot image classification. "Learning Transferable Visual Models From Natural Language Supervision" (Radford et al., 2021)
+
 ---
 
-## Theory & Principles
+## Mathematical Background
 
-This lesson implements CLIP from scratch, anchoring the contrastive-learning theory of the previous lesson in concrete tensor operations. The keys are getting the symmetric loss right, understanding what each batch of `N` actually contributes (`N - 1` negatives per example), and the prompt engineering that turns zero-shot inference from acceptable into excellent.
-
-This section covers:
-
-- **A.** The InfoNCE loss as cross-entropy on a similarity matrix
-- **B.** Why batch size dominates contrastive performance
-- **C.** Prompt engineering and why it works
-- **D.** Using CLIP as a frozen feature extractor
-
-### A. InfoNCE = Cross-Entropy on Similarity Matrix
+### Theory: InfoNCE = Cross-Entropy on Similarity Matrix
 
 The contrastive loss for a batch of `N` matched pairs:
 
@@ -44,64 +39,6 @@ Conceptually: each row of `S` is treated as a softmax over `N` "classes" (which 
 
 This is the entire CLIP loss. Three lines of PyTorch.
 
-### B. Batch Size Dominates Contrastive Performance
-
-The number of negatives per example equals `batch_size - 1`. More negatives = harder discrimination task = better representations. Empirically:
-
-- Batch 256: weak contrastive signal, plateau quickly.
-- Batch 4096: significant improvement.
-- Batch 32k (CLIP's setting): roughly the regime where returns diminish.
-
-This is why CLIP needed enormous compute: the batch size matters more than the model size, and large batches across multi-GPU setups require gradient synchronization (all-gather of features), which has its own engineering challenges. Frameworks like MoCo (memory bank of features) and SimCLR (large in-batch negatives + projection head) are partial workarounds for the batch-size requirement.
-
-### C. Prompt Engineering
-
-A "prompt" in CLIP is the text wrapper around a class name: `"a photo of a {}"`, `"a sketch of a {}"`, `"a small {}"`, etc. Empirical findings (Radford et al. 2021):
-
-- Bare class names (`"dog"`, `"cat"`) underperform.
-- `"a photo of a {}"` adds ~1-2% accuracy on ImageNet zero-shot.
-- Ensembling many prompts (encode with each, average the embeddings) adds another ~1%.
-- Domain-specific prompts (`"a satellite photo of a {}"`) help on domain-shifted data.
-
-Why this matters: CLIP was trained on web image-caption pairs, where "a photo of a dog" is far more frequent than just "dog." The text embedding for "a photo of a dog" sits in a richer, better-supported region of the text embedding space — it matches what an actual image of a dog's text caption would likely look like.
-
-This is the first hint of *prompt engineering* as a real technique: the model's behavior depends on the input formulation in deep, content-related ways.
-
-### D. CLIP as Frozen Feature Extractor
-
-For downstream tasks (image classification, retrieval), it is often best to freeze CLIP entirely and use its image embeddings as features:
-
-```
-features = clip_image_encoder(images)                  # (B, d), no grad
-classifier = nn.Linear(d, num_classes)                 # train this only
-```
-
-Two advantages:
-
-- **Compute efficiency**: only the small classifier head is trained.
-- **Better few-shot performance**: a small classifier on frozen CLIP features often beats fully fine-tuned smaller models, because CLIP's representations are already very general.
-
-For "linear probe" benchmarking (a common evaluation in the SSL literature), this is exactly what is measured: how good are the representations as a feature space, holding the head trivially simple?
-
-### From Theory to the Code Below
-
-| Theory concept | Code construct in this lesson |
-|----------------|-------------------------------|
-| Symmetric InfoNCE | The two `F.cross_entropy` calls on `logits` and `logits.T` |
-| Feature L2 normalize | `F.normalize(features, dim=-1)` before similarity |
-| Prompt template | `prompts = [f"a photo of a {c}" for c in class_names]` |
-| Frozen CLIP linear probe | `clip_model.eval(); for p in clip_model.parameters(): p.requires_grad_(False)` |
-
----
-
-
-## Overview
-
-CLIP maps images and text to the same embedding space, enabling zero-shot image classification. "Learning Transferable Visual Models From Natural Language Supervision" (Radford et al., 2021)
-
----
-
-## Mathematical Background
 
 ### 1. Contrastive Learning
 
@@ -215,6 +152,48 @@ Model variants:
 ---
 
 ## Core Concepts
+
+### Theory: CLIP as Frozen Feature Extractor
+
+For downstream tasks (image classification, retrieval), it is often best to freeze CLIP entirely and use its image embeddings as features:
+
+```
+features = clip_image_encoder(images)                  # (B, d), no grad
+classifier = nn.Linear(d, num_classes)                 # train this only
+```
+
+Two advantages:
+
+- **Compute efficiency**: only the small classifier head is trained.
+- **Better few-shot performance**: a small classifier on frozen CLIP features often beats fully fine-tuned smaller models, because CLIP's representations are already very general.
+
+For "linear probe" benchmarking (a common evaluation in the SSL literature), this is exactly what is measured: how good are the representations as a feature space, holding the head trivially simple?
+
+
+### Theory: Prompt Engineering
+
+A "prompt" in CLIP is the text wrapper around a class name: `"a photo of a {}"`, `"a sketch of a {}"`, `"a small {}"`, etc. Empirical findings (Radford et al. 2021):
+
+- Bare class names (`"dog"`, `"cat"`) underperform.
+- `"a photo of a {}"` adds ~1-2% accuracy on ImageNet zero-shot.
+- Ensembling many prompts (encode with each, average the embeddings) adds another ~1%.
+- Domain-specific prompts (`"a satellite photo of a {}"`) help on domain-shifted data.
+
+Why this matters: CLIP was trained on web image-caption pairs, where "a photo of a dog" is far more frequent than just "dog." The text embedding for "a photo of a dog" sits in a richer, better-supported region of the text embedding space — it matches what an actual image of a dog's text caption would likely look like.
+
+This is the first hint of *prompt engineering* as a real technique: the model's behavior depends on the input formulation in deep, content-related ways.
+
+
+### Theory: Batch Size Dominates Contrastive Performance
+
+The number of negatives per example equals `batch_size - 1`. More negatives = harder discrimination task = better representations. Empirically:
+
+- Batch 256: weak contrastive signal, plateau quickly.
+- Batch 4096: significant improvement.
+- Batch 32k (CLIP's setting): roughly the regime where returns diminish.
+
+This is why CLIP needed enormous compute: the batch size matters more than the model size, and large batches across multi-GPU setups require gradient synchronization (all-gather of features), which has its own engineering challenges. Frameworks like MoCo (memory bank of features) and SimCLR (large in-batch negatives + projection head) are partial workarounds for the batch-size requirement.
+
 
 ### 1. Large-scale Dataset
 

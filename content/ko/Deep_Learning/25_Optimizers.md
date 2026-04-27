@@ -14,113 +14,6 @@
 
 **난이도**: ⭐⭐⭐
 
----
-
-## 이론과 원리
-
-이 레슨은 옵티마이저 조사입니다: SGD → Momentum → Nesterov → Adagrad → RMSprop → Adam → AdamW → LAMB → Lion. 각 새 옵티마이저는 이전이 잘못한 무언가를 고쳤고, 체인은 "적응형"이 정말로 무엇을 의미하며 어디서 실패할 수 있는지에 대한 일관된 이야기를 형성합니다. 이 이야기를 이해하면 어떤 상황에서 어느 옵티마이저에 손을 뻗을지 알게 됩니다.
-
-이 섹션에서 다루는 내용:
-
-- **A.** SGD, Momentum, Nesterov: 속도 기반 관점
-- **B.** Adagrad → RMSprop → Adam: 파라미터별 적응성
-- **C.** AdamW가 존재하는 이유와 손실 내 L2가 잘못한 것
-- **D.** 현대 옵티마이저(LAMB, Lion)와 그들이 이기는 곳
-
-### A. SGD, Momentum, Nesterov
-
-**SGD**: `\theta <- \theta - \eta g`. 잡음 추정에 대한 순수 경사 하강.
-
-**Momentum**은 속도를 누적:
-
-```
-v <- \mu v + g
-\theta <- \theta - \eta v
-```
-
-속도 `v`는 과거 그래디언트의 지수 가중 평균(`\mu = 0.9`이 표준). 고곡률 방향의 진동을 약화시키고 일관된 방향 따라 가속합니다.
-
-**Nesterov** ("앞을 봐" momentum)는 현재 위치가 아닌 *투영된* 미래 위치에서 그래디언트를 계산:
-
-```
-v <- \mu v + g(\theta - \mu v)
-\theta <- \theta - \eta v
-```
-
-부드러운 볼록 함수에서 이론적으로 더 빠른 수렴; 딥러닝에서 평이한 momentum 대비 차이는 작지만 일관됨.
-
-### B. Adagrad → RMSprop → Adam
-
-다음 아이디어는 파라미터별 학습률입니다: 일관되게 큰 그래디언트를 가진 파라미터가 더 작은 스텝을 취해야 합니다.
-
-**Adagrad** (Duchi 2011)는 감쇠 없이 제곱 그래디언트를 누적:
-
-```
-G <- G + g^2
-\theta <- \theta - \eta * g / (sqrt(G) + \epsilon)
-```
-
-초기에는 잘 작동하지만 `G`가 자라기만 하므로, 유효 학습률이 0으로 감소. 긴 학습에 쓸모없음.
-
-**RMSprop** (Hinton 2012)은 누적 합을 지수 가중 평균으로 대체:
-
-```
-v <- \beta v + (1 - \beta) g^2
-\theta <- \theta - \eta * g / (sqrt(v) + \epsilon)
-```
-
-`v`가 더 이상 단조 증가하지 않음; 옵티마이저가 무한히 적응을 계속할 수 있음.
-
-**Adam** (Kingma & Ba 2014)은 momentum과 RMSprop을 결합하고 편향 보정 추가:
-
-```
-m <- \beta_1 m + (1 - \beta_1) g
-v <- \beta_2 v + (1 - \beta_2) g^2
-hat_m = m / (1 - \beta_1^t),  hat_v = v / (1 - \beta_2^t)
-\theta <- \theta - \eta * hat_m / (sqrt(hat_v) + \epsilon)
-```
-
-기본값 `\beta_1 = 0.9, \beta_2 = 0.999, \epsilon = 1e-8`이 거대한 작업 범위에서 작동. 이것이 Adam이 vanilla 지도 비전이 아닌 거의 모든 것의 기본 옵티마이저가 된 이유입니다(거기서는 SGD+momentum이 종종 여전히 이김).
-
-### C. AdamW: 디커플드 Weight Decay
-
-표준 L2 정규화는 그래디언트에 `\lambda \theta`를 더합니다. Adam의 적응 스케일링으로, 이 정규화가 `sqrt(v)`로 *나뉘므로*, 큰 그래디언트 크기의 파라미터는 과소 정규화되고 작은 것은 과대 정규화됩니다. 수정(Loshchilov & Hutter 2019, **AdamW**): weight decay를 그래디언트 업데이트 *외부*에 적용:
-
-```
-\theta <- \theta - \eta * (hat_m / sqrt(hat_v) + \lambda \theta)        (디커플드)
-```
-
-이는 적응 옵티마이저의 경우 손실 내 L2와 수학적으로 다르며, 일관되게 더 좋습니다. 현대 transformer 학습은 보편적으로 AdamW를 사용합니다.
-
-### D. LAMB와 Lion
-
-**LAMB** (You et al. 2019)는 층의 가중치 노름으로 정규화하여 Adam을 층별 학습률 스케일링으로 확장. 매우 큰 배치 크기(32k+)를 위해 설계; BERT-large 학습에서 사용.
-
-**Lion** (Chen et al. 2023)은 부호 기반 옵티마이저:
-
-```
-update = sign(\beta_1 m + (1 - \beta_1) g)
-\theta <- \theta - \eta * (update + \lambda \theta)
-m <- \beta_2 m + (1 - \beta_2) g
-```
-
-`sign(...)`은 모든 업데이트를 파라미터당 동등한 크기로 만듦 — 훨씬 낮은 메모리 비용(`v`가 아닌 momentum 버퍼만)에서 Adam과 놀랍도록 경쟁력. 일부 최근 대규모 학습에서 사용.
-
-추세: 모델 크기가 Adam의 메모리 오버헤드가 중요한 지점을 지나면서 더 단순하고 더 메모리 효율적인 옵티마이저.
-
-### 이론에서 아래 코드로
-
-| 이론 개념 | 본 레슨의 코드 구성 |
-|-----------|---------------------|
-| SGD + Momentum | `torch.optim.SGD(..., momentum=0.9)` |
-| Nesterov | `torch.optim.SGD(..., momentum=0.9, nesterov=True)` |
-| Adam | `torch.optim.Adam(..., betas=(0.9, 0.999))` |
-| AdamW | `torch.optim.AdamW(..., weight_decay=0.01)` |
-| 코사인 + 워밍업 스케줄러 | `torch.optim.lr_scheduler.OneCycleLR` 등 |
-
----
-
-
 ## 1. 경사 하강법 기초
 
 ### 1.1 경사 하강법의 변형
@@ -303,6 +196,29 @@ adam_traj = optimize_trajectory(lambda p: optim.Adam(p, lr=0.1))
 
 ## 2. 고전적 옵티마이저
 
+### 이론: SGD, Momentum, Nesterov
+
+**SGD**: `\theta <- \theta - \eta g`. 잡음 추정에 대한 순수 경사 하강.
+
+**Momentum**은 속도를 누적:
+
+```
+v <- \mu v + g
+\theta <- \theta - \eta v
+```
+
+속도 `v`는 과거 그래디언트의 지수 가중 평균(`\mu = 0.9`이 표준). 고곡률 방향의 진동을 약화시키고 일관된 방향 따라 가속합니다.
+
+**Nesterov** ("앞을 봐" momentum)는 현재 위치가 아닌 *투영된* 미래 위치에서 그래디언트를 계산:
+
+```
+v <- \mu v + g(\theta - \mu v)
+\theta <- \theta - \eta v
+```
+
+부드러운 볼록 함수에서 이론적으로 더 빠른 수렴; 딥러닝에서 평이한 momentum 대비 차이는 작지만 일관됨.
+
+
 ### 2.1 확률적 경사 하강법(SGD)
 
 기본 SGD 업데이트 규칙:
@@ -464,6 +380,51 @@ compare_sgd_variants()
 ---
 
 ## 3. 적응적 학습률 방법
+
+### 이론: AdamW: 디커플드 Weight Decay
+
+표준 L2 정규화는 그래디언트에 `\lambda \theta`를 더합니다. Adam의 적응 스케일링으로, 이 정규화가 `sqrt(v)`로 *나뉘므로*, 큰 그래디언트 크기의 파라미터는 과소 정규화되고 작은 것은 과대 정규화됩니다. 수정(Loshchilov & Hutter 2019, **AdamW**): weight decay를 그래디언트 업데이트 *외부*에 적용:
+
+```
+\theta <- \theta - \eta * (hat_m / sqrt(hat_v) + \lambda \theta)        (디커플드)
+```
+
+이는 적응 옵티마이저의 경우 손실 내 L2와 수학적으로 다르며, 일관되게 더 좋습니다. 현대 transformer 학습은 보편적으로 AdamW를 사용합니다.
+
+
+### 이론: Adagrad → RMSprop → Adam
+
+다음 아이디어는 파라미터별 학습률입니다: 일관되게 큰 그래디언트를 가진 파라미터가 더 작은 스텝을 취해야 합니다.
+
+**Adagrad** (Duchi 2011)는 감쇠 없이 제곱 그래디언트를 누적:
+
+```
+G <- G + g^2
+\theta <- \theta - \eta * g / (sqrt(G) + \epsilon)
+```
+
+초기에는 잘 작동하지만 `G`가 자라기만 하므로, 유효 학습률이 0으로 감소. 긴 학습에 쓸모없음.
+
+**RMSprop** (Hinton 2012)은 누적 합을 지수 가중 평균으로 대체:
+
+```
+v <- \beta v + (1 - \beta) g^2
+\theta <- \theta - \eta * g / (sqrt(v) + \epsilon)
+```
+
+`v`가 더 이상 단조 증가하지 않음; 옵티마이저가 무한히 적응을 계속할 수 있음.
+
+**Adam** (Kingma & Ba 2014)은 momentum과 RMSprop을 결합하고 편향 보정 추가:
+
+```
+m <- \beta_1 m + (1 - \beta_1) g
+v <- \beta_2 v + (1 - \beta_2) g^2
+hat_m = m / (1 - \beta_1^t),  hat_v = v / (1 - \beta_2^t)
+\theta <- \theta - \eta * hat_m / (sqrt(hat_v) + \epsilon)
+```
+
+기본값 `\beta_1 = 0.9, \beta_2 = 0.999, \epsilon = 1e-8`이 거대한 작업 범위에서 작동. 이것이 Adam이 vanilla 지도 비전이 아닌 거의 모든 것의 기본 옵티마이저가 된 이유입니다(거기서는 SGD+momentum이 종종 여전히 이김).
+
 
 ### 3.1 Adagrad
 
@@ -739,6 +700,23 @@ compare_adam_adamw()
 ---
 
 ## 4. 현대적 옵티마이저
+
+### 이론: LAMB와 Lion
+
+**LAMB** (You et al. 2019)는 층의 가중치 노름으로 정규화하여 Adam을 층별 학습률 스케일링으로 확장. 매우 큰 배치 크기(32k+)를 위해 설계; BERT-large 학습에서 사용.
+
+**Lion** (Chen et al. 2023)은 부호 기반 옵티마이저:
+
+```
+update = sign(\beta_1 m + (1 - \beta_1) g)
+\theta <- \theta - \eta * (update + \lambda \theta)
+m <- \beta_2 m + (1 - \beta_2) g
+```
+
+`sign(...)`은 모든 업데이트를 파라미터당 동등한 크기로 만듦 — 훨씬 낮은 메모리 비용(`v`가 아닌 momentum 버퍼만)에서 Adam과 놀랍도록 경쟁력. 일부 최근 대규모 학습에서 사용.
+
+추세: 모델 크기가 Adam의 메모리 오버헤드가 중요한 지점을 지나면서 더 단순하고 더 메모리 효율적인 옵티마이저.
+
 
 ### 4.1 LAMB (Layer-wise Adaptive Moments optimizer for Batch training)
 

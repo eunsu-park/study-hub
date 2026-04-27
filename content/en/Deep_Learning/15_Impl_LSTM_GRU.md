@@ -15,20 +15,15 @@ After completing this lesson, you will be able to:
 5. Build a sequence-to-sequence model using stacked LSTM/GRU layers and apply it to a time-series or NLP task.
 6. Compare the performance and training dynamics of vanilla RNN, LSTM, and GRU on a benchmark sequence task and interpret the results.
 
+## Overview
+
+LSTM (Long Short-Term Memory) and GRU (Gated Recurrent Unit) are Recurrent Neural Network (RNN) variants that solve the **vanishing gradient problem**. They effectively learn long-term dependencies through gating mechanisms.
+
 ---
 
-## Theory & Principles
+## Mathematical Background
 
-Implementing LSTM and GRU from scratch is the cleanest exercise for understanding what `nn.LSTM` actually does inside, and the BPTT mechanics that make sequence training work (or fail). This section anchors the implementation in three pieces: the precise gate equations, the unrolling pattern that PyTorch hides, and the gradient flow through the cell-state highway.
-
-This section covers:
-
-- **A.** From equations to tensor operations: the four-gate matrix multiply
-- **B.** Unrolling and how PyTorch builds the BPTT graph for you
-- **C.** Hidden state vs cell state initialization and detachment
-- **D.** Per-step vs batched computation and why CuDNN is faster
-
-### A. From Equations to Tensor Operations
+### Theory: From Equations to Tensor Operations
 
 The four LSTM gates can be implemented with one combined matrix multiply rather than four separate ones. Concatenate the gate weights:
 
@@ -49,58 +44,6 @@ h_t = o * tanh(c_t)
 
 Why one matmul instead of four? On modern GPUs, one large matrix multiply is significantly faster than four smaller ones because of better memory locality and kernel-launch amortization. PyTorch's `nn.LSTM` does this internally; when you write a custom cell, you should too.
 
-### B. Unrolling and the BPTT Graph
-
-PyTorch's `nn.LSTM` accepts a `(seq_len, batch, d_in)` tensor and returns the hidden states for all time steps. Internally, this is just a `for` loop:
-
-```
-for t in range(T):
-    h_t, c_t = cell(x_t, (h_{t-1}, c_{t-1}))
-    outputs.append(h_t)
-```
-
-Each iteration appends nodes to the autograd DAG, edges going `(h_{t-1}, c_{t-1}) -> (h_t, c_t)`. After the loop, the graph has `O(T)` nodes; `loss.backward()` walks all of them in reverse — this is BPTT. Memory grows linearly in `T` because every intermediate activation is retained for the backward pass.
-
-For very long sequences, this becomes prohibitive. Two solutions:
-
-- **Truncated BPTT (TBPTT)**: process the sequence in chunks of length `K`, calling `h.detach()` between chunks to break the autograd graph but preserve the values.
-- **Gradient checkpointing**: re-execute selected forward steps during backward to save memory, trading compute for memory.
-
-### C. Hidden and Cell State Initialization
-
-`(h_0, c_0)` need to start somewhere. Three common choices:
-
-1. **Zeros**: most common; reasonable when the sequence is "fresh."
-2. **Learned initial state**: register `h_0` and `c_0` as parameters; the network learns the best starting point.
-3. **Carried-over state**: in language modeling on a long document, `(h_0, c_0)` for batch `b+1` is `(h_T, c_T).detach()` from batch `b`. The detach is critical: without it, the BPTT graph would extend across batches and consume unbounded memory.
-
-The detachment pattern (carry values, drop graph) is one of the most error-prone parts of RNN training. Forgetting `.detach()` causes silent OOMs after many batches; using it incorrectly cuts gradient flow you actually wanted.
-
-### D. Per-Step vs Batched, and CuDNN
-
-A naive Python `for` loop over time has Python overhead per step. PyTorch's `nn.LSTM` (when run on CUDA) calls into CuDNN's hand-optimized LSTM kernel, which fuses the four gate operations and runs the recurrence at GPU memory bandwidth. The speedup over a manual loop can be 10-50x.
-
-When you implement a custom cell, you typically pay the Python-loop cost — useful for understanding and for novel cell designs, but not competitive with `nn.LSTM` for production. PyTorch 2.0's `torch.compile` partially closes this gap by JIT-compiling Python loops into fused kernels, but for plain LSTM/GRU, the canonical answer is "use the built-in module."
-
-### From Theory to the Code Below
-
-| Theory concept | Code construct in this lesson |
-|----------------|-------------------------------|
-| Combined gate matmul | `gates = self.linear(torch.cat([x_t, h_prev], dim=-1)).chunk(4, dim=-1)` |
-| Manual unrolling | `for t in range(seq_len): ...` |
-| State detach | `h.detach(), c.detach()` between batches |
-| CuDNN fast path | `nn.LSTM(...)` vs the custom cell |
-
----
-
-
-## Overview
-
-LSTM (Long Short-Term Memory) and GRU (Gated Recurrent Unit) are Recurrent Neural Network (RNN) variants that solve the **vanishing gradient problem**. They effectively learn long-term dependencies through gating mechanisms.
-
----
-
-## Mathematical Background
 
 ### 1. Vanilla RNN Problem
 
@@ -197,6 +140,24 @@ This acts as a "highway":
 
 ## Architecture
 
+### Theory: Unrolling and the BPTT Graph
+
+PyTorch's `nn.LSTM` accepts a `(seq_len, batch, d_in)` tensor and returns the hidden states for all time steps. Internally, this is just a `for` loop:
+
+```
+for t in range(T):
+    h_t, c_t = cell(x_t, (h_{t-1}, c_{t-1}))
+    outputs.append(h_t)
+```
+
+Each iteration appends nodes to the autograd DAG, edges going `(h_{t-1}, c_{t-1}) -> (h_t, c_t)`. After the loop, the graph has `O(T)` nodes; `loss.backward()` walks all of them in reverse — this is BPTT. Memory grows linearly in `T` because every intermediate activation is retained for the backward pass.
+
+For very long sequences, this becomes prohibitive. Two solutions:
+
+- **Truncated BPTT (TBPTT)**: process the sequence in chunks of length `K`, calling `h.detach()` between chunks to break the autograd graph but preserve the values.
+- **Gradient checkpointing**: re-execute selected forward steps during backward to save memory, trading compute for memory.
+
+
 ### LSTM Structure Diagram
 
 ```
@@ -281,6 +242,24 @@ Example: input=128, hidden=256
 ---
 
 ## Core Concepts
+
+### Theory: Per-Step vs Batched, and CuDNN
+
+A naive Python `for` loop over time has Python overhead per step. PyTorch's `nn.LSTM` (when run on CUDA) calls into CuDNN's hand-optimized LSTM kernel, which fuses the four gate operations and runs the recurrence at GPU memory bandwidth. The speedup over a manual loop can be 10-50x.
+
+When you implement a custom cell, you typically pay the Python-loop cost — useful for understanding and for novel cell designs, but not competitive with `nn.LSTM` for production. PyTorch 2.0's `torch.compile` partially closes this gap by JIT-compiling Python loops into fused kernels, but for plain LSTM/GRU, the canonical answer is "use the built-in module."
+
+
+### Theory: Hidden and Cell State Initialization
+
+`(h_0, c_0)` need to start somewhere. Three common choices:
+
+1. **Zeros**: most common; reasonable when the sequence is "fresh."
+2. **Learned initial state**: register `h_0` and `c_0` as parameters; the network learns the best starting point.
+3. **Carried-over state**: in language modeling on a long document, `(h_0, c_0)` for batch `b+1` is `(h_T, c_T).detach()` from batch `b`. The detach is critical: without it, the BPTT graph would extend across batches and consume unbounded memory.
+
+The detachment pattern (carry values, drop graph) is one of the most error-prone parts of RNN training. Forgetting `.detach()` causes silent OOMs after many batches; using it incorrectly cuts gradient flow you actually wanted.
+
 
 ### 1. Role of Gates
 

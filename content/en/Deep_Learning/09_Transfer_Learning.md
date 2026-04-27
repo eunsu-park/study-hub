@@ -11,20 +11,9 @@
 - Learn fine-tuning strategies
 - Practical image classification project
 
----
+## 1. What is Transfer Learning?
 
-## Theory & Principles
-
-Transfer learning works because the features a deep network learns on one task are partially reusable on another. This section formalizes "partially": which features transfer, why earlier layers transfer better than later ones, and what the gradient math says when you freeze some parameters and train others.
-
-This section covers:
-
-- **A.** Why pretrained features transfer: hierarchical generality
-- **B.** Feature extraction vs fine-tuning: the gradient picture
-- **C.** Domain shift and when transfer learning fails
-- **D.** Layer-wise learning rates and discriminative fine-tuning
-
-### A. Why Features Transfer
+### Theory: Why Features Transfer
 
 A CNN trained on ImageNet learns a hierarchy:
 
@@ -41,65 +30,6 @@ This gives the standard recipe:
 - **Small target dataset, different domain**: freeze early layers, retrain later ones.
 - **Large target dataset, different domain**: still beneficial to start from pretrained weights as initialization, then fine-tune everything.
 
-### B. Feature Extraction vs Fine-Tuning: Gradients
-
-In **feature extraction**, you set `requires_grad=False` on the backbone:
-
-```
-for p in backbone.parameters():
-    p.requires_grad = False
-```
-
-The backward pass still propagates gradients through these layers (it has to, to reach the head's gradients), but no `.grad` is accumulated and no update is made. Backbone parameters stay exactly at their pretrained values.
-
-In **fine-tuning**, all parameters update:
-
-```
-\theta^{new}_l = \theta^{pre}_l - \eta * \nabla_{\theta_l} L_{target}
-```
-
-The pretrained weights act as the initialization. The crucial question is the learning rate: too large, and you destroy the pretrained features (this is called *catastrophic forgetting*); too small, and you cannot adapt enough. A standard rule is to use a 10-100x smaller learning rate than you would for training from scratch.
-
-### C. Domain Shift
-
-Transfer learning assumes the source and target distributions share enough structure for the source's features to be useful. Formally, source distribution `P_S(x, y)` and target `P_T(x, y)`. Three failure modes:
-
-1. **Covariate shift**: `P_S(x) \neq P_T(x)` but `P(y | x)` is unchanged. (Different image styles, same object semantics — e.g., daytime to nighttime driving.)
-2. **Label shift**: `P_S(y) \neq P_T(y)` (class proportions differ).
-3. **Concept shift**: `P_S(y | x) \neq P_T(y | x)` (the same input means different things in the target).
-
-Concept shift breaks transfer learning entirely — features useful for one mapping may be actively misleading for another. Covariate shift is usually mild for natural images, which is why ImageNet pretraining works for so many downstream tasks.
-
-### D. Layer-Wise Learning Rates and Discriminative Fine-Tuning
-
-A more nuanced fine-tuning strategy is to use *different* learning rates per layer (Howard & Ruder 2018, ULMFiT):
-
-```
-\eta_l = \eta_L * \gamma^{(L - l)},   \gamma in [0.1, 0.5]
-```
-
-The last layer (closest to the loss, most task-specific) gets the highest learning rate; early layers get exponentially smaller ones. The intuition is that early features are most general and need least adjustment; late features are most task-specific and need most. PyTorch supports this via parameter groups in the optimizer:
-
-```python
-optimizer = torch.optim.SGD([
-    {"params": backbone.parameters(), "lr": 1e-4},
-    {"params": head.parameters(),     "lr": 1e-2},
-])
-```
-
-### From Theory to the Code Below
-
-| Theory concept | Code construct in this lesson |
-|----------------|-------------------------------|
-| Hierarchical feature generality | Choosing which layers to freeze |
-| Feature extraction (no update) | `param.requires_grad = False` |
-| Fine-tuning with smaller LR | `lr = 1e-4` instead of `1e-2` for backbone |
-| Discriminative LRs | Multiple parameter groups in `torch.optim.X(...)` |
-
----
-
-
-## 1. What is Transfer Learning?
 
 ### Concept
 
@@ -126,6 +56,26 @@ Model trained on ImageNet
 ## 2. Transfer Learning Strategies
 
 **When to fine-tune vs feature-extract?** Small dataset + similar domain (e.g., classifying dog breeds using an ImageNet model) -- freeze most layers and only train the head. Large dataset + different domain (e.g., medical X-rays) -- fine-tune all layers with a small learning rate so the network can adapt its low-level features to the new image distribution. In between, gradual unfreezing offers a safe middle ground.
+
+### Theory: Feature Extraction vs Fine-Tuning: Gradients
+
+In **feature extraction**, you set `requires_grad=False` on the backbone:
+
+```
+for p in backbone.parameters():
+    p.requires_grad = False
+```
+
+The backward pass still propagates gradients through these layers (it has to, to reach the head's gradients), but no `.grad` is accumulated and no update is made. Backbone parameters stay exactly at their pretrained values.
+
+In **fine-tuning**, all parameters update:
+
+```
+\theta^{new}_l = \theta^{pre}_l - \eta * \nabla_{\theta_l} L_{target}
+```
+
+The pretrained weights act as the initialization. The crucial question is the learning rate: too large, and you destroy the pretrained features (this is called *catastrophic forgetting*); too small, and you cannot adapt enough. A standard rule is to use a 10-100x smaller learning rate than you would for training from scratch.
+
 
 ### Strategy 1: Feature Extraction
 
@@ -239,6 +189,24 @@ val_transform = transforms.Compose([
 
 ## 4. Training Strategies
 
+### Theory: Layer-Wise Learning Rates and Discriminative Fine-Tuning
+
+A more nuanced fine-tuning strategy is to use *different* learning rates per layer (Howard & Ruder 2018, ULMFiT):
+
+```
+\eta_l = \eta_L * \gamma^{(L - l)},   \gamma in [0.1, 0.5]
+```
+
+The last layer (closest to the loss, most task-specific) gets the highest learning rate; early layers get exponentially smaller ones. The intuition is that early features are most general and need least adjustment; late features are most task-specific and need most. PyTorch supports this via parameter groups in the optimizer:
+
+```python
+optimizer = torch.optim.SGD([
+    {"params": backbone.parameters(), "lr": 1e-4},
+    {"params": head.parameters(),     "lr": 1e-2},
+])
+```
+
+
 ### Discriminative Learning Rates
 
 ```python
@@ -349,6 +317,17 @@ optimizer = torch.optim.AdamW(model.parameters(), lr=1e-4)
 ---
 
 ## 7. Considerations
+
+### Theory: Domain Shift
+
+Transfer learning assumes the source and target distributions share enough structure for the source's features to be useful. Formally, source distribution `P_S(x, y)` and target `P_T(x, y)`. Three failure modes:
+
+1. **Covariate shift**: `P_S(x) \neq P_T(x)` but `P(y | x)` is unchanged. (Different image styles, same object semantics — e.g., daytime to nighttime driving.)
+2. **Label shift**: `P_S(y) \neq P_T(y)` (class proportions differ).
+3. **Concept shift**: `P_S(y | x) \neq P_T(y | x)` (the same input means different things in the target).
+
+Concept shift breaks transfer learning entirely — features useful for one mapping may be actively misleading for another. Covariate shift is usually mild for natural images, which is why ImageNet pretraining works for so many downstream tasks.
+
 
 ### Strategy by Data Size
 

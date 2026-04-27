@@ -10,84 +10,6 @@
 - Learn gradient calculation using the chain rule
 - Implement backpropagation directly with NumPy
 
----
-
-## Theory & Principles
-
-Backpropagation is often introduced as "apply the chain rule layer by layer," but this hides the structure that makes it efficient. The key idea is the **vector-Jacobian product (VJP)**: at every layer, you never form the full Jacobian matrix; you propagate a single cotangent vector that always has the shape of one tensor, not the product of two. This is why training a 100-million-parameter network is feasible at all.
-
-This section covers:
-
-- **A.** The chain rule in Jacobian formalism
-- **B.** Vector-Jacobian product and why we never materialize the full Jacobian
-- **C.** Backprop as repeated VJP application on the DAG
-- **D.** Forward-mode vs reverse-mode trade-offs in deep nets
-
-### A. Chain Rule in Jacobian Form
-
-Let `f = g \circ h` with `h: R^n -> R^m` and `g: R^m -> R^k`. The Jacobian of the composition is the matrix product of Jacobians:
-
-```
-J_f(x) = J_g(h(x)) * J_h(x)            [k x n]  =  [k x m] * [m x n]
-```
-
-A neural network is a long composition `f = f_L \circ f_{L-1} \circ ... \circ f_1`. By induction, its Jacobian is:
-
-```
-J_f = J_{f_L} * J_{f_{L-1}} * ... * J_{f_1}
-```
-
-If we computed this product naively from the right (forward mode) or from the left (reverse mode), the intermediate matrices would be enormous — `J_{f_l}` for a fully-connected layer is `m x n` with both dimensions in the thousands or millions. Storing one such matrix is already gigabytes; storing the chain is impossible.
-
-### B. Vector-Jacobian Products: The Key Saving
-
-For a scalar loss `L`, we only need a *single row* of the final Jacobian — `dL/dx`, which has shape `(1, n)` or equivalently the same shape as `x`. Reverse-mode AD exploits this by propagating a row vector `v^T` from left to right:
-
-```
-v_L^T  =  dL/dy_L                                     [shape: same as y_L]
-v_{l-1}^T = v_l^T * J_{f_l}(x_{l-1})                  [shape: same as x_{l-1}]
-```
-
-The product `v^T * J` is a **vector-Jacobian product (VJP)**. Each VJP can be computed *without ever materializing J*, because the structure of the layer tells us how to multiply a vector by `J` directly. Examples:
-
-- **Linear layer** `y = W x + b`: `J = W`, so VJP is `v^T W`. Cost: O(m * n), no Jacobian stored.
-- **ReLU** `y_i = max(0, x_i)`: `J` is diagonal with `J_{ii} = [x_i > 0]`. VJP is element-wise mask: `v_i * [x_i > 0]`. Cost: O(n).
-- **Softmax + cross-entropy**: VJP simplifies to `softmax(x) - one_hot(y)`. Cost: O(n).
-
-Every primitive op in PyTorch ships with a hand-written VJP rule — that is what `grad_fn` actually stores.
-
-### C. Backprop = Repeated VJP on the DAG
-
-The full backprop algorithm is:
-
-1. Run forward; remember intermediate activations needed by the VJP rules.
-2. Initialize `v = 1` (the seed `dL/dL`) at the loss node.
-3. Walk the DAG in reverse topological order. At each node, look up its VJP rule, multiply the incoming `v` by the local Jacobian, and pass the result to the parents. If a node has multiple consumers, sum the cotangents flowing back into it (the chain rule's sum-over-paths becomes a literal sum at fan-out points).
-4. Accumulate the result into `.grad` for leaf tensors with `requires_grad=True`.
-
-The total cost is `O(forward cost)` because each VJP costs roughly the same as the corresponding forward op.
-
-### D. Forward vs Reverse Mode in Deep Nets
-
-For a network with `n` parameters and a scalar loss `L`:
-
-- **Reverse mode**: one backward pass = O(forward) regardless of `n`. This is what `loss.backward()` does.
-- **Forward mode**: one tangent propagation = O(forward), but you need *one pass per input direction*. To get `dL/dx_i` for all `n` parameters takes `n` forward passes — completely infeasible.
-
-Forward mode wins only when `n << m` (few parameters, many outputs), which is the opposite of deep learning. PyTorch 2.x exposes both via `torch.func.jacrev` and `torch.func.jacfwd`; the right choice always depends on the shape ratio.
-
-### From Theory to the Code Below
-
-| Theory concept | Code construct in this lesson |
-|----------------|-------------------------------|
-| Chain rule (matrix form) | The hand-written `dL_dW = X^T @ dL_dy` lines |
-| VJP for linear layer | `dL/dW`, `dL/dx` derivations in NumPy |
-| VJP for ReLU | `(x > 0)` mask used in the backward pass |
-| Backprop = reverse traversal | The order `dL_dy -> dL_dW2 -> dL_dh -> dL_dW1` |
-
----
-
-
 ## 1. What is Backpropagation?
 
 Backpropagation is an algorithm for training neural network weights.
@@ -115,6 +37,23 @@ Think of a neural network as an assembly line with multiple stations. When the f
 Why does the chain rule matter for neural networks? A neural network is a deeply nested function composition: `L(softmax(W2 * relu(W1 * x + b1) + b2), y)`. To compute `dL/dW1`, we cannot differentiate directly — we must decompose the derivative into a product of local derivatives at each layer. The chain rule provides exactly this decomposition, making it possible to compute gradients layer by layer without ever expanding the full expression.
 
 The differentiation rule for composite functions.
+
+### Theory: Chain Rule in Jacobian Form
+
+Let `f = g \circ h` with `h: R^n -> R^m` and `g: R^m -> R^k`. The Jacobian of the composition is the matrix product of Jacobians:
+
+```
+J_f(x) = J_g(h(x)) * J_h(x)            [k x n]  =  [k x m] * [m x n]
+```
+
+A neural network is a long composition `f = f_L \circ f_{L-1} \circ ... \circ f_1`. By induction, its Jacobian is:
+
+```
+J_f = J_{f_L} * J_{f_{L-1}} * ... * J_{f_1}
+```
+
+If we computed this product naively from the right (forward mode) or from the left (reverse mode), the intermediate matrices would be enormous — `J_{f_l}` for a fully-connected layer is `m x n` with both dimensions in the thousands or millions. Storing one such matrix is already gigabytes; storing the chain is impossible.
+
 
 ### Formula
 
@@ -190,6 +129,24 @@ dL/dz = y_pred - y_true  # Gradient w.r.t. softmax input
 ## 5. MLP Backpropagation
 
 Backpropagation process for a 2-layer MLP.
+
+### Theory: Vector-Jacobian Products: The Key Saving
+
+For a scalar loss `L`, we only need a *single row* of the final Jacobian — `dL/dx`, which has shape `(1, n)` or equivalently the same shape as `x`. Reverse-mode AD exploits this by propagating a row vector `v^T` from left to right:
+
+```
+v_L^T  =  dL/dy_L                                     [shape: same as y_L]
+v_{l-1}^T = v_l^T * J_{f_l}(x_{l-1})                  [shape: same as x_{l-1}]
+```
+
+The product `v^T * J` is a **vector-Jacobian product (VJP)**. Each VJP can be computed *without ever materializing J*, because the structure of the layer tells us how to multiply a vector by `J` directly. Examples:
+
+- **Linear layer** `y = W x + b`: `J = W`, so VJP is `v^T W`. Cost: O(m * n), no Jacobian stored.
+- **ReLU** `y_i = max(0, x_i)`: `J` is diagonal with `J_{ii} = [x_i > 0]`. VJP is element-wise mask: `v_i * [x_i > 0]`. Cost: O(n).
+- **Softmax + cross-entropy**: VJP simplifies to `softmax(x) - one_hot(y)`. Cost: O(n).
+
+Every primitive op in PyTorch ships with a hand-written VJP rule — that is what `grad_fn` actually stores.
+
 
 ### Architecture
 
@@ -270,6 +227,18 @@ class MLP:
         return {'W1': dW1, 'b1': db1, 'W2': dW2, 'b2': db2}
 ```
 
+### Theory: Backprop = Repeated VJP on the DAG
+
+The full backprop algorithm is:
+
+1. Run forward; remember intermediate activations needed by the VJP rules.
+2. Initialize `v = 1` (the seed `dL/dL`) at the loss node.
+3. Walk the DAG in reverse topological order. At each node, look up its VJP rule, multiply the incoming `v` by the local Jacobian, and pass the result to the parents. If a node has multiple consumers, sum the cotangents flowing back into it (the chain rule's sum-over-paths becomes a literal sum at fan-out points).
+4. Accumulate the result into `.grad` for leaf tensors with `requires_grad=True`.
+
+The total cost is `O(forward cost)` because each VJP costs roughly the same as the corresponding forward op.
+
+
 ---
 
 ## 7. PyTorch's Automatic Differentiation
@@ -287,6 +256,16 @@ loss.backward()
 # Access gradients
 print(model.fc1.weight.grad)
 ```
+
+### Theory: Forward vs Reverse Mode in Deep Nets
+
+For a network with `n` parameters and a scalar loss `L`:
+
+- **Reverse mode**: one backward pass = O(forward) regardless of `n`. This is what `loss.backward()` does.
+- **Forward mode**: one tangent propagation = O(forward), but you need *one pass per input direction*. To get `dL/dx_i` for all `n` parameters takes `n` forward passes — completely infeasible.
+
+Forward mode wins only when `n << m` (few parameters, many outputs), which is the opposite of deep learning. PyTorch 2.x exposes both via `torch.func.jacrev` and `torch.func.jacfwd`; the right choice always depends on the shape ratio.
+
 
 ### Computational Graph
 

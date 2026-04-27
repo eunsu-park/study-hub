@@ -12,70 +12,6 @@
 - ViT variants (DeiT, Swin Transformer)
 - PyTorch implementation and applications
 
----
-
-## Theory & Principles
-
-The Vision Transformer (Dosovitskiy et al. 2020) showed that the Transformer architecture, with no convolutional layers at all, could match or beat CNNs on ImageNet — provided that you trained on enough data. ViT's design choices answer one question: how do you turn a 2D image into something a Transformer can process? This section walks through patch embedding, positional encoding for 2D, the class token's role, and the inductive-bias trade-off that explains why ViT needs so much pretraining data.
-
-This section covers:
-
-- **A.** Patch embedding as 2D linear projection
-- **B.** Positional encoding for spatial layout
-- **C.** The class token: a learned aggregator
-- **D.** Inductive bias trade-off: ViT needs ~JFT-300M to shine
-
-### A. Patch Embedding
-
-A `H x W x 3` image cannot directly enter a Transformer (which expects a sequence of vectors). ViT splits the image into a regular grid of `P x P` patches:
-
-```
-Number of patches:  N = (H / P) * (W / P)
-Patch flattening:   each patch -> R^{3 P^2} vector
-Linear projection:  z = patch * E,  E in R^{3 P^2 x d_model}
-```
-
-For ImageNet `224 x 224` with `P = 16`, this gives `14 x 14 = 196` patches, each projected to `d_model = 768`. The patch embedding is *not* a 1x1 convolution philosophically (no channel mixing across patches) but is *implemented* as one — a `Conv2d(3, d_model, kernel=P, stride=P)` produces exactly the same result.
-
-This is the entire bridge from image to sequence. Everything after is standard Transformer encoder.
-
-### B. Positional Encoding for 2D
-
-ViT uses **learned 1D positional embeddings**: `nn.Embedding(num_patches + 1, d_model)`, indexed by patch's flat position (row-major). Even though the underlying layout is 2D, ViT does not encode 2D structure explicitly — patches at adjacent grid positions get embeddings that are *close in 1D index* but the model must learn the 2D geometry from data. Empirically, the learned 1D positional embeddings *do* learn a 2D-meaningful structure (visualizations show smooth 2D patterns), but it requires data to discover.
-
-Alternatives include 2D sinusoidal PE (separate row and column encodings, concatenated) and relative 2D position bias (Swin Transformer). The choice has small but measurable effects.
-
-### C. The Class Token
-
-ViT prepends a learnable `[CLS]` token to the patch sequence, identical to BERT. After all Transformer layers, the CLS token's final hidden state is fed to an MLP classification head. Why a special token instead of, say, average-pooling all patch outputs?
-
-The CLS token gets to *attend to* every patch in every layer; it can learn to query whatever features matter for the classification task. Average pooling gives every patch equal weight, which discards spatial selectivity. In practice CLS-token and global-average-pooling perform similarly (within ~0.5%), and many newer ViT variants drop CLS in favor of GAP for simplicity.
-
-### D. Inductive Bias and the Pretraining Data Requirement
-
-CNNs have strong **inductive biases** baked in: locality (small receptive fields early), translation equivariance (parameter sharing across positions), spatial hierarchy (pooling). These biases are very useful when training data is limited — they constrain the function space to image-like functions before any learning happens.
-
-ViT has *almost none* of these biases. Every patch is just a vector in a sequence; the only spatial information is whatever the positional embedding encodes. This means:
-
-- **On ImageNet alone (~1.3M images)**: ViT *underperforms* CNNs of comparable size. The biases are doing real work.
-- **On ImageNet-21k (14M images)**: ViT matches CNNs.
-- **On JFT-300M (Google's 300M-image private dataset)**: ViT *exceeds* CNNs by a notable margin.
-
-The conclusion (Dosovitskiy et al.): inductive biases are a substitute for data. With enough data, the biases are unnecessary and the more flexible architecture wins. With less data, the biases save you. This is why ViT-style architectures are now ubiquitous in foundation-model contexts (where data is abundant) but CNNs remain competitive in data-limited regimes.
-
-### From Theory to the Code Below
-
-| Theory concept | Code construct in this lesson |
-|----------------|-------------------------------|
-| Patch embedding | `nn.Conv2d(3, d_model, kernel_size=P, stride=P)` |
-| Sequence + CLS | Concatenate learnable `[CLS]` to patch tokens |
-| Positional embedding | `nn.Embedding(num_patches + 1, d_model)` |
-| Standard Transformer | `nn.TransformerEncoder` over the patch sequence |
-| Classification head | `nn.Linear(d_model, num_classes)` on CLS hidden |
-
----
-
-
 ## 1. Vision Transformer Overview
 
 ### Core Idea
@@ -151,6 +87,21 @@ y = LN(z_L^0)  # Final representation of CLS token
 
 ## 3. Patch Embedding
 
+### Theory: Patch Embedding
+
+A `H x W x 3` image cannot directly enter a Transformer (which expects a sequence of vectors). ViT splits the image into a regular grid of `P x P` patches:
+
+```
+Number of patches:  N = (H / P) * (W / P)
+Patch flattening:   each patch -> R^{3 P^2} vector
+Linear projection:  z = patch * E,  E in R^{3 P^2 x d_model}
+```
+
+For ImageNet `224 x 224` with `P = 16`, this gives `14 x 14 = 196` patches, each projected to `d_model = 768`. The patch embedding is *not* a 1x1 convolution philosophically (no channel mixing across patches) but is *implemented* as one — a `Conv2d(3, d_model, kernel=P, stride=P)` produces exactly the same result.
+
+This is the entire bridge from image to sequence. Everything after is standard Transformer encoder.
+
+
 ### Concept
 
 ```python
@@ -195,6 +146,20 @@ class PatchEmbedding(nn.Module):
 ---
 
 ## 4. CLS Token and Position Embedding
+
+### Theory: The Class Token
+
+ViT prepends a learnable `[CLS]` token to the patch sequence, identical to BERT. After all Transformer layers, the CLS token's final hidden state is fed to an MLP classification head. Why a special token instead of, say, average-pooling all patch outputs?
+
+The CLS token gets to *attend to* every patch in every layer; it can learn to query whatever features matter for the classification task. Average pooling gives every patch equal weight, which discards spatial selectivity. In practice CLS-token and global-average-pooling perform similarly (within ~0.5%), and many newer ViT variants drop CLS in favor of GAP for simplicity.
+
+
+### Theory: Positional Encoding for 2D
+
+ViT uses **learned 1D positional embeddings**: `nn.Embedding(num_patches + 1, d_model)`, indexed by patch's flat position (row-major). Even though the underlying layout is 2D, ViT does not encode 2D structure explicitly — patches at adjacent grid positions get embeddings that are *close in 1D index* but the model must learn the 2D geometry from data. Empirically, the learned 1D positional embeddings *do* learn a 2D-meaningful structure (visualizations show smooth 2D patterns), but it requires data to discover.
+
+Alternatives include 2D sinusoidal PE (separate row and column encodings, concatenated) and relative 2D position bias (Swin Transformer). The choice has small but measurable effects.
+
 
 ### CLS Token
 
@@ -815,6 +780,19 @@ def finetune_vit_cifar10(epochs=10):
 ---
 
 ## 10. ViT vs CNN Comparison
+
+### Theory: Inductive Bias and the Pretraining Data Requirement
+
+CNNs have strong **inductive biases** baked in: locality (small receptive fields early), translation equivariance (parameter sharing across positions), spatial hierarchy (pooling). These biases are very useful when training data is limited — they constrain the function space to image-like functions before any learning happens.
+
+ViT has *almost none* of these biases. Every patch is just a vector in a sequence; the only spatial information is whatever the positional embedding encodes. This means:
+
+- **On ImageNet alone (~1.3M images)**: ViT *underperforms* CNNs of comparable size. The biases are doing real work.
+- **On ImageNet-21k (14M images)**: ViT matches CNNs.
+- **On JFT-300M (Google's 300M-image private dataset)**: ViT *exceeds* CNNs by a notable margin.
+
+The conclusion (Dosovitskiy et al.): inductive biases are a substitute for data. With enough data, the biases are unnecessary and the more flexible architecture wins. With less data, the biases save you. This is why ViT-style architectures are now ubiquitous in foundation-model contexts (where data is abundant) but CNNs remain competitive in data-limited regimes.
+
 
 ### Characteristics Comparison
 

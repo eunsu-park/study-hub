@@ -11,20 +11,9 @@
 - Implement CNNs with PyTorch
 - Classify MNIST/CIFAR-10 datasets
 
----
+## 1. Convolution Operation
 
-## Theory & Principles
-
-A convolutional layer is not "an MLP plus some weight sharing tricks." It is a fundamentally different parameterization that bakes two physical priors of images directly into the architecture: locality (nearby pixels matter together) and translation equivariance (an object is an object regardless of where it appears). This section gives the math for both, plus the receptive-field formula that lets you reason about how much input each output unit actually sees.
-
-This section covers:
-
-- **A.** The convolution operation: math vs the deep-learning convention
-- **B.** Parameter sharing and translation equivariance
-- **C.** Receptive field and the recursive formula across layers
-- **D.** Pooling: invariance bought with information loss
-
-### A. Convolution: Math vs Deep-Learning Convention
+### Theory: Convolution: Math vs Deep-Learning Convention
 
 The mathematical 2D convolution is:
 
@@ -52,57 +41,6 @@ H_out = floor( (H_in + 2P - K) / S ) + 1
 
 Memorize this — half of CNN debugging is checking output shapes.
 
-### B. Parameter Sharing and Translation Equivariance
-
-A fully-connected layer applied to an `H x W x C` image has `O(H W C * d_out)` parameters — millions. A `K x K` convolutional kernel has `O(K^2 C * C_out)` parameters — independent of image size.
-
-The reason this works is **parameter sharing**: the same `K x K` filter is applied at every spatial location. This embeds **translation equivariance**:
-
-```
-Conv(Translate(x)) = Translate(Conv(x))
-```
-
-Shifting the input by `(\Delta i, \Delta j)` produces an output shifted by exactly the same amount. The network's response to a feature is the same regardless of where that feature appears. This is the inductive bias that makes CNNs sample-efficient on natural images, and it is also why position-invariant object recognition works in the first place. (Note: equivariance is not invariance — invariance means the output does not change at all; pooling adds that.)
-
-### C. Receptive Field
-
-The **receptive field** of an output unit is the region of the input that influences it. For a single conv layer with kernel size `K`, the receptive field is `K x K`. For multiple layers, it grows recursively:
-
-```
-R_l = R_{l-1} + (K_l - 1) * S_{l-1} * S_{l-2} * ... * S_1
-```
-
-In words: each new layer adds `(K_l - 1)` pixels worth of receptive field, but those pixels are spaced apart by the *product* of all previous strides. A network with three layers, each `3x3` kernel and stride 2:
-
-- Layer 1: RF = 3
-- Layer 2: RF = 3 + 2 * 2 = 7
-- Layer 3: RF = 7 + 2 * 4 = 15
-
-Receptive field grows roughly *exponentially* when you stack strides; it grows *linearly* when you do not. This is why early CNN architectures used pooling so aggressively, and why dilated convolutions later replaced pooling in tasks (segmentation) where you want a large RF without losing resolution.
-
-### D. Pooling: Invariance vs Information Loss
-
-Max-pooling and average-pooling reduce a `K x K` patch to a single number. Two effects:
-
-1. **Local translation invariance**: small shifts of the input within the pooling window produce the same output. This is genuine *invariance*, not equivariance.
-2. **Information loss**: you keep one value out of `K^2`. Subsequent layers cannot recover details below the pooling resolution.
-
-The trade-off — invariance bought with resolution — is fundamental. Modern architectures (ResNet, ViT) reduce pooling and rely on strided convolutions or learned downsampling, because learned subsampling can encode *which* features to preserve, while max-pooling is a fixed rule.
-
-### From Theory to the Code Below
-
-| Theory concept | Code construct in this lesson |
-|----------------|-------------------------------|
-| Cross-correlation with channels | `nn.Conv2d(in_channels, out_channels, kernel_size)` |
-| Output size formula | The `H_out = (H_in + 2P - K) / S + 1` calculation |
-| Translation equivariance | The fact that shifting input shifts output |
-| Pooling invariance | `nn.MaxPool2d(kernel_size)`, `nn.AvgPool2d` |
-| Receptive field growth | Stacking conv + pool layers |
-
----
-
-
-## 1. Convolution Operation
 
 ### Concept
 
@@ -137,6 +75,46 @@ Example: Input 32×32, Kernel 3×3, Padding 1, Stride 1
 ---
 
 ## 2. Key Concepts
+
+### Theory: Pooling: Invariance vs Information Loss
+
+Max-pooling and average-pooling reduce a `K x K` patch to a single number. Two effects:
+
+1. **Local translation invariance**: small shifts of the input within the pooling window produce the same output. This is genuine *invariance*, not equivariance.
+2. **Information loss**: you keep one value out of `K^2`. Subsequent layers cannot recover details below the pooling resolution.
+
+The trade-off — invariance bought with resolution — is fundamental. Modern architectures (ResNet, ViT) reduce pooling and rely on strided convolutions or learned downsampling, because learned subsampling can encode *which* features to preserve, while max-pooling is a fixed rule.
+
+
+### Theory: Receptive Field
+
+The **receptive field** of an output unit is the region of the input that influences it. For a single conv layer with kernel size `K`, the receptive field is `K x K`. For multiple layers, it grows recursively:
+
+```
+R_l = R_{l-1} + (K_l - 1) * S_{l-1} * S_{l-2} * ... * S_1
+```
+
+In words: each new layer adds `(K_l - 1)` pixels worth of receptive field, but those pixels are spaced apart by the *product* of all previous strides. A network with three layers, each `3x3` kernel and stride 2:
+
+- Layer 1: RF = 3
+- Layer 2: RF = 3 + 2 * 2 = 7
+- Layer 3: RF = 7 + 2 * 4 = 15
+
+Receptive field grows roughly *exponentially* when you stack strides; it grows *linearly* when you do not. This is why early CNN architectures used pooling so aggressively, and why dilated convolutions later replaced pooling in tasks (segmentation) where you want a large RF without losing resolution.
+
+
+### Theory: Parameter Sharing and Translation Equivariance
+
+A fully-connected layer applied to an `H x W x C` image has `O(H W C * d_out)` parameters — millions. A `K x K` convolutional kernel has `O(K^2 C * C_out)` parameters — independent of image size.
+
+The reason this works is **parameter sharing**: the same `K x K` filter is applied at every spatial location. This embeds **translation equivariance**:
+
+```
+Conv(Translate(x)) = Translate(Conv(x))
+```
+
+Shifting the input by `(\Delta i, \Delta j)` produces an output shifted by exactly the same amount. The network's response to a feature is the same regardless of where that feature appears. This is the inductive bias that makes CNNs sample-efficient on natural images, and it is also why position-invariant object recognition works in the first place. (Note: equivariance is not invariance — invariance means the output does not change at all; pooling adds that.)
+
 
 ### Padding
 

@@ -24,20 +24,32 @@ Linear regression and logistic regression are the most fundamental building bloc
    - MNIST binary classification
    - Overfitting/regularization experiments
 
----
+## Mathematical Background
 
-## Theory & Principles
+### Theory: Logistic Regression as Maximum Likelihood
 
-Linear and logistic regression are the simplest models in this course, and that simplicity is exactly why they deserve a careful theoretical treatment. Both have closed-form or near-closed-form solutions, both are convex, and the way you implement them by hand is exactly the template that scales up to every later layer of every later network. Understanding the math here makes everything that follows feel familiar.
+Logistic regression assumes the label `y \in {0, 1}` is Bernoulli-distributed conditional on `x`:
 
-This section covers:
+```
+p(y=1 | x) = \sigma(w^T x + b),       \sigma(z) = 1 / (1 + e^{-z})
+```
 
-- **A.** Linear regression: closed-form solution vs gradient descent
-- **B.** Logistic regression as maximum likelihood under a Bernoulli model
-- **C.** Why MSE for regression and cross-entropy for classification, not the reverse
-- **D.** Convexity, uniqueness, and what changes when you add hidden layers
+The negative log-likelihood (NLL) over a dataset is:
 
-### A. Linear Regression: Closed Form vs Gradient Descent
+```
+NLL(w) = - sum_i [ y_i log p_i + (1 - y_i) log(1 - p_i) ]
+```
+
+This is exactly **binary cross-entropy**. So minimizing cross-entropy *is* maximum-likelihood estimation under the Bernoulli model. The gradient has a remarkably clean form:
+
+```
+\nabla_w NLL = sum_i (p_i - y_i) x_i
+```
+
+Notice the term `(p_i - y_i)`: it is the prediction error in probability space. The sigmoid's derivative cancels neatly with the log's derivative — this is why no `\sigma'` term appears in the gradient.
+
+
+### Theory: Linear Regression: Closed Form vs Gradient Descent
 
 Linear regression minimizes the mean squared error:
 
@@ -60,68 +72,6 @@ Why use gradient descent at all if a closed form exists? Three reasons:
 
 So the closed form is the *target* of gradient descent: as steps go to zero and iterations to infinity, `w_t -> w*`.
 
-### B. Logistic Regression as Maximum Likelihood
-
-Logistic regression assumes the label `y \in {0, 1}` is Bernoulli-distributed conditional on `x`:
-
-```
-p(y=1 | x) = \sigma(w^T x + b),       \sigma(z) = 1 / (1 + e^{-z})
-```
-
-The negative log-likelihood (NLL) over a dataset is:
-
-```
-NLL(w) = - sum_i [ y_i log p_i + (1 - y_i) log(1 - p_i) ]
-```
-
-This is exactly **binary cross-entropy**. So minimizing cross-entropy *is* maximum-likelihood estimation under the Bernoulli model. The gradient has a remarkably clean form:
-
-```
-\nabla_w NLL = sum_i (p_i - y_i) x_i
-```
-
-Notice the term `(p_i - y_i)`: it is the prediction error in probability space. The sigmoid's derivative cancels neatly with the log's derivative — this is why no `\sigma'` term appears in the gradient.
-
-### C. Loss Function Choice: MSE vs Cross-Entropy
-
-Why MSE for continuous targets and cross-entropy for class labels?
-
-**MSE for regression** comes from assuming Gaussian noise: `y = w^T x + \epsilon` with `\epsilon ~ N(0, \sigma^2)`. The NLL is `(1 / 2 \sigma^2) (y - w^T x)^2 + const`, which is MSE up to a constant.
-
-**Cross-entropy for classification** comes from the Bernoulli/categorical NLL above. If you use MSE on classification with sigmoid output, the gradient is:
-
-```
-\nabla_w MSE = (p - y) * \sigma'(z) * x = (p - y) * p (1 - p) * x
-```
-
-The extra factor `p (1 - p)` vanishes when `p \to 0` or `p \to 1`, even when the prediction is *wrong* (e.g., `p = 0.99` but `y = 0`). The gradient flatlines exactly when you most want it to push back hard. Cross-entropy avoids this — it has no such damping factor — and is therefore strictly preferred.
-
-### D. Convexity and What Hidden Layers Change
-
-Both linear regression's MSE and logistic regression's NLL are **convex** in `w`. Convexity guarantees that any local minimum is the global minimum, so gradient descent (with appropriate step size) converges to the optimum from any starting point. There is essentially nothing to tune.
-
-Adding even one hidden layer with a nonlinearity destroys convexity. The loss surface becomes a non-convex landscape with many local minima, saddle points, and plateaus. This is why deep learning needs:
-
-- Careful initialization (so you start in a "good" region),
-- Adaptive optimizers (Adam) instead of vanilla GD,
-- Regularization (dropout, BN) to flatten the landscape,
-- Tricks like learning-rate warmup that have no analogue in convex optimization.
-
-The simplicity of this lesson's models is the last time everything is guaranteed to "just work."
-
-### From Theory to the Code Below
-
-| Theory concept | Code construct in this lesson |
-|----------------|-------------------------------|
-| MSE gradient `(1/N) X^T (X w - y)` | `dL_dw = X.T @ (pred - y) / N` |
-| Closed form `w* = (X^T X)^{-1} X^T y` | Optional check via `np.linalg.lstsq` |
-| Sigmoid + BCE clean gradient | `dL_dw = X.T @ (p - y)` (no `\sigma'` factor) |
-| Convexity guarantee | The fact that both models converge from any init |
-
----
-
-
-## Mathematical Background
 
 ### 1. Linear Regression
 
@@ -196,6 +146,35 @@ python linear_lowlevel.py
 ---
 
 ## Core Concepts
+
+### Theory: Convexity and What Hidden Layers Change
+
+Both linear regression's MSE and logistic regression's NLL are **convex** in `w`. Convexity guarantees that any local minimum is the global minimum, so gradient descent (with appropriate step size) converges to the optimum from any starting point. There is essentially nothing to tune.
+
+Adding even one hidden layer with a nonlinearity destroys convexity. The loss surface becomes a non-convex landscape with many local minima, saddle points, and plateaus. This is why deep learning needs:
+
+- Careful initialization (so you start in a "good" region),
+- Adaptive optimizers (Adam) instead of vanilla GD,
+- Regularization (dropout, BN) to flatten the landscape,
+- Tricks like learning-rate warmup that have no analogue in convex optimization.
+
+The simplicity of this lesson's models is the last time everything is guaranteed to "just work."
+
+
+### Theory: Loss Function Choice: MSE vs Cross-Entropy
+
+Why MSE for continuous targets and cross-entropy for class labels?
+
+**MSE for regression** comes from assuming Gaussian noise: `y = w^T x + \epsilon` with `\epsilon ~ N(0, \sigma^2)`. The NLL is `(1 / 2 \sigma^2) (y - w^T x)^2 + const`, which is MSE up to a constant.
+
+**Cross-entropy for classification** comes from the Bernoulli/categorical NLL above. If you use MSE on classification with sigmoid output, the gradient is:
+
+```
+\nabla_w MSE = (p - y) * \sigma'(z) * x = (p - y) * p (1 - p) * x
+```
+
+The extra factor `p (1 - p)` vanishes when `p \to 0` or `p \to 1`, even when the prediction is *wrong* (e.g., `p = 0.99` but `y = 0`). The gradient flatlines exactly when you most want it to push back hard. Cross-entropy avoids this — it has no such damping factor — and is therefore strictly preferred.
+
 
 ### 1. Gradient Descent
 

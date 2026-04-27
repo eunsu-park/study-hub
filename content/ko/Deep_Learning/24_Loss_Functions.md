@@ -14,85 +14,6 @@
 
 **난이도**: ⭐⭐⭐
 
----
-
-## 이론과 원리
-
-손실 함수는 네트워크에게 "좋음"이 무엇을 의미하는지 말해주는 *유일한* 곳입니다. 모든 아키텍처 선택은 손실이 무엇이든 그것에 대해 최적화하므로, 올바른 손실 선택은 최소한 올바른 아키텍처 선택만큼 중요합니다. 이 섹션은 각 손실 패밀리가 그 작업 클래스에 맞는 이유의 수학과 — 불일치(예: 분류에 MSE, 회귀에 cross-entropy)가 조용히 파국적인 이유를 제공합니다.
-
-이 섹션에서 다루는 내용:
-
-- **A.** Cross-entropy와 최대 우도 토대
-- **B.** MSE vs MAE vs Huber: 이상치 민감도
-- **C.** 클래스 불균형을 위한 focal loss
-- **D.** 표현 학습을 위한 contrastive 손실 (InfoNCE)
-
-### A. 최대 우도로서의 Cross-Entropy
-
-범주형 타겟 `y`와 예측 분포 `p_\theta`인 분류 문제의 경우, cross-entropy 손실은:
-
-```
-L_CE = -sum_i y_i log p_\theta(i) = -log p_\theta(y_true)         (원-핫 y)
-```
-
-이는 정확히 모델 하의 **음의 로그 우도**입니다. 이를 최소화하는 것은 최대 우도 추정: 관찰된 라벨을 가장 확률 높게 만드는 파라미터 찾기. 두 정보 이론적 읽기:
-
-- **코딩 비용**: `L_CE`는 예측 분포를 사용해 진실 라벨을 인코딩하는 데 필요한 평균 nat 수(`log_2` 사용 시 비트).
-- **KL 더하기 엔트로피**: `H(y, p) = H(y) + KL(y || p)`. `H(y)`가 데이터로 고정되므로, `H(y, p)` 최소화는 `KL(y || p)` 최소화와 동등 — 진실과 예측 분포 사이의 발산.
-
-이것이 cross-entropy가 정전적인 분류 손실인 이유입니다: 이론적으로 근거 있고, 깔끔한 그래디언트(`p - y_onehot`)를 가지며, 확률적 목적에 정확히 대응합니다.
-
-### B. 회귀 손실: MSE, MAE, Huber
-
-연속 타겟의 경우, 세 가지 흔한 선택과 그 NLL 해석:
-
-- **MSE = 평균 제곱 오차**: 가우시안 잡음 가정. 오차를 이차로 벌함 — 이상치에 매우 민감(10만큼 빗나간 한 예측이 1씩 빗나간 100개 예측과 같이 기여).
-- **MAE = 평균 절대 오차**: 라플라스 잡음 가정. 오차를 선형으로 벌함 — 이상치에 강건하지만 0에서 그래디언트가 정의되지 않음; 실전에서 약간 느린 수렴으로 이어짐.
-- **Huber 손실**: 0 근처는 이차, 0에서 멀면 선형. MSE의 부드러운 그래디언트와 MAE의 이상치 강건성을 결합, 임계값 `\delta`로 제어:
-
-```
-Huber(x) = 0.5 * x^2          if |x| <= \delta
-         = \delta * (|x| - 0.5 * \delta)   else
-```
-
-선택은 데이터가 어떻게 보이는지에 의존. 가우시안 잡음의 깨끗한 라벨: MSE. 두꺼운 꼬리 오차나 이상치: MAE 또는 Huber. 객체 검출 bounding-box 회귀의 경우 smooth-L1(본질적으로 `\delta = 1`인 Huber)이 표준.
-
-### C. 클래스 불균형을 위한 Focal Loss
-
-밀집 객체 검출 같은 작업에서, 예제의 99%가 쉽고(배경) 1%가 어렵습니다(전경). 쉬운 것이 그래디언트를 압도하기 때문에 cross-entropy가 어려운 예제에서 느리게 학습됩니다. **Focal loss** (Lin et al. 2017)는 재가중:
-
-```
-L_focal = -(1 - p_t)^\gamma * log(p_t)
-```
-
-여기서 `y = 1`이면 `p_t = p`, 아니면 `1 - p`. 인자 `(1 - p_t)^\gamma`는 잘 분류된 예제를 억제(`p_t \to 1`이 인자를 `\to 0`으로 만듦). `\gamma = 2`로, 90% 신뢰도로 올바르게 분류된 예제는 표준 cross-entropy 그래디언트의 `(0.1)^2 = 1%`만 기여; 10%에서 잘못 분류된 예제는 `(0.9)^2 = 81%` 기여.
-
-이는 명시적 재샘플링 없이 네트워크의 주의를 드문 어려운 예제로 이동시킴 — RetinaNet과 YOLO 같은 단일 단계 검출기의 효과성에 필수.
-
-### D. Contrastive 손실: InfoNCE
-
-메트릭/표현 학습의 경우, 유사한 항목이 가까운 임베딩을 가지고 다른 것이 멀리 떨어지기를 원합니다. **InfoNCE** (van den Oord 2018)는 이를 하나의 양성과 `N-1`개 음성의 분류 문제로 구성:
-
-```
-L_InfoNCE = -log( exp(sim(q, k+) / \tau) / sum_i exp(sim(q, k_i) / \tau) )
-```
-
-이는 정확히 "클래스"가 어느 키가 양성인지인 cross-entropy. Temperature `\tau`가 softmax가 얼마나 뾰족한지 제어 — 작은 `\tau`는 양성 근처 음성을 무겁게 벌함, 큰 `\tau`는 더 관대. CLIP, SimCLR, MoCo에서 사용 — 본질적으로 모든 현대 자기 지도 비전 모델.
-
-상호 정보(mutual information)와의 연결: InfoNCE 최소화는 `I(q, k+)`의 하한 — 모델이 query와 양성 표현 사이의 의존성을 최대화하도록 학습. 이것이 contrastive 학습이 유용한 표현을 만드는 이유의 이론적 정당화.
-
-### 이론에서 아래 코드로
-
-| 이론 개념 | 본 레슨의 코드 구성 |
-|-----------|---------------------|
-| Cross-entropy = NLL | `nn.CrossEntropyLoss()`, `F.cross_entropy(logits, y)` |
-| MSE / MAE / Huber | `nn.MSELoss`, `nn.L1Loss`, `nn.SmoothL1Loss` |
-| Focal loss | 수동 `(1 - p_t)**gamma * F.binary_cross_entropy(...)` |
-| InfoNCE | `F.cross_entropy(sim_matrix / tau, labels)` |
-
----
-
-
 ## 1. 손실 함수 소개
 
 ### 1.1 신경망 훈련에서의 역할
@@ -187,6 +108,22 @@ visualize_loss_landscape()
 ## 2. 회귀 손실(Regression Losses)
 
 회귀 손실은 연속적인 값을 예측할 때 사용됩니다(예: 주택 가격, 온도, 좌표).
+
+### 이론: 회귀 손실: MSE, MAE, Huber
+
+연속 타겟의 경우, 세 가지 흔한 선택과 그 NLL 해석:
+
+- **MSE = 평균 제곱 오차**: 가우시안 잡음 가정. 오차를 이차로 벌함 — 이상치에 매우 민감(10만큼 빗나간 한 예측이 1씩 빗나간 100개 예측과 같이 기여).
+- **MAE = 평균 절대 오차**: 라플라스 잡음 가정. 오차를 선형으로 벌함 — 이상치에 강건하지만 0에서 그래디언트가 정의되지 않음; 실전에서 약간 느린 수렴으로 이어짐.
+- **Huber 손실**: 0 근처는 이차, 0에서 멀면 선형. MSE의 부드러운 그래디언트와 MAE의 이상치 강건성을 결합, 임계값 `\delta`로 제어:
+
+```
+Huber(x) = 0.5 * x^2          if |x| <= \delta
+         = \delta * (|x| - 0.5 * \delta)   else
+```
+
+선택은 데이터가 어떻게 보이는지에 의존. 가우시안 잡음의 깨끗한 라벨: MSE. 두꺼운 꼬리 오차나 이상치: MAE 또는 Huber. 객체 검출 bounding-box 회귀의 경우 smooth-L1(본질적으로 `\delta = 1`인 Huber)이 표준.
+
 
 ### 2.1 평균 제곱 오차(Mean Squared Error, L2 Loss)
 
@@ -418,6 +355,22 @@ compare_regression_losses()
 ## 3. 분류 손실(Classification Losses)
 
 분류 손실은 이산 레이블 예측 작업에 사용됩니다.
+
+### 이론: 최대 우도로서의 Cross-Entropy
+
+범주형 타겟 `y`와 예측 분포 `p_\theta`인 분류 문제의 경우, cross-entropy 손실은:
+
+```
+L_CE = -sum_i y_i log p_\theta(i) = -log p_\theta(y_true)         (원-핫 y)
+```
+
+이는 정확히 모델 하의 **음의 로그 우도**입니다. 이를 최소화하는 것은 최대 우도 추정: 관찰된 라벨을 가장 확률 높게 만드는 파라미터 찾기. 두 정보 이론적 읽기:
+
+- **코딩 비용**: `L_CE`는 예측 분포를 사용해 진실 라벨을 인코딩하는 데 필요한 평균 nat 수(`log_2` 사용 시 비트).
+- **KL 더하기 엔트로피**: `H(y, p) = H(y) + KL(y || p)`. `H(y)`가 데이터로 고정되므로, `H(y, p)` 최소화는 `KL(y || p)` 최소화와 동등 — 진실과 예측 분포 사이의 발산.
+
+이것이 cross-entropy가 정전적인 분류 손실인 이유입니다: 이론적으로 근거 있고, 깔끔한 그래디언트(`p - y_onehot`)를 가지며, 확률적 목적에 정확히 대응합니다.
+
 
 ### 3.1 이진 교차 엔트로피(Binary Cross-Entropy, BCE)
 
@@ -866,6 +819,19 @@ print(f"Multi-Label Loss: {loss.item():.4f}")
 
 이 손실들은 유사한 항목은 가깝고 비유사한 항목은 멀리 떨어진 임베딩을 학습합니다.
 
+### 이론: Contrastive 손실: InfoNCE
+
+메트릭/표현 학습의 경우, 유사한 항목이 가까운 임베딩을 가지고 다른 것이 멀리 떨어지기를 원합니다. **InfoNCE** (van den Oord 2018)는 이를 하나의 양성과 `N-1`개 음성의 분류 문제로 구성:
+
+```
+L_InfoNCE = -log( exp(sim(q, k+) / \tau) / sum_i exp(sim(q, k_i) / \tau) )
+```
+
+이는 정확히 "클래스"가 어느 키가 양성인지인 cross-entropy. Temperature `\tau`가 softmax가 얼마나 뾰족한지 제어 — 작은 `\tau`는 양성 근처 음성을 무겁게 벌함, 큰 `\tau`는 더 관대. CLIP, SimCLR, MoCo에서 사용 — 본질적으로 모든 현대 자기 지도 비전 모델.
+
+상호 정보(mutual information)와의 연결: InfoNCE 최소화는 `I(q, k+)`의 하한 — 모델이 query와 양성 표현 사이의 의존성을 최대화하도록 학습. 이것이 contrastive 학습이 유용한 표현을 만드는 이유의 이론적 정당화.
+
+
 ### 4.1 대조 손실(Contrastive Loss)
 
 **공식:**
@@ -1199,6 +1165,19 @@ print(f"InfoNCE Loss: {loss.item():.4f}")
 ---
 
 ## 5. 세그멘테이션 및 검출 손실(Segmentation and Detection Losses)
+
+### 이론: 클래스 불균형을 위한 Focal Loss
+
+밀집 객체 검출 같은 작업에서, 예제의 99%가 쉽고(배경) 1%가 어렵습니다(전경). 쉬운 것이 그래디언트를 압도하기 때문에 cross-entropy가 어려운 예제에서 느리게 학습됩니다. **Focal loss** (Lin et al. 2017)는 재가중:
+
+```
+L_focal = -(1 - p_t)^\gamma * log(p_t)
+```
+
+여기서 `y = 1`이면 `p_t = p`, 아니면 `1 - p`. 인자 `(1 - p_t)^\gamma`는 잘 분류된 예제를 억제(`p_t \to 1`이 인자를 `\to 0`으로 만듦). `\gamma = 2`로, 90% 신뢰도로 올바르게 분류된 예제는 표준 cross-entropy 그래디언트의 `(0.1)^2 = 1%`만 기여; 10%에서 잘못 분류된 예제는 `(0.9)^2 = 81%` 기여.
+
+이는 명시적 재샘플링 없이 네트워크의 주의를 드문 어려운 예제로 이동시킴 — RetinaNet과 YOLO 같은 단일 단계 검출기의 효과성에 필수.
+
 
 ### 5.1 다이스 손실(Dice Loss)
 

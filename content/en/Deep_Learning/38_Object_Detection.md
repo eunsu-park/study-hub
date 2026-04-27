@@ -11,20 +11,9 @@
 - Grasp DETR (Detection Transformer) concepts
 - Practice with PyTorch/Ultralytics
 
----
+## 1. Object Detection Overview
 
-## Theory & Principles
-
-Object detection adds two complications to classification: predicting *where* objects are (localization) and predicting *how many* are present (a variable, per-image count). Every detection architecture is one answer to these two questions. This section walks through the math of bounding-box regression, the two-stage vs one-stage design split, anchor-based vs anchor-free, and DETR's "set prediction" reframing.
-
-This section covers:
-
-- **A.** Bounding-box parameterization and IoU
-- **B.** Two-stage detectors: proposals + classification (Faster R-CNN)
-- **C.** One-stage detectors: dense prediction (YOLO, RetinaNet)
-- **D.** DETR: detection as set prediction with bipartite matching
-
-### A. Bounding Boxes and IoU
+### Theory: Bounding Boxes and IoU
 
 A bounding box is `(x, y, w, h)` or `(x_1, y_1, x_2, y_2)`. The standard quality metric is **Intersection over Union (IoU)**:
 
@@ -45,52 +34,6 @@ t_h = log(h / h_a)
 
 The log on `w, h` keeps regressed scales positive and treats relative scale changes uniformly (predicting a 2x or 0.5x box is symmetric in log-space).
 
-### B. Two-Stage: Faster R-CNN
-
-Faster R-CNN (Ren et al. 2015) factorizes detection into two stages:
-
-1. **Region Proposal Network (RPN)**: a small CNN slides over feature maps, predicting at each location whether an object is present and a coarse box. Outputs ~2000 proposals per image.
-2. **Per-proposal classifier**: each proposal is RoI-Align'd to a fixed-size feature, then classified into K+1 classes (K objects + background) and refined to a tighter box.
-
-The split lets the first stage be class-agnostic (just "object or not") and the second stage focus on the harder discrimination. Two-stage detectors achieve high accuracy but are slower (~5-15 FPS).
-
-### C. One-Stage: YOLO, RetinaNet
-
-YOLO (Redmon et al. 2015) collapses the two stages into one: a single CNN directly predicts boxes and classes at every spatial location of the output feature map. No proposals, no per-region classifier — just dense prediction.
-
-The challenge: most spatial locations have no object, so the loss is dominated by background. This is what **focal loss** (Lin et al. 2017) was invented for — RetinaNet's focal loss `(1 - p_t)^\gamma * log(p_t)` down-weights well-classified easy examples, letting the rare hard examples drive the gradient.
-
-YOLO has gone through many versions (v1-v8); each generation refined the loss, the backbone, the data augmentation. The basic recipe (single dense prediction, focal-loss-like reweighting, NMS at inference to dedupe overlapping detections) has been remarkably stable.
-
-### D. DETR: Set Prediction
-
-DETR (Carion et al. 2020) reframes detection as **set prediction**: the output is a *set* of bounding boxes (no fixed cardinality, no NMS), produced by a Transformer decoder with `N` learned "object queries." Each query attends to image features and outputs (class, box). Padding queries output the "no object" class.
-
-The training loss requires matching predictions to ground-truth boxes:
-
-```
-loss = min over permutations sigma of sum_i [ class_loss(pred_{sigma(i)}, gt_i) + box_loss(pred_{sigma(i)}, gt_i) ]
-```
-
-This is solved by the **Hungarian algorithm** for optimal bipartite matching. After matching, standard cross-entropy + L1 + GIoU losses are applied per matched pair.
-
-DETR's elegance: no anchors, no NMS, no proposals. Its initial weakness: training was slow (500+ epochs) and small-object detection was poor. Successors (Deformable DETR, DINO-DETR) addressed both.
-
-### From Theory to the Code Below
-
-| Theory concept | Code construct in this lesson |
-|----------------|-------------------------------|
-| IoU | `IoU = intersection / (area_a + area_b - intersection)` |
-| Box regression | `t_x, t_y, t_w, t_h` offsets relative to anchor |
-| Faster R-CNN | RPN + RoIAlign + classifier head, two passes |
-| YOLO | Single forward pass with dense prediction grid |
-| Focal loss | `(1 - p_t).pow(gamma) * F.binary_cross_entropy(...)` |
-| DETR | Object queries + Hungarian matching + bipartite loss |
-
----
-
-
-## 1. Object Detection Overview
 
 ### 1.1 Problem Definition
 
@@ -213,6 +156,16 @@ COCO dataset metrics:
 ---
 
 ## 2. R-CNN Family
+
+### Theory: Two-Stage: Faster R-CNN
+
+Faster R-CNN (Ren et al. 2015) factorizes detection into two stages:
+
+1. **Region Proposal Network (RPN)**: a small CNN slides over feature maps, predicting at each location whether an object is present and a coarse box. Outputs ~2000 proposals per image.
+2. **Per-proposal classifier**: each proposal is RoI-Align'd to a fixed-size feature, then classified into K+1 classes (K objects + background) and refined to a tighter box.
+
+The split lets the first stage be class-agnostic (just "object or not") and the second stage focus on the harder discrimination. Two-stage detectors achieve high accuracy but are slower (~5-15 FPS).
+
 
 ### 2.1 R-CNN Evolution
 
@@ -449,6 +402,15 @@ print(f"Generated {len(anchors)} anchors")  # 38*50*9 = 17,100
 ---
 
 ## 3. YOLO (You Only Look Once)
+
+### Theory: One-Stage: YOLO, RetinaNet
+
+YOLO (Redmon et al. 2015) collapses the two stages into one: a single CNN directly predicts boxes and classes at every spatial location of the output feature map. No proposals, no per-region classifier — just dense prediction.
+
+The challenge: most spatial locations have no object, so the loss is dominated by background. This is what **focal loss** (Lin et al. 2017) was invented for — RetinaNet's focal loss `(1 - p_t)^\gamma * log(p_t)` down-weights well-classified easy examples, letting the rare hard examples drive the gradient.
+
+YOLO has gone through many versions (v1-v8); each generation refined the loss, the backbone, the data augmentation. The basic recipe (single dense prediction, focal-loss-like reweighting, NMS at inference to dedupe overlapping detections) has been remarkably stable.
+
 
 ### 3.1 YOLO Evolution
 
@@ -710,6 +672,21 @@ def ciou_loss(pred_boxes, target_boxes, eps=1e-7):
 ---
 
 ## 4. DETR (Detection Transformer)
+
+### Theory: DETR: Set Prediction
+
+DETR (Carion et al. 2020) reframes detection as **set prediction**: the output is a *set* of bounding boxes (no fixed cardinality, no NMS), produced by a Transformer decoder with `N` learned "object queries." Each query attends to image features and outputs (class, box). Padding queries output the "no object" class.
+
+The training loss requires matching predictions to ground-truth boxes:
+
+```
+loss = min over permutations sigma of sum_i [ class_loss(pred_{sigma(i)}, gt_i) + box_loss(pred_{sigma(i)}, gt_i) ]
+```
+
+This is solved by the **Hungarian algorithm** for optimal bipartite matching. After matching, standard cross-entropy + L1 + GIoU losses are applied per matched pair.
+
+DETR's elegance: no anchors, no NMS, no proposals. Its initial weakness: training was slow (500+ epochs) and small-object detection was poor. Successors (Deformable DETR, DINO-DETR) addressed both.
+
 
 ### 4.1 DETR Concept
 

@@ -13,20 +13,9 @@
 - Apply training stabilization techniques
 - Understand StyleGAN concepts
 
----
+## 1. GAN Fundamentals
 
-## Theory & Principles
-
-A Generative Adversarial Network (Goodfellow et al. 2014) frames generative modeling as a *game*: two networks, a generator G and a discriminator D, with opposing objectives. The math behind this game — the minimax objective, its equivalence to JS divergence, and the failure modes (mode collapse, vanishing gradients) — is the entire content of this section. Understanding it is the only way to interpret the loss curves and stabilization tricks the rest of the lesson presents.
-
-This section covers:
-
-- **A.** The GAN minimax objective
-- **B.** The optimal D and JS-divergence equivalence
-- **C.** Why vanilla GANs train badly: vanishing gradients and mode collapse
-- **D.** Wasserstein GANs and the Earth-Mover's Distance fix
-
-### A. The Minimax Objective
+### Theory: The Minimax Objective
 
 GAN training optimizes a two-player zero-sum game:
 
@@ -39,64 +28,6 @@ min_G max_D V(G, D) = E_{x ~ p_data} [log D(x)] + E_{z ~ p_z} [log(1 - D(G(z)))]
 
 In practice, the minimax is implemented by alternating updates: one (or several) D step, then one G step. Mathematically these are not the same as solving the joint minimax, but the alternation is the only thing that fits in a gradient-descent training loop.
 
-### B. Optimal D and JS Divergence
-
-For a fixed G, the optimal D is closed-form:
-
-```
-D*(x) = p_data(x) / (p_data(x) + p_G(x))
-```
-
-(Derived by maximizing `V` with respect to `D(x)` for each `x`.) Substituting back:
-
-```
-V(G, D*) = -log(4) + 2 * JS(p_data || p_G)
-```
-
-where JS is the **Jensen-Shannon divergence**. So at the optimum, GAN training is equivalent to **minimizing JS(p_data || p_G)** — the generator is pushed to match the data distribution as measured by JS divergence.
-
-JS is symmetric and bounded `[0, log 2]`, which is appealing — but also where the trouble starts.
-
-### C. Vanishing Gradients and Mode Collapse
-
-**Vanishing gradients**: when D becomes too good (correctly classifies almost every sample), `log(1 - D(G(z)))` saturates near 0 and its gradient with respect to G vanishes. G stops improving even though it is far from p_data. This is fundamentally because JS divergence has a constant value (`log 2`) when `p_G` and `p_data` have disjoint supports — perfect news for a discriminator, terrible news for a generator trying to learn from D's gradient.
-
-**Mode collapse**: G learns to produce only a few outputs that fool D, ignoring most of the data distribution. The minimax objective does not penalize this — D only checks whether each *individual* sample is real, not whether G's output distribution covers all modes.
-
-The original paper's "non-saturating" loss replaces `log(1 - D(G(z)))` with `-log(D(G(z)))` for the G update, which gives stronger gradients but does not solve the underlying instability.
-
-### D. Wasserstein GANs
-
-**Wasserstein GAN** (Arjovsky et al. 2017) replaces JS divergence with the **Earth-Mover's distance** (Wasserstein-1):
-
-```
-W(p_data, p_G) = inf_{\gamma in \Pi(p_data, p_G)} E_{(x, y) ~ \gamma} [||x - y||]
-```
-
-Intuitively, the minimum "cost" to morph `p_G` into `p_data` by moving probability mass. Crucially, EMD is well-defined even when supports are disjoint and provides a continuous, useful gradient — unlike JS, which is constant.
-
-Computing W directly is intractable, but its dual form gives a tractable objective:
-
-```
-W(p_data, p_G) = sup_{||f||_L <= 1} E_{p_data}[f(x)] - E_{p_G}[f(x)]
-```
-
-over all 1-Lipschitz functions `f`. WGAN parameterizes `f` as a neural network (the "critic," replacing D) and enforces the Lipschitz constraint via weight clipping (original) or gradient penalty (WGAN-GP, Gulrajani et al. 2017). This recipe stabilizes training enormously and is the basis of most modern GAN training.
-
-### From Theory to the Code Below
-
-| Theory concept | Code construct in this lesson |
-|----------------|-------------------------------|
-| Minimax / non-saturating G loss | `loss_G = -log(D(G(z))).mean()` |
-| D loss | `loss_D = -(log(D(x)) + log(1 - D(G(z)))).mean()` |
-| Mode collapse symptom | All generated samples look the same |
-| WGAN critic | No sigmoid on D's output; W loss = `D(x).mean() - D(G(z)).mean()` |
-| Gradient penalty | `||grad_D(interpolated)||_2 - 1)^2` term |
-
----
-
-
-## 1. GAN Fundamentals
 
 ### Concept
 
@@ -277,6 +208,44 @@ def train_gan(generator, discriminator, dataloader, epochs=100, latent_dim=100):
 ---
 
 ## 3. Loss Functions
+
+### Theory: Wasserstein GANs
+
+**Wasserstein GAN** (Arjovsky et al. 2017) replaces JS divergence with the **Earth-Mover's distance** (Wasserstein-1):
+
+```
+W(p_data, p_G) = inf_{\gamma in \Pi(p_data, p_G)} E_{(x, y) ~ \gamma} [||x - y||]
+```
+
+Intuitively, the minimum "cost" to morph `p_G` into `p_data` by moving probability mass. Crucially, EMD is well-defined even when supports are disjoint and provides a continuous, useful gradient — unlike JS, which is constant.
+
+Computing W directly is intractable, but its dual form gives a tractable objective:
+
+```
+W(p_data, p_G) = sup_{||f||_L <= 1} E_{p_data}[f(x)] - E_{p_G}[f(x)]
+```
+
+over all 1-Lipschitz functions `f`. WGAN parameterizes `f` as a neural network (the "critic," replacing D) and enforces the Lipschitz constraint via weight clipping (original) or gradient penalty (WGAN-GP, Gulrajani et al. 2017). This recipe stabilizes training enormously and is the basis of most modern GAN training.
+
+
+### Theory: Optimal D and JS Divergence
+
+For a fixed G, the optimal D is closed-form:
+
+```
+D*(x) = p_data(x) / (p_data(x) + p_G(x))
+```
+
+(Derived by maximizing `V` with respect to `D(x)` for each `x`.) Substituting back:
+
+```
+V(G, D*) = -log(4) + 2 * JS(p_data || p_G)
+```
+
+where JS is the **Jensen-Shannon divergence**. So at the optimum, GAN training is equivalent to **minimizing JS(p_data || p_G)** — the generator is pushed to match the data distribution as measured by JS divergence.
+
+JS is symmetric and bounded `[0, log 2]`, which is appealing — but also where the trouble starts.
+
 
 ### Vanilla GAN Loss (BCE)
 
@@ -484,6 +453,15 @@ class DCGANDiscriminator(nn.Module):
 ---
 
 ## 5. Training Stabilization Techniques
+
+### Theory: Vanishing Gradients and Mode Collapse
+
+**Vanishing gradients**: when D becomes too good (correctly classifies almost every sample), `log(1 - D(G(z)))` saturates near 0 and its gradient with respect to G vanishes. G stops improving even though it is far from p_data. This is fundamentally because JS divergence has a constant value (`log 2`) when `p_G` and `p_data` have disjoint supports — perfect news for a discriminator, terrible news for a generator trying to learn from D's gradient.
+
+**Mode collapse**: G learns to produce only a few outputs that fool D, ignoring most of the data distribution. The minimax objective does not penalize this — D only checks whether each *individual* sample is real, not whether G's output distribution covers all modes.
+
+The original paper's "non-saturating" loss replaces `log(1 - D(G(z)))` with `-log(D(G(z)))` for the G update, which gives stronger gradients but does not solve the underlying instability.
+
 
 ### Spectral Normalization
 

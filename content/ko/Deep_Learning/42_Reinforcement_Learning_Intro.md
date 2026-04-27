@@ -13,105 +13,6 @@
 - Deep RL 기초 (DQN)
 - PyTorch 구현 및 실습
 
----
-
-## 이론과 원리
-
-강화 학습은 한 가지 결정적 방식으로 지도 학습과 다릅니다: 라벨이 붙은 "정확한 행동"이 없습니다 — 단지 지연된, 아마도 미래의 먼, 아마도 확률적인 스칼라 보상. 전체 RL 메커니즘(MDP, 가치 함수, policy gradient, DQN)은 이 훨씬 약한 신호로부터 학습하는 도구상자입니다. 이 섹션은 보상을 정책 개선과 연결하는 수학을 제공합니다.
-
-이 섹션에서 다루는 내용:
-
-- **A.** Markov Decision Process (MDP) 형식
-- **B.** 가치 함수와 Bellman 방정식
-- **C.** Q-학습과 Deep Q-Networks (DQN)
-- **D.** Policy gradient와 REINFORCE 추정기
-
-### A. MDP
-
-MDP는 RL 문제의 형식 모델:
-
-- **상태 공간 S**: 에이전트가 관찰하는 것.
-- **행동 공간 A**: 에이전트가 할 수 있는 것.
-- **전이 `P(s' | s, a)`**: 환경의 동역학.
-- **보상 `R(s, a, s')`**: 즉각적 스칼라 보상.
-- **할인 `\gamma in [0, 1)`**: 현재 보상 대비 미래 보상이 얼마나 중요한가.
-
-마르코프 성질: `P(s_{t+1} | s_t, a_t)`이 역사가 아닌 현재 상태와 행동에만 의존. 이것이 가치 함수와 동적 프로그래밍을 다룰 수 있게 만듦.
-
-에이전트의 목표: 기대 할인된 보상의 합 `E[sum_t \gamma^t R_t]` 최대화. 할인 인자가 시간 선호를 반영하고 무한 지평선에 대해 합이 유한함을 보장.
-
-### B. 가치 함수와 Bellman
-
-두 가치 함수 정의:
-
-- **상태 가치** `V^\pi(s) = E_\pi [sum_t \gamma^t R_t | s_0 = s]`: 정책 `\pi`를 따르며 상태 `s`에서의 기대 수익.
-- **행동 가치** `Q^\pi(s, a) = E_\pi [sum_t \gamma^t R_t | s_0 = s, a_0 = a]`: 상태 `s`에서 행동 `a`를 한 다음 `\pi`를 따르는 기대 수익.
-
-**Bellman 방정식**은 재귀적 특성화:
-
-```
-V^\pi(s) = E_{a ~ \pi(s)} [ R + \gamma E_{s' ~ P(.|s,a)} V^\pi(s') ]
-Q^\pi(s, a) = E_{s' ~ P(.|s,a)} [ R + \gamma E_{a' ~ \pi(s')} Q^\pi(s', a') ]
-```
-
-최적 정책 `\pi*`에 대해, Bellman *최적성* 방정식:
-
-```
-Q*(s, a) = E_{s'} [ R + \gamma max_{a'} Q*(s', a') ]
-```
-
-`Q*`를 알면 최적 정책은 `\pi*(s) = argmax_a Q*(s, a)`. 따라서 `Q*`를 학습하면 제어 문제 해결.
-
-### C. Q-학습과 DQN
-
-Q-학습은 샘플링된 전이를 사용해 `Q*`의 추정을 반복적으로 업데이트:
-
-```
-Q(s, a) <- Q(s, a) + \alpha * [ R + \gamma max_{a'} Q(s', a') - Q(s, a) ]
-```
-
-괄호 항이 **TD 오차**: 부트스트랩된 타겟 `R + \gamma max Q(s', a')`과 현재 추정 사이의 차이. 충분한 탐색이 있는 표 설정에서 `Q*`로의 수렴이 보장됨.
-
-**DQN** (Mnih et al. 2015)은 `Q(s, a; \theta)`를 깊은 CNN으로 매개변수화 — `\theta`는 파라미터, `s`는 입력(예: 게임 프레임), 출력은 각 행동에 대한 `Q(s, .)`. 학습은 제곱 TD 오차 최소화:
-
-```
-L(\theta) = E_{(s, a, R, s')} [ (R + \gamma max_{a'} Q(s', a'; \theta-) - Q(s, a; \theta))^2 ]
-```
-
-안정성을 위한 두 결정적 트릭:
-
-1. **Replay buffer**: 전이를 저장, 미니 배치를 균등하게 샘플. 연속 샘플 간 상관관계를 끊음.
-2. **Target network**: `\theta-`는 `\theta`의 천천히 움직이는 복사본, N 스텝마다 업데이트. 그것 없이는 타겟이 각 업데이트와 함께 움직여 불안정성 유발.
-
-DQN은 RL을 고차원 입력(원시 픽셀에서 Atari 게임)으로 스케일한 돌파구였으며, 현대 deep RL을 시작.
-
-### D. Policy Gradient
-
-Q를 학습하는 대안은 정책 `\pi_\theta(a | s)`를 직접 매개변수화하고 경사 상승을 통해 그 기대 수익을 최적화하는 것. **Policy gradient 정리**:
-
-```
-\nabla_\theta J(\theta) = E_\pi [ \sum_t \nabla_\theta log \pi_\theta(a_t | s_t) * G_t ]
-```
-
-여기서 `G_t = \sum_{k >= t} \gamma^{k-t} R_k`는 시간 `t`에서의 수익. 직관: 높은 수익을 이끈 행동의 로그 확률을 증가, 낮은 수익을 이끈 것을 감소.
-
-이것이 **REINFORCE**, 가장 단순한 policy gradient. 높은 분산(한 에피소드 = 하나의 잡음 그래디언트 추정). 현대 알고리즘(PPO, A2C, A3C, TRPO)은 베이스라인, advantage 추정, 신뢰 영역 등을 통해 분산을 감소하지만 핵심 공식은 같음.
-
-복잡한 문제의 경우, 현대 RL은 policy gradient를 가치 함수와 결합(actor-critic): 가치 함수가 분산을 감소, 정책이 행동을 출력.
-
-### 이론에서 아래 코드로
-
-| 이론 개념 | 본 레슨의 코드 구성 |
-|-----------|---------------------|
-| MDP 루프 | `s = env.reset(); a = policy(s); s', r, done = env.step(a)` |
-| Q-네트워크 | 상태를 행동별 Q-값으로 매핑하는 `nn.Sequential(...)` |
-| TD 손실 | `loss = F.mse_loss(Q(s, a), r + gamma * Q_target(s', :).max())` |
-| Replay buffer | `buffer.append((s, a, r, s')); batch = random.sample(buffer, B)` |
-| epsilon-greedy | `if random() < eps: action = random else action = argmax Q(s)` |
-
----
-
-
 ## 1. 강화학습 개요
 
 ### 정의와 특징
@@ -163,6 +64,21 @@ Q를 학습하는 대안은 정책 `\pi_\theta(a | s)`를 직접 매개변수화
 ---
 
 ## 2. MDP (Markov Decision Process)
+
+### 이론: MDP
+
+MDP는 RL 문제의 형식 모델:
+
+- **상태 공간 S**: 에이전트가 관찰하는 것.
+- **행동 공간 A**: 에이전트가 할 수 있는 것.
+- **전이 `P(s' | s, a)`**: 환경의 동역학.
+- **보상 `R(s, a, s')`**: 즉각적 스칼라 보상.
+- **할인 `\gamma in [0, 1)`**: 현재 보상 대비 미래 보상이 얼마나 중요한가.
+
+마르코프 성질: `P(s_{t+1} | s_t, a_t)`이 역사가 아닌 현재 상태와 행동에만 의존. 이것이 가치 함수와 동적 프로그래밍을 다룰 수 있게 만듦.
+
+에이전트의 목표: 기대 할인된 보상의 합 `E[sum_t \gamma^t R_t]` 최대화. 할인 인자가 시간 선호를 반영하고 무한 지평선에 대해 합이 유한함을 보장.
+
 
 ### 구성 요소
 
@@ -228,6 +144,29 @@ def rl_loop(env, agent, episodes=1000):
 
 ## 3. Value Functions
 
+### 이론: 가치 함수와 Bellman
+
+두 가치 함수 정의:
+
+- **상태 가치** `V^\pi(s) = E_\pi [sum_t \gamma^t R_t | s_0 = s]`: 정책 `\pi`를 따르며 상태 `s`에서의 기대 수익.
+- **행동 가치** `Q^\pi(s, a) = E_\pi [sum_t \gamma^t R_t | s_0 = s, a_0 = a]`: 상태 `s`에서 행동 `a`를 한 다음 `\pi`를 따르는 기대 수익.
+
+**Bellman 방정식**은 재귀적 특성화:
+
+```
+V^\pi(s) = E_{a ~ \pi(s)} [ R + \gamma E_{s' ~ P(.|s,a)} V^\pi(s') ]
+Q^\pi(s, a) = E_{s' ~ P(.|s,a)} [ R + \gamma E_{a' ~ \pi(s')} Q^\pi(s', a') ]
+```
+
+최적 정책 `\pi*`에 대해, Bellman *최적성* 방정식:
+
+```
+Q*(s, a) = E_{s'} [ R + \gamma max_{a'} Q*(s', a') ]
+```
+
+`Q*`를 알면 최적 정책은 `\pi*(s) = argmax_a Q*(s, a)`. 따라서 `Q*`를 학습하면 제어 문제 해결.
+
+
 ### State Value Function (V)
 
 ```
@@ -264,6 +203,30 @@ Q(s, a) = R(s, a) + γ * Σ P(s'|s,a) * max_a' Q(s', a')
 ---
 
 ## 4. Q-Learning
+
+### 이론: Q-학습과 DQN
+
+Q-학습은 샘플링된 전이를 사용해 `Q*`의 추정을 반복적으로 업데이트:
+
+```
+Q(s, a) <- Q(s, a) + \alpha * [ R + \gamma max_{a'} Q(s', a') - Q(s, a) ]
+```
+
+괄호 항이 **TD 오차**: 부트스트랩된 타겟 `R + \gamma max Q(s', a')`과 현재 추정 사이의 차이. 충분한 탐색이 있는 표 설정에서 `Q*`로의 수렴이 보장됨.
+
+**DQN** (Mnih et al. 2015)은 `Q(s, a; \theta)`를 깊은 CNN으로 매개변수화 — `\theta`는 파라미터, `s`는 입력(예: 게임 프레임), 출력은 각 행동에 대한 `Q(s, .)`. 학습은 제곱 TD 오차 최소화:
+
+```
+L(\theta) = E_{(s, a, R, s')} [ (R + \gamma max_{a'} Q(s', a'; \theta-) - Q(s, a; \theta))^2 ]
+```
+
+안정성을 위한 두 결정적 트릭:
+
+1. **Replay buffer**: 전이를 저장, 미니 배치를 균등하게 샘플. 연속 샘플 간 상관관계를 끊음.
+2. **Target network**: `\theta-`는 `\theta`의 천천히 움직이는 복사본, N 스텝마다 업데이트. 그것 없이는 타겟이 각 업데이트와 함께 움직여 불안정성 유발.
+
+DQN은 RL을 고차원 입력(원시 픽셀에서 Atari 게임)으로 스케일한 돌파구였으며, 현대 deep RL을 시작.
+
 
 ### 알고리즘 개요
 
@@ -557,6 +520,21 @@ def train_dqn(env, agent, episodes=500):
 ---
 
 ## 6. Policy Gradient
+
+### 이론: Policy Gradient
+
+Q를 학습하는 대안은 정책 `\pi_\theta(a | s)`를 직접 매개변수화하고 경사 상승을 통해 그 기대 수익을 최적화하는 것. **Policy gradient 정리**:
+
+```
+\nabla_\theta J(\theta) = E_\pi [ \sum_t \nabla_\theta log \pi_\theta(a_t | s_t) * G_t ]
+```
+
+여기서 `G_t = \sum_{k >= t} \gamma^{k-t} R_k`는 시간 `t`에서의 수익. 직관: 높은 수익을 이끈 행동의 로그 확률을 증가, 낮은 수익을 이끈 것을 감소.
+
+이것이 **REINFORCE**, 가장 단순한 policy gradient. 높은 분산(한 에피소드 = 하나의 잡음 그래디언트 추정). 현대 알고리즘(PPO, A2C, A3C, TRPO)은 베이스라인, advantage 추정, 신뢰 영역 등을 통해 분산을 감소하지만 핵심 공식은 같음.
+
+복잡한 문제의 경우, 현대 RL은 policy gradient를 가치 함수와 결합(actor-critic): 가치 함수가 분산을 감소, 정책이 행동을 출력.
+
 
 ### 아이디어
 

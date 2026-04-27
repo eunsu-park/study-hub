@@ -11,95 +11,6 @@
 - Use PyTorch nn.RNN
 - Understand vanishing gradient problem
 
----
-
-## Theory & Principles
-
-A recurrent neural network is a feedforward network unrolled across time, with weight sharing across the time axis. That single sentence hides three of deep learning's deepest difficulties — long-range credit assignment, vanishing/exploding gradients, and the trade-off between sequential expressiveness and parallel computation. This section gives the math behind why vanilla RNNs struggle and what the standard fixes (gradient clipping, careful init) actually do.
-
-This section covers:
-
-- **A.** RNN forward pass and the unrolled computational graph
-- **B.** Backpropagation Through Time (BPTT) and its O(T) gradient flow
-- **C.** Vanishing and exploding gradients via eigenvalue analysis
-- **D.** Gradient clipping and orthogonal init as partial fixes
-
-### A. RNN Forward Pass and Unrolling
-
-A vanilla RNN processes a sequence `x_1, x_2, ..., x_T` by maintaining a hidden state `h_t`:
-
-```
-h_t = tanh(W_x x_t + W_h h_{t-1} + b)
-y_t = W_y h_t + c                          (optional output)
-```
-
-The same `(W_x, W_h, W_y, b, c)` are used at every time step — this is the **temporal weight sharing** that lets the network handle variable-length sequences. Conceptually, the RNN is a feedforward network with `T` "layers," all of which share weights, with skip connections from the input at each layer.
-
-The "unrolled" view replaces the recurrence with a long DAG: `h_0 -> h_1 -> ... -> h_T`. Forward pass time is `O(T)` and cannot be parallelized across time (each `h_t` depends on `h_{t-1}`). This is the fundamental sequential bottleneck that motivated Transformers.
-
-### B. Backpropagation Through Time (BPTT)
-
-Computing the gradient of a loss `L = sum_t L_t` with respect to `W_h` requires backpropagating through every time step:
-
-```
-dL/dW_h = sum_t  sum_{k <= t}  dL_t/dh_t * (prod_{j=k+1}^{t} dh_j/dh_{j-1}) * dh_k/dW_h
-```
-
-The inner product is over a chain of `t - k` Jacobians. Because all hidden Jacobians share `W_h`, this expands as:
-
-```
-dh_j/dh_{j-1} = diag(tanh'(z_j)) * W_h
-```
-
-So the chain becomes:
-
-```
-prod_{j=k+1}^{t} dh_j/dh_{j-1} = (prod_{j=k+1}^{t} diag(tanh'(z_j))) * W_h^{t-k}
-```
-
-The matrix `W_h` is multiplied by itself `t - k` times. This is the source of all RNN gradient pathology.
-
-**Truncated BPTT (TBPTT)** limits backprop to a window of `K << T` steps, trading exact gradients for tractable computation and bounded gradient magnitude.
-
-### C. Vanishing and Exploding Gradients via Eigenvalues
-
-Let `\lambda_max` be the largest absolute eigenvalue (spectral radius) of `W_h`. Repeated multiplication scales vectors by approximately `\lambda_max^{t-k}`:
-
-- If `\lambda_max < 1`: the gradient *vanishes* exponentially. Information from time `k` cannot influence the loss at time `t` once `t - k` is large. Long-range dependencies become invisible to gradient descent.
-- If `\lambda_max > 1`: the gradient *explodes* exponentially. Updates become enormous and training diverges (NaN losses).
-- If `\lambda_max = 1`: stable in principle but extremely sensitive to perturbations.
-
-The `tanh'(z)` factors compound this — `tanh'(z) <= 1` and equals 1 only at `z = 0`, so the actual gradient decays even faster than `\lambda_max^{t-k}`. This is why even spectral-radius-1 RNNs typically vanish in practice.
-
-Bengio et al. (1994) proved formally that learning long-range dependencies with vanilla RNNs is *impossible* in the limit: any training procedure must trade off between contractive maps (for stable training, vanishing gradients) and expansive maps (for long memory, exploding gradients).
-
-### D. Partial Fixes
-
-**Gradient clipping** (Pascanu et al. 2013):
-
-```
-if ||g|| > c:
-    g <- g * (c / ||g||)
-```
-
-Caps gradient norm at `c`, preventing the explosion case. Does *nothing* for vanishing gradients (which are already small) — it only saves you from divergence. It is essentially mandatory for any RNN training.
-
-**Orthogonal initialization**: choose `W_h` to be a random orthogonal matrix, which has all eigenvalues of magnitude 1. The product `W_h^{t-k}` then preserves vector norms exactly, postponing both vanishing and explosion. Useful but does not solve the problem; the `tanh'` factors still compound.
-
-**Architectural fix (next lesson)**: LSTM and GRU replace the multiplicative product with an additive cell state, breaking the `W_h^{t-k}` chain entirely. This is the only true solution.
-
-### From Theory to the Code Below
-
-| Theory concept | Code construct in this lesson |
-|----------------|-------------------------------|
-| Forward recurrence | `nn.RNN`, `nn.RNNCell`, or manual loop with `tanh(W_x @ x + W_h @ h)` |
-| BPTT | Standard `loss.backward()` on the unrolled graph |
-| Truncated BPTT | `h.detach()` between segments to cut graph |
-| Gradient clipping | `nn.utils.clip_grad_norm_(model.parameters(), max_norm)` |
-
----
-
-
 ## 1. What is RNN?
 
 A feedforward network processes each input independently — it has no concept of order or context. "The dog bit the man" and "The man bit the dog" would look identical if we treat words as a bag. RNNs maintain a hidden state that carries context from previous time steps, making them aware of sequence order and history.
@@ -132,6 +43,20 @@ h(t-1): Previous hidden state
 ---
 
 ## 2. RNN Structure
+
+### Theory: RNN Forward Pass and Unrolling
+
+A vanilla RNN processes a sequence `x_1, x_2, ..., x_T` by maintaining a hidden state `h_t`:
+
+```
+h_t = tanh(W_x x_t + W_h h_{t-1} + b)
+y_t = W_y h_t + c                          (optional output)
+```
+
+The same `(W_x, W_h, W_y, b, c)` are used at every time step — this is the **temporal weight sharing** that lets the network handle variable-length sequences. Conceptually, the RNN is a feedforward network with `T` "layers," all of which share weights, with skip connections from the input at each layer.
+
+The "unrolled" view replaces the recurrence with a long DAG: `h_0 -> h_1 -> ... -> h_T`. Forward pass time is `O(T)` and cannot be parallelized across time (each `h_t` depends on `h_{t-1}`). This is the fundamental sequential bottleneck that motivated Transformers.
+
 
 ### Time Unrolling
 
@@ -247,6 +172,60 @@ class RNNSeq2Seq(nn.Module):
 ---
 
 ## 5. Vanishing Gradient Problem
+
+### Theory: Partial Fixes
+
+**Gradient clipping** (Pascanu et al. 2013):
+
+```
+if ||g|| > c:
+    g <- g * (c / ||g||)
+```
+
+Caps gradient norm at `c`, preventing the explosion case. Does *nothing* for vanishing gradients (which are already small) — it only saves you from divergence. It is essentially mandatory for any RNN training.
+
+**Orthogonal initialization**: choose `W_h` to be a random orthogonal matrix, which has all eigenvalues of magnitude 1. The product `W_h^{t-k}` then preserves vector norms exactly, postponing both vanishing and explosion. Useful but does not solve the problem; the `tanh'` factors still compound.
+
+**Architectural fix (next lesson)**: LSTM and GRU replace the multiplicative product with an additive cell state, breaking the `W_h^{t-k}` chain entirely. This is the only true solution.
+
+
+### Theory: Vanishing and Exploding Gradients via Eigenvalues
+
+Let `\lambda_max` be the largest absolute eigenvalue (spectral radius) of `W_h`. Repeated multiplication scales vectors by approximately `\lambda_max^{t-k}`:
+
+- If `\lambda_max < 1`: the gradient *vanishes* exponentially. Information from time `k` cannot influence the loss at time `t` once `t - k` is large. Long-range dependencies become invisible to gradient descent.
+- If `\lambda_max > 1`: the gradient *explodes* exponentially. Updates become enormous and training diverges (NaN losses).
+- If `\lambda_max = 1`: stable in principle but extremely sensitive to perturbations.
+
+The `tanh'(z)` factors compound this — `tanh'(z) <= 1` and equals 1 only at `z = 0`, so the actual gradient decays even faster than `\lambda_max^{t-k}`. This is why even spectral-radius-1 RNNs typically vanish in practice.
+
+Bengio et al. (1994) proved formally that learning long-range dependencies with vanilla RNNs is *impossible* in the limit: any training procedure must trade off between contractive maps (for stable training, vanishing gradients) and expansive maps (for long memory, exploding gradients).
+
+
+### Theory: Backpropagation Through Time (BPTT)
+
+Computing the gradient of a loss `L = sum_t L_t` with respect to `W_h` requires backpropagating through every time step:
+
+```
+dL/dW_h = sum_t  sum_{k <= t}  dL_t/dh_t * (prod_{j=k+1}^{t} dh_j/dh_{j-1}) * dh_k/dW_h
+```
+
+The inner product is over a chain of `t - k` Jacobians. Because all hidden Jacobians share `W_h`, this expands as:
+
+```
+dh_j/dh_{j-1} = diag(tanh'(z_j)) * W_h
+```
+
+So the chain becomes:
+
+```
+prod_{j=k+1}^{t} dh_j/dh_{j-1} = (prod_{j=k+1}^{t} diag(tanh'(z_j))) * W_h^{t-k}
+```
+
+The matrix `W_h` is multiplied by itself `t - k` times. This is the source of all RNN gradient pathology.
+
+**Truncated BPTT (TBPTT)** limits backprop to a window of `K << T` steps, trading exact gradients for tractable computation and bounded gradient magnitude.
+
 
 ### Problem
 
