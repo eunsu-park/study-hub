@@ -15,62 +15,15 @@
 
 ---
 
-## 이론과 원리
+## 개요
 
-Airflow는 모든 운영 결정을 형성하는 네 가지 아이디어를 내재화하기 전까지는 "UI가 있는 cron"처럼 보입니다: 스케줄링과 추론의 단위로서의 DAG, 정체성의 단위로서의 *논리 날짜(logical date)*(데이터 인터벌), 동시성(Concurrency)의 단위로서의 익스큐터(Executor), 그리고 실패 의미론의 단위로서의 태스크 라이프사이클.
+Apache Airflow는 워크플로우를 프로그래밍 방식으로 작성, 스케줄링, 모니터링하는 플랫폼입니다. Python으로 DAG(Directed Acyclic Graph)를 정의하여 복잡한 데이터 파이프라인을 관리합니다.
 
-- **(A) DAG 의미론** — 방향성 비순환 그래프, 비순환성이 중요한 이유, 정의 시점과 실행 시점의 차이
-- **(B) 논리 날짜(Logical Date) / 데이터 인터벌(Data Interval)** — "이 실행이 어떤 날짜를 나타내는가"가 "실제로 언제 실행되었는가"와 다른 이유
-- **(C) 익스큐터 모델(Executor Models)** — Sequential, Local, Celery, Kubernetes — 각각이 확장과 격리에 함의하는 것
-- **(D) 태스크 라이프사이클과 멱등성 계약** — 태스크가 거치는 상태와 모든 태스크가 재시도 안전해야 하는 이유
+---
 
-### A. DAG 의미론
+## 1. Airflow 아키텍처
 
-DAG는 방향성 비순환 그래프입니다: 노드는 태스크, 엣지는 의존성. Airflow는 모든 업스트림(upstream) 태스크가 끝나기 전까지 태스크가 시작되지 않음을 보장합니다.
-
-#### A.1 왜 비순환인가
-
-순환(cycle)은 유효한 실행 순서가 없으므로 금지됩니다 — 태스크 A가 B를 기다리고 B가 A를 기다림. Airflow는 파싱 시점에 DAG 정의를 검증하고 순환을 거부합니다. 비순환 제약은 스케줄링을 결정 가능하게(decidable) 만드는 것입니다; 그것이 없으면 "이 DAG가 완료되었는가?"에 답이 없습니다.
-
-루프가 필요하면 반복된 DAG 실행(스케줄된 인터벌당 하나)으로 표현하거나, 새 Airflow에서는 *동적 태스크 매핑(dynamic task mapping)* — 런타임에 N개의 병렬 인스턴스로 확장되는 태스크 — 으로 표현합니다.
-
-#### A.2 정의 시점 vs 실행 시점
-
-DAG 파일은 **스케줄러에 의해 몇 초마다 파싱되는 Python 코드** 입니다. 이는 단순한 특이점이 아니라 — 모든 것을 형성합니다:
-
-- 최상위 코드(import, 변수, DAG 구성)는 **파싱마다** 스케줄러에서 실행됩니다. 느린 import = 느린 스케줄러.
-- 태스크 코드(`@task`로 데코레이트되거나 오퍼레이터에 래핑된 함수)는 워커에서 **태스크 인스턴스당 한 번** 실행됩니다.
-- 데이터베이스 쿼리나 API 호출을 최상위 DAG 코드에 *절대* 두지 마세요. 파싱 사이클마다 두들겨 맞습니다.
-
-멘탈 모델: DAG 파일은 태스크 그래프의 *정의* 이고, 태스크는 실제 작업입니다. 분리해서 유지하세요.
-
-#### A.3 템플릿팅과 Jinja
-
-Airflow는 Jinja 템플릿을 통해 컨텍스트(logical_date, run_id, task_instance)를 오퍼레이터 매개변수에 주입합니다: `bash_command="extract.sh {{ ds }}"`. 템플릿은 DAG 파싱 시점이 아니라 태스크 실행 시점에 렌더링됩니다. 이것이 단일 DAG가 365번의 일일 실행을 처리하는 방법입니다 — 각 실행이 자신의 날짜를 대입.
-
-### B. 논리 날짜 / 데이터 인터벌
-
-새 Airflow 사용자에게 가장 혼란스러운 개념. 스케줄된 DAG 실행에는 두 개의 별개 타임스탬프가 있습니다:
-
-- **논리 날짜(Logical date) / 데이터 인터벌 시작** — 실행이 *나타내는* 개념적 날짜. UTC 자정에 스케줄된 일일 DAG의 경우, 2024-03-15 실행은 `logical_date = 2024-03-15 00:00 UTC`. 이 실행은 3월 15일의 *데이터를 처리* 합니다.
-- **벽시계 시간(Wall-clock time)** — 실행이 실제로 수행된 시점. 2024-03-15 실행은 일반적으로 2024-03-16 00:00 UTC에 시작됩니다, 왜냐하면 Airflow는 데이터 인터벌의 *끝* 에서 실행하기 때문입니다(데이터가 완전히 도착한 후).
-
-이 시프트가 모두를 걸려 넘어뜨립니다. 규칙: 태스크는 항상 처리 중인 데이터(`{{ ds }}` = YYYY-MM-DD 논리 날짜)를 참조해야 하며, "오늘"이나 "지금"이 아닙니다. 태스크는 자신의 데이터 인터벌의 결정적 함수여야 합니다.
-
-#### B.1 왜 "인터벌 종료" 스케줄링인가
-
-DAG가 "어제의 이벤트를 처리"한다면 2024-03-15 00:00에 시작할 수 없습니다 — 어제의 이벤트가 여전히 도착 중. 인터벌이 *끝날* 때까지 기다린 다음(2024-03-16 00:00) 닫힌 인터벌 [2024-03-15 00:00, 2024-03-16 00:00)을 처리합니다.
-
-#### B.2 백필(Backfill)과 캐치업(Catchup)
-
-두 가지 관련 개념:
-
-- **Catchup:** 일시 중지된 DAG가 재개되면 놓친 모든 스케줄 인터벌을 실행. 기본값 `catchup=True`. 앞으로만 실행되어야 하는 DAG는 `catchup=False`로 설정.
-- **Backfill:** CLI를 통해 명시적으로 과거 실행 트리거: `airflow dags backfill --start-date 2024-01-01 --end-date 2024-03-15`. 옛 데이터에 로직을 재실행하는 데 유용.
-
-둘 다 태스크가 **`logical_date`의 멱등 함수** 임에 의존합니다. 2024-01-15 태스크를 오늘 실행하면 2024-01-16에 실행한 것과 동일한 최종 상태를 생산해야 합니다. 태스크가 "어제 적재" 대신 "`{{ ds }}` 적재"라고 말하면 백필이 망가집니다.
-
-### C. 익스큐터 모델
+### 이론: 익스큐터 모델
 
 익스큐터는 태스크가 실제로 어디서 실행되는지를 결정합니다. Airflow는 4가지 프로덕션급 옵션을 제공합니다:
 
@@ -107,60 +60,6 @@ DAG가 "어제의 이벤트를 처리"한다면 2024-03-15 00:00에 시작할 �
 | 중대형 프로덕션, 대부분 빠른 태스크 | CeleryExecutor |
 | 격리 필요한 이질적 태스크 | KubernetesExecutor |
 | 빠른 것과 격리된 것의 혼합 | CeleryKubernetesExecutor |
-
-### D. 태스크 라이프사이클과 멱등성 계약
-
-태스크 인스턴스는 상태를 거칩니다. 흥미로운 전이:
-
-```
-none → scheduled → queued → running → success
-                                    ↘ failed → up_for_retry → queued → running → success/failed
-                                    ↘ skipped (업스트림 실패/스킵, 분기 결정)
-```
-
-각 상태 전이는 메타데이터 DB에 기록됩니다; UI는 모든 실행의 모든 태스크의 현재 상태를 보여줍니다.
-
-#### D.1 재시도 의미론
-
-태스크는 `retries=N`과 `retry_delay`를 선언합니다. 태스크가 실패하면 Airflow는 `retry_delay` 후 재시도를 스케줄합니다. N번의 재시도 후 태스크는 `failed`로 표시되고 다운스트림 태스크는 `upstream_failed`가 됩니다.
-
-이는 **태스크가 멱등할 때만** 작동합니다: 두 번 실행하면 동일한 최종 상태를 생산. 구체적으로:
-
-- **나쁨:** `INSERT INTO sales SELECT * FROM raw WHERE date='{{ ds }}'`. 재시도 → 중복 행.
-- **좋음:** 한 트랜잭션 안에서 `DELETE FROM sales WHERE date='{{ ds }}'; INSERT INTO sales SELECT ...`. 재시도 → 동일한 최종 상태.
-- **좋음:** 날짜 파티션된 위치에 쓰기. 재시도가 파티션을 덮어씀.
-
-`{{ ds }}`에 대한 멱등성 원칙이 Airflow의 재시도, 백필, 재실행을 작동하게 만드는 것입니다.
-
-#### D.2 풀(Pool)과 동시성
-
-두 개의 손잡이가 동시성을 제어합니다:
-
-- **DAG 수준 `max_active_runs`** — 이 DAG의 실행이 동시에 in-flight 가능한 수. 기본 16.
-- **풀(Pool)** — 슬롯 제한이 있는 명명된 버킷. 풀에 할당된 태스크는 실행 중에 슬롯을 소비. 희소 자원에 대한 접근을 throttle하는 데 사용(예: `database_pool`에 5 슬롯이면 DB 과부하 방지).
-
-풀 제한에 도달한 태스크는 슬롯이 비기 전까지 `queued`. 이것이 폭주하는 병렬성이 다운스트림 시스템을 죽이는 것을 막는 방법입니다.
-
-### From Theory to the Code Below
-
-이어지는 각 절은 위 프레임워크의 한 조각을 운영합니다:
-
-- §1 (Airflow 아키텍처)는 §C — 익스큐터 모델을 구현하는 컴포넌트.
-- §2 (DAG 정의)는 §A.1 + §A.2 — Python 코드가 태스크 그래프를 표현하는 방법.
-- §3 (오퍼레이터)는 구체적 도구 키트; 각 오퍼레이터는 §D의 멱등성 계약을 존중하는 매개변수화된 태스크.
-- §4 (XComs와 Variables)는 §A.3 템플릿팅을 존중하는 태스크 간 통신 메커니즘.
-- §5 (스케줄링)는 §B — cron 표현식, catchup, backfill을 구체적 구문으로.
-- §6 (모니터링)은 UI에서 가시화된 §D의 태스크 라이프사이클.
-
----
-
-## 개요
-
-Apache Airflow는 워크플로우를 프로그래밍 방식으로 작성, 스케줄링, 모니터링하는 플랫폼입니다. Python으로 DAG(Directed Acyclic Graph)를 정의하여 복잡한 데이터 파이프라인을 관리합니다.
-
----
-
-## 1. Airflow 아키텍처
 
 구성 요소를 살펴보기 전에 Airflow가 해결하는 문제를 이해하면 도움이 된다. 일반 cron 작업은 단일 스크립트를 스케줄링할 수 있지만, 복잡한 태스크 의존성, 실패 시 자동 재시도, 과거 날짜 범위 백필, 모니터링을 위한 중앙 UI를 기본으로 지원하지 않는다. Airflow는 이 모든 문제를 해결한다: 명시적 의존성을 가진 DAG로 파이프라인을 모델링하고, 재시도/알림 정책을 제공하며, 단일 CLI 명령으로 백필을 지원하고, 태스크 상태, 로그, 실행 이력을 한 곳에서 보여주는 웹 UI를 제공한다.
 
@@ -344,6 +243,30 @@ airflow scheduler &
 
 ## 3. DAG (Directed Acyclic Graph)
 
+### 이론: DAG 의미론
+
+DAG는 방향성 비순환 그래프입니다: 노드는 태스크, 엣지는 의존성. Airflow는 모든 업스트림(upstream) 태스크가 끝나기 전까지 태스크가 시작되지 않음을 보장합니다.
+
+#### A.1 왜 비순환인가
+
+순환(cycle)은 유효한 실행 순서가 없으므로 금지됩니다 — 태스크 A가 B를 기다리고 B가 A를 기다림. Airflow는 파싱 시점에 DAG 정의를 검증하고 순환을 거부합니다. 비순환 제약은 스케줄링을 결정 가능하게(decidable) 만드는 것입니다; 그것이 없으면 "이 DAG가 완료되었는가?"에 답이 없습니다.
+
+루프가 필요하면 반복된 DAG 실행(스케줄된 인터벌당 하나)으로 표현하거나, 새 Airflow에서는 *동적 태스크 매핑(dynamic task mapping)* — 런타임에 N개의 병렬 인스턴스로 확장되는 태스크 — 으로 표현합니다.
+
+#### A.2 정의 시점 vs 실행 시점
+
+DAG 파일은 **스케줄러에 의해 몇 초마다 파싱되는 Python 코드** 입니다. 이는 단순한 특이점이 아니라 — 모든 것을 형성합니다:
+
+- 최상위 코드(import, 변수, DAG 구성)는 **파싱마다** 스케줄러에서 실행됩니다. 느린 import = 느린 스케줄러.
+- 태스크 코드(`@task`로 데코레이트되거나 오퍼레이터에 래핑된 함수)는 워커에서 **태스크 인스턴스당 한 번** 실행됩니다.
+- 데이터베이스 쿼리나 API 호출을 최상위 DAG 코드에 *절대* 두지 마세요. 파싱 사이클마다 두들겨 맞습니다.
+
+멘탈 모델: DAG 파일은 태스크 그래프의 *정의* 이고, 태스크는 실제 작업입니다. 분리해서 유지하세요.
+
+#### A.3 템플릿팅과 Jinja
+
+Airflow는 Jinja 템플릿을 통해 컨텍스트(logical_date, run_id, task_instance)를 오퍼레이터 매개변수에 주입합니다: `bash_command="extract.sh {{ ds }}"`. 템플릿은 DAG 파싱 시점이 아니라 태스크 실행 시점에 렌더링됩니다. 이것이 단일 DAG가 365번의 일일 실행을 처리하는 방법입니다 — 각 실행이 자신의 날짜를 대입.
+
 ### 3.1 DAG 기본 구조
 
 ```python
@@ -466,6 +389,39 @@ schedule_presets = {
 
 ## 4. Operator 유형
 
+### 이론: 태스크 라이프사이클과 멱등성 계약
+
+태스크 인스턴스는 상태를 거칩니다. 흥미로운 전이:
+
+```
+none → scheduled → queued → running → success
+                                    ↘ failed → up_for_retry → queued → running → success/failed
+                                    ↘ skipped (업스트림 실패/스킵, 분기 결정)
+```
+
+각 상태 전이는 메타데이터 DB에 기록됩니다; UI는 모든 실행의 모든 태스크의 현재 상태를 보여줍니다.
+
+#### D.1 재시도 의미론
+
+태스크는 `retries=N`과 `retry_delay`를 선언합니다. 태스크가 실패하면 Airflow는 `retry_delay` 후 재시도를 스케줄합니다. N번의 재시도 후 태스크는 `failed`로 표시되고 다운스트림 태스크는 `upstream_failed`가 됩니다.
+
+이는 **태스크가 멱등할 때만** 작동합니다: 두 번 실행하면 동일한 최종 상태를 생산. 구체적으로:
+
+- **나쁨:** `INSERT INTO sales SELECT * FROM raw WHERE date='{{ ds }}'`. 재시도 → 중복 행.
+- **좋음:** 한 트랜잭션 안에서 `DELETE FROM sales WHERE date='{{ ds }}'; INSERT INTO sales SELECT ...`. 재시도 → 동일한 최종 상태.
+- **좋음:** 날짜 파티션된 위치에 쓰기. 재시도가 파티션을 덮어씀.
+
+`{{ ds }}`에 대한 멱등성 원칙이 Airflow의 재시도, 백필, 재실행을 작동하게 만드는 것입니다.
+
+#### D.2 풀(Pool)과 동시성
+
+두 개의 손잡이가 동시성을 제어합니다:
+
+- **DAG 수준 `max_active_runs`** — 이 DAG의 실행이 동시에 in-flight 가능한 수. 기본 16.
+- **풀(Pool)** — 슬롯 제한이 있는 명명된 버킷. 풀에 할당된 태스크는 실행 중에 슬롯을 소비. 희소 자원에 대한 접근을 throttle하는 데 사용(예: `database_pool`에 5 슬롯이면 DB 과부하 방지).
+
+풀 제한에 도달한 태스크는 슬롯이 비기 전까지 `queued`. 이것이 폭주하는 병렬성이 다운스트림 시스템을 죽이는 것을 막는 방법입니다.
+
 ### 4.1 주요 Operator
 
 ```python
@@ -488,7 +444,6 @@ python_task = PythonOperator(
     op_kwargs={'arg1': 1},       # 키워드 인자
 )
 
-
 # 2. BashOperator — CLI 도구 호출(dbt run, spark-submit), 셸 스크립트 실행,
 # 빠른 파일 작업에 이상적이다. 태스크가 본질적으로 셸 명령일 때
 # PythonOperator보다 이것을 사용한다.
@@ -499,12 +454,10 @@ bash_task = BashOperator(
     cwd='/tmp',                  # 작업 디렉토리
 )
 
-
 # 3. EmptyOperator — 비용이 없는 DAG 구조 노드. 시작/끝 마커로 사용하거나
 # 로직을 실행하지 않고 병렬 분기를 팬인/팬아웃할 때 사용한다.
 start = EmptyOperator(task_id='start')
 end = EmptyOperator(task_id='end')
-
 
 # 4. PostgresOperator — 관리형 커넥션에 SQL을 직접 실행한다.
 # 단순한 SQL 구문에는 커넥션 생명주기와 템플릿을 자동으로 처리하므로
@@ -518,7 +471,6 @@ sql_task = PostgresOperator(
     """,
 )
 
-
 # 5. EmailOperator — 설정된 SMTP 커넥션을 통해 알림 이메일을 전송한다.
 # 성공 요약이나 보고서에 사용한다; 실패 알림에는 default_args의
 # email_on_failure를 선호한다 (자동으로 실행됨).
@@ -528,7 +480,6 @@ email_task = EmailOperator(
     subject='Airflow Notification',
     html_content='<h1>Task completed!</h1>',
 )
-
 
 # 6. SimpleHttpOperator — 외부 REST API를 호출한다. response_check 람다로
 # HTTP 2xx 상태 코드 이외의 커스텀 성공 기준을 정의할 수 있다.
@@ -615,7 +566,6 @@ class MyCustomOperator(BaseOperator):
         # 하위 태스크에서 사용 가능해진다.
         return result
 
-
 # 사용
 custom_task = MyCustomOperator(
     task_id='custom_task',
@@ -699,6 +649,28 @@ task_error_handler = EmptyOperator(
 ---
 
 ## 6. 스케줄링
+
+### 이론: 논리 날짜 / 데이터 인터벌
+
+새 Airflow 사용자에게 가장 혼란스러운 개념. 스케줄된 DAG 실행에는 두 개의 별개 타임스탬프가 있습니다:
+
+- **논리 날짜(Logical date) / 데이터 인터벌 시작** — 실행이 *나타내는* 개념적 날짜. UTC 자정에 스케줄된 일일 DAG의 경우, 2024-03-15 실행은 `logical_date = 2024-03-15 00:00 UTC`. 이 실행은 3월 15일의 *데이터를 처리* 합니다.
+- **벽시계 시간(Wall-clock time)** — 실행이 실제로 수행된 시점. 2024-03-15 실행은 일반적으로 2024-03-16 00:00 UTC에 시작됩니다, 왜냐하면 Airflow는 데이터 인터벌의 *끝* 에서 실행하기 때문입니다(데이터가 완전히 도착한 후).
+
+이 시프트가 모두를 걸려 넘어뜨립니다. 규칙: 태스크는 항상 처리 중인 데이터(`{{ ds }}` = YYYY-MM-DD 논리 날짜)를 참조해야 하며, "오늘"이나 "지금"이 아닙니다. 태스크는 자신의 데이터 인터벌의 결정적 함수여야 합니다.
+
+#### B.1 왜 "인터벌 종료" 스케줄링인가
+
+DAG가 "어제의 이벤트를 처리"한다면 2024-03-15 00:00에 시작할 수 없습니다 — 어제의 이벤트가 여전히 도착 중. 인터벌이 *끝날* 때까지 기다린 다음(2024-03-16 00:00) 닫힌 인터벌 [2024-03-15 00:00, 2024-03-16 00:00)을 처리합니다.
+
+#### B.2 백필(Backfill)과 캐치업(Catchup)
+
+두 가지 관련 개념:
+
+- **Catchup:** 일시 중지된 DAG가 재개되면 놓친 모든 스케줄 인터벌을 실행. 기본값 `catchup=True`. 앞으로만 실행되어야 하는 DAG는 `catchup=False`로 설정.
+- **Backfill:** CLI를 통해 명시적으로 과거 실행 트리거: `airflow dags backfill --start-date 2024-01-01 --end-date 2024-03-15`. 옛 데이터에 로직을 재실행하는 데 유용.
+
+둘 다 태스크가 **`logical_date`의 멱등 함수** 임에 의존합니다. 2024-01-15 태스크를 오늘 실행하면 2024-01-16에 실행한 것과 동일한 최종 상태를 생산해야 합니다. 태스크가 "어제 적재" 대신 "`{{ ds }}` 적재"라고 말하면 백필이 망가집니다.
 
 ### 6.1 Cron 표현식
 
@@ -802,7 +774,6 @@ def extract_data(**kwargs):
     print(f"Extracted data for {ds}")
     return f"/tmp/extract_{ds}.parquet"
 
-
 def transform_data(**kwargs):
     """데이터 변환"""
     import pandas as pd
@@ -817,7 +788,6 @@ def transform_data(**kwargs):
 
     print("Data transformed")
     return f"/tmp/transform_{kwargs['ds']}.parquet"
-
 
 with DAG(
     dag_id='daily_etl_pipeline',

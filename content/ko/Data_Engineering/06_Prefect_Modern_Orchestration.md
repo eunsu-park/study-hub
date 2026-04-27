@@ -15,137 +15,6 @@
 
 ---
 
-## 이론과 원리
-
-Prefect의 설계는 비판에서 시작합니다: Airflow는 파이프라인을 *기술하는* Python을 작성하라고 요구합니다(DAG 파일은 파이프라인이 아니라 그래프로 파싱되는 명세). Prefect는 파이프라인 *그 자체인* Python을 작성하라고 요구합니다. 이 시프트 — 선언적 DAG-as-data에서 명령적 function-as-flow로 — 는 테스트 가능성, 동적성, 실패 표면에 결과가 있습니다.
-
-- **(A) 명령적 오케스트레이션(Imperative Orchestration)** — 평범한 Python으로서의 flow, 런타임 DAG 구성, 그리고 이것이 가능하게 하는 것
-- **(B) 하이브리드 실행 모델(Hybrid Execution Model)** — 컨트롤 플레인 vs 실행 플레인, Prefect Cloud가 코드를 실행하지 않는 이유
-- **(C) 일급 개념으로서의 상태(State)** — pending, running, completed, failed, crashed — 그리고 프로그래밍 가능한 상태 전이
-- **(D) 워크 풀(Work Pool)과 워커** — "이 flow가 어디서 실행되는가"에 대한 현대 추상, 옛 agent 모델 대체
-
-### A. 명령적 오케스트레이션
-
-Airflow에서 DAG 파일은 몇 초마다 파싱되는 *명세* 입니다; 태스크는 기호적으로 참조되고 의존성 그래프는 어떤 태스크가 실행되기 전에 스케줄러에 의해 구체화됩니다. Prefect에서 flow는 *Python 함수* 입니다 — 호출하면 실제로 실행되고, 그 과정에서 API에 상태를 기록합니다.
-
-#### A.1 DAG가 함수일 때 무엇이 바뀌는가
-
-```python
-@flow
-def daily_pipeline(date: str):
-    raw = extract(date)
-    if len(raw) > 0:
-        clean = transform(raw)
-        load(clean)
-    else:
-        log("nothing to do")
-```
-
-이 코드를 보세요: 평범한 Python입니다. `if`, 함수 호출, 조건부 분기 — 모두 예상대로 작동. "DAG"는 런타임 호출 그래프가 결국 무엇이 되든 그것입니다.
-
-이는 의미합니다:
-
-- **조건부 실행이 자명함.** `BranchPythonOperator` 의례 없음.
-- **루프가 자명함.** `for partition in partitions: process(partition)`이 직접 작동.
-- **테스트가 자명함.** 단위 테스트에서 flow 함수 호출; 실행됨.
-- **타입 검사가 작동.** mypy가 `extract`이 DataFrame을 반환함을 이해.
-
-트레이드오프: 실행 *전에* 검사할 정적 그래프가 없습니다. UI는 런타임에 구성된 대로 그래프를 보여줍니다.
-
-#### A.2 무엇을 포기하는가
-
-- **사전 비행 정적 검증.** Airflow는 파싱 시점에 "태스크 X가 누락된 태스크 Y에 의존한다"라고 알려줄 수 있음. Prefect는 안 됨 — 그래프 오류를 발견하려면 실제로 실행해야 함.
-- **장거리 스케줄링 보장.** Airflow 스케줄러는 다음 N개 실행에 대해 추론. Prefect는 각 실행을 독립적으로 스케줄.
-- **확립된 오퍼레이터 생태계.** Airflow는 1000+개의 사전 빌드된 오퍼레이터(모든 클라우드, DB, API). Prefect의 컬렉션은 성장 중이지만 더 작음.
-
-옳은 멘탈 모델: Prefect는 파이프라인 코드가 *나머지 Python 애플리케이션처럼 보이기를* 원하는 팀을 위한 것; Airflow는 중앙화된 선언적 오케스트레이션 계층을 원하는 팀을 위한 것.
-
-### B. 하이브리드 실행 모델
-
-Prefect의 가장 아키텍처적으로 중요한 선택: **컨트롤 플레인(오케스트레이션 API)과 실행 플레인(코드가 실행되는 곳)이 별개의 프로세스이며, 종종 별개의 네트워크에 있음.**
-
-```
-┌──────────────────┐                ┌──────────────────────┐
-│ Prefect Cloud    │ ←── HTTPS ───  │  워커 (당신의 인프라)│
-│ (오케스트레이션) │   상태 이벤트   │   - flow run pull    │
-│ - 스케줄         │                │   - 실행             │
-│ - 상태 관리      │   ingress 없음  │   - 상태 보고        │
-│ - UI / API       │                │                      │
-└──────────────────┘                └──────────────────────┘
-```
-
-#### B.1 왜 이것이 중요한가
-
-Airflow의 아키텍처는 스케줄러가 워커에 접근할 수 있다고 가정. 기업 환경에서는 종종 VPN, 방화벽 구멍, 또는 스케줄러를 기업 네트워크 내에 두는 것을 의미합니다. Prefect는 관계를 뒤집습니다: 워커가 API에 *밖으로* 접근. 인바운드 방화벽 구멍 없음; 오케스트레이션 UI는 클라우드에 살 수 있고 flow 코드는 온프렘에서 실행될 수 있습니다.
-
-#### B.2 코드 지역성
-
-결정적으로, **Prefect Cloud는 당신의 데이터를 절대 보지 않고 당신의 코드를 절대 실행하지 않습니다**. 워커는 당신이 통제하는 인프라에서 코드를 실행; 상태 이벤트(시작됨, 완료됨, 실패함)만 API로 다시 흐름. 이것은 실제 컴플라이언스 이점: 데이터가 고객 네트워크를 절대 떠나지 않음.
-
-#### B.3 트레이드오프
-
-대가: 어딘가에서 워커를 실행해야 함. Prefect Cloud는 "내가 코드만 푸시하는 완전 관리형 오케스트레이션"이 아니라 "내가 워커를 실행하는 관리형 컨트롤 플레인"입니다. Airflow와 비교하세요, MWAA / Composer도 워커 풀을 제공하라고 요구합니다. 둘 다 같은 근본적 제약; Prefect가 그것을 명시적으로 만듭니다.
-
-### C. 일급 개념으로서의 상태
-
-모든 Prefect 태스크와 flow는 **상태** 를 가집니다 — `Pending`, `Running`, `Completed`, `Failed`, `Crashed`, `Cancelled`, `Retrying`, `Paused`. 상태 전이는 API를 통해 기록되고 UI를 구동합니다.
-
-#### C.1 프로그래밍 가능한 신호로서의 상태
-
-상태가 대부분 관찰되는 Airflow와 달리, Prefect는 전이를 가로채고 반응할 수 있게 합니다:
-
-```python
-def alert_on_failure(flow, flow_run, state):
-    if state.is_failed():
-        send_slack(...)
-
-@flow(on_failure=[alert_on_failure])
-def my_flow(): ...
-```
-
-오케스트레이션에 영향을 주기 위해 상태를 명시적으로 반환할 수도 있습니다: `return Completed(message="nothing to do")`은 다운스트림을 우아하게 스킵.
-
-#### C.2 Crashed vs Failed
-
-미묘하지만 중요: `Failed`는 태스크가 실행되어 raise되었음; `Crashed`는 워커가 죽었음(OOM, 네트워크 끊김). 이 구분은 재시도 로직에 중요 — `Failed` 태스크는 `Crashed` 태스크와 다른 처리를 필요로 할 가능성.
-
-#### C.3 재시도는 동작이 아닌 정책
-
-`@task(retries=3, retry_delay_seconds=10)`은 재시도 정책을 선언. 런타임은 `Failed`에서 자동으로 `Retrying`으로 전이하고 태스크를 재실행. Airflow와 같은 멱등성 계약: 태스크는 재실행 안전해야 함.
-
-### D. 워크 풀과 워커
-
-Prefect 2.x는 워크 풀을 도입했습니다 — "이 flow가 어디서 실행되는가"를 표현하는 현대적 방법.
-
-#### D.1 모델
-
-- **deployment** 는 "이 flow, 이 스케줄에, 이 매개변수로"를 말합니다.
-- **워크 풀(work pool)** 은 deployment가 실행을 푸시하는 큐(인프라 설정 포함)입니다.
-- **워커** 는 특정 워크 풀을 폴링하고 실행합니다.
-
-이는 Airflow의 익스큐터 + 큐 개념과 비슷하지만 더 명시적. "작은 Python 태스크"를 위해 process 워커가 받치는 워크 풀 하나, "Spark 잡"을 위해 Kubernetes 워커가 받치는 다른 풀, "AWS batch"를 위해 ECS 워커가 받치는 또 다른 풀을 가질 수 있습니다.
-
-#### D.2 코드와 인프라의 분리
-
-`kubernetes_job.with_options(image="my-spark:1.0").submit(work)`라고 말하는 flow는 인프라를 인라인으로 선언; 워커는 단지 pull하고 디스패치. flow 코드가 아닌 deployment의 워크 풀을 변경하여 flow를 인프라 간에 옮길 수 있습니다.
-
-#### D.3 Pull 모델 함의
-
-워커가 워크 풀에서 pull; API가 push하지 않음. 풀을 폴링하는 워커가 없으면 실행이 큐잉되지만 실행되지 않음. 누락된/죽은 워커의 첫 번째 신호는 "스케줄된 실행이 시작되지 않음"입니다. 모니터링은 항상 "각 활성 워크 풀에 최소 하나의 워커가 폴링하고 있는가?"를 포함해야 합니다.
-
-### From Theory to the Code Below
-
-이어지는 각 절은 위 프레임워크의 한 조각을 운영합니다:
-
-- §1 (Prefect 개요 및 Airflow 비교)는 §A — 명령적 vs 선언적 시프트.
-- §2 (Flow와 Task 기초)는 §A.1 메커니즘 — `@flow`, `@task`, 호출 규약.
-- §3 (상태 관리)는 §C — 프로그래밍 가능한 상태와 전이 핸들러.
-- §4 (Deployment와 스케줄)는 §D — 워크 풀, deployment, 스케줄 정의.
-- §5 (워커와 인프라)는 §B + §D — 당신의 인프라에서 워커 실행.
-- §6 (프로덕션 패턴)은 하이브리드(§B) 아키텍처에서 오류 처리(§C), 재시도, 관측성을 모음.
-
----
-
 ## 개요
 
 Prefect는 현대적인 워크플로우 오케스트레이션 도구로, Python 네이티브 방식으로 데이터 파이프라인을 구축합니다. Airflow와 비교하여 더 간단한 설정과 동적 워크플로우를 지원합니다.
@@ -259,6 +128,69 @@ prefect server start
 
 ## 3. Flow와 Task 기본
 
+### 이론: 명령적 오케스트레이션
+
+Airflow에서 DAG 파일은 몇 초마다 파싱되는 *명세* 입니다; 태스크는 기호적으로 참조되고 의존성 그래프는 어떤 태스크가 실행되기 전에 스케줄러에 의해 구체화됩니다. Prefect에서 flow는 *Python 함수* 입니다 — 호출하면 실제로 실행되고, 그 과정에서 API에 상태를 기록합니다.
+
+#### A.1 DAG가 함수일 때 무엇이 바뀌는가
+
+```python
+@flow
+def daily_pipeline(date: str):
+    raw = extract(date)
+    if len(raw) > 0:
+        clean = transform(raw)
+        load(clean)
+    else:
+        log("nothing to do")
+```
+
+이 코드를 보세요: 평범한 Python입니다. `if`, 함수 호출, 조건부 분기 — 모두 예상대로 작동. "DAG"는 런타임 호출 그래프가 결국 무엇이 되든 그것입니다.
+
+이는 의미합니다:
+
+- **조건부 실행이 자명함.** `BranchPythonOperator` 의례 없음.
+- **루프가 자명함.** `for partition in partitions: process(partition)`이 직접 작동.
+- **테스트가 자명함.** 단위 테스트에서 flow 함수 호출; 실행됨.
+- **타입 검사가 작동.** mypy가 `extract`이 DataFrame을 반환함을 이해.
+
+트레이드오프: 실행 *전에* 검사할 정적 그래프가 없습니다. UI는 런타임에 구성된 대로 그래프를 보여줍니다.
+
+#### A.2 무엇을 포기하는가
+
+- **사전 비행 정적 검증.** Airflow는 파싱 시점에 "태스크 X가 누락된 태스크 Y에 의존한다"라고 알려줄 수 있음. Prefect는 안 됨 — 그래프 오류를 발견하려면 실제로 실행해야 함.
+- **장거리 스케줄링 보장.** Airflow 스케줄러는 다음 N개 실행에 대해 추론. Prefect는 각 실행을 독립적으로 스케줄.
+- **확립된 오퍼레이터 생태계.** Airflow는 1000+개의 사전 빌드된 오퍼레이터(모든 클라우드, DB, API). Prefect의 컬렉션은 성장 중이지만 더 작음.
+
+옳은 멘탈 모델: Prefect는 파이프라인 코드가 *나머지 Python 애플리케이션처럼 보이기를* 원하는 팀을 위한 것; Airflow는 중앙화된 선언적 오케스트레이션 계층을 원하는 팀을 위한 것.
+
+### 이론: 일급 개념으로서의 상태
+
+모든 Prefect 태스크와 flow는 **상태** 를 가집니다 — `Pending`, `Running`, `Completed`, `Failed`, `Crashed`, `Cancelled`, `Retrying`, `Paused`. 상태 전이는 API를 통해 기록되고 UI를 구동합니다.
+
+#### C.1 프로그래밍 가능한 신호로서의 상태
+
+상태가 대부분 관찰되는 Airflow와 달리, Prefect는 전이를 가로채고 반응할 수 있게 합니다:
+
+```python
+def alert_on_failure(flow, flow_run, state):
+    if state.is_failed():
+        send_slack(...)
+
+@flow(on_failure=[alert_on_failure])
+def my_flow(): ...
+```
+
+오케스트레이션에 영향을 주기 위해 상태를 명시적으로 반환할 수도 있습니다: `return Completed(message="nothing to do")`은 다운스트림을 우아하게 스킵.
+
+#### C.2 Crashed vs Failed
+
+미묘하지만 중요: `Failed`는 태스크가 실행되어 raise되었음; `Crashed`는 워커가 죽었음(OOM, 네트워크 끊김). 이 구분은 재시도 로직에 중요 — `Failed` 태스크는 `Crashed` 태스크와 다른 처리를 필요로 할 가능성.
+
+#### C.3 재시도는 동작이 아닌 정책
+
+`@task(retries=3, retry_delay_seconds=10)`은 재시도 정책을 선언. 런타임은 `Failed`에서 자동으로 `Retrying`으로 전이하고 태스크를 재실행. Airflow와 같은 멱등성 계약: 태스크는 재실행 안전해야 함.
+
 ### 3.1 기본 Flow 작성
 
 ```python
@@ -280,7 +212,6 @@ def extract_data(source: str) -> dict:
     data = {"source": source, "records": [1, 2, 3, 4, 5]}
     return data
 
-
 @task
 def transform_data(data: dict) -> dict:
     """데이터 변환 Task"""
@@ -292,7 +223,6 @@ def transform_data(data: dict) -> dict:
     data["transformed"] = True
     return data
 
-
 @task
 def load_data(data: dict, destination: str) -> bool:
     """데이터 적재 Task"""
@@ -302,7 +232,6 @@ def load_data(data: dict, destination: str) -> bool:
     # 실제로는 DB, 파일 등에 저장
     print(f"Loaded data: {data}")
     return True
-
 
 # @flow는 오케스트레이션 로직을 감싼다. Prefect는 함수 호출 간의 데이터 흐름에서
 # 태스크 의존성을 추론한다 — Airflow의 >> 연산자처럼 명시적으로 연결할 필요가 없다.
@@ -316,7 +245,6 @@ def etl_pipeline(source: str = "database", destination: str = "warehouse"):
     transformed = transform_data(raw_data)
     result = load_data(transformed, destination)
     return result
-
 
 # 플로우는 일반 Python 함수다 — 스케줄러, 데이터베이스, 웹 서버 없이
 # 로컬에서 직접 실행하여 테스트할 수 있다 (Airflow의 전체 스택과 달리)
@@ -344,7 +272,6 @@ from datetime import timedelta
 def my_task(param: str) -> str:
     print(f"Processing: {param}")
     return f"Result: {param}"
-
 
 # 지수 백오프(exponential backoff)는 복구 중인 서비스에 대한 재시도 폭주를 방지한다 —
 # 각 재시도는 점점 더 오래 대기(10초, 20초, 40초, 80초, 160초)하여 부하를 줄인다
@@ -382,7 +309,6 @@ from prefect.task_runners import ConcurrentTaskRunner, SequentialTaskRunner
 def my_flow():
     pass
 
-
 # SequentialTaskRunner는 한 번에 하나씩 실행을 강제한다 — 태스크가 공유 상태를
 # 가질 때 사용 (예: 동일 파일에 쓰기)하여 동시성으로 인한 손상을 방지한다
 @flow(task_runner=SequentialTaskRunner())
@@ -403,7 +329,6 @@ from prefect import flow, task
 def process_item(item: str) -> str:
     return f"Processed: {item}"
 
-
 # Airflow DAG에서는 태스크 수가 파싱 시점에 정의되어야 하지만, Prefect는
 # 런타임에 태스크를 생성한다 — 루프 본문이 정적 그래프가 아닌 실제 Python이다.
 @flow
@@ -416,10 +341,8 @@ def dynamic_tasks_flow(items: list[str]):
         results.append(result)
     return results
 
-
 # 실행
 dynamic_tasks_flow(["a", "b", "c", "d"])
-
 
 # .submit()은 플로우의 task_runner를 통해 동시 실행을 가능하게 한다.
 # I/O 바운드 워크로드(API 호출, 파일 다운로드)에서 순차 대기가 시간을 낭비하는
@@ -448,16 +371,13 @@ from prefect import flow, task
 def check_condition(data: dict) -> bool:
     return data.get("count", 0) > 100
 
-
 @task
 def process_large(data: dict):
     print(f"Processing large dataset: {data['count']} records")
 
-
 @task
 def process_small(data: dict):
     print(f"Processing small dataset: {data['count']} records")
-
 
 @flow
 def conditional_flow(data: dict):
@@ -468,7 +388,6 @@ def conditional_flow(data: dict):
         process_large(data)
     else:
         process_small(data)
-
 
 # 실행
 conditional_flow({"count": 150})  # process_large 실행
@@ -484,16 +403,13 @@ from prefect import flow, task
 def extract(source: str) -> list:
     return [1, 2, 3, 4, 5]
 
-
 @task
 def transform(data: list) -> list:
     return [x * 2 for x in data]
 
-
 @task
 def load(data: list, target: str):
     print(f"Loading {len(data)} records to {target}")
-
 
 # 서브플로우는 다른 플로우에서 호출되는 플로우다. 각 서브플로우는 독립적인 상태
 # 추적, 재시도, 로그를 갖는 자체 플로우 실행을 가져 — 구성 가능하고 재사용 가능하게 만든다.
@@ -504,7 +420,6 @@ def etl_subflow(source: str, target: str):
     transformed = transform(data)
     load(transformed, target)
     return len(transformed)
-
 
 # 부모 플로우는 서브플로우를 함수 호출처럼 오케스트레이션한다. 서브플로우가 실패하면
 # 해당 서브플로우만 재시도된다 — 이미 완료된 서브플로우는 재실행되지 않는다.
@@ -519,13 +434,58 @@ def main_pipeline():
 
     print(f"Total processed: {count_a + count_b + count_c}")
 
-
 main_pipeline()
 ```
 
 ---
 
 ## 5. 배포 (Deployment)
+
+### 이론: 하이브리드 실행 모델
+
+Prefect의 가장 아키텍처적으로 중요한 선택: **컨트롤 플레인(오케스트레이션 API)과 실행 플레인(코드가 실행되는 곳)이 별개의 프로세스이며, 종종 별개의 네트워크에 있음.**
+
+```
+┌──────────────────┐                ┌──────────────────────┐
+│ Prefect Cloud    │ ←── HTTPS ───  │  워커 (당신의 인프라)│
+│ (오케스트레이션) │   상태 이벤트   │   - flow run pull    │
+│ - 스케줄         │                │   - 실행             │
+│ - 상태 관리      │   ingress 없음  │   - 상태 보고        │
+│ - UI / API       │                │                      │
+└──────────────────┘                └──────────────────────┘
+```
+
+#### B.1 왜 이것이 중요한가
+
+Airflow의 아키텍처는 스케줄러가 워커에 접근할 수 있다고 가정. 기업 환경에서는 종종 VPN, 방화벽 구멍, 또는 스케줄러를 기업 네트워크 내에 두는 것을 의미합니다. Prefect는 관계를 뒤집습니다: 워커가 API에 *밖으로* 접근. 인바운드 방화벽 구멍 없음; 오케스트레이션 UI는 클라우드에 살 수 있고 flow 코드는 온프렘에서 실행될 수 있습니다.
+
+#### B.2 코드 지역성
+
+결정적으로, **Prefect Cloud는 당신의 데이터를 절대 보지 않고 당신의 코드를 절대 실행하지 않습니다**. 워커는 당신이 통제하는 인프라에서 코드를 실행; 상태 이벤트(시작됨, 완료됨, 실패함)만 API로 다시 흐름. 이것은 실제 컴플라이언스 이점: 데이터가 고객 네트워크를 절대 떠나지 않음.
+
+#### B.3 트레이드오프
+
+대가: 어딘가에서 워커를 실행해야 함. Prefect Cloud는 "내가 코드만 푸시하는 완전 관리형 오케스트레이션"이 아니라 "내가 워커를 실행하는 관리형 컨트롤 플레인"입니다. Airflow와 비교하세요, MWAA / Composer도 워커 풀을 제공하라고 요구합니다. 둘 다 같은 근본적 제약; Prefect가 그것을 명시적으로 만듭니다.
+
+### 이론: 워크 풀과 워커
+
+Prefect 2.x는 워크 풀을 도입했습니다 — "이 flow가 어디서 실행되는가"를 표현하는 현대적 방법.
+
+#### D.1 모델
+
+- **deployment** 는 "이 flow, 이 스케줄에, 이 매개변수로"를 말합니다.
+- **워크 풀(work pool)** 은 deployment가 실행을 푸시하는 큐(인프라 설정 포함)입니다.
+- **워커** 는 특정 워크 풀을 폴링하고 실행합니다.
+
+이는 Airflow의 익스큐터 + 큐 개념과 비슷하지만 더 명시적. "작은 Python 태스크"를 위해 process 워커가 받치는 워크 풀 하나, "Spark 잡"을 위해 Kubernetes 워커가 받치는 다른 풀, "AWS batch"를 위해 ECS 워커가 받치는 또 다른 풀을 가질 수 있습니다.
+
+#### D.2 코드와 인프라의 분리
+
+`kubernetes_job.with_options(image="my-spark:1.0").submit(work)`라고 말하는 flow는 인프라를 인라인으로 선언; 워커는 단지 pull하고 디스패치. flow 코드가 아닌 deployment의 워크 풀을 변경하여 flow를 인프라 간에 옮길 수 있습니다.
+
+#### D.3 Pull 모델 함의
+
+워커가 워크 풀에서 pull; API가 push하지 않음. 풀을 폴링하는 워커가 없으면 실행이 큐잉되지만 실행되지 않음. 누락된/죽은 워커의 첫 번째 신호는 "스케줄된 실행이 시작되지 않음"입니다. 모니터링은 항상 "각 활성 워크 풀에 최소 하나의 워커가 폴링하고 있는가?"를 포함해야 합니다.
 
 ### 5.1 Deployment 생성
 
@@ -540,7 +500,6 @@ def my_etl_flow(date: str = None):
     from datetime import datetime
     date = date or datetime.now().strftime("%Y-%m-%d")
     print(f"Running ETL for {date}")
-
 
 # 배포는 플로우 정의와 실행 스케줄링을 분리한다 — 동일한 플로우가 서로 다른
 # 스케줄, 파라미터, 인프라를 가진 여러 배포를 가질 수 있다.
@@ -728,13 +687,11 @@ def custom_state_handler(task, task_run, state: State):
         print(f"Task {task.name} failed!")
     return state
 
-
 # on_failure 훅은 실패 시에만 실행된다 — 오류 알림만 필요한 경우
 # 모든 상태 전환을 확인하는 것보다 효율적이다
 @task(on_failure=[custom_state_handler])
 def risky_task():
     raise ValueError("Something went wrong")
-
 
 # 플로우 수준 핸들러는 플로우 내 모든 태스크의 실패를 감지한다 — 태스크별
 # 알림 대신 단일 "파이프라인 실패" 알림을 보내는 데 유용하다
@@ -756,7 +713,6 @@ from prefect.serializers import JSONSerializer
 @task(result_storage=LocalFileSystem(basepath="/tmp/prefect"))
 def save_locally():
     return {"data": [1, 2, 3]}
-
 
 # JSON 직렬화를 사용한 S3 저장소 — JSONSerializer는 기본 pickle과 달리
 # 사람이 읽을 수 있는 결과를 생성하여 디버깅에 유용하다.
@@ -785,7 +741,6 @@ def use_secret():
     api_key = Secret.load("my-api-key").get()
     # API 호출에 사용
     return f"Using key: {api_key[:4]}..."
-
 
 # 환경 변수 사용
 import os

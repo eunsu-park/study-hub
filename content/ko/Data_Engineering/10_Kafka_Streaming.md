@@ -15,17 +15,15 @@
 
 ---
 
-## 이론과 원리
+## 개요
 
-Kafka는 종종 "메시지 큐"로 기술되지만 그 프레이밍은 그것이 실제로 무엇인지 놓칩니다: **분산되고 복제되고 영속적인 커밋 로그(commit log)**. 모든 운영 속성 — 높은 처리량, 순서 보장, 재생(replay), exactly-once 의미론 — 은 그 한 가지 구조적 선택에서 떨어져 나옵니다.
+Apache Kafka는 분산 이벤트 스트리밍 플랫폼으로, 실시간 데이터 파이프라인과 스트리밍 애플리케이션 구축에 사용됩니다. 높은 처리량과 내결함성을 제공합니다.
 
-- **(A) 통합 추상으로서의 로그** — append-only, 불변, 순서 있음, 식별자로서의 오프셋
-- **(B) 파티션, 복제본(Replica), 리더(Leader)** — 로그가 수평으로 확장되고 노드 장애에서 살아남는 방법
-- **(C) 컨슈머 그룹과 오프셋** — 여러 컨슈머가 작업을 공유하고 진행 상황이 추적되는 방법
-- **(D) 전달 의미론** — at-most-once, at-least-once, exactly-once, 그리고 EOS를 작동하게 만드는 producer/broker/consumer 협력
-- **(E) 보존(Retention) vs 압축(Compaction)** — 매우 다른 의미론을 가진 로그 축소의 두 가지 방법
+---
 
-### A. 통합 추상으로서의 로그
+## 1. Kafka 개요
+
+### 이론: 통합 추상으로서의 로그
 
 Kafka **토픽** 은 로그입니다: 순서 있고 append-only인 레코드 시퀀스. 각 레코드는 파티션 내에서 그것의 정체성인 정수 **오프셋(offset)** 을 받습니다.
 
@@ -44,137 +42,6 @@ record: [A]  [B]  [C]  [D]  [E]  [F]  [G]  [H]  [I]  →  ← producer가 여기
 - **재생은 무료.** 오프셋을 0으로 재설정, 모든 것을 다시 읽음. 이것이 Kafka를 이벤트 소싱, 디버깅, 재생 기반 복구의 자연스러운 backbone으로 만듭니다.
 
 이는 consumer가 메시지를 *가져가고* broker가 잊는 큐(RabbitMQ, SQS)와 근본적으로 다릅니다. Kafka는 보존 정책에 따라 메시지를 *유지* 하고; consumer는 단지 스트림에서 자신이 어디 있는지 추적합니다.
-
-### B. 파티션, 복제본, 리더
-
-단일 로그는 한 머신이 쓸 수 있는 것에 의해 제한됨. Kafka는 **파티션** 으로 샤딩.
-
-#### B.1 파티셔닝
-
-토픽은 N개 파티션으로 분할. 각 파티션은 자체 broker 위의 자체 로그. 순서는 *파티션별*, 토픽 전체가 아님. Producer가 파티션을 선택(일반적으로 *키* 를 해싱 — 같은 키의 이벤트는 항상 같은 파티션에 떨어져, 그 키에 대한 순서 보존).
-
-```
-3개 파티션이 있는 토픽 "orders":
-  파티션 0: [order_A, order_C, order_F, ...]   on broker 1
-  파티션 1: [order_B, order_D, order_G, ...]   on broker 2
-  파티션 2: [order_E, order_H, ...]            on broker 3
-```
-
-처리량은 파티션 수에 선형으로 확장. 100만 events/s를 처리하려면 100개 파티션 × 10K events/s/파티션을 사용할 수 있음.
-
-#### B.2 복제
-
-각 파티션은 **N개 복제본**(보통 3)을 가짐. 한 복제본은 **리더**; 다른 것은 **팔로워(follower)**. Producer와 consumer는 리더와만 대화; 팔로워는 동기화 유지를 위해 리더의 로그를 지속적으로 fetch.
-
-```
-파티션 0:
-  리더       on broker 1: [A, B, C, D, E]
-  팔로워 1   on broker 2: [A, B, C, D, E]   (in sync)
-  팔로워 2   on broker 3: [A, B, C, D]      (lagging)
-```
-
-리더 broker가 죽으면 Kafka는 팔로워를 새 리더로 선출. 현재 따라잡은 복제본 집합이 **In-Sync Replicas (ISR)**. 프로덕션 규칙: `min.insync.replicas=2`는 producer가 ack되기 전에 쓰기가 최소 2개 ISR 사본을 필요로 하도록 보장하여, 데이터 손실 없이 단일 broker 손실에서 살아남음.
-
-#### B.3 acks 계약
-
-Producer는 내구성 보장의 엄격함을 선택:
-
-- `acks=0` — fire and forget. broker 충돌 시 데이터 손실 가능.
-- `acks=1` — 리더가 쓸 때까지 대기. 리더 프로세스 충돌은 견딤, 하지만 팔로워가 따라잡기 전에 리더 디스크가 죽으면 데이터 손실.
-- `acks=all` — `min.insync.replicas`가 쓸 때까지 대기. 어떤 소수 장애에서도 살아남음.
-
-중요 데이터의 프로덕션 기본값: `acks=all` + `min.insync.replicas=2` + 복제 인자(replication factor) 3.
-
-### C. 컨슈머 그룹과 오프셋
-
-각 consumer가 모든 메시지를 읽지 않고 어떻게 consumer fleet이 고처리량 토픽을 처리하나요?
-
-#### C.1 컨슈머 그룹
-
-**컨슈머 그룹** 은 토픽을 집합적으로 처리하는 consumer 집합. Kafka는 각 파티션을 그룹의 정확히 한 consumer에 할당; 파티션은 공유되지 않음. 100개 파티션과 그룹의 25개 consumer로, 각 consumer는 4개 파티션 소유.
-
-```
-토픽 "orders" (3 파티션), consumer 그룹 "billing":
-  consumer A → 파티션 0
-  consumer B → 파티션 1
-  consumer C → 파티션 2
-```
-
-그룹에 네 번째 consumer 추가: idle 상태로 앉아 있음(할당할 파티션 없음). consumer C 제거: Kafka가 **rebalance** — 파티션 2가 A 또는 B에 재할당.
-
-*두 번째* consumer 그룹 "analytics" 추가: *그것의* 각 consumer도 같은 토픽의 파티션을 받음. **다른 그룹은 독립적으로 읽음**, 각각 자체 오프셋 추적. 이것이 Kafka가 "큐 의미론"(한 그룹, 작업 공유)과 "pub-sub 의미론"(여러 그룹, 각각 모든 메시지 받음)을 모두 지원하는 방법.
-
-#### C.2 오프셋 커밋
-
-각 consumer는 주기적으로 현재 오프셋을 Kafka에 커밋(내부 토픽 `__consumer_offsets`에 저장). consumer 재시작 시 마지막 커밋된 오프셋에서 재개.
-
-결정적인 결정: **처리 전에 커밋할 것인가, 후에 커밋할 것인가?**
-
-- **처리 전 커밋** → at-most-once. 커밋 후, 처리 전에 충돌하면 메시지 손실.
-- **처리 후 커밋** → at-least-once. 처리 후, 커밋 전에 충돌하면 메시지 재처리.
-
-거의 모두가 at-least-once를 선택; 따라서 consumer 코드는 멱등해야 합니다.
-
-### D. 전달 의미론
-
-유명한 삼분법:
-
-#### D.1 At-most-once
-
-Producer가 발사; ack를 받지 못해도 *재시도하지 않음*. Consumer가 처리 전에 커밋. 메시지가 손실될 수 있음; 절대 중복되지 않음. 손실이 허용되는 텔레메트리에만 사용.
-
-#### D.2 At-least-once
-
-Producer가 no-ack에서 재시도. Consumer가 처리 후 커밋. 메시지가 도착할 것임(두 번 도착할 수 있음). 대부분 워크로드의 기본값. **Consumer 로직은 멱등해야 합니다.**
-
-#### D.3 Exactly-once 의미론 (EOS)
-
-Kafka 0.11+는 세 가지 협조된 메커니즘을 통해 EOS를 지원:
-
-1. **멱등 producer**(`enable.idempotence=true`). 각 producer에 ID 할당; 각 메시지에 시퀀스 번호. Broker가 파티션의 재시도를 deduplicate하므로, "send + 타임아웃 시 재시도 + 실제로는 전달됨" 시나리오는 중복을 만들지 않음.
-2. **트랜잭션.** Producer가 여러 파티션에 원자적으로 쓸 수 있음: `beginTransaction(); send(...); send(...); commitTransaction()`. 모든 쓰기가 보이거나 아무것도 안 보임.
-3. **`isolation.level=read_committed`** consumer. 커밋되지 않은(또는 abort된) 트랜잭션 레코드를 스킵.
-
-조합은 **Kafka-to-Kafka** flow에 EOS를 제공: 토픽 A에서 읽고, 변환하고, 토픽 B에 원자적으로 쓰고, 같은 트랜잭션에서 A의 오프셋을 커밋. Kafka Streams(레슨 16)와 Spark Structured Streaming(레슨 17) 같은 스트림 프로세서가 이를 내부적으로 사용.
-
-EOS는 외부 sink(데이터베이스, HTTP API)로 자동 확장되지 *않습니다*. 종단간 EOS의 경우 sink는 Kafka의 트랜잭션과 협조된 트랜잭션 쓰기를 지원해야 함("two-phase commit" 패턴) — 또는 at-least-once + 멱등 sink 쓰기를 받아들임.
-
-### E. 보존 vs 압축
-
-로그는 영원히 자랄 수 없음. 두 가지 정리 전략:
-
-#### E.1 시간 기반 보존
-
-기본: `retention.ms=604800000`(7일). 이보다 오래된 레코드는 로그 세그먼트별로 삭제. 옛 데이터에 가치가 없는 이벤트 스트림에 사용.
-
-#### E.2 로그 압축
-
-`cleanup.policy=compact`. Kafka가 *키당 최신 레코드만* 유지. "현재 상태" 토픽에 사용 — `customer_id`로 압축된 `customer_profile_changes` 토픽은 항상 존재했던 모든 고객에 대한 최신 프로필을 가짐.
-
-압축이 Kafka를 이벤트의 데이터베이스로 사용 가능하게 만드는 것입니다: 압축된 토픽을 오프셋 0에서 읽음으로써 "현재 상태"의 어떤 뷰든 재구축 가능. 이것이 CDC 패턴(레슨 18)과 Kafka Streams의 KTable 추상(레슨 16)의 기초입니다.
-
-두 정책은 결합 가능(`compact,delete`): 키당 최신 레코드 유지, 하지만 보존보다 오래된 레코드도 삭제. 진정 옛 키가 evict될 수 있는 장수명 상태에 유용.
-
-### From Theory to the Tool Below
-
-이어지는 각 절은 위 프레임워크의 한 조각을 운영합니다:
-
-- §1 (Kafka 아키텍처)는 §B — broker, 파티션, 복제본, 리더.
-- §2 (Producer)는 §A와 §B.3 — 옳은 내구성 계약으로 로그에 append.
-- §3 (Consumer와 Consumer Group)은 §C — 작업 분배, 오프셋 커밋.
-- §4 (토픽 구성)은 §B.2 + §E — 복제 인자, 보존, 압축.
-- §5 (전달 의미론)은 §D — at-most-once / at-least-once / exactly-once 구체적으로.
-- §6 (프로덕션 패턴)은 위 모든 것의 실제 파이프라인 통합.
-
----
-
-## 개요
-
-Apache Kafka는 분산 이벤트 스트리밍 플랫폼으로, 실시간 데이터 파이프라인과 스트리밍 애플리케이션 구축에 사용됩니다. 높은 처리량과 내결함성을 제공합니다.
-
----
-
-## 1. Kafka 개요
 
 ### 1.1 Kafka 아키텍처
 
@@ -301,6 +168,62 @@ pip install kafka-python
 
 ## 3. Topic과 Partition
 
+### 이론: 파티션, 복제본, 리더
+
+단일 로그는 한 머신이 쓸 수 있는 것에 의해 제한됨. Kafka는 **파티션** 으로 샤딩.
+
+#### B.1 파티셔닝
+
+토픽은 N개 파티션으로 분할. 각 파티션은 자체 broker 위의 자체 로그. 순서는 *파티션별*, 토픽 전체가 아님. Producer가 파티션을 선택(일반적으로 *키* 를 해싱 — 같은 키의 이벤트는 항상 같은 파티션에 떨어져, 그 키에 대한 순서 보존).
+
+```
+3개 파티션이 있는 토픽 "orders":
+  파티션 0: [order_A, order_C, order_F, ...]   on broker 1
+  파티션 1: [order_B, order_D, order_G, ...]   on broker 2
+  파티션 2: [order_E, order_H, ...]            on broker 3
+```
+
+처리량은 파티션 수에 선형으로 확장. 100만 events/s를 처리하려면 100개 파티션 × 10K events/s/파티션을 사용할 수 있음.
+
+#### B.2 복제
+
+각 파티션은 **N개 복제본**(보통 3)을 가짐. 한 복제본은 **리더**; 다른 것은 **팔로워(follower)**. Producer와 consumer는 리더와만 대화; 팔로워는 동기화 유지를 위해 리더의 로그를 지속적으로 fetch.
+
+```
+파티션 0:
+  리더       on broker 1: [A, B, C, D, E]
+  팔로워 1   on broker 2: [A, B, C, D, E]   (in sync)
+  팔로워 2   on broker 3: [A, B, C, D]      (lagging)
+```
+
+리더 broker가 죽으면 Kafka는 팔로워를 새 리더로 선출. 현재 따라잡은 복제본 집합이 **In-Sync Replicas (ISR)**. 프로덕션 규칙: `min.insync.replicas=2`는 producer가 ack되기 전에 쓰기가 최소 2개 ISR 사본을 필요로 하도록 보장하여, 데이터 손실 없이 단일 broker 손실에서 살아남음.
+
+#### B.3 acks 계약
+
+Producer는 내구성 보장의 엄격함을 선택:
+
+- `acks=0` — fire and forget. broker 충돌 시 데이터 손실 가능.
+- `acks=1` — 리더가 쓸 때까지 대기. 리더 프로세스 충돌은 견딤, 하지만 팔로워가 따라잡기 전에 리더 디스크가 죽으면 데이터 손실.
+- `acks=all` — `min.insync.replicas`가 쓸 때까지 대기. 어떤 소수 장애에서도 살아남음.
+
+중요 데이터의 프로덕션 기본값: `acks=all` + `min.insync.replicas=2` + 복제 인자(replication factor) 3.
+
+### 이론: 보존 vs 압축
+
+로그는 영원히 자랄 수 없음. 두 가지 정리 전략:
+
+#### E.1 시간 기반 보존
+
+기본: `retention.ms=604800000`(7일). 이보다 오래된 레코드는 로그 세그먼트별로 삭제. 옛 데이터에 가치가 없는 이벤트 스트림에 사용.
+
+#### E.2 로그 압축
+
+`cleanup.policy=compact`. Kafka가 *키당 최신 레코드만* 유지. "현재 상태" 토픽에 사용 — `customer_id`로 압축된 `customer_profile_changes` 토픽은 항상 존재했던 모든 고객에 대한 최신 프로필을 가짐.
+
+압축이 Kafka를 이벤트의 데이터베이스로 사용 가능하게 만드는 것입니다: 압축된 토픽을 오프셋 0에서 읽음으로써 "현재 상태"의 어떤 뷰든 재구축 가능. 이것이 CDC 패턴(레슨 18)과 Kafka Streams의 KTable 추상(레슨 16)의 기초입니다.
+
+두 정책은 결합 가능(`compact,delete`): 키당 최신 레코드 유지, 하지만 보존보다 오래된 레코드도 삭제. 진정 옛 키가 evict될 수 있는 장수명 상태에 유용.
+
 ### 3.1 Topic 관리
 
 ```bash
@@ -363,6 +286,30 @@ kafka-topics --alter \
 ---
 
 ## 4. Producer
+
+### 이론: 전달 의미론
+
+유명한 삼분법:
+
+#### D.1 At-most-once
+
+Producer가 발사; ack를 받지 못해도 *재시도하지 않음*. Consumer가 처리 전에 커밋. 메시지가 손실될 수 있음; 절대 중복되지 않음. 손실이 허용되는 텔레메트리에만 사용.
+
+#### D.2 At-least-once
+
+Producer가 no-ack에서 재시도. Consumer가 처리 후 커밋. 메시지가 도착할 것임(두 번 도착할 수 있음). 대부분 워크로드의 기본값. **Consumer 로직은 멱등해야 합니다.**
+
+#### D.3 Exactly-once 의미론 (EOS)
+
+Kafka 0.11+는 세 가지 협조된 메커니즘을 통해 EOS를 지원:
+
+1. **멱등 producer**(`enable.idempotence=true`). 각 producer에 ID 할당; 각 메시지에 시퀀스 번호. Broker가 파티션의 재시도를 deduplicate하므로, "send + 타임아웃 시 재시도 + 실제로는 전달됨" 시나리오는 중복을 만들지 않음.
+2. **트랜잭션.** Producer가 여러 파티션에 원자적으로 쓸 수 있음: `beginTransaction(); send(...); send(...); commitTransaction()`. 모든 쓰기가 보이거나 아무것도 안 보임.
+3. **`isolation.level=read_committed`** consumer. 커밋되지 않은(또는 abort된) 트랜잭션 레코드를 스킵.
+
+조합은 **Kafka-to-Kafka** flow에 EOS를 제공: 토픽 A에서 읽고, 변환하고, 토픽 B에 원자적으로 쓰고, 같은 트랜잭션에서 A의 오프셋을 커밋. Kafka Streams(레슨 16)와 Spark Structured Streaming(레슨 17) 같은 스트림 프로세서가 이를 내부적으로 사용.
+
+EOS는 외부 sink(데이터베이스, HTTP API)로 자동 확장되지 *않습니다*. 종단간 EOS의 경우 sink는 Kafka의 트랜잭션과 협조된 트랜잭션 쓰기를 지원해야 함("two-phase commit" 패턴) — 또는 at-least-once + 멱등 sink 쓰기를 받아들임.
 
 ### 4.1 기본 Producer
 
@@ -475,7 +422,6 @@ class HighThroughputProducer:
 
     def close(self):
         self.flush()
-
 
 # 대량 전송 예시
 producer = HighThroughputProducer('localhost:9092')
@@ -609,6 +555,36 @@ finally:
 ---
 
 ## 6. Consumer Group
+
+### 이론: 컨슈머 그룹과 오프셋
+
+각 consumer가 모든 메시지를 읽지 않고 어떻게 consumer fleet이 고처리량 토픽을 처리하나요?
+
+#### C.1 컨슈머 그룹
+
+**컨슈머 그룹** 은 토픽을 집합적으로 처리하는 consumer 집합. Kafka는 각 파티션을 그룹의 정확히 한 consumer에 할당; 파티션은 공유되지 않음. 100개 파티션과 그룹의 25개 consumer로, 각 consumer는 4개 파티션 소유.
+
+```
+토픽 "orders" (3 파티션), consumer 그룹 "billing":
+  consumer A → 파티션 0
+  consumer B → 파티션 1
+  consumer C → 파티션 2
+```
+
+그룹에 네 번째 consumer 추가: idle 상태로 앉아 있음(할당할 파티션 없음). consumer C 제거: Kafka가 **rebalance** — 파티션 2가 A 또는 B에 재할당.
+
+*두 번째* consumer 그룹 "analytics" 추가: *그것의* 각 consumer도 같은 토픽의 파티션을 받음. **다른 그룹은 독립적으로 읽음**, 각각 자체 오프셋 추적. 이것이 Kafka가 "큐 의미론"(한 그룹, 작업 공유)과 "pub-sub 의미론"(여러 그룹, 각각 모든 메시지 받음)을 모두 지원하는 방법.
+
+#### C.2 오프셋 커밋
+
+각 consumer는 주기적으로 현재 오프셋을 Kafka에 커밋(내부 토픽 `__consumer_offsets`에 저장). consumer 재시작 시 마지막 커밋된 오프셋에서 재개.
+
+결정적인 결정: **처리 전에 커밋할 것인가, 후에 커밋할 것인가?**
+
+- **처리 전 커밋** → at-most-once. 커밋 후, 처리 전에 충돌하면 메시지 손실.
+- **처리 후 커밋** → at-least-once. 처리 후, 커밋 전에 충돌하면 메시지 재처리.
+
+거의 모두가 at-least-once를 선택; 따라서 consumer 코드는 멱등해야 합니다.
 
 ### 6.1 Consumer Group 개념
 
@@ -751,7 +727,6 @@ class EventProcessor:
             self.producer.flush()
             self.consumer.close()
 
-
 # 사용 예시: 주문 → 배송 이벤트 변환
 def order_to_shipment(order: dict) -> dict:
     """주문 이벤트를 배송 이벤트로 변환"""
@@ -809,7 +784,6 @@ class WindowedAggregator:
                     del self.windows[window_start]
 
         return completed
-
 
 # 사용 예시: 분당 카테고리별 판매 수 집계
 aggregator = WindowedAggregator(window_size_seconds=60)

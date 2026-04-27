@@ -15,200 +15,6 @@
 
 ---
 
-## 이론과 원리
-
-dbt의 기여는 "SQL을 실행하는 도구"가 아닙니다 — 많은 도구가 SQL을 실행합니다. dbt의 기여는 SQL 변환에 **소프트웨어 엔지니어링 원칙** 을 가져오는 것입니다: 버전 관리, 의존성 추적된 빌드, 선언적 테스트, 생성된 문서, 그리고 명시적 계보 그래프. 이것들 각각은 데이터 웨어하우스가 결코 주지 않은 것입니다.
-
-- **(A) 변환의 단위로서의 모델** — DAG의 노드로 컴파일되고 오케스트레이션되는 SQL 파일
-- **(B) ref() 함수와 의존성 그래프** — dbt가 무엇을 어떤 순서로 빌드할지 아는 방법
-- **(C) Materialization: view, table, incremental, ephemeral, snapshot** — 같은 SQL, 다른 물리적 전략
-- **(D) 데이터 계약으로서의 테스트** — 고유성, not-null, 참조 무결성, 커스텀 어설션
-- **(E) Jinja와 매크로** — 코드 재사용, 매개변수화, 그리고 dbt 컴파일 모델
-
-### A. 변환의 단위로서의 모델
-
-dbt **모델** 은 단일 SELECT 문을 정의하는 SQL 파일입니다. dbt는 SELECT를 `CREATE TABLE`, `CREATE VIEW`, 또는 `MERGE`로 컴파일하고(materialization에 따라) 웨어하우스에 대해 실행합니다.
-
-```sql
--- models/marts/customer_lifetime_value.sql
-SELECT
-    customer_id,
-    SUM(amount) AS lifetime_value,
-    COUNT(*) AS order_count
-FROM {{ ref('fact_orders') }}
-WHERE status = 'completed'
-GROUP BY customer_id
-```
-
-동등한 (컴파일된) SQL:
-
-```sql
-CREATE OR REPLACE TABLE prod.marts.customer_lifetime_value AS
-SELECT customer_id, SUM(amount) AS lifetime_value, ...
-FROM prod.marts.fact_orders ...
-```
-
-요점: 테이블이 *무엇* 을 포함해야 하는지 작성하면; dbt가 *어떻게* 구체화할지(DDL, 의존성 순서, 환경별 스키마 이름) 처리합니다.
-
-### B. ref() 함수와 의존성 그래프
-
-`{{ ref('fact_orders') }}`이 한 구문에 전체 아키텍처입니다. 두 가지를 합니다:
-
-1. **컴파일 시점에 실제 테이블 이름으로 해결**, 환경(dev/staging/prod)에 맞는 올바른 스키마에서.
-2. **dbt의 내부 그래프에 의존성 기록**: "이 모델은 `fact_orders`에 의존".
-
-dbt는 프로젝트 전체의 모든 `ref()`를 파싱하고 DAG를 빌드합니다. `dbt build`를 실행하면 dbt는:
-1. DAG를 위상 정렬.
-2. 의존성 순서로 모델 빌드.
-3. 가능한 곳에서 병렬 실행(독립적 leaf).
-
-이는 전체 버그 카테고리(잘못된 순서로 모델 실행)와 전체 단조로움 카테고리(각 모델의 실행을 수동으로 스케줄)를 제거합니다.
-
-#### B.1 Selector와 증분 빌드
-
-`dbt build --select customer_lifetime_value+`는 `customer_lifetime_value`와 다운스트림 모든 것을 빌드. `--select +customer_lifetime_value`는 그것과 업스트림 모든 것을 빌드. `--select state:modified+`(상태 비교와 함께)는 변경된 것과 다운스트림만 빌드 — 분석을 위한 CI/CD의 기초.
-
-### C. Materialization
-
-같은 SQL이 다섯 가지 방법으로 구체화될 수 있습니다. 옳은 materialization 선택이 가장 결과적인 dbt 결정입니다.
-
-#### C.1 view
-
-`CREATE OR REPLACE VIEW`. 데이터가 저장되지 않음; 매번 기저 테이블에 대해 쿼리 실행. 새로고침 저렴(즉시), 쿼리 비쌈.
-
-사용 시점: 모델이 거의 쿼리되지 않거나, 기저 데이터가 끊임없이 변하거나, 큰 테이블 위의 얇은 변환.
-
-#### C.2 table
-
-`CREATE OR REPLACE TABLE AS SELECT ...`. 매 실행마다 전체 재구축. 저장 비용이 결과에 비례; 쿼리 비용은 빠름(테이블만 읽음).
-
-사용 시점: 모델이 자주 쿼리되고, 데이터가 작거나 중간이고, 전체 재구축이 실행 윈도우에서 허용 가능.
-
-#### C.3 incremental
-
-```sql
-{{ config(materialized='incremental', unique_key='order_id') }}
-SELECT * FROM {{ ref('staging_orders') }}
-{% if is_incremental() %}
-  WHERE updated_at > (SELECT MAX(updated_at) FROM {{ this }})
-{% endif %}
-```
-
-첫 실행: 전체 테이블 빌드. 후속 실행: 새/업데이트된 행만 처리, 기존 테이블에 MERGE. O(N) 대신 O(델타) 비용.
-
-사용 시점: 테이블이 크고, 매 실행마다 일부만 변경. 팩트 테이블에 가장 흔한 materialization.
-
-워터마크 로직(`WHERE updated_at > ...`)이 그것을 정확하게 만드는 계약. 워터마크를 잘못 잡으면 행을 조용히 떨어뜨립니다.
-
-#### C.4 ephemeral
-
-모델이 웨어하우스에 *구체화되지 않음* — `ref`하는 모든 모델에서 CTE가 됨.
-
-사용 시점: 자체 테이블의 가치가 없는 논리적 변환; 여러 다운스트림 모델에서 재사용되지만 직접 쿼리되지 않음.
-
-#### C.5 snapshot
-
-```sql
-{% snapshot dim_customer_history %}
-{{ config(unique_key='customer_id', strategy='timestamp', updated_at='updated_at') }}
-SELECT * FROM {{ source('crm', 'customers') }}
-{% endsnapshot %}
-```
-
-dbt가 자동으로 SCD Type 2 이력 테이블 유지. 매 실행마다 소스 행을 최신 snapshot 행과 비교; 변경은 valid_from/valid_to를 가진 새 행으로 기록.
-
-이는 한 줄 config로 구현된 SCD Type 2 패턴(레슨 2 §D)입니다. Snapshot은 dbt의 가장 적게 사용되는 기능입니다.
-
-### D. 데이터 계약으로서의 테스트
-
-dbt 테스트는 통과하려면 0행을 반환해야 하는 SQL 쿼리입니다.
-
-#### D.1 내장 테스트
-
-`schema.yml`에 정의:
-
-```yaml
-models:
-  - name: dim_customer
-    columns:
-      - name: customer_id
-        tests:
-          - unique
-          - not_null
-      - name: country_code
-        tests:
-          - accepted_values:
-              values: ['US', 'CA', 'GB', ...]
-      - name: account_manager_id
-        tests:
-          - relationships:
-              to: ref('dim_employee')
-              field: employee_id
-```
-
-각 테스트는 문제 있는 행을 반환하는 SELECT로 컴파일. `dbt test`는 모든 테스트 실행; 실패는 특정 잘못된 행을 가리킴.
-
-#### D.2 커스텀 테스트
-
-`tests/`에 저장된 모든 SQL 쿼리:
-
-```sql
--- tests/no_negative_revenue.sql
-SELECT * FROM {{ ref('fact_orders') }} WHERE amount < 0
-```
-
-성공 시 0행 반환. 이것이 비즈니스 불변량을 인코딩하는 방법 — "revenue는 절대 음수여서는 안 됨", "모든 주문은 알려진 고객을 가져야 함", "일일 메트릭이 50% 이상 떨어져서는 안 됨".
-
-#### D.3 CI 게이트로서의 테스트
-
-CI 파이프라인에서 `dbt build`는 모델 *과* 그 테스트를 실행. 실패한 테스트는 배포를 차단. 이는 분석을 위한 단위 테스트의 유사물 — 깨진 데이터가 절대 프로덕션 대시보드에 도달하지 않음.
-
-### E. Jinja와 매크로
-
-dbt는 웨어하우스에 보내기 전에 Jinja 템플릿팅을 통해 SQL 파일을 처리합니다. 이는 다음을 잠금 해제:
-
-#### E.1 매개변수화
-
-`{{ var('start_date') }}`이 `dbt_project.yml`이나 CLI 인자에서 읽음. 같은 모델, 환경별로 다른 매개변수.
-
-#### E.2 매크로 (함수)
-
-```sql
-{% macro cents_to_dollars(column) %}
-  CAST({{ column }} / 100.0 AS DECIMAL(10, 2))
-{% endmacro %}
-```
-
-이제 모든 모델의 `{{ cents_to_dollars('amount') }}`이 같은 SQL 조각으로 확장. SQL을 위한 DRY.
-
-#### E.3 생성된 SQL
-
-루프, 조건문, 리스트 — Jinja가 SQL을 프로그래밍 가능하게 만듭니다:
-
-```sql
-SELECT
-  {% for region in ['us', 'eu', 'apac'] %}
-    SUM(CASE WHEN region = '{{ region }}' THEN amount END) AS revenue_{{ region }}
-    {% if not loop.last %},{% endif %}
-  {% endfor %}
-FROM {{ ref('fact_orders') }}
-```
-
-컴파일된 SQL은 루프가 펼쳐짐. 반복적 집계나 pivot 같은 패턴에 유용.
-
-### From Theory to the Practice Below
-
-이어지는 각 절은 위 프레임워크의 한 조각을 운영합니다:
-
-- §1 (dbt 개념)은 §A — 변환 단위로서의 모델.
-- §2 (프로젝트 설정)은 실용적 골격(`dbt_project.yml`, profile, schema.yml).
-- §3 (모델과 Materialization)은 §C — view vs table vs incremental 선택.
-- §4 (테스트와 문서화)는 §D — 내장 및 커스텀 테스트, 생성된 문서.
-- §5 (Jinja와 매크로)는 §E — 프로그래밍 가능한 SQL.
-- §6 (Incremental 모델과 Snapshot)은 §C.3 + §C.5 — SCD Type 2 구현.
-
----
-
 ## 개요
 
 dbt(data build tool)는 SQL 기반의 데이터 변환 도구입니다. ELT 패턴에서 Transform 단계를 담당하며, 소프트웨어 엔지니어링 모범 사례(버전 관리, 테스트, 문서화)를 데이터 변환에 적용합니다.
@@ -372,6 +178,49 @@ my_project:
 ---
 
 ## 3. 모델 (Models)
+
+### 이론: 변환의 단위로서의 모델
+
+dbt **모델** 은 단일 SELECT 문을 정의하는 SQL 파일입니다. dbt는 SELECT를 `CREATE TABLE`, `CREATE VIEW`, 또는 `MERGE`로 컴파일하고(materialization에 따라) 웨어하우스에 대해 실행합니다.
+
+```sql
+-- models/marts/customer_lifetime_value.sql
+SELECT
+    customer_id,
+    SUM(amount) AS lifetime_value,
+    COUNT(*) AS order_count
+FROM {{ ref('fact_orders') }}
+WHERE status = 'completed'
+GROUP BY customer_id
+```
+
+동등한 (컴파일된) SQL:
+
+```sql
+CREATE OR REPLACE TABLE prod.marts.customer_lifetime_value AS
+SELECT customer_id, SUM(amount) AS lifetime_value, ...
+FROM prod.marts.fact_orders ...
+```
+
+요점: 테이블이 *무엇* 을 포함해야 하는지 작성하면; dbt가 *어떻게* 구체화할지(DDL, 의존성 순서, 환경별 스키마 이름) 처리합니다.
+
+### 이론: ref() 함수와 의존성 그래프
+
+`{{ ref('fact_orders') }}`이 한 구문에 전체 아키텍처입니다. 두 가지를 합니다:
+
+1. **컴파일 시점에 실제 테이블 이름으로 해결**, 환경(dev/staging/prod)에 맞는 올바른 스키마에서.
+2. **dbt의 내부 그래프에 의존성 기록**: "이 모델은 `fact_orders`에 의존".
+
+dbt는 프로젝트 전체의 모든 `ref()`를 파싱하고 DAG를 빌드합니다. `dbt build`를 실행하면 dbt는:
+1. DAG를 위상 정렬.
+2. 의존성 순서로 모델 빌드.
+3. 가능한 곳에서 병렬 실행(독립적 leaf).
+
+이는 전체 버그 카테고리(잘못된 순서로 모델 실행)와 전체 단조로움 카테고리(각 모델의 실행을 수동으로 스케줄)를 제거합니다.
+
+#### B.1 Selector와 증분 빌드
+
+`dbt build --select customer_lifetime_value+`는 `customer_lifetime_value`와 다운스트림 모든 것을 빌드. `--select +customer_lifetime_value`는 그것과 업스트림 모든 것을 빌드. `--select state:modified+`(상태 비교와 함께)는 변경된 것과 다운스트림만 빌드 — 분석을 위한 CI/CD의 기초.
 
 ### 3.1 기본 모델
 
@@ -538,6 +387,50 @@ WHERE order_date > (SELECT MAX(order_date) FROM {{ this }})
 
 ## 4. 테스트
 
+### 이론: 데이터 계약으로서의 테스트
+
+dbt 테스트는 통과하려면 0행을 반환해야 하는 SQL 쿼리입니다.
+
+#### D.1 내장 테스트
+
+`schema.yml`에 정의:
+
+```yaml
+models:
+  - name: dim_customer
+    columns:
+      - name: customer_id
+        tests:
+          - unique
+          - not_null
+      - name: country_code
+        tests:
+          - accepted_values:
+              values: ['US', 'CA', 'GB', ...]
+      - name: account_manager_id
+        tests:
+          - relationships:
+              to: ref('dim_employee')
+              field: employee_id
+```
+
+각 테스트는 문제 있는 행을 반환하는 SELECT로 컴파일. `dbt test`는 모든 테스트 실행; 실패는 특정 잘못된 행을 가리킴.
+
+#### D.2 커스텀 테스트
+
+`tests/`에 저장된 모든 SQL 쿼리:
+
+```sql
+-- tests/no_negative_revenue.sql
+SELECT * FROM {{ ref('fact_orders') }} WHERE amount < 0
+```
+
+성공 시 0행 반환. 이것이 비즈니스 불변량을 인코딩하는 방법 — "revenue는 절대 음수여서는 안 됨", "모든 주문은 알려진 고객을 가져야 함", "일일 메트릭이 50% 이상 떨어져서는 안 됨".
+
+#### D.3 CI 게이트로서의 테스트
+
+CI 파이프라인에서 `dbt build`는 모델 *과* 그 테스트를 실행. 실패한 테스트는 배포를 차단. 이는 분석을 위한 단위 테스트의 유사물 — 깨진 데이터가 절대 프로덕션 대시보드에 도달하지 않음.
+
 ### 4.1 스키마 테스트
 
 ```yaml
@@ -679,6 +572,39 @@ dbt docs serve --port 8080
 
 ## 6. Jinja 템플릿
 
+### 이론: Jinja와 매크로
+
+dbt는 웨어하우스에 보내기 전에 Jinja 템플릿팅을 통해 SQL 파일을 처리합니다. 이는 다음을 잠금 해제:
+
+#### E.1 매개변수화
+
+`{{ var('start_date') }}`이 `dbt_project.yml`이나 CLI 인자에서 읽음. 같은 모델, 환경별로 다른 매개변수.
+
+#### E.2 매크로 (함수)
+
+```sql
+{% macro cents_to_dollars(column) %}
+  CAST({{ column }} / 100.0 AS DECIMAL(10, 2))
+{% endmacro %}
+```
+
+이제 모든 모델의 `{{ cents_to_dollars('amount') }}`이 같은 SQL 조각으로 확장. SQL을 위한 DRY.
+
+#### E.3 생성된 SQL
+
+루프, 조건문, 리스트 — Jinja가 SQL을 프로그래밍 가능하게 만듭니다:
+
+```sql
+SELECT
+  {% for region in ['us', 'eu', 'apac'] %}
+    SUM(CASE WHEN region = '{{ region }}' THEN amount END) AS revenue_{{ region }}
+    {% if not loop.last %},{% endif %}
+  {% endfor %}
+FROM {{ ref('fact_orders') }}
+```
+
+컴파일된 SQL은 루프가 펼쳐짐. 반복적 집계나 pivot 같은 패턴에 유용.
+
 ### 6.1 기본 Jinja 문법
 
 ```sql
@@ -725,7 +651,6 @@ GROUP BY order_id
     {%- endif -%}
 {%- endmacro %}
 
-
 -- macros/cents_to_dollars.sql
 -- 통화 변환 로직을 중앙화합니다: 정밀도나 제수가 변경되면
 -- (예: 센트에서 베이시스 포인트로 전환), 돈을 다루는
@@ -733,7 +658,6 @@ GROUP BY order_id
 {% macro cents_to_dollars(column_name, precision=2) %}
     ROUND({{ column_name }} / 100.0, {{ precision }})
 {% endmacro %}
-
 
 -- macros/limit_data_in_dev.sql
 -- 개발 중 자동으로 쿼리 결과를 제한하여 반복 속도를 높이고
@@ -781,6 +705,57 @@ SELECT MAX(updated_at) FROM {{ this }}
 ---
 
 ## 7. 증분 처리 (Incremental)
+
+### 이론: Materialization
+
+같은 SQL이 다섯 가지 방법으로 구체화될 수 있습니다. 옳은 materialization 선택이 가장 결과적인 dbt 결정입니다.
+
+#### C.1 view
+
+`CREATE OR REPLACE VIEW`. 데이터가 저장되지 않음; 매번 기저 테이블에 대해 쿼리 실행. 새로고침 저렴(즉시), 쿼리 비쌈.
+
+사용 시점: 모델이 거의 쿼리되지 않거나, 기저 데이터가 끊임없이 변하거나, 큰 테이블 위의 얇은 변환.
+
+#### C.2 table
+
+`CREATE OR REPLACE TABLE AS SELECT ...`. 매 실행마다 전체 재구축. 저장 비용이 결과에 비례; 쿼리 비용은 빠름(테이블만 읽음).
+
+사용 시점: 모델이 자주 쿼리되고, 데이터가 작거나 중간이고, 전체 재구축이 실행 윈도우에서 허용 가능.
+
+#### C.3 incremental
+
+```sql
+{{ config(materialized='incremental', unique_key='order_id') }}
+SELECT * FROM {{ ref('staging_orders') }}
+{% if is_incremental() %}
+  WHERE updated_at > (SELECT MAX(updated_at) FROM {{ this }})
+{% endif %}
+```
+
+첫 실행: 전체 테이블 빌드. 후속 실행: 새/업데이트된 행만 처리, 기존 테이블에 MERGE. O(N) 대신 O(델타) 비용.
+
+사용 시점: 테이블이 크고, 매 실행마다 일부만 변경. 팩트 테이블에 가장 흔한 materialization.
+
+워터마크 로직(`WHERE updated_at > ...`)이 그것을 정확하게 만드는 계약. 워터마크를 잘못 잡으면 행을 조용히 떨어뜨립니다.
+
+#### C.4 ephemeral
+
+모델이 웨어하우스에 *구체화되지 않음* — `ref`하는 모든 모델에서 CTE가 됨.
+
+사용 시점: 자체 테이블의 가치가 없는 논리적 변환; 여러 다운스트림 모델에서 재사용되지만 직접 쿼리되지 않음.
+
+#### C.5 snapshot
+
+```sql
+{% snapshot dim_customer_history %}
+{{ config(unique_key='customer_id', strategy='timestamp', updated_at='updated_at') }}
+SELECT * FROM {{ source('crm', 'customers') }}
+{% endsnapshot %}
+```
+
+dbt가 자동으로 SCD Type 2 이력 테이블 유지. 매 실행마다 소스 행을 최신 snapshot 행과 비교; 변경은 valid_from/valid_to를 가진 새 행으로 기록.
+
+이는 한 줄 config로 구현된 SCD Type 2 패턴(레슨 2 §D)입니다. Snapshot은 dbt의 가장 적게 사용되는 기능입니다.
 
 ### 7.1 기본 증분 모델
 

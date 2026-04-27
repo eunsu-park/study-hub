@@ -15,16 +15,15 @@
 
 ---
 
-## 이론과 원리
+## 개요
 
-데이터 모델링은 기법(스타 스키마, SCD Type 2)이 *왜* 그렇게 하는지보다 훨씬 먼저 가르쳐지는 주제 중 하나입니다. 그 "왜"는 단 하나의 아키텍처 결정입니다: 트랜잭션(OLTP)을 최적화할 것인가, 분석(OLAP)을 최적화할 것인가? 이 선택이 정규화/비정규화 여부, 행 저장(row-store)/컬럼 저장(column-store) 여부, 그리고 차원 모델링이 적용되는지조차 결정합니다.
+데이터 모델링은 데이터의 구조, 관계, 제약 조건을 정의하는 과정입니다. 데이터 웨어하우스와 분석 시스템에서는 차원 모델링(Dimensional Modeling)이 널리 사용됩니다.
 
-- **(A) OLTP vs OLAP** — 동일한 비즈니스 데이터에 대해 별도의 모델을 정당화하는 워크로드 이중성
-- **(B) 정규화 vs 비정규화** — Codd의 정규형 vs Kimball의 스타 스키마, 각각이 이기는 시점
-- **(C) 차원 모델링(Dimensional Modeling)** — 측정으로서의 팩트(Fact), 맥락으로서의 차원(Dimension), 그리고 스타 vs 스노우플레이크의 기하학
-- **(D) 천천히 변하는 차원(Slowly Changing Dimensions)** — 시간에 따라 차원 속성이 변한다는 사실을 처리하는 6가지 표준 방법
+---
 
-### A. OLTP vs OLAP: 두 워크로드, 두 모델
+## 1. 차원 모델링 (Dimensional Modeling)
+
+### 이론: OLTP vs OLAP: 두 워크로드, 두 모델
 
 동일한 비즈니스 데이터 — 고객, 주문, 상품 — 가 완전히 다른 두 가지 접근 패턴으로 쿼리됩니다.
 
@@ -61,7 +60,7 @@
 
 표준 아키텍처: OLTP 데이터베이스가 진실의 원천이고, ETL/ELT 파이프라인(레슨 3, 12)이 데이터를 분석용으로 모델링된 별도의 OLAP 웨어하우스로 옮깁니다.
 
-### B. 정규화 vs 비정규화
+### 이론: 정규화 vs 비정규화
 
 Codd의 정규형(1NF부터 BCNF까지)은 중복을 제거합니다. 각 사실은 정확히 한 번 저장되며, 업데이트는 한 행만 건드립니다. 이것은 OLTP에 옳은 선택입니다.
 
@@ -77,7 +76,7 @@ OLAP의 경우, Kimball은 트레이드오프를 뒤집었습니다: 저장은 �
 
 비대칭성: OLAP에서 쓰기는 ETL 배치당 한 번 발생합니다(멱등 덮어쓰기 또는 upsert). 읽기는 수천 번 발생합니다. 쓰기를 희생하여 읽기를 최적화하는 것이 옳은 거래입니다.
 
-### C. 차원 모델링
+### 이론: 차원 모델링
 
 Kimball의 차원 모델은 웨어하우스 스키마 설계의 표준입니다.
 
@@ -119,50 +118,6 @@ Kimball의 차원 모델은 웨어하우스 스키마 설계의 표준입니다.
 - **누적 스냅샷(Accumulating snapshot):** 프로세스 인스턴스당 한 행, 각 마일스톤의 타임스탬프 포함 (주문당 한 행, `placed_at`, `paid_at`, `shipped_at`, `delivered_at` 포함).
 
 항상 가지고 있는 *가장 세밀한* 그레인으로 모델링하세요. 위로 집계하는 것은 항상 가능하지만, 분해하는 것은 불가능합니다.
-
-### D. 천천히 변하는 차원 (Slowly Changing Dimensions)
-
-차원 속성은 시간에 따라 변합니다 — 고객이 도시를 옮기고, 상품이 새 카테고리를 받습니다. 모든 팩트 행을 다시 쓰지 않고 어떻게 이력을 보존할까요? 6가지 표준 SCD 타입:
-
-| 타입 | 동작 | 트레이드오프 |
-|------|------|--------------|
-| **Type 0** | 절대 변경 안 함 (예: 생년월일) | 단순; 진정 불변 속성에만 |
-| **Type 1** | 덮어쓰기, 이력 없음 | 가장 단순; 과거 손실 — 팩트가 새 값으로 보임 |
-| **Type 2** | 변경마다 새 행 + `valid_from` / `valid_to` / `is_current` | 완전한 이력; 팩트 행은 팩트 시점에 활성이었던 버전을 참조 |
-| **Type 3** | `previous_value` 컬럼 추가 | 제한된 이력 (이전 값 1개만); 단순 |
-| **Type 4** | 이력을 별도 테이블로 이동 | 현재 차원이 작게 유지; 이력이 필요한 쿼리는 이력 테이블 조인 |
-| **Type 6** | Type 1 + 2 + 3 하이브리드 | 가장 유연, 가장 복잡 |
-
-Type 2가 주력입니다. 팩트 테이블의 차원 FK는 팩트 이벤트 시점에 활성이었던 버전의 *대리 키(surrogate key)* 를 참조하므로, 2022년 판매는 고객이 2023년에 이사하더라도 영원히 2022년 고객 도시를 보여줍니다.
-
-#### D.1 대리 키 원칙
-
-차원 테이블은 자연 비즈니스 키(소스 시스템의 customer_id)가 아닌 *대리 키(surrogate key)* — 의미 없는 정수 — 를 기본 키로 사용합니다. 왜?
-
-1. **SCD Type 2가 필요로 함.** 자연 키가 PK라면 동일 고객에 대해 여러 행을 가질 수 없습니다. 대리 키는 한 고객이 여러 행(과거 버전당 하나)을 가질 수 있게 합니다.
-2. **웨어하우스를 소스로부터 분리.** 소스 시스템의 customer_id 형식이 바뀔 수 있지만, 대리 키는 영원히 안정적.
-3. **더 작은 팩트 테이블.** 대리 키는 4바이트 정수; 자연 키는 36바이트 UUID 문자열일 수 있음.
-
-### From Theory to the Practice Below
-
-이어지는 각 절은 위 프레임워크의 한 조각을 운영합니다:
-
-- §1 (차원 모델링)은 §C — 팩트, 차원, 스타 스키마 — 를 운영합니다.
-- §2 (스타 vs 스노우플레이크)는 구체적 스키마로 본 §C.2 vs §C.3입니다.
-- §3 (천천히 변하는 차원)은 SQL로 본 §D — Type 1, 2, 3 구현입니다.
-- §4 (공통 패턴) — 날짜 차원, 대리 키, 정크 차원(junk dimension) — 은 §D.1과 §C를 실무에 적용합니다.
-- §5 (Data Vault)는 감사 가능성/규제가 높은 환경에서 §C의 대안입니다.
-- §6 (정규화 트레이드오프)는 §B — 워크로드별로 3NF vs 스타 vs Data Vault 선택입니다.
-
----
-
-## 개요
-
-데이터 모델링은 데이터의 구조, 관계, 제약 조건을 정의하는 과정입니다. 데이터 웨어하우스와 분석 시스템에서는 차원 모델링(Dimensional Modeling)이 널리 사용됩니다.
-
----
-
-## 1. 차원 모델링 (Dimensional Modeling)
 
 ### 1.1 차원 모델링 개념
 
@@ -314,7 +269,6 @@ CREATE TABLE dim_store (
     opened_date     DATE
 );
 
-
 -- 2. 팩트 테이블 생성
 -- BIGINT PK는 수십억 행을 수용한다; 팩트 테이블은 모든 트랜잭션이
 -- 새 행을 생성하므로 디멘전보다 훨씬 빠르게 성장한다.
@@ -371,7 +325,6 @@ WHERE d.year = 2024
 GROUP BY d.year, d.month, d.month_name, p.category
 ORDER BY d.year, d.month, total_sales DESC;
 
-
 -- 지역별 상위 10개 상품
 -- QUALIFY는 Snowflake/BigQuery 확장으로 윈도우 함수 결과를 필터링 —
 -- 순위로 필터링하기 위해 CTE로 감쌀 필요가 없다.
@@ -385,7 +338,6 @@ JOIN dim_store s ON f.store_sk = s.store_sk
 JOIN dim_product p ON f.product_sk = p.product_sk
 GROUP BY s.region, p.product_name
 QUALIFY rank <= 10;
-
 
 -- 고객 세그먼트별 구매 패턴
 -- is_current = TRUE로 필터링: SCD Type 2에서 고객은 여러 행을 가질 수 있다;
@@ -489,7 +441,6 @@ CREATE TABLE fact_daily_inventory (
     inventory_value DECIMAL(12, 2)
 );
 
-
 -- 일일 계정 잔액 스냅샷
 CREATE TABLE fact_daily_account_balance (
     balance_sk      BIGINT PRIMARY KEY,
@@ -545,6 +496,29 @@ CREATE TABLE fact_order_fulfillment (
 ---
 
 ## 5. SCD (Slowly Changing Dimensions)
+
+### 이론: 천천히 변하는 차원 (Slowly Changing Dimensions)
+
+차원 속성은 시간에 따라 변합니다 — 고객이 도시를 옮기고, 상품이 새 카테고리를 받습니다. 모든 팩트 행을 다시 쓰지 않고 어떻게 이력을 보존할까요? 6가지 표준 SCD 타입:
+
+| 타입 | 동작 | 트레이드오프 |
+|------|------|--------------|
+| **Type 0** | 절대 변경 안 함 (예: 생년월일) | 단순; 진정 불변 속성에만 |
+| **Type 1** | 덮어쓰기, 이력 없음 | 가장 단순; 과거 손실 — 팩트가 새 값으로 보임 |
+| **Type 2** | 변경마다 새 행 + `valid_from` / `valid_to` / `is_current` | 완전한 이력; 팩트 행은 팩트 시점에 활성이었던 버전을 참조 |
+| **Type 3** | `previous_value` 컬럼 추가 | 제한된 이력 (이전 값 1개만); 단순 |
+| **Type 4** | 이력을 별도 테이블로 이동 | 현재 차원이 작게 유지; 이력이 필요한 쿼리는 이력 테이블 조인 |
+| **Type 6** | Type 1 + 2 + 3 하이브리드 | 가장 유연, 가장 복잡 |
+
+Type 2가 주력입니다. 팩트 테이블의 차원 FK는 팩트 이벤트 시점에 활성이었던 버전의 *대리 키(surrogate key)* 를 참조하므로, 2022년 판매는 고객이 2023년에 이사하더라도 영원히 2022년 고객 도시를 보여줍니다.
+
+#### D.1 대리 키 원칙
+
+차원 테이블은 자연 비즈니스 키(소스 시스템의 customer_id)가 아닌 *대리 키(surrogate key)* — 의미 없는 정수 — 를 기본 키로 사용합니다. 왜?
+
+1. **SCD Type 2가 필요로 함.** 자연 키가 PK라면 동일 고객에 대해 여러 행을 가질 수 없습니다. 대리 키는 한 고객이 여러 행(과거 버전당 하나)을 가질 수 있게 합니다.
+2. **웨어하우스를 소스로부터 분리.** 소스 시스템의 customer_id 형식이 바뀔 수 있지만, 대리 키는 영원히 안정적.
+3. **더 작은 팩트 테이블.** 대리 키는 4바이트 정수; 자연 키는 36바이트 UUID 문자열일 수 있음.
 
 ### 5.1 SCD 유형 개요
 
@@ -633,7 +607,6 @@ def scd_type2_update(
         target_df = pd.concat([target_df, new_records], ignore_index=True)
 
     return target_df
-
 
 # 사용 예시
 """
@@ -756,7 +729,6 @@ def generate_date_dimension(start_date: str, end_date: str) -> pd.DataFrame:
         records.append(record)
 
     return pd.DataFrame(records)
-
 
 # 사용 예시: 11년 범위는 이력 백필 + 몇 년 앞의 미래를 커버한다
 date_dim = generate_date_dimension('2020-01-01', '2030-12-31')

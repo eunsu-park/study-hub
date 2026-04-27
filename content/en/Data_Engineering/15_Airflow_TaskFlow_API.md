@@ -15,204 +15,6 @@ After completing this lesson, you will be able to:
 
 ---
 
-## Theory & Principles
-
-The TaskFlow API isn't merely "decorators instead of operators" — it is a fundamental shift in how DAGs are expressed. The traditional Operator pattern treats tasks as opaque units of work whose data flow is implicit (via XCom strings); TaskFlow treats tasks as functions whose inputs and outputs are visible to the type checker. This shift brings Python-language ergonomics to a system that historically resisted them.
-
-- **(A) Functional model: tasks as functions** — what changes when a task is `def f(x: int) -> int` instead of `Operator(...)`.
-- **(B) Implicit XCom and the dependency graph** — how `result = task_a(); task_b(result)` constructs both data flow and dependency.
-- **(C) Type safety and the testing surface** — running tasks as plain Python in unit tests; mypy support.
-- **(D) Mixing TaskFlow with traditional operators** — when `@task` is wrong and you need the operator ecosystem.
-
-### A. Functional Model: Tasks as Functions
-
-The traditional Airflow pattern:
-
-```python
-def my_callable(**context):
-    value = context['ti'].xcom_pull(task_ids='upstream_task')
-    return value * 2
-
-PythonOperator(
-    task_id='my_task',
-    python_callable=my_callable,
-    provide_context=True,
-)
-```
-
-The TaskFlow equivalent:
-
-```python
-@task
-def my_task(value: int) -> int:
-    return value * 2
-```
-
-What changed:
-
-- **No `**context` plumbing.** The decorator handles XCom pull/push transparently.
-- **Real Python signature.** `value: int` is the actual parameter; type-checked by mypy.
-- **Return value IS the XCom.** Whatever the function returns is automatically pushed.
-
-This is the "functional model": tasks are functions of their inputs, returning their outputs. The framework hides the orchestration plumbing.
-
-#### A.1 The decorator transformation
-
-What `@task` actually does: at DAG parse time, it wraps the Python function in a synthesized `PythonOperator`-like object. Calling the decorated function (`my_task(upstream_value)`) doesn't run the function — it creates a *task instance reference* in the DAG graph and records the dependency on `upstream_value`'s producing task.
-
-Mental model: under the hood it's still an operator with XCom, but the developer experience is "write Python; the DAG falls out."
-
-### B. Implicit XCom and Dependency Graph Construction
-
-The deepest TaskFlow trick: **the act of using one task's output as another task's input simultaneously creates the data flow and the dependency.**
-
-```python
-with DAG("pipeline", ...) as dag:
-    raw = extract()
-    cleaned = transform(raw)
-    load(cleaned)
-```
-
-Three things happened:
-1. `extract` task is registered.
-2. `transform` task is registered, and its dependency on `extract` is recorded (because `raw` is `extract`'s output).
-3. `load` task is registered, depending on `transform`.
-
-You never wrote `extract >> transform >> load`. The data flow expressed it.
-
-This is a *huge* ergonomic improvement. In the old style:
-
-```python
-extract = PythonOperator(task_id='extract', python_callable=extract_fn)
-transform = PythonOperator(task_id='transform', python_callable=transform_fn,
-                           op_args=["{{ ti.xcom_pull(task_ids='extract') }}"])
-load = PythonOperator(task_id='load', python_callable=load_fn,
-                      op_args=["{{ ti.xcom_pull(task_ids='transform') }}"])
-extract >> transform >> load
-```
-
-The data flow (XCom strings) and dependency (`>>`) had to be specified separately and kept consistent. With TaskFlow, you express the data flow once and the dependency follows.
-
-#### B.1 Multi-output and structured data
-
-```python
-@task
-def split() -> dict:
-    return {"users": [...], "orders": [...]}
-
-@task
-def process_users(users): ...
-
-@task
-def process_orders(orders): ...
-
-result = split()
-process_users(result["users"])
-process_orders(result["orders"])
-```
-
-The dict-key access on `result["users"]` works because TaskFlow returns proxy objects that record what's accessed and translate to the appropriate XCom pulls at runtime.
-
-For multi-output tasks, `@task(multiple_outputs=True)` makes returns of dict push each key as a separate XCom — useful when downstream tasks consume different keys.
-
-### C. Type Safety and Testing Surface
-
-#### C.1 mypy works
-
-Because tasks are functions with type-annotated signatures, mypy can catch:
-
-```python
-@task
-def upstream() -> int: return 42
-
-@task
-def downstream(s: str): print(s)
-
-downstream(upstream())  # mypy: error - int is not str
-```
-
-In the old operator pattern, XCom values are typed `Any`; bugs like this surface only at runtime, often in production.
-
-#### C.2 Unit testing without Airflow
-
-```python
-def test_transform():
-    result = transform.function({"raw": 100})  # call the underlying function directly
-    assert result["clean"] == 100
-```
-
-The decorated function exposes `.function` — the original undecorated callable. You can invoke it in unit tests with no Airflow runtime, no scheduler, no metadata DB. This was nearly impossible in the old style.
-
-#### C.3 The line for what TaskFlow can express
-
-TaskFlow handles:
-- Pure Python tasks.
-- Tasks that return data consumable by other tasks.
-- Tasks that need Airflow context (`@task` injects `**kwargs` if signature accepts).
-
-TaskFlow doesn't directly handle:
-- Calling a Bash command (use `BashOperator` directly, possibly inside a `@task` wrapper).
-- Submitting a Spark job to a cluster (use `SparkSubmitOperator`).
-- Polling for external events (use `Sensor` / `@task.sensor`).
-
-In practice, real DAGs mix `@task` for Python work with traditional operators for system integration.
-
-### D. Mixing TaskFlow with Traditional Operators
-
-The pragmatic pattern: TaskFlow for the Python glue, operators for the heavy lifting.
-
-```python
-with DAG(...) as dag:
-    @task
-    def prepare_config() -> dict:
-        return {"input": "/data/today.parquet", "output": "/results/today/"}
-
-    config = prepare_config()
-
-    spark_job = SparkSubmitOperator(
-        task_id='spark_transform',
-        application='/jobs/transform.py',
-        application_args=[
-            "--input", "{{ ti.xcom_pull(task_ids='prepare_config')['input'] }}",
-            "--output", "{{ ti.xcom_pull(task_ids='prepare_config')['output'] }}",
-        ],
-    )
-
-    @task
-    def post_process(spark_output_dir: str): ...
-
-    config >> spark_job >> post_process(config["output"])
-```
-
-The Python tasks (`prepare_config`, `post_process`) are TaskFlow; the Spark job is a traditional operator. You bridge them with explicit dependency arrows where automatic inference can't apply.
-
-#### D.1 The `@task.virtualenv` and `@task.docker` extensions
-
-For tasks with non-standard Python dependencies, decorators run the function in an isolated virtualenv or Docker container:
-
-```python
-@task.virtualenv(requirements=["pandas==2.1", "scikit-learn==1.4"])
-def ml_task(): ...
-
-@task.docker(image="my-ml:1.0")
-def heavy_ml_task(): ...
-```
-
-This is how TaskFlow handles per-task dependencies without the `KubernetesExecutor` operational overhead — useful for mixed environments.
-
-### From Theory to the Code Below
-
-Each section that follows operationalizes one piece of this framework:
-
-- §1 (TaskFlow Overview) is §A — the functional model.
-- §2 (Defining Tasks with @task) is §A.1 + §B — decorator mechanics, XCom flow.
-- §3 (Data Passing) is §B — implicit XCom and structured data flow.
-- §4 (Mixing with Traditional Operators) is §D — bridging styles.
-- §5 (Advanced Decorators) is the `@task.virtualenv` / `@task.docker` ecosystem.
-- §6 (Migration from Old Style) is the practical refactoring path for legacy DAGs.
-
----
-
 ## Overview
 
 The TaskFlow API, introduced in Airflow 2.0, provides a Python-native way to define DAGs using decorators. It replaces the traditional Operator-based pattern with `@task` decorators, enabling automatic XCom passing, cleaner code, and better type safety. This is the modern standard for writing Airflow DAGs.
@@ -313,6 +115,97 @@ taskflow_etl()  # Instantiate the DAG
 ---
 
 ## 2. @task Decorator Basics
+
+### Theory: Functional Model: Tasks as Functions
+
+The traditional Airflow pattern:
+
+```python
+def my_callable(**context):
+    value = context['ti'].xcom_pull(task_ids='upstream_task')
+    return value * 2
+
+PythonOperator(
+    task_id='my_task',
+    python_callable=my_callable,
+    provide_context=True,
+)
+```
+
+The TaskFlow equivalent:
+
+```python
+@task
+def my_task(value: int) -> int:
+    return value * 2
+```
+
+What changed:
+
+- **No `**context` plumbing.** The decorator handles XCom pull/push transparently.
+- **Real Python signature.** `value: int` is the actual parameter; type-checked by mypy.
+- **Return value IS the XCom.** Whatever the function returns is automatically pushed.
+
+This is the "functional model": tasks are functions of their inputs, returning their outputs. The framework hides the orchestration plumbing.
+
+#### A.1 The decorator transformation
+
+What `@task` actually does: at DAG parse time, it wraps the Python function in a synthesized `PythonOperator`-like object. Calling the decorated function (`my_task(upstream_value)`) doesn't run the function — it creates a *task instance reference* in the DAG graph and records the dependency on `upstream_value`'s producing task.
+
+Mental model: under the hood it's still an operator with XCom, but the developer experience is "write Python; the DAG falls out."
+
+### Theory: Implicit XCom and Dependency Graph Construction
+
+The deepest TaskFlow trick: **the act of using one task's output as another task's input simultaneously creates the data flow and the dependency.**
+
+```python
+with DAG("pipeline", ...) as dag:
+    raw = extract()
+    cleaned = transform(raw)
+    load(cleaned)
+```
+
+Three things happened:
+1. `extract` task is registered.
+2. `transform` task is registered, and its dependency on `extract` is recorded (because `raw` is `extract`'s output).
+3. `load` task is registered, depending on `transform`.
+
+You never wrote `extract >> transform >> load`. The data flow expressed it.
+
+This is a *huge* ergonomic improvement. In the old style:
+
+```python
+extract = PythonOperator(task_id='extract', python_callable=extract_fn)
+transform = PythonOperator(task_id='transform', python_callable=transform_fn,
+                           op_args=["{{ ti.xcom_pull(task_ids='extract') }}"])
+load = PythonOperator(task_id='load', python_callable=load_fn,
+                      op_args=["{{ ti.xcom_pull(task_ids='transform') }}"])
+extract >> transform >> load
+```
+
+The data flow (XCom strings) and dependency (`>>`) had to be specified separately and kept consistent. With TaskFlow, you express the data flow once and the dependency follows.
+
+#### B.1 Multi-output and structured data
+
+```python
+@task
+def split() -> dict:
+    return {"users": [...], "orders": [...]}
+
+@task
+def process_users(users): ...
+
+@task
+def process_orders(orders): ...
+
+result = split()
+process_users(result["users"])
+process_orders(result["orders"])
+```
+
+The dict-key access on `result["users"]` works because TaskFlow returns proxy objects that record what's accessed and translate to the appropriate XCom pulls at runtime.
+
+For multi-output tasks, `@task(multiple_outputs=True)` makes returns of dict push each key as a separate XCom — useful when downstream tasks consume different keys.
 
 ### 2.1 Return Values and Automatic XCom
 
@@ -703,6 +596,49 @@ taskgroup_demo()
 
 ## 6. Mixing TaskFlow with Traditional Operators
 
+### Theory: Mixing TaskFlow with Traditional Operators
+
+The pragmatic pattern: TaskFlow for the Python glue, operators for the heavy lifting.
+
+```python
+with DAG(...) as dag:
+    @task
+    def prepare_config() -> dict:
+        return {"input": "/data/today.parquet", "output": "/results/today/"}
+
+    config = prepare_config()
+
+    spark_job = SparkSubmitOperator(
+        task_id='spark_transform',
+        application='/jobs/transform.py',
+        application_args=[
+            "--input", "{{ ti.xcom_pull(task_ids='prepare_config')['input'] }}",
+            "--output", "{{ ti.xcom_pull(task_ids='prepare_config')['output'] }}",
+        ],
+    )
+
+    @task
+    def post_process(spark_output_dir: str): ...
+
+    config >> spark_job >> post_process(config["output"])
+```
+
+The Python tasks (`prepare_config`, `post_process`) are TaskFlow; the Spark job is a traditional operator. You bridge them with explicit dependency arrows where automatic inference can't apply.
+
+#### D.1 The `@task.virtualenv` and `@task.docker` extensions
+
+For tasks with non-standard Python dependencies, decorators run the function in an isolated virtualenv or Docker container:
+
+```python
+@task.virtualenv(requirements=["pandas==2.1", "scikit-learn==1.4"])
+def ml_task(): ...
+
+@task.docker(image="my-ml:1.0")
+def heavy_ml_task(): ...
+```
+
+This is how TaskFlow handles per-task dependencies without the `KubernetesExecutor` operational overhead — useful for mixed environments.
+
 ### 6.1 Hybrid DAGs
 
 ```python
@@ -772,6 +708,48 @@ hybrid_dag()
 ---
 
 ## 7. Testing TaskFlow DAGs
+
+### Theory: Type Safety and Testing Surface
+
+#### C.1 mypy works
+
+Because tasks are functions with type-annotated signatures, mypy can catch:
+
+```python
+@task
+def upstream() -> int: return 42
+
+@task
+def downstream(s: str): print(s)
+
+downstream(upstream())  # mypy: error - int is not str
+```
+
+In the old operator pattern, XCom values are typed `Any`; bugs like this surface only at runtime, often in production.
+
+#### C.2 Unit testing without Airflow
+
+```python
+def test_transform():
+    result = transform.function({"raw": 100})  # call the underlying function directly
+    assert result["clean"] == 100
+```
+
+The decorated function exposes `.function` — the original undecorated callable. You can invoke it in unit tests with no Airflow runtime, no scheduler, no metadata DB. This was nearly impossible in the old style.
+
+#### C.3 The line for what TaskFlow can express
+
+TaskFlow handles:
+- Pure Python tasks.
+- Tasks that return data consumable by other tasks.
+- Tasks that need Airflow context (`@task` injects `**kwargs` if signature accepts).
+
+TaskFlow doesn't directly handle:
+- Calling a Bash command (use `BashOperator` directly, possibly inside a `@task` wrapper).
+- Submitting a Spark job to a cluster (use `SparkSubmitOperator`).
+- Polling for external events (use `Sensor` / `@task.sensor`).
+
+In practice, real DAGs mix `@task` for Python work with traditional operators for system integration.
 
 ### 7.1 Unit Testing Tasks
 

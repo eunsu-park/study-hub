@@ -15,137 +15,6 @@ After completing this lesson, you will be able to:
 
 ---
 
-## Theory & Principles
-
-Prefect's design starts with a critique: Airflow asks you to write Python that *describes* a pipeline (the DAG file is not the pipeline; it is a parsed-into-graph specification). Prefect asks you to write Python that *is* the pipeline. This shift — from declarative DAG-as-data to imperative function-as-flow — has consequences for testability, dynamism, and the failure surface.
-
-- **(A) Imperative orchestration** — flows as ordinary Python, runtime DAG construction, and what this enables.
-- **(B) Hybrid execution model** — control plane vs execution plane, why Prefect Cloud doesn't run your code.
-- **(C) State as a first-class concept** — pending, running, completed, failed, crashed — and the programmable state transitions.
-- **(D) Work pools and workers** — the modern abstraction for "where does this flow run", replacing the old agent model.
-
-### A. Imperative Orchestration
-
-In Airflow, the DAG file is a *specification* parsed every few seconds; tasks are referenced symbolically and the dependency graph is materialized by the scheduler before any task runs. In Prefect, a flow is *a Python function* — when you call it, it actually executes, recording state to the API along the way.
-
-#### A.1 What changes when the DAG is the function
-
-```python
-@flow
-def daily_pipeline(date: str):
-    raw = extract(date)
-    if len(raw) > 0:
-        clean = transform(raw)
-        load(clean)
-    else:
-        log("nothing to do")
-```
-
-Look at this code: it is plain Python. `if`, function calls, conditional branches — all work as you expect. The "DAG" is whatever the runtime call graph turns out to be.
-
-This means:
-
-- **Conditional execution is trivial.** No `BranchPythonOperator` ceremony.
-- **Loops are trivial.** `for partition in partitions: process(partition)` works directly.
-- **Testing is trivial.** Call the flow function in a unit test; it runs.
-- **Type checking works.** mypy understands `extract` returns a DataFrame.
-
-The trade-off: there is no static graph to inspect *before* running. The UI shows the graph as it is constructed at runtime.
-
-#### A.2 What you give up
-
-- **Pre-flight static validation.** Airflow can tell you "task X depends on missing task Y" at parse time. Prefect cannot — you need to actually run to discover graph errors.
-- **Long-range scheduling guarantees.** Airflow schedulers reason over the next N runs. Prefect schedules each run independently.
-- **Established operator ecosystem.** Airflow has 1000+ pre-built operators (every cloud, DB, API). Prefect's collections are growing but smaller.
-
-The right mental model: Prefect is for teams that want their pipeline code to *look like the rest of their Python application*; Airflow is for teams that want a centralized, declarative orchestration layer.
-
-### B. Hybrid Execution Model
-
-Prefect's most architecturally important choice: **the control plane (orchestration API) and the execution plane (where code runs) are separate processes, often on separate networks.**
-
-```
-┌──────────────────┐                ┌──────────────────────┐
-│ Prefect Cloud    │ ←── HTTPS ───  │  Worker (your infra) │
-│ (orchestration)  │   state events │   - Pulls flow runs  │
-│ - Schedules      │                │   - Executes         │
-│ - State mgmt     │   no ingress   │   - Reports state    │
-│ - UI / API       │                │                      │
-└──────────────────┘                └──────────────────────┘
-```
-
-#### B.1 Why this matters
-
-Airflow's architecture assumes the scheduler can reach the workers. In a corporate environment, that often means VPN, firewall holes, or putting the scheduler inside the corporate network. Prefect inverts the relationship: workers reach *out* to the API. No inbound firewall holes; the orchestration UI can live in the cloud while flow code runs on-prem.
-
-#### B.2 Code locality
-
-Critically, **Prefect Cloud never sees your data and never runs your code**. Workers run code on infrastructure you control; only state events (started, completed, failed) flow back to the API. This is a real compliance advantage: data never leaves the customer's network.
-
-#### B.3 Trade-off
-
-The price: you must run workers somewhere. Prefect Cloud is not "fully managed orchestration where I just push code"; it is "managed control plane where I run the workers." Compare to Airflow, where MWAA / Composer also requires you to provide a worker pool. Both have the same fundamental constraint; Prefect makes it explicit.
-
-### C. State as a First-Class Concept
-
-Every Prefect task and flow has a **state** — `Pending`, `Running`, `Completed`, `Failed`, `Crashed`, `Cancelled`, `Retrying`, `Paused`. State transitions are recorded via the API and drive the UI.
-
-#### C.1 State as a programmable signal
-
-Unlike Airflow where state is mostly observed, Prefect lets you intercept and react to transitions:
-
-```python
-def alert_on_failure(flow, flow_run, state):
-    if state.is_failed():
-        send_slack(...)
-
-@flow(on_failure=[alert_on_failure])
-def my_flow(): ...
-```
-
-You can also return states explicitly to influence orchestration: `return Completed(message="nothing to do")` skips downstream gracefully.
-
-#### C.2 Crashed vs Failed
-
-Subtle but important: `Failed` means the task ran and raised; `Crashed` means the worker died (OOM, network gone). The distinction matters for retry logic — a `Failed` task probably needs different handling than a `Crashed` one.
-
-#### C.3 Retries are policy, not behavior
-
-`@task(retries=3, retry_delay_seconds=10)` declares a retry policy. The runtime, on `Failed`, automatically transitions to `Retrying` and reruns the task. Same idempotency contract as Airflow: tasks must be safe to rerun.
-
-### D. Work Pools and Workers
-
-Prefect 2.x introduced work pools — the modern way to express "where does this flow run."
-
-#### D.1 The model
-
-- A **deployment** says "this flow, on this schedule, with these parameters."
-- A **work pool** is a queue (with infrastructure config) that deployments push runs into.
-- A **worker** polls a specific work pool and executes runs.
-
-This is similar to Airflow's executor + queue concept but more explicit. You can have one work pool for "small Python tasks" backed by a process worker, another for "Spark jobs" backed by a Kubernetes worker, another for "AWS batch" backed by an ECS worker.
-
-#### D.2 Decoupling code and infrastructure
-
-A flow that says `kubernetes_job.with_options(image="my-spark:1.0").submit(work)` declares its infrastructure inline; the worker just pulls and dispatches. You can move flows between infrastructures by changing the deployment's work pool, not the flow code.
-
-#### D.3 The pull model implication
-
-Workers pull from work pools; the API does not push. If no worker is polling a pool, runs queue up but do not execute. The first sign of a missing/dead worker is "scheduled runs are not starting." Monitoring should always include "is at least one worker polling each active work pool?"
-
-### From Theory to the Code Below
-
-Each section that follows operationalizes one piece of this framework:
-
-- §1 (Prefect Overview & Comparison with Airflow) is §A — the imperative-vs-declarative shift.
-- §2 (Flow and Task Basics) is the §A.1 mechanics — `@flow`, `@task`, calling conventions.
-- §3 (State Management) is §C — programmable states and transition handlers.
-- §4 (Deployments and Schedules) is §D — work pools, deployments, schedule definitions.
-- §5 (Workers and Infrastructure) is §B + §D — running workers in your infra.
-- §6 (Production Patterns) brings together error handling (§C), retries, and observability across the hybrid (§B) architecture.
-
----
-
 ## Overview
 
 Prefect is a modern workflow orchestration tool that builds data pipelines in a Python-native way. Compared to Airflow, it offers simpler setup and supports dynamic workflows.
@@ -259,6 +128,69 @@ prefect server start
 
 ## 3. Flow and Task Basics
 
+### Theory: Imperative Orchestration
+
+In Airflow, the DAG file is a *specification* parsed every few seconds; tasks are referenced symbolically and the dependency graph is materialized by the scheduler before any task runs. In Prefect, a flow is *a Python function* — when you call it, it actually executes, recording state to the API along the way.
+
+#### A.1 What changes when the DAG is the function
+
+```python
+@flow
+def daily_pipeline(date: str):
+    raw = extract(date)
+    if len(raw) > 0:
+        clean = transform(raw)
+        load(clean)
+    else:
+        log("nothing to do")
+```
+
+Look at this code: it is plain Python. `if`, function calls, conditional branches — all work as you expect. The "DAG" is whatever the runtime call graph turns out to be.
+
+This means:
+
+- **Conditional execution is trivial.** No `BranchPythonOperator` ceremony.
+- **Loops are trivial.** `for partition in partitions: process(partition)` works directly.
+- **Testing is trivial.** Call the flow function in a unit test; it runs.
+- **Type checking works.** mypy understands `extract` returns a DataFrame.
+
+The trade-off: there is no static graph to inspect *before* running. The UI shows the graph as it is constructed at runtime.
+
+#### A.2 What you give up
+
+- **Pre-flight static validation.** Airflow can tell you "task X depends on missing task Y" at parse time. Prefect cannot — you need to actually run to discover graph errors.
+- **Long-range scheduling guarantees.** Airflow schedulers reason over the next N runs. Prefect schedules each run independently.
+- **Established operator ecosystem.** Airflow has 1000+ pre-built operators (every cloud, DB, API). Prefect's collections are growing but smaller.
+
+The right mental model: Prefect is for teams that want their pipeline code to *look like the rest of their Python application*; Airflow is for teams that want a centralized, declarative orchestration layer.
+
+### Theory: State as a First-Class Concept
+
+Every Prefect task and flow has a **state** — `Pending`, `Running`, `Completed`, `Failed`, `Crashed`, `Cancelled`, `Retrying`, `Paused`. State transitions are recorded via the API and drive the UI.
+
+#### C.1 State as a programmable signal
+
+Unlike Airflow where state is mostly observed, Prefect lets you intercept and react to transitions:
+
+```python
+def alert_on_failure(flow, flow_run, state):
+    if state.is_failed():
+        send_slack(...)
+
+@flow(on_failure=[alert_on_failure])
+def my_flow(): ...
+```
+
+You can also return states explicitly to influence orchestration: `return Completed(message="nothing to do")` skips downstream gracefully.
+
+#### C.2 Crashed vs Failed
+
+Subtle but important: `Failed` means the task ran and raised; `Crashed` means the worker died (OOM, network gone). The distinction matters for retry logic — a `Failed` task probably needs different handling than a `Crashed` one.
+
+#### C.3 Retries are policy, not behavior
+
+`@task(retries=3, retry_delay_seconds=10)` declares a retry policy. The runtime, on `Failed`, automatically transitions to `Retrying` and reruns the task. Same idempotency contract as Airflow: tasks must be safe to rerun.
+
 ### 3.1 Basic Flow
 
 ```python
@@ -280,7 +212,6 @@ def extract_data(source: str) -> dict:
     data = {"source": source, "records": [1, 2, 3, 4, 5]}
     return data
 
-
 @task
 def transform_data(data: dict) -> dict:
     """Data transformation task"""
@@ -292,7 +223,6 @@ def transform_data(data: dict) -> dict:
     data["transformed"] = True
     return data
 
-
 @task
 def load_data(data: dict, destination: str) -> bool:
     """Data loading task"""
@@ -302,7 +232,6 @@ def load_data(data: dict, destination: str) -> bool:
     # In practice, save to DB, file, etc.
     print(f"Loaded data: {data}")
     return True
-
 
 # @flow wraps the orchestration logic. Prefect infers task dependencies from the
 # data flow between function calls — no need for explicit >> operators like Airflow.
@@ -316,7 +245,6 @@ def etl_pipeline(source: str = "database", destination: str = "warehouse"):
     transformed = transform_data(raw_data)
     result = load_data(transformed, destination)
     return result
-
 
 # Flows are regular Python functions — run directly for local testing without
 # needing a scheduler, database, or web server (unlike Airflow's full stack)
@@ -344,7 +272,6 @@ from datetime import timedelta
 def my_task(param: str) -> str:
     print(f"Processing: {param}")
     return f"Result: {param}"
-
 
 # Exponential backoff avoids thundering-herd retries against recovering services —
 # each retry waits exponentially longer (10s, 20s, 40s, 80s, 160s) to reduce load
@@ -382,7 +309,6 @@ from prefect.task_runners import ConcurrentTaskRunner, SequentialTaskRunner
 def my_flow():
     pass
 
-
 # SequentialTaskRunner forces one-at-a-time execution — use when tasks have
 # hidden shared state (e.g., writing to same file) that concurrency would corrupt
 @flow(task_runner=SequentialTaskRunner())
@@ -403,7 +329,6 @@ from prefect import flow, task
 def process_item(item: str) -> str:
     return f"Processed: {item}"
 
-
 # Unlike Airflow DAGs where task count must be defined at parse time, Prefect
 # creates tasks at runtime — the loop body is real Python, not a static graph.
 @flow
@@ -416,10 +341,8 @@ def dynamic_tasks_flow(items: list[str]):
         results.append(result)
     return results
 
-
 # Execute
 dynamic_tasks_flow(["a", "b", "c", "d"])
-
 
 # .submit() enables concurrent execution via the flow's task_runner.
 # Use this for I/O-bound workloads (API calls, file downloads) where
@@ -449,16 +372,13 @@ from prefect import flow, task
 def check_condition(data: dict) -> bool:
     return data.get("count", 0) > 100
 
-
 @task
 def process_large(data: dict):
     print(f"Processing large dataset: {data['count']} records")
 
-
 @task
 def process_small(data: dict):
     print(f"Processing small dataset: {data['count']} records")
-
 
 @flow
 def conditional_flow(data: dict):
@@ -469,7 +389,6 @@ def conditional_flow(data: dict):
         process_large(data)
     else:
         process_small(data)
-
 
 # Execute
 conditional_flow({"count": 150})  # Runs process_large
@@ -485,16 +404,13 @@ from prefect import flow, task
 def extract(source: str) -> list:
     return [1, 2, 3, 4, 5]
 
-
 @task
 def transform(data: list) -> list:
     return [x * 2 for x in data]
 
-
 @task
 def load(data: list, target: str):
     print(f"Loading {len(data)} records to {target}")
-
 
 # Subflows are flows called from other flows. Each subflow gets its own flow run
 # with independent state tracking, retries, and logs — making them composable and reusable.
@@ -505,7 +421,6 @@ def etl_subflow(source: str, target: str):
     transformed = transform(data)
     load(transformed, target)
     return len(transformed)
-
 
 # Parent flow orchestrates subflows like function calls. If a subflow fails,
 # only that subflow retries — other completed subflows are not re-executed.
@@ -520,13 +435,58 @@ def main_pipeline():
 
     print(f"Total processed: {count_a + count_b + count_c}")
 
-
 main_pipeline()
 ```
 
 ---
 
 ## 5. Deployment
+
+### Theory: Hybrid Execution Model
+
+Prefect's most architecturally important choice: **the control plane (orchestration API) and the execution plane (where code runs) are separate processes, often on separate networks.**
+
+```
+┌──────────────────┐                ┌──────────────────────┐
+│ Prefect Cloud    │ ←── HTTPS ───  │  Worker (your infra) │
+│ (orchestration)  │   state events │   - Pulls flow runs  │
+│ - Schedules      │                │   - Executes         │
+│ - State mgmt     │   no ingress   │   - Reports state    │
+│ - UI / API       │                │                      │
+└──────────────────┘                └──────────────────────┘
+```
+
+#### B.1 Why this matters
+
+Airflow's architecture assumes the scheduler can reach the workers. In a corporate environment, that often means VPN, firewall holes, or putting the scheduler inside the corporate network. Prefect inverts the relationship: workers reach *out* to the API. No inbound firewall holes; the orchestration UI can live in the cloud while flow code runs on-prem.
+
+#### B.2 Code locality
+
+Critically, **Prefect Cloud never sees your data and never runs your code**. Workers run code on infrastructure you control; only state events (started, completed, failed) flow back to the API. This is a real compliance advantage: data never leaves the customer's network.
+
+#### B.3 Trade-off
+
+The price: you must run workers somewhere. Prefect Cloud is not "fully managed orchestration where I just push code"; it is "managed control plane where I run the workers." Compare to Airflow, where MWAA / Composer also requires you to provide a worker pool. Both have the same fundamental constraint; Prefect makes it explicit.
+
+### Theory: Work Pools and Workers
+
+Prefect 2.x introduced work pools — the modern way to express "where does this flow run."
+
+#### D.1 The model
+
+- A **deployment** says "this flow, on this schedule, with these parameters."
+- A **work pool** is a queue (with infrastructure config) that deployments push runs into.
+- A **worker** polls a specific work pool and executes runs.
+
+This is similar to Airflow's executor + queue concept but more explicit. You can have one work pool for "small Python tasks" backed by a process worker, another for "Spark jobs" backed by a Kubernetes worker, another for "AWS batch" backed by an ECS worker.
+
+#### D.2 Decoupling code and infrastructure
+
+A flow that says `kubernetes_job.with_options(image="my-spark:1.0").submit(work)` declares its infrastructure inline; the worker just pulls and dispatches. You can move flows between infrastructures by changing the deployment's work pool, not the flow code.
+
+#### D.3 The pull model implication
+
+Workers pull from work pools; the API does not push. If no worker is polling a pool, runs queue up but do not execute. The first sign of a missing/dead worker is "scheduled runs are not starting." Monitoring should always include "is at least one worker polling each active work pool?"
 
 ### 5.1 Creating Deployment
 
@@ -541,7 +501,6 @@ def my_etl_flow(date: str = None):
     from datetime import datetime
     date = date or datetime.now().strftime("%Y-%m-%d")
     print(f"Running ETL for {date}")
-
 
 # Deployments decouple flow definition from execution scheduling — the same flow
 # can have multiple deployments with different schedules, parameters, and infrastructure.
@@ -730,13 +689,11 @@ def custom_state_handler(task, task_run, state: State):
         print(f"Task {task.name} failed!")
     return state
 
-
 # on_failure hooks only fire on failure — more efficient than checking every
 # state transition when you only need error notifications
 @task(on_failure=[custom_state_handler])
 def risky_task():
     raise ValueError("Something went wrong")
-
 
 # Flow-level handlers catch failures from any task in the flow — useful for
 # sending a single "pipeline failed" alert instead of per-task notifications
@@ -758,7 +715,6 @@ from prefect.serializers import JSONSerializer
 @task(result_storage=LocalFileSystem(basepath="/tmp/prefect"))
 def save_locally():
     return {"data": [1, 2, 3]}
-
 
 # S3 storage with JSON serialization — JSONSerializer produces human-readable
 # results (useful for debugging), unlike the default pickle which is faster but opaque.
@@ -787,7 +743,6 @@ def use_secret():
     api_key = Secret.load("my-api-key").get()
     # Use for API calls
     return f"Using key: {api_key[:4]}..."
-
 
 # Use environment variables
 import os

@@ -14,17 +14,19 @@
 
 ---
 
-## Theory & Principles
+## Overview
 
-Vector search looks deceptively simple — "find the K nearest vectors to my query" — until you scale past a million vectors and discover that brute-force comparison is impossibly slow. Every interesting vector database decision is downstream of one fundamental tension: **exact** nearest-neighbor search is provably hard in high dimensions (the "curse of dimensionality"), so production systems use **approximate** nearest-neighbor (ANN) algorithms that trade a tiny bit of recall for orders of magnitude in speed.
+Modern data pipelines increasingly deal with high-dimensional vector data — embeddings from language models, image encoders, recommendation systems, and scientific simulations. Storing and searching these vectors efficiently is a data engineering problem that sits at the intersection of indexing theory, distributed systems, and hardware optimization.
 
-- **(A) The curse of dimensionality and why brute force breaks down** — what makes high-dimensional search hard.
-- **(B) Distance metrics: cosine, Euclidean, dot product** — what each measures and when each is right.
-- **(C) The major ANN algorithm families** — IVF (inverted file), HNSW (hierarchical small-world graphs), PQ (product quantization).
-- **(D) The recall-vs-speed-vs-memory triangle** — every index lives somewhere on this surface.
-- **(E) Storage architecture for vectors at scale** — partitioning, sharding, the embedding-pipeline as a data engineering problem.
+This lesson covers the storage layer: how vectors are persisted, indexed, and queried across the major tools in the ecosystem. We start with the foundational library (FAISS), then examine purpose-built vector databases (Milvus, Weaviate, Pinecone, Qdrant, Chroma), and conclude with a benchmark comparison to guide technology selection.
 
-### A. The Curse of Dimensionality
+> **Data Engineering perspective**: Vector storage is not just an ML concern. Data engineers must design embedding pipelines, manage index lifecycle, handle schema evolution for metadata, and integrate vector stores into the broader data platform alongside warehouses, lakes, and streaming systems.
+
+---
+
+## 1. Vector Storage Architectures
+
+### Theory: The Curse of Dimensionality
 
 In low dimensions, nearest-neighbor search is straightforward — kd-trees give you O(log N). In high dimensions (D > 30 or so), kd-trees degenerate: nearly every point becomes "approximately equidistant" from the query, and tree pruning fails.
 
@@ -32,7 +34,7 @@ For a typical embedding (D = 768 from BERT, D = 1536 from OpenAI), brute-force c
 
 This is not solvable by faster hardware. The math fights back. The solution is to give up on exact answers.
 
-### B. Distance Metrics
+### Theory: Distance Metrics
 
 What does "nearest" mean?
 
@@ -57,119 +59,6 @@ Use when: vectors are normalized (most modern embeddings are). Faster than cosin
 #### B.4 The pragmatic rule
 
 For modern text/image embeddings, vectors are usually L2-normalized at production time. Then dot product = cosine similarity, both computed faster than Euclidean. This is what FAISS, Milvus, Pinecone all default to.
-
-### C. ANN Algorithm Families
-
-Three dominant families, three different design philosophies.
-
-#### C.1 IVF (Inverted File Index)
-
-The clustering approach.
-
-1. **Training:** k-means cluster all N vectors into K centroids (K typically 1000-10000).
-2. **Indexing:** assign each vector to its nearest centroid; bucket them.
-3. **Query:** find the closest M centroids to the query; only search those buckets.
-
-Speed: O(K + M × N/K). Trade-off: increasing M improves recall but slows queries. M=1 might give 70% recall; M=20 might give 95%.
-
-Strengths: simple, fast to build, works well at moderate scale (millions to ~100M vectors). Standard in FAISS as `IndexIVFFlat`.
-
-#### C.2 HNSW (Hierarchical Navigable Small World)
-
-The graph approach.
-
-1. **Indexing:** build a multi-layer graph. Top layer is sparse (few long-range edges); bottom layer is dense (many short edges). Insert each vector with edges to its nearest neighbors at each layer.
-2. **Query:** start at the top layer, greedy-walk toward the query (always step to the neighbor closest to the query). Drop down a layer; repeat. At the bottom layer, the K nearest neighbors are the result.
-
-Speed: O(log N) per query. Recall: typically 95-99% with reasonable parameters.
-
-Strengths: best-in-class recall/speed trade-off for moderate-scale workloads. Standard in pgvector, Qdrant, Weaviate, and most modern vector DBs.
-
-Weaknesses: high memory (graph edges); slow to build; updates are tricky.
-
-#### C.3 PQ (Product Quantization)
-
-The compression approach. Not a search algorithm per se, but a way to make IVF or HNSW use less memory.
-
-1. Split each D-dim vector into M sub-vectors of D/M dims each.
-2. K-means cluster each sub-space independently into 256 centroids.
-3. Store each vector as M bytes (one centroid index per sub-space) instead of D × 4 bytes.
-
-Compression: 32x to 64x. Distance computation: approximate, via cluster-to-cluster lookup tables.
-
-Strengths: enables billion-scale vector search on a single machine. Standard in FAISS as `IndexIVFPQ`.
-
-Weakness: lossy. Recall drops slightly compared to uncompressed.
-
-#### C.4 Combinations
-
-Production systems combine these. `IndexIVFPQ` (FAISS): IVF for partitioning + PQ for compression. Pinecone: HNSW + PQ-style compression. Each tool's index choices are tunings on this design space.
-
-### D. The Recall-Speed-Memory Triangle
-
-Every ANN index lives somewhere on a 3D surface:
-
-- **Recall:** what fraction of the true K-NN does the index return? 100% = exact; lower = approximate.
-- **Query speed:** queries per second per node.
-- **Memory:** RAM needed to hold the index.
-
-Increasing one usually costs another. `IndexFlat` (brute force) is 100% recall but slow. `IndexHNSWFlat` is fast and ~98% recall but uses 2x memory of raw vectors. `IndexIVFPQ` uses 30x less memory but recall drops to 90% and queries are slower than HNSW.
-
-Picking an index = picking your point on this triangle for your workload. If 95% recall is acceptable and memory is constrained, IVFPQ. If recall is critical and memory is plentiful, HNSW. If query latency is the priority, HNSW with high `ef` parameter.
-
-### E. Storage Architecture for Vectors at Scale
-
-The vector index is just one component; getting vectors *into* and *out of* the system is a data engineering problem.
-
-#### E.1 The embedding pipeline
-
-1. Source content (documents, images, products) lives in a primary store (DB, S3).
-2. An embedding service (OpenAI API, local model on GPU) computes vectors.
-3. Vectors are written to the vector DB along with metadata (the source ID, schema fields for filtering).
-4. On change (new content, content updated), the embedding is recomputed and the vector DB is updated.
-
-This is a CDC + transform + load pipeline (Lessons 18, 12). The vector DB is the sink. Failure modes: stale embeddings (source updated but vector not refreshed), missing embeddings (new content not indexed yet), schema drift between source and vector DB metadata.
-
-#### E.2 Partitioning and sharding
-
-- **Per-tenant partitioning.** Each customer / namespace has its own vector collection. Search is scoped to one partition. Common for multi-tenant SaaS.
-- **By-key sharding.** A single logical collection is sharded by key across nodes. Each query scatters to all shards, gathers results. Standard for billion-scale.
-- **Hot-cold tiering.** Recent vectors in fast HNSW; older vectors in compressed IVFPQ; archive in object storage. Query accumulates from each tier.
-
-#### E.3 The metadata-filter problem
-
-A common query: "find similar products, but only those in Category=X and Price<100." The naive approach (search top 1000, filter) breaks when filters are selective (out of 1000 results, only 5 match the filter). Solutions:
-
-- **Pre-filter:** apply metadata filter first, then search only matching vectors. Requires metadata index.
-- **Post-filter with overshoot:** search top 10000, filter, return top 10. Wastes compute when filter is selective.
-- **Filtered-aware index:** indexes that support filters at the graph traversal level (Weaviate's filtered HNSW, Qdrant's filterable HNSW). Best performance when filters are common.
-
-This is one of the deepest design issues in production vector search.
-
-### From Theory to the Code Below
-
-Each section that follows operationalizes one piece of this framework:
-
-- §1 (Vector Search Fundamentals) is §A and §B — distance metrics and the dimensionality problem.
-- §2 (FAISS) is §C — the foundational library implementing IVF, HNSW, PQ.
-- §3 (Vector Databases) is §E — production systems built around these algorithms.
-- §4 (Index Selection) is §D — the recall-speed-memory triangle in practice.
-- §5 (Filtering and Hybrid Queries) is §E.3 — pre-filter, post-filter, filtered indexes.
-- §6 (Benchmark Comparison) gives concrete recall/QPS/memory numbers across tools.
-
----
-
-## Overview
-
-Modern data pipelines increasingly deal with high-dimensional vector data — embeddings from language models, image encoders, recommendation systems, and scientific simulations. Storing and searching these vectors efficiently is a data engineering problem that sits at the intersection of indexing theory, distributed systems, and hardware optimization.
-
-This lesson covers the storage layer: how vectors are persisted, indexed, and queried across the major tools in the ecosystem. We start with the foundational library (FAISS), then examine purpose-built vector databases (Milvus, Weaviate, Pinecone, Qdrant, Chroma), and conclude with a benchmark comparison to guide technology selection.
-
-> **Data Engineering perspective**: Vector storage is not just an ML concern. Data engineers must design embedding pipelines, manage index lifecycle, handle schema evolution for metadata, and integrate vector stores into the broader data platform alongside warehouses, lakes, and streaming systems.
-
----
-
-## 1. Vector Storage Architectures
 
 ### 1.1 Storage Model Taxonomy
 
@@ -314,6 +203,65 @@ WAL ensures no data loss on crash:
 ---
 
 ## 2. FAISS Deep Dive
+
+### Theory: ANN Algorithm Families
+
+Three dominant families, three different design philosophies.
+
+#### C.1 IVF (Inverted File Index)
+
+The clustering approach.
+
+1. **Training:** k-means cluster all N vectors into K centroids (K typically 1000-10000).
+2. **Indexing:** assign each vector to its nearest centroid; bucket them.
+3. **Query:** find the closest M centroids to the query; only search those buckets.
+
+Speed: O(K + M × N/K). Trade-off: increasing M improves recall but slows queries. M=1 might give 70% recall; M=20 might give 95%.
+
+Strengths: simple, fast to build, works well at moderate scale (millions to ~100M vectors). Standard in FAISS as `IndexIVFFlat`.
+
+#### C.2 HNSW (Hierarchical Navigable Small World)
+
+The graph approach.
+
+1. **Indexing:** build a multi-layer graph. Top layer is sparse (few long-range edges); bottom layer is dense (many short edges). Insert each vector with edges to its nearest neighbors at each layer.
+2. **Query:** start at the top layer, greedy-walk toward the query (always step to the neighbor closest to the query). Drop down a layer; repeat. At the bottom layer, the K nearest neighbors are the result.
+
+Speed: O(log N) per query. Recall: typically 95-99% with reasonable parameters.
+
+Strengths: best-in-class recall/speed trade-off for moderate-scale workloads. Standard in pgvector, Qdrant, Weaviate, and most modern vector DBs.
+
+Weaknesses: high memory (graph edges); slow to build; updates are tricky.
+
+#### C.3 PQ (Product Quantization)
+
+The compression approach. Not a search algorithm per se, but a way to make IVF or HNSW use less memory.
+
+1. Split each D-dim vector into M sub-vectors of D/M dims each.
+2. K-means cluster each sub-space independently into 256 centroids.
+3. Store each vector as M bytes (one centroid index per sub-space) instead of D × 4 bytes.
+
+Compression: 32x to 64x. Distance computation: approximate, via cluster-to-cluster lookup tables.
+
+Strengths: enables billion-scale vector search on a single machine. Standard in FAISS as `IndexIVFPQ`.
+
+Weakness: lossy. Recall drops slightly compared to uncompressed.
+
+#### C.4 Combinations
+
+Production systems combine these. `IndexIVFPQ` (FAISS): IVF for partitioning + PQ for compression. Pinecone: HNSW + PQ-style compression. Each tool's index choices are tunings on this design space.
+
+### Theory: The Recall-Speed-Memory Triangle
+
+Every ANN index lives somewhere on a 3D surface:
+
+- **Recall:** what fraction of the true K-NN does the index return? 100% = exact; lower = approximate.
+- **Query speed:** queries per second per node.
+- **Memory:** RAM needed to hold the index.
+
+Increasing one usually costs another. `IndexFlat` (brute force) is 100% recall but slow. `IndexHNSWFlat` is fast and ~98% recall but uses 2x memory of raw vectors. `IndexIVFPQ` uses 30x less memory but recall drops to 90% and queries are slower than HNSW.
+
+Picking an index = picking your point on this triangle for your workload. If 95% recall is acceptable and memory is constrained, IVFPQ. If recall is critical and memory is plentiful, HNSW. If query latency is the priority, HNSW with high `ef` parameter.
 
 ### 2.1 FAISS in the Ecosystem
 
@@ -470,6 +418,35 @@ Decision tree for FAISS index selection:
 ---
 
 ## 3. Milvus Architecture
+
+### Theory: Storage Architecture for Vectors at Scale
+
+The vector index is just one component; getting vectors *into* and *out of* the system is a data engineering problem.
+
+#### E.1 The embedding pipeline
+
+1. Source content (documents, images, products) lives in a primary store (DB, S3).
+2. An embedding service (OpenAI API, local model on GPU) computes vectors.
+3. Vectors are written to the vector DB along with metadata (the source ID, schema fields for filtering).
+4. On change (new content, content updated), the embedding is recomputed and the vector DB is updated.
+
+This is a CDC + transform + load pipeline (Lessons 18, 12). The vector DB is the sink. Failure modes: stale embeddings (source updated but vector not refreshed), missing embeddings (new content not indexed yet), schema drift between source and vector DB metadata.
+
+#### E.2 Partitioning and sharding
+
+- **Per-tenant partitioning.** Each customer / namespace has its own vector collection. Search is scoped to one partition. Common for multi-tenant SaaS.
+- **By-key sharding.** A single logical collection is sharded by key across nodes. Each query scatters to all shards, gathers results. Standard for billion-scale.
+- **Hot-cold tiering.** Recent vectors in fast HNSW; older vectors in compressed IVFPQ; archive in object storage. Query accumulates from each tier.
+
+#### E.3 The metadata-filter problem
+
+A common query: "find similar products, but only those in Category=X and Price<100." The naive approach (search top 1000, filter) breaks when filters are selective (out of 1000 results, only 5 match the filter). Solutions:
+
+- **Pre-filter:** apply metadata filter first, then search only matching vectors. Requires metadata index.
+- **Post-filter with overshoot:** search top 10000, filter, return top 10. Wastes compute when filter is selective.
+- **Filtered-aware index:** indexes that support filters at the graph traversal level (Weaviate's filtered HNSW, Qdrant's filterable HNSW). Best performance when filters are common.
+
+This is one of the deepest design issues in production vector search.
 
 ### 3.1 Distributed Components
 

@@ -15,120 +15,15 @@ After completing this lesson, you will be able to:
 
 ---
 
-## Theory & Principles
+## Overview
 
-Spark is most easily learned API-first — `spark.read.parquet(...).filter(...).groupBy(...).count()` looks like familiar pandas-style chaining. But the API hides four ideas that determine whether your job runs in 30 seconds or 3 hours: the RDD as a lineage graph, narrow vs wide transformations, lazy evaluation with the DAG scheduler, and the in-memory model that distinguishes Spark from MapReduce.
+Apache Spark is a unified analytics engine for large-scale data processing. It provides faster performance than Hadoop MapReduce through in-memory processing and supports both batch processing and streaming.
 
-- **(A) RDD as lineage graph** — the original Spark abstraction, why fault tolerance comes from the graph, not from replication.
-- **(B) Narrow vs wide transformations** — the shuffle boundary that dominates Spark performance.
-- **(C) Lazy evaluation and the DAG scheduler** — transformations build a plan; actions execute it.
-- **(D) Spark vs MapReduce** — what changed when Spark kept intermediate results in memory.
+---
 
-### A. RDD as Lineage Graph
+## 1. Spark Overview
 
-The Resilient Distributed Dataset (RDD) is the core abstraction Spark was built on (DataFrames are now the recommended API, but they compile down to RDDs). Three properties:
-
-- **Distributed:** the data is partitioned across N executors. A 1 TB RDD with 200 partitions has roughly 5 GB on each of 200 executors.
-- **Resilient:** if a partition is lost (executor died), Spark recomputes it from the lineage — without needing replicas.
-- **Immutable:** transformations create new RDDs, never mutate the existing one.
-
-#### A.1 The lineage trick
-
-A traditional distributed system (HDFS, Cassandra) achieves fault tolerance by *replication*: every block is stored on 3 machines. Storage cost: 3x.
-
-Spark does it differently. Each RDD remembers *how it was derived* — the function applied to its parent RDD(s). If a partition of `rdd_3 = rdd_2.map(f)` is lost, Spark re-runs `f` on the corresponding partition of `rdd_2` to reconstruct it. If `rdd_2` is also lost, recursion: rebuild `rdd_2` from `rdd_1`, then re-apply `f`. The lineage graph is the recovery plan.
-
-Storage cost: 1x (no replicas, just the source data). The price: recomputation can be expensive for long lineages, which is why `cache()` / `persist()` exist (covered in §B).
-
-#### A.2 The 5-tuple
-
-Every RDD has:
-1. A list of partitions.
-2. A function to compute each partition from its parents.
-3. Dependencies on parent RDDs.
-4. (Optional) a partitioner — how key/value RDDs are partitioned by key.
-5. (Optional) preferred locations for each partition (data locality hints).
-
-These five fields are sufficient to evaluate, recompute, and schedule any RDD.
-
-### B. Narrow vs Wide Transformations
-
-The most performance-relevant distinction in Spark.
-
-#### B.1 Narrow transformations
-
-Each output partition depends on **one** input partition. Examples: `map`, `filter`, `mapPartitions`. No data needs to move between executors — each executor independently transforms its own partitions.
-
-```
-input partitions   →  narrow op  →  output partitions
-[A][B][C][D]                          [A'][B'][C'][D']
-```
-
-Narrow transformations *pipeline* — `filter().map().filter()` runs as a single pass over each partition, in memory, with no inter-executor communication.
-
-#### B.2 Wide transformations (shuffles)
-
-Each output partition depends on **all** input partitions. Examples: `groupByKey`, `reduceByKey`, `join`, `distinct`, `repartition`. Data must move across executors — a *shuffle*.
-
-```
-input partitions   →    shuffle    →   output partitions
-[A][B][C][D]              ↘↙↘↙              [X][Y][Z]
-                          ↗↖↗↖
-```
-
-A shuffle:
-1. Each input partition writes its output keyed by the shuffle key.
-2. Data is sorted/hashed by key.
-3. Each output partition pulls all rows for its key range from every input partition.
-
-The shuffle is **the** bottleneck in Spark. It involves disk write, network transfer, and sort/merge. A job that shuffles 100 GB might take 10x longer than the equivalent map-only work on the same data.
-
-#### B.3 Stages and the shuffle boundary
-
-The DAG scheduler splits the lineage graph into *stages* at every wide transformation. Each stage is a sequence of narrow transformations that pipeline together. Between stages, there is a shuffle.
-
-Reading a Spark UI is largely about counting and minimizing stages.
-
-#### B.4 Reducing shuffle cost
-
-- **Use `reduceByKey` over `groupByKey`** when possible — reduces local before shuffle.
-- **Broadcast small tables** for joins — sends the small side to every executor, avoiding shuffle of the large side.
-- **Pre-partition** — if you will join two RDDs on the same key repeatedly, repartition once and persist.
-- **Use DataFrames** — the Catalyst optimizer rewrites your query to minimize shuffles automatically.
-
-### C. Lazy Evaluation and the DAG Scheduler
-
-Spark transformations do not execute immediately. They build a *plan* (the lineage graph). Execution happens only when an *action* is called — `count`, `collect`, `save`, `show`.
-
-#### C.1 Why laziness matters
-
-```python
-df = spark.read.parquet("...")              # plan: scan
-df2 = df.filter(col("amount") > 100)         # plan: scan + filter
-df3 = df2.select("user_id", "amount")        # plan: scan + filter + project
-df3.count()                                  # ACTION → execute plan
-```
-
-Because Spark sees the entire plan before running, it can:
-
-- **Push down predicates.** The `filter(amount > 100)` is pushed *into the Parquet read*, so unmatched row groups are not read at all.
-- **Project early.** Only `user_id` and `amount` columns are read from disk; the other 50 columns are skipped.
-- **Reorder.** Filter before join, broadcast the smaller side, etc.
-
-Without laziness, each operator would have to materialize its full output before the next began. Laziness is what makes optimization possible.
-
-#### C.2 The Catalyst optimizer
-
-DataFrame operations go through Catalyst — a four-stage rule-based + cost-based optimizer:
-
-1. **Analysis:** resolve column names against schema.
-2. **Logical optimization:** apply rules (predicate pushdown, constant folding, projection pruning).
-3. **Physical planning:** choose join algorithms (broadcast vs shuffle hash vs sort merge).
-4. **Code generation:** Tungsten compiles the physical plan to JVM bytecode for tight loops.
-
-The result: idiomatic DataFrame code is often within 2x of hand-written JVM code, and far faster than the equivalent RDD operations because the RDD path bypasses Catalyst.
-
-### D. Spark vs MapReduce
+### Theory: Spark vs MapReduce
 
 Hadoop MapReduce, the predecessor, had a brutally simple execution model: every job is one Map stage + one Reduce stage, with intermediate results *written to HDFS* between them. A multi-stage workflow was N MapReduce jobs in sequence, each writing to disk between stages.
 
@@ -141,27 +36,6 @@ Spark's innovation:
 The performance gain is primarily from avoiding HDFS roundtrips. A 5-stage pipeline that wrote to HDFS 4 times (after each stage) becomes a 5-stage pipeline that writes once at the end — an order of magnitude faster.
 
 The myth: "Spark is fast because it's in-memory." The reality: Spark is fast because it doesn't write intermediate results to durable storage. When an executor's working set exceeds memory, Spark spills to local disk and is still much faster than MapReduce, because local disk is faster than HDFS.
-
-### From Theory to the Code Below
-
-Each section that follows operationalizes one piece of this framework:
-
-- §1 (Spark Overview) is the §D MapReduce-comparison and ecosystem.
-- §2 (Spark Architecture) is §A — the executor model that runs the partitioned RDDs.
-- §3 (RDDs vs DataFrames vs Datasets) is §A and the Catalyst (§C.2) story.
-- §4 (DataFrame Transformations) is §B in concrete API — narrow ops are pipelined, wide ops cause stages.
-- §5 (Lazy Evaluation) is §C explicitly.
-- §6 (Configuration and Data Sources) is the practical I/O layer that Catalyst pushes predicates into.
-
----
-
-## Overview
-
-Apache Spark is a unified analytics engine for large-scale data processing. It provides faster performance than Hadoop MapReduce through in-memory processing and supports both batch processing and streaming.
-
----
-
-## 1. Spark Overview
 
 ### 1.1 Spark Features
 
@@ -218,6 +92,38 @@ Apache Spark is a unified analytics engine for large-scale data processing. It p
 ---
 
 ## 2. Spark Architecture
+
+### Theory: Lazy Evaluation and the DAG Scheduler
+
+Spark transformations do not execute immediately. They build a *plan* (the lineage graph). Execution happens only when an *action* is called — `count`, `collect`, `save`, `show`.
+
+#### C.1 Why laziness matters
+
+```python
+df = spark.read.parquet("...")              # plan: scan
+df2 = df.filter(col("amount") > 100)         # plan: scan + filter
+df3 = df2.select("user_id", "amount")        # plan: scan + filter + project
+df3.count()                                  # ACTION → execute plan
+```
+
+Because Spark sees the entire plan before running, it can:
+
+- **Push down predicates.** The `filter(amount > 100)` is pushed *into the Parquet read*, so unmatched row groups are not read at all.
+- **Project early.** Only `user_id` and `amount` columns are read from disk; the other 50 columns are skipped.
+- **Reorder.** Filter before join, broadcast the smaller side, etc.
+
+Without laziness, each operator would have to materialize its full output before the next began. Laziness is what makes optimization possible.
+
+#### C.2 The Catalyst optimizer
+
+DataFrame operations go through Catalyst — a four-stage rule-based + cost-based optimizer:
+
+1. **Analysis:** resolve column names against schema.
+2. **Logical optimization:** apply rules (predicate pushdown, constant folding, projection pruning).
+3. **Physical planning:** choose join algorithms (broadcast vs shuffle hash vs sort merge).
+4. **Code generation:** Tungsten compiles the physical plan to JVM bytecode for tight loops.
+
+The result: idiomatic DataFrame code is often within 2x of hand-written JVM code, and far faster than the equivalent RDD operations because the RDD path bypasses Catalyst.
 
 ### 2.1 Cluster Configuration
 
@@ -304,6 +210,78 @@ result = df3.collect()
 
 ## 3. RDD (Resilient Distributed Dataset)
 
+### Theory: RDD as Lineage Graph
+
+The Resilient Distributed Dataset (RDD) is the core abstraction Spark was built on (DataFrames are now the recommended API, but they compile down to RDDs). Three properties:
+
+- **Distributed:** the data is partitioned across N executors. A 1 TB RDD with 200 partitions has roughly 5 GB on each of 200 executors.
+- **Resilient:** if a partition is lost (executor died), Spark recomputes it from the lineage — without needing replicas.
+- **Immutable:** transformations create new RDDs, never mutate the existing one.
+
+#### A.1 The lineage trick
+
+A traditional distributed system (HDFS, Cassandra) achieves fault tolerance by *replication*: every block is stored on 3 machines. Storage cost: 3x.
+
+Spark does it differently. Each RDD remembers *how it was derived* — the function applied to its parent RDD(s). If a partition of `rdd_3 = rdd_2.map(f)` is lost, Spark re-runs `f` on the corresponding partition of `rdd_2` to reconstruct it. If `rdd_2` is also lost, recursion: rebuild `rdd_2` from `rdd_1`, then re-apply `f`. The lineage graph is the recovery plan.
+
+Storage cost: 1x (no replicas, just the source data). The price: recomputation can be expensive for long lineages, which is why `cache()` / `persist()` exist (covered in §B).
+
+#### A.2 The 5-tuple
+
+Every RDD has:
+1. A list of partitions.
+2. A function to compute each partition from its parents.
+3. Dependencies on parent RDDs.
+4. (Optional) a partitioner — how key/value RDDs are partitioned by key.
+5. (Optional) preferred locations for each partition (data locality hints).
+
+These five fields are sufficient to evaluate, recompute, and schedule any RDD.
+
+### Theory: Narrow vs Wide Transformations
+
+The most performance-relevant distinction in Spark.
+
+#### B.1 Narrow transformations
+
+Each output partition depends on **one** input partition. Examples: `map`, `filter`, `mapPartitions`. No data needs to move between executors — each executor independently transforms its own partitions.
+
+```
+input partitions   →  narrow op  →  output partitions
+[A][B][C][D]                          [A'][B'][C'][D']
+```
+
+Narrow transformations *pipeline* — `filter().map().filter()` runs as a single pass over each partition, in memory, with no inter-executor communication.
+
+#### B.2 Wide transformations (shuffles)
+
+Each output partition depends on **all** input partitions. Examples: `groupByKey`, `reduceByKey`, `join`, `distinct`, `repartition`. Data must move across executors — a *shuffle*.
+
+```
+input partitions   →    shuffle    →   output partitions
+[A][B][C][D]              ↘↙↘↙              [X][Y][Z]
+                          ↗↖↗↖
+```
+
+A shuffle:
+1. Each input partition writes its output keyed by the shuffle key.
+2. Data is sorted/hashed by key.
+3. Each output partition pulls all rows for its key range from every input partition.
+
+The shuffle is **the** bottleneck in Spark. It involves disk write, network transfer, and sort/merge. A job that shuffles 100 GB might take 10x longer than the equivalent map-only work on the same data.
+
+#### B.3 Stages and the shuffle boundary
+
+The DAG scheduler splits the lineage graph into *stages* at every wide transformation. Each stage is a sequence of narrow transformations that pipeline together. Between stages, there is a shuffle.
+
+Reading a Spark UI is largely about counting and minimizing stages.
+
+#### B.4 Reducing shuffle cost
+
+- **Use `reduceByKey` over `groupByKey`** when possible — reduces local before shuffle.
+- **Broadcast small tables** for joins — sends the small side to every executor, avoiding shuffle of the large side.
+- **Pre-partition** — if you will join two RDDs on the same key repeatedly, repartition once and persist.
+- **Use DataFrames** — the Catalyst optimizer rewrites your query to minimize shuffles automatically.
+
 ### 3.1 RDD Concept
 
 RDD is Spark's fundamental data structure, an immutable distributed collection of data.
@@ -372,7 +350,6 @@ grouped = pairs.groupByKey()  # [("a", [1, 3]), ("b", [2])]
 # reduceByKey: Performs local combine BEFORE shuffle (like a mini-MapReduce combiner),
 # drastically reducing network transfer. Always prefer over groupByKey + reduce.
 reduced = pairs.reduceByKey(lambda a, b: a + b)  # [("a", 4), ("b", 2)]
-
 
 # Actions (Eager)
 # - Trigger the full lineage execution — Spark submits a job to the cluster,

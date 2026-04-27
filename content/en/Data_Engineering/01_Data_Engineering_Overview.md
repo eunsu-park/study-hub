@@ -15,147 +15,6 @@ After completing this lesson, you will be able to:
 
 ---
 
-## Theory & Principles
-
-Before the role-and-tools tour, it helps to fix a small set of architectural ideas that recur in every data system you will touch. The vocabulary of "pipeline", "warehouse", "lake", "Lambda", and "Kappa" is not just naming — each label encodes a different answer to the same three questions: where does the data live, when is it transformed, and what consistency does the consumer see?
-
-- **(A) Pipeline as a directed graph of stages** — extract, transform, load, and the idempotency discipline that makes retries safe.
-- **(B) Storage tiers: warehouse, lake, lakehouse** — schema-on-write vs schema-on-read, and the medallion (bronze/silver/gold) refinement.
-- **(C) Lambda vs Kappa** — two ways to combine batch and streaming, and why the industry largely converged on Kappa-style streaming with batch reprocessing.
-- **(D) Batch vs streaming trade-offs** — latency, throughput, and cost as a single triangle.
-
-### A. Pipeline as a Directed Graph of Stages
-
-A data pipeline is a DAG (directed acyclic graph) of stages, each consuming inputs and producing outputs. The canonical decomposition is *extract* (pull from a source), *transform* (clean, join, aggregate), and *load* (write to a sink) — but the deeper truth is that every stage in the graph has the same shape: read inputs, do work, write outputs.
-
-#### A.1 Why a DAG, not a linear script
-
-A linear script (`extract.py && transform.py && load.py`) breaks the moment you have:
-
-- More than one source feeding the same transform.
-- A transform that fans out to multiple sinks.
-- A failure in stage 5 that needs to rerun without redoing stages 1-4.
-
-A DAG makes the dependency explicit, lets the scheduler skip already-completed stages, and allows parallel execution of independent branches. This is why every modern orchestrator (Airflow, Prefect, Dagster) models pipelines as DAGs — see Lessons 4-6.
-
-#### A.2 Idempotency: the single most important pipeline discipline
-
-A pipeline stage is *idempotent* when running it twice with the same input produces the same output as running it once. This matters because failures are inevitable — a worker crashes, a network blip kills the connection, the orchestrator retries. If the stage is idempotent, retry is safe; if not, retry corrupts.
-
-Three patterns make a stage idempotent:
-
-1. **Deterministic partitioning by date.** "Load yesterday's data into the `orders_2024_03_15` partition." Rerunning overwrites the same partition; downstream sees the same final state.
-2. **Upsert (merge) instead of insert.** Use `INSERT ... ON CONFLICT DO UPDATE` (PostgreSQL) or `MERGE` (data warehouse SQL). The second run finds the row already there and updates rather than duplicating.
-3. **Content-addressed outputs.** Hash the input; if a file with that hash already exists, skip writing. Common in ML feature pipelines.
-
-The pattern to avoid: `INSERT INTO sales SELECT * FROM raw_sales WHERE date = today()`. If this runs twice, you get every row twice.
-
-#### A.3 Atomicity at the stage boundary
-
-A stage either fully completes or leaves no partial state behind. Concretely: write to a temporary location, then atomically rename to the final location only when the write succeeds. On HDFS/S3 this is `_SUCCESS` markers; in SQL warehouses it is transactions; in Delta Lake / Iceberg it is the table commit log. A reader that sees a stage's output sees either *all* of it or *none* of it — never a half-written file.
-
-### B. Storage Tiers: Warehouse, Lake, Lakehouse
-
-Three storage architectures dominate analytical workloads. They differ in *when* schema is enforced and *what* compute can run against them.
-
-#### B.1 Data warehouse (schema-on-write)
-
-A relational database tuned for analytics: columnar storage, MPP (massively parallel processing) execution, optimizer that pushes predicates down. Examples: Snowflake, BigQuery, Redshift.
-
-- **Schema enforced at write.** Loading data requires it to fit a defined table schema; bad rows get rejected or quarantined.
-- **SQL is the only interface.** Great for analysts; clumsy for unstructured data (images, logs, JSON).
-- **Storage and compute coupled (historically), decoupled (modern).** Snowflake/BigQuery separate storage from compute, so you can scale compute independently.
-
-#### B.2 Data lake (schema-on-read)
-
-A blob store (S3, GCS, ADLS) holding raw files: Parquet, JSON, CSV, images, anything. Examples: AWS S3 + Glue catalog, Databricks lake.
-
-- **No schema at write.** You dump bytes; consumers parse on read.
-- **Any compute can read.** Spark, Presto/Trino, Python notebooks, ML training pipelines.
-- **Cheap storage; expensive analytics.** Without indexing or table format, scanning is full-file.
-
-The lake's flexibility comes at a cost: without enforced schema, garbage accumulates ("data swamp"). Without ACID, concurrent writers corrupt each other.
-
-#### B.3 Lakehouse (schema-on-read with table format)
-
-The synthesis: keep data in cheap blob storage but add a *table format* layer (Delta Lake, Apache Iceberg, Apache Hudi) that provides ACID transactions, schema evolution, and time travel. Examples: Databricks Lakehouse, Snowflake Iceberg tables.
-
-- **ACID on top of object storage.** A transaction log file (`_delta_log/`) records each commit; readers see consistent snapshots.
-- **Schema enforced at write** (after you turn it on), but you can also dump raw files and refine later.
-- **Both SQL and ML compute.** Spark/Trino read the same tables that BI tools query.
-
-#### B.4 Medallion architecture
-
-The lakehouse-era convention for organizing refinement levels:
-
-- **Bronze:** raw ingested data, append-only, schema-on-read. Source of truth; never deleted.
-- **Silver:** cleaned, deduplicated, joined, conformed to a schema. Analyst-ready.
-- **Gold:** business-aggregated, denormalized, optimized for specific consumption (dashboards, ML features).
-
-Each tier reads from the previous and is independently rebuildable from bronze. This is the modern operational pattern for lakehouse pipelines — covered in detail in Lessons 11 and 19.
-
-### C. Lambda vs Kappa Architectures
-
-Two architectural patterns for combining batch and streaming. The choice shapes everything from team structure to monitoring.
-
-#### C.1 Lambda architecture
-
-```
-              ┌──── batch layer (Spark) ──── batch view ────┐
-source ──────┤                                              ├── serving layer (query)
-              └──── speed layer (Storm)  ──── realtime view ┘
-```
-
-- **Batch layer** processes the entire dataset (or large windows) for high accuracy.
-- **Speed layer** processes recent events in real time for low latency.
-- **Serving layer** merges the two views at query time.
-
-Pros: combines accuracy of batch with freshness of streaming. Cons: two codebases (batch + stream) implementing the same logic, plus the merge logic. Operationally heavy.
-
-#### C.2 Kappa architecture
-
-```
-source ──── stream processor (Flink/Spark Structured Streaming) ──── materialized view
-                              ↑
-                        replay from log
-                        (Kafka retention)
-```
-
-A single stream processor handles both real-time and historical reprocessing. To "rebuild" a view, replay the stream from the beginning (Kafka can retain forever; or replay from the lakehouse). One codebase, one operational story.
-
-Pros: simpler, single source of truth. Cons: stream processor must be capable of high throughput batch-style replay; some workloads (heavy joins across years of data) are still better as nightly batch.
-
-#### C.3 Which won
-
-In practice, modern stacks lean Kappa-with-batch-supplement: streaming for low-latency views and continuous ETL, scheduled batch (Airflow + Spark + dbt) for complex aggregations and historical rebuilds. The Lambda pattern survives in legacy systems but is rarely the choice for new builds, because the cost of maintaining two implementations exceeds the latency benefit for most analytics use cases.
-
-### D. Batch vs Streaming Trade-offs
-
-The choice is not "stream is modern, batch is old" — it is a deliberate trade-off triangle.
-
-| Property | Batch | Streaming |
-|----------|-------|-----------|
-| Latency | minutes to hours | milliseconds to seconds |
-| Throughput per dollar | very high (compute amortized) | lower (always-on workers) |
-| Operational complexity | low (cron + DAG) | high (state, watermarks, exactly-once) |
-| Reprocessing | trivial (rerun the job) | complex (replay from log, manage state) |
-| Best for | analytics, ML training, reports | alerts, dashboards, real-time features |
-
-The pragmatic rule: use batch by default; introduce streaming only when latency requirements truly demand it. Streaming compounds operational burden — watermarks (event-time vs processing-time), state management, late-arriving data — that does not exist in batch. See Lessons 10, 16, 17 for streaming-specific theory (event time, exactly-once, windowing).
-
-### From Theory to the Tools Below
-
-Each section that follows operationalizes one piece of this framework:
-
-- §1 (Role of a Data Engineer) is the human side of operating §A's DAGs.
-- §2 (Data Pipeline Components) walks the §A.1 stages and §A.2-3 idempotency/atomicity disciplines.
-- §3 (Batch vs Streaming) is §D in concrete code.
-- §4 (Data Architecture Patterns) covers §B (warehouse / lake / lakehouse) and §C (Lambda / Kappa) at the deployment level.
-- §5 (Tool Ecosystem) maps each layer to specific tools (Airflow for orchestration, Spark for compute, Kafka for streaming, dbt for transformation).
-- §6 (Best Practices) is §A.2 idempotency + §A.3 atomicity + retry/observability discipline made concrete.
-
----
-
 ## Overview
 
 Data Engineering is the field of designing and building systems that collect, store, process, and deliver organizational data. Data engineers build data pipelines that transform raw data into analyzable formats.
@@ -219,6 +78,36 @@ tech_stack = {
 ---
 
 ## 2. Data Pipeline Concepts
+
+### Theory: Pipeline as a Directed Graph of Stages
+
+A data pipeline is a DAG (directed acyclic graph) of stages, each consuming inputs and producing outputs. The canonical decomposition is *extract* (pull from a source), *transform* (clean, join, aggregate), and *load* (write to a sink) — but the deeper truth is that every stage in the graph has the same shape: read inputs, do work, write outputs.
+
+#### A.1 Why a DAG, not a linear script
+
+A linear script (`extract.py && transform.py && load.py`) breaks the moment you have:
+
+- More than one source feeding the same transform.
+- A transform that fans out to multiple sinks.
+- A failure in stage 5 that needs to rerun without redoing stages 1-4.
+
+A DAG makes the dependency explicit, lets the scheduler skip already-completed stages, and allows parallel execution of independent branches. This is why every modern orchestrator (Airflow, Prefect, Dagster) models pipelines as DAGs — see Lessons 4-6.
+
+#### A.2 Idempotency: the single most important pipeline discipline
+
+A pipeline stage is *idempotent* when running it twice with the same input produces the same output as running it once. This matters because failures are inevitable — a worker crashes, a network blip kills the connection, the orchestrator retries. If the stage is idempotent, retry is safe; if not, retry corrupts.
+
+Three patterns make a stage idempotent:
+
+1. **Deterministic partitioning by date.** "Load yesterday's data into the `orders_2024_03_15` partition." Rerunning overwrites the same partition; downstream sees the same final state.
+2. **Upsert (merge) instead of insert.** Use `INSERT ... ON CONFLICT DO UPDATE` (PostgreSQL) or `MERGE` (data warehouse SQL). The second run finds the row already there and updates rather than duplicating.
+3. **Content-addressed outputs.** Hash the input; if a file with that hash already exists, skip writing. Common in ML feature pipelines.
+
+The pattern to avoid: `INSERT INTO sales SELECT * FROM raw_sales WHERE date = today()`. If this runs twice, you get every row twice.
+
+#### A.3 Atomicity at the stage boundary
+
+A stage either fully completes or leaves no partial state behind. Concretely: write to a temporary location, then atomically rename to the final location only when the write succeeds. On HDFS/S3 this is `_SUCCESS` markers; in SQL warehouses it is transactions; in Delta Lake / Iceberg it is the table commit log. A reader that sees a stage's output sees either *all* of it or *none* of it — never a half-written file.
 
 ### 2.1 What is a Pipeline?
 
@@ -290,7 +179,6 @@ class DataPipeline:
         duration = (self.end_time - self.start_time).seconds
         print(f"Pipeline completed in {duration} seconds")
 
-
 # Execute pipeline
 if __name__ == "__main__":
     pipeline = DataPipeline("daily_sales")
@@ -309,6 +197,20 @@ if __name__ == "__main__":
 ---
 
 ## 3. Batch Processing vs Stream Processing
+
+### Theory: Batch vs Streaming Trade-offs
+
+The choice is not "stream is modern, batch is old" — it is a deliberate trade-off triangle.
+
+| Property | Batch | Streaming |
+|----------|-------|-----------|
+| Latency | minutes to hours | milliseconds to seconds |
+| Throughput per dollar | very high (compute amortized) | lower (always-on workers) |
+| Operational complexity | low (cron + DAG) | high (state, watermarks, exactly-once) |
+| Reprocessing | trivial (rerun the job) | complex (replay from log, manage state) |
+| Best for | analytics, ML training, reports | alerts, dashboards, real-time features |
+
+The pragmatic rule: use batch by default; introduce streaming only when latency requirements truly demand it. Streaming compounds operational burden — watermarks (event-time vs processing-time), state management, late-arriving data — that does not exist in batch. See Lessons 10, 16, 17 for streaming-specific theory (event time, exactly-once, windowing).
 
 ### 3.1 Batch Processing
 
@@ -405,7 +307,6 @@ class StreamProcessor:
             )
             self.process(event)
 
-
 # Handler examples
 def log_handler(event: Event):
     """Event logging"""
@@ -439,6 +340,81 @@ streaming_characteristics = {
 ---
 
 ## 4. Data Architecture Patterns
+
+### Theory: Storage Tiers: Warehouse, Lake, Lakehouse
+
+Three storage architectures dominate analytical workloads. They differ in *when* schema is enforced and *what* compute can run against them.
+
+#### B.1 Data warehouse (schema-on-write)
+
+A relational database tuned for analytics: columnar storage, MPP (massively parallel processing) execution, optimizer that pushes predicates down. Examples: Snowflake, BigQuery, Redshift.
+
+- **Schema enforced at write.** Loading data requires it to fit a defined table schema; bad rows get rejected or quarantined.
+- **SQL is the only interface.** Great for analysts; clumsy for unstructured data (images, logs, JSON).
+- **Storage and compute coupled (historically), decoupled (modern).** Snowflake/BigQuery separate storage from compute, so you can scale compute independently.
+
+#### B.2 Data lake (schema-on-read)
+
+A blob store (S3, GCS, ADLS) holding raw files: Parquet, JSON, CSV, images, anything. Examples: AWS S3 + Glue catalog, Databricks lake.
+
+- **No schema at write.** You dump bytes; consumers parse on read.
+- **Any compute can read.** Spark, Presto/Trino, Python notebooks, ML training pipelines.
+- **Cheap storage; expensive analytics.** Without indexing or table format, scanning is full-file.
+
+The lake's flexibility comes at a cost: without enforced schema, garbage accumulates ("data swamp"). Without ACID, concurrent writers corrupt each other.
+
+#### B.3 Lakehouse (schema-on-read with table format)
+
+The synthesis: keep data in cheap blob storage but add a *table format* layer (Delta Lake, Apache Iceberg, Apache Hudi) that provides ACID transactions, schema evolution, and time travel. Examples: Databricks Lakehouse, Snowflake Iceberg tables.
+
+- **ACID on top of object storage.** A transaction log file (`_delta_log/`) records each commit; readers see consistent snapshots.
+- **Schema enforced at write** (after you turn it on), but you can also dump raw files and refine later.
+- **Both SQL and ML compute.** Spark/Trino read the same tables that BI tools query.
+
+#### B.4 Medallion architecture
+
+The lakehouse-era convention for organizing refinement levels:
+
+- **Bronze:** raw ingested data, append-only, schema-on-read. Source of truth; never deleted.
+- **Silver:** cleaned, deduplicated, joined, conformed to a schema. Analyst-ready.
+- **Gold:** business-aggregated, denormalized, optimized for specific consumption (dashboards, ML features).
+
+Each tier reads from the previous and is independently rebuildable from bronze. This is the modern operational pattern for lakehouse pipelines — covered in detail in Lessons 11 and 19.
+
+### Theory: Lambda vs Kappa Architectures
+
+Two architectural patterns for combining batch and streaming. The choice shapes everything from team structure to monitoring.
+
+#### C.1 Lambda architecture
+
+```
+              ┌──── batch layer (Spark) ──── batch view ────┐
+source ──────┤                                              ├── serving layer (query)
+              └──── speed layer (Storm)  ──── realtime view ┘
+```
+
+- **Batch layer** processes the entire dataset (or large windows) for high accuracy.
+- **Speed layer** processes recent events in real time for low latency.
+- **Serving layer** merges the two views at query time.
+
+Pros: combines accuracy of batch with freshness of streaming. Cons: two codebases (batch + stream) implementing the same logic, plus the merge logic. Operationally heavy.
+
+#### C.2 Kappa architecture
+
+```
+source ──── stream processor (Flink/Spark Structured Streaming) ──── materialized view
+                              ↑
+                        replay from log
+                        (Kafka retention)
+```
+
+A single stream processor handles both real-time and historical reprocessing. To "rebuild" a view, replay the stream from the beginning (Kafka can retain forever; or replay from the lakehouse). One codebase, one operational story.
+
+Pros: simpler, single source of truth. Cons: stream processor must be capable of high throughput batch-style replay; some workloads (heavy joins across years of data) are still better as nightly batch.
+
+#### C.3 Which won
+
+In practice, modern stacks lean Kappa-with-batch-supplement: streaming for low-latency views and continuous ETL, scheduled batch (Airflow + Spark + dbt) for complex aggregations and historical rebuilds. The Lambda pattern survives in legacy systems but is rarely the choice for new builds, because the cost of maintaining two implementations exceeds the latency benefit for most analytics use cases.
 
 ### 4.1 Traditional Data Warehouse Architecture
 
@@ -538,7 +514,6 @@ class LambdaArchitecture:
         # the query result is both complete *and* up-to-date.
         return self.merge_views(batch_result, realtime_result)
 
-
 class BatchLayer:
     """Batch layer: Process entire dataset"""
 
@@ -555,7 +530,6 @@ class BatchLayer:
         # using Spark or MapReduce on the master dataset.
         pass
 
-
 class SpeedLayer:
     """Speed layer: Real-time data processing"""
 
@@ -569,7 +543,6 @@ class SpeedLayer:
     def get_realtime_view(self, params):
         """Return real-time view"""
         pass
-
 
 class ServingLayer:
     """Serving layer: Query processing"""
@@ -741,7 +714,6 @@ def retry(
             raise last_exception
         return wrapper
     return decorator
-
 
 # max_attempts=3, delay=2.0 → waits 2s, then 4s before giving up.
 # Total worst-case wait: 6s, which balances fast recovery against

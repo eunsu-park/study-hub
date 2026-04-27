@@ -14,17 +14,21 @@
 
 ---
 
-## 이론과 원리
+## 개요
 
-Dagster의 명성의 주장은 *데이터 자산* 을 아키텍처 중심에 두는 것이며, 태스크가 아니라는 것입니다. 이는 라벨링 변경 그 이상입니다 — 이는 lineage, 테스트, 관측성, 증분 계산이 어떻게 작동하는지를 변경합니다. 그 이유를 이해하려면, Airflow / Prefect / Luigi가 공유하는 태스크 중심 모델의 한계를 보고, 자산 중심 모델이 그것들을 어떻게 다루는지 봐야 합니다.
+대부분의 오케스트레이션 도구들 — Airflow, Prefect, Luigi — 은 **태스크(task)** 단위로 생각합니다: "이 Python 함수를 실행하고, 그다음 저 함수를 실행하라." Dagster는 이 사고 모델을 완전히 뒤집습니다. "어떤 단계를 실행해야 하는가?"라고 묻는 대신, Dagster는 "어떤 데이터 자산(data asset)이 존재해야 하며, 어떻게 파생되는가?"라고 묻습니다. 이 겉보기에는 작은 변화가 우리가 데이터 파이프라인을 구축하고, 테스트하고, 디버그하고, 관측하는 방식에 심대한 영향을 미칩니다.
 
-- **(A) 태스크 vs 자산** — 각 추상이 무엇을 특권화하고, 무엇을 모호하게 하는가
-- **(B) Software-defined assets (SDAs)** — 작성 단위로서의 선언적 자산 그래프
-- **(C) Materialization 모델** — Dagster가 무엇을 계산하고 무엇을 스킵할지 결정하는 방법
-- **(D) 자산 검사(Asset checks): 자산 수준의 데이터 계약** — 일급으로서의 품질과 신선도
-- **(E) 리소스(Resources)와 IO 매니저(IO managers)** — 비즈니스 로직, 데이터 위치, 실행 환경의 깨끗한 분리
+Dagster는 Nick Schrock(Facebook에서 GraphQL 공동 창시자)이 만들었으며 2019년에 처음 출시되었습니다. 2022년 Dagster 1.0으로 프로덕션 수준의 성숙도에 도달했으며, 이후 가장 빠르게 성장하는 오케스트레이션 프레임워크 중 하나가 되었습니다. 자산 중심 모델은 현대 데이터 스택 — dbt 모델, ML 피처, 분석 테이블이 모두 소비자가 의존하는 **자산(assets)** 인 환경 — 과 자연스럽게 맞아떨어집니다.
 
-### A. 태스크 vs 자산
+이 레슨에서는 Dagster에 대한 철학부터 프로덕션 배포까지 완전한 이해를 구축합니다. 마지막에는 테스트 가능하고, 관측 가능하며, 유지보수 가능한 자산 기반 파이프라인을 설계하고 구현할 수 있게 됩니다.
+
+> **비유**: Dagster 자산은 각 요리(자산)가 자신의 재료(업스트림 자산)를 선언하는 레시피 책과 같습니다. 주방(Dagster)이 자동으로 조리 순서를 파악합니다. 소스 레시피를 업데이트하면, 주방은 어떤 요리를 다시 준비해야 하는지 압니다 — 모든 단계를 일일이 나열하지 않아도 됩니다.
+
+---
+
+## 1. 소프트웨어 정의 자산(Software-Defined Asset) 철학
+
+### 이론: 태스크 vs 자산
 
 Airflow 모델:
 
@@ -65,7 +69,7 @@ DAG는 *자산* 의 그래프. 각 함수는 그것이 생산하는 데이터로
 
 대가: 더 가파른 학습 곡선, 더 엄격한 구조(자산이 사전에 명명되고 그래프에 맞춰져야 함).
 
-### B. Software-Defined Assets (SDAs)
+### 이론: Software-Defined Assets (SDAs)
 
 Dagster의 작성 단위.
 
@@ -93,123 +97,6 @@ def clean_customers(context, raw_customers: pd.DataFrame) -> pd.DataFrame:
 
 이는 DAG가 독립적이고 DAG 간 의존성이 어색한 Airflow와 근본적으로 다름. Dagster에서 전체 데이터 플랫폼이 한 그래프.
 
-### C. Materialization 모델
-
-Dagster가 무엇을 계산할지 결정하는 방법.
-
-#### C.1 수동 materialization
-
-`dagster asset materialize --select daily_revenue`은 자산과 실행될 필요가 있는 업스트림을 실행.
-
-#### C.2 스케줄과 sensor
-
-```python
-@schedule(cron_schedule="0 6 * * *", target=AssetSelection.groups("customer"))
-def daily_customer_refresh():
-    return RunRequest()
-```
-
-매일 6am에 "customer" 그룹의 모든 자산을 실행하는 스케줄. *sensor* 는 외부 이벤트가 발화할 때(파일 나타남, Kafka 메시지 도착 등) 자산을 실행.
-
-#### C.3 파티션된 자산
-
-```python
-@asset(partitions_def=DailyPartitionsDefinition(start_date="2024-01-01"))
-def daily_revenue(context): ...
-```
-
-자산이 날짜 파티션으로 분할됨. 파티션 2024-03-15에 대한 `daily_revenue` materialize는 2024-03-16에 대한 materialize와 독립적. 재실행은 특정 파티션을 타겟팅; 백필은 범위를 materialize. 이는 logical_date를 통해 Airflow가 가지는 같은 파티셔닝 패턴이지만 더 명시적.
-
-#### C.4 Auto-materialization (선언적 스케줄링)
-
-```python
-@asset(auto_materialize_policy=AutoMaterializePolicy.eager())
-def daily_revenue(clean_customers, raw_orders): ...
-```
-
-"어떤 업스트림이든 변경되면 materialize." Dagster가 업스트림 materialization을 모니터하고 다운스트림을 자동으로 트리거. 이는 많은 수동 스케줄 와이어링을 제거.
-
-### D. 자산 검사: 자산 수준의 데이터 계약
-
-```python
-@asset_check(asset=clean_customers)
-def no_null_emails(clean_customers: pd.DataFrame):
-    bad = clean_customers["email"].isnull().sum()
-    return AssetCheckResult(passed=(bad == 0), metadata={"bad_count": bad})
-```
-
-자산 검사는 자산에 부착된 일급 품질 어설션. materialization 후 실행되며:
-- 통과/실패가 메타데이터 DB에 materialization과 함께 기록됨.
-- Dagster UI가 자산별로 실패한 검사를 두드러지게 표시.
-- 검사가 다운스트림 materialization을 차단할 수 있음(`blocking=True`).
-
-이는 dbt 테스트와 개념적으로 비슷하지만 프레임워크 수준 — SQL 모델이든 Python 코드든 Spark 잡이든 모든 자산이 부착된 검사를 가질 수 있음.
-
-### E. 리소스와 IO 매니저
-
-테스트 가능성과 유지보수성을 개선하는 두 가지 아키텍처 아이디어.
-
-#### E.1 리소스
-
-외부 시스템에 대한 재사용 가능, 구성 가능한 연결:
-
-```python
-class SnowflakeResource(ConfigurableResource):
-    account: str
-    user: str
-    password: str
-    
-    def get_connection(self): ...
-
-@asset
-def fact_orders(snowflake: SnowflakeResource): ...
-```
-
-프로덕션에서 리소스는 prod 자격증명으로 구성. 테스트에서 mock이나 in-memory 리소스로 swap. 같은 자산 코드, 다른 런타임.
-
-#### E.2 IO 매니저
-
-자산의 출력이 어떻게 *저장* 되고 다운스트림 자산이 어떻게 *읽는지*. 자산 코드가 값(DataFrame, dict 등)을 반환; IO 매니저가 어디에 둘지 결정.
-
-```python
-@asset(io_manager_key="snowflake_io")
-def daily_revenue(): return df
-
-@asset(io_manager_key="snowflake_io")
-def revenue_dashboard(daily_revenue): ...  # IO 매니저가 Snowflake에서 df 로드
-```
-
-자산은 "Snowflake 테이블 X에 쓰기"라고 말하지 않음 — 단지 데이터를 반환. IO 매니저가 영속화를 처리. 자산 코드를 변경하지 않고 환경 간 IO 매니저 swap(prod에서 Snowflake, dev에서 로컬 Parquet).
-
-이는 어떤 오케스트레이션 프레임워크에서든 가장 깨끗한 관심사 분리 중 하나입니다.
-
-### From Theory to the Code Below
-
-이어지는 각 절은 위 프레임워크의 한 조각을 운영합니다:
-
-- §1 (Dagster 개념)은 §A — asset-vs-task 시프트.
-- §2 (Software-Defined Assets)는 §B — @asset 데코레이터와 자산 그래프.
-- §3 (Materialization과 스케줄링)은 §C — 스케줄, sensor, auto-materialization.
-- §4 (파티션된 자산)은 §C.3 — 날짜와 다른 파티션 전략.
-- §5 (자산 검사)는 §D — 자산 수준의 품질 계약.
-- §6 (리소스와 IO 매니저)는 §E — 테스트 가능성을 위한 관심사 분리.
-
----
-
-## 개요
-
-대부분의 오케스트레이션 도구들 — Airflow, Prefect, Luigi — 은 **태스크(task)** 단위로 생각합니다: "이 Python 함수를 실행하고, 그다음 저 함수를 실행하라." Dagster는 이 사고 모델을 완전히 뒤집습니다. "어떤 단계를 실행해야 하는가?"라고 묻는 대신, Dagster는 "어떤 데이터 자산(data asset)이 존재해야 하며, 어떻게 파생되는가?"라고 묻습니다. 이 겉보기에는 작은 변화가 우리가 데이터 파이프라인을 구축하고, 테스트하고, 디버그하고, 관측하는 방식에 심대한 영향을 미칩니다.
-
-Dagster는 Nick Schrock(Facebook에서 GraphQL 공동 창시자)이 만들었으며 2019년에 처음 출시되었습니다. 2022년 Dagster 1.0으로 프로덕션 수준의 성숙도에 도달했으며, 이후 가장 빠르게 성장하는 오케스트레이션 프레임워크 중 하나가 되었습니다. 자산 중심 모델은 현대 데이터 스택 — dbt 모델, ML 피처, 분석 테이블이 모두 소비자가 의존하는 **자산(assets)** 인 환경 — 과 자연스럽게 맞아떨어집니다.
-
-이 레슨에서는 Dagster에 대한 철학부터 프로덕션 배포까지 완전한 이해를 구축합니다. 마지막에는 테스트 가능하고, 관측 가능하며, 유지보수 가능한 자산 기반 파이프라인을 설계하고 구현할 수 있게 됩니다.
-
-> **비유**: Dagster 자산은 각 요리(자산)가 자신의 재료(업스트림 자산)를 선언하는 레시피 책과 같습니다. 주방(Dagster)이 자동으로 조리 순서를 파악합니다. 소스 레시피를 업데이트하면, 주방은 어떤 요리를 다시 준비해야 하는지 압니다 — 모든 단계를 일일이 나열하지 않아도 됩니다.
-
----
-
-## 1. 소프트웨어 정의 자산(Software-Defined Asset) 철학
-
 ### 1.1 태스크 기반 vs 자산 기반 사고
 
 Dagster와 전통적인 오케스트레이터 사이의 근본적인 차이는 무엇을 주요 추상화(primary abstraction)로 보는가에 있습니다.
@@ -227,7 +114,6 @@ Dagster와 전통적인 오케스트레이터 사이의 근본적인 차이는 �
 - 데이터는 태스크 실행의 부산물(side effect)이다
 - Task 3가 실패하면, 어느 TASK가 실패했는지 알 수 있다
 - 하지만 어떤 DATASET이 오래됐는지(stale)? 직접적으로는 알 수 없다.
-
 
 자산 기반 오케스트레이션(Dagster 모델):
 ──────────────────────────────────────────
@@ -298,6 +184,96 @@ Dagster가 뛰어난 시나리오와 덜 이상적인 시나리오가 있습니�
 
 ## 2. 핵심 개념 심층 분석
 
+### 이론: Materialization 모델
+
+Dagster가 무엇을 계산할지 결정하는 방법.
+
+#### C.1 수동 materialization
+
+`dagster asset materialize --select daily_revenue`은 자산과 실행될 필요가 있는 업스트림을 실행.
+
+#### C.2 스케줄과 sensor
+
+```python
+@schedule(cron_schedule="0 6 * * *", target=AssetSelection.groups("customer"))
+def daily_customer_refresh():
+    return RunRequest()
+```
+
+매일 6am에 "customer" 그룹의 모든 자산을 실행하는 스케줄. *sensor* 는 외부 이벤트가 발화할 때(파일 나타남, Kafka 메시지 도착 등) 자산을 실행.
+
+#### C.3 파티션된 자산
+
+```python
+@asset(partitions_def=DailyPartitionsDefinition(start_date="2024-01-01"))
+def daily_revenue(context): ...
+```
+
+자산이 날짜 파티션으로 분할됨. 파티션 2024-03-15에 대한 `daily_revenue` materialize는 2024-03-16에 대한 materialize와 독립적. 재실행은 특정 파티션을 타겟팅; 백필은 범위를 materialize. 이는 logical_date를 통해 Airflow가 가지는 같은 파티셔닝 패턴이지만 더 명시적.
+
+#### C.4 Auto-materialization (선언적 스케줄링)
+
+```python
+@asset(auto_materialize_policy=AutoMaterializePolicy.eager())
+def daily_revenue(clean_customers, raw_orders): ...
+```
+
+"어떤 업스트림이든 변경되면 materialize." Dagster가 업스트림 materialization을 모니터하고 다운스트림을 자동으로 트리거. 이는 많은 수동 스케줄 와이어링을 제거.
+
+### 이론: 자산 검사: 자산 수준의 데이터 계약
+
+```python
+@asset_check(asset=clean_customers)
+def no_null_emails(clean_customers: pd.DataFrame):
+    bad = clean_customers["email"].isnull().sum()
+    return AssetCheckResult(passed=(bad == 0), metadata={"bad_count": bad})
+```
+
+자산 검사는 자산에 부착된 일급 품질 어설션. materialization 후 실행되며:
+- 통과/실패가 메타데이터 DB에 materialization과 함께 기록됨.
+- Dagster UI가 자산별로 실패한 검사를 두드러지게 표시.
+- 검사가 다운스트림 materialization을 차단할 수 있음(`blocking=True`).
+
+이는 dbt 테스트와 개념적으로 비슷하지만 프레임워크 수준 — SQL 모델이든 Python 코드든 Spark 잡이든 모든 자산이 부착된 검사를 가질 수 있음.
+
+### 이론: 리소스와 IO 매니저
+
+테스트 가능성과 유지보수성을 개선하는 두 가지 아키텍처 아이디어.
+
+#### E.1 리소스
+
+외부 시스템에 대한 재사용 가능, 구성 가능한 연결:
+
+```python
+class SnowflakeResource(ConfigurableResource):
+    account: str
+    user: str
+    password: str
+    
+    def get_connection(self): ...
+
+@asset
+def fact_orders(snowflake: SnowflakeResource): ...
+```
+
+프로덕션에서 리소스는 prod 자격증명으로 구성. 테스트에서 mock이나 in-memory 리소스로 swap. 같은 자산 코드, 다른 런타임.
+
+#### E.2 IO 매니저
+
+자산의 출력이 어떻게 *저장* 되고 다운스트림 자산이 어떻게 *읽는지*. 자산 코드가 값(DataFrame, dict 등)을 반환; IO 매니저가 어디에 둘지 결정.
+
+```python
+@asset(io_manager_key="snowflake_io")
+def daily_revenue(): return df
+
+@asset(io_manager_key="snowflake_io")
+def revenue_dashboard(daily_revenue): ...  # IO 매니저가 Snowflake에서 df 로드
+```
+
+자산은 "Snowflake 테이블 X에 쓰기"라고 말하지 않음 — 단지 데이터를 반환. IO 매니저가 영속화를 처리. 자산 코드를 변경하지 않고 환경 간 IO 매니저 swap(prod에서 Snowflake, dev에서 로컬 Parquet).
+
+이는 어떤 오케스트레이션 프레임워크에서든 가장 깨끗한 관심사 분리 중 하나입니다.
+
 ### 2.1 Assets — 기반
 
 **자산(asset)** 은 데이터 플랫폼의 영속적인 객체입니다 — 테이블, 파일, 모델 아티팩트, 대시보드. Dagster에서는 데코레이터가 적용된 Python 함수로 자산을 정의합니다.
@@ -330,7 +306,6 @@ def raw_orders() -> pd.DataFrame:
         "created_at": pd.date_range("2024-01-01", periods=5, freq="D"),
     })
 
-
 @dg.asset(
     description="유효하지 않은 레코드가 제거되고 타입이 표준화된 주문",
     group_name="silver",
@@ -354,7 +329,6 @@ def cleaned_orders(raw_orders: pd.DataFrame) -> pd.DataFrame:
     df["created_at"] = pd.to_datetime(df["created_at"])
 
     return df
-
 
 @dg.asset(
     description="고객별 집계된 주문 지표",
@@ -408,7 +382,6 @@ def check_api_health(context: dg.OpExecutionContext) -> bool:
     # 프로덕션에서: requests.get("https://api.store.com/health")
     return True
 
-
 @dg.op
 def extract_data(context: dg.OpExecutionContext, api_healthy: bool) -> dict:
     """API가 정상인 경우에만 데이터를 추출한다."""
@@ -417,14 +390,12 @@ def extract_data(context: dg.OpExecutionContext, api_healthy: bool) -> dict:
     context.log.info("API에서 데이터 추출 중")
     return {"orders": [1, 2, 3], "extracted_at": "2024-01-15"}
 
-
 @dg.op
 def validate_data(context: dg.OpExecutionContext, raw_data: dict) -> dict:
     """추출된 데이터가 기대치를 충족하는지 검증한다."""
     assert len(raw_data["orders"]) > 0, "추출된 주문 없음"
     context.log.info(f"{len(raw_data['orders'])}개 주문 검증 완료")
     return raw_data
-
 
 # Graph는 Ops를 계산 DAG로 구성한다
 # Graph와 Job을 분리하는 이유?
@@ -437,7 +408,6 @@ def etl_graph():
     healthy = check_api_health()
     raw = extract_data(healthy)
     validate_data(raw)
-
 
 # Job = 특정 리소스/설정에 바인딩된 Graph
 etl_job = etl_graph.to_job(
@@ -473,7 +443,6 @@ import dagster as dg
 # 3. 자산 간 연결 공유 (커넥션 풀링)
 # 4. 환경별 구성 (dev는 로컬 파일, prod는 S3)
 
-
 class DatabaseResource(dg.ConfigurableResource):
     """설정 가능한 데이터베이스 연결 리소스.
 
@@ -496,7 +465,6 @@ class DatabaseResource(dg.ConfigurableResource):
         # 프로덕션에서: sqlalchemy 또는 psycopg2 사용
         return [{"result": "mock_data"}]
 
-
 class S3Resource(dg.ConfigurableResource):
     """데이터 읽기/쓰기를 위한 S3 클라이언트 리소스."""
     bucket: str
@@ -513,7 +481,6 @@ class S3Resource(dg.ConfigurableResource):
         """DataFrame을 Parquet으로 S3에 쓴다."""
         path = f"s3://{self.bucket}/{key}"
         df.to_parquet(path, index=False)
-
 
 # 자산에서 리소스 사용:
 
@@ -545,7 +512,6 @@ IO 매니저(IO Manager)는 자산이 **어떻게** 저장되고 로드되는지
 import dagster as dg
 import pandas as pd
 from pathlib import Path
-
 
 class ParquetIOManager(dg.ConfigurableIOManager):
     """로컬 파일시스템에 자산을 Parquet 파일로 저장한다.
@@ -579,7 +545,6 @@ class ParquetIOManager(dg.ConfigurableIOManager):
         df = pd.read_parquet(path)
         context.log.info(f"{path}에서 {len(df)}행을 로드했습니다")
         return df
-
 
 class CsvIOManager(dg.ConfigurableIOManager):
     """자산을 CSV 파일로 저장한다 (디버깅 / 소규모 데이터셋에 유용)."""
@@ -857,7 +822,6 @@ import dagster as dg
 import pandas as pd
 from datetime import datetime, timedelta
 
-
 # ── 소스 자산 (Bronze 레이어) ──────────────────────────────────
 
 @dg.asset(
@@ -880,7 +844,6 @@ def raw_orders(database: DatabaseResource) -> pd.DataFrame:
         WHERE updated_at >= CURRENT_DATE - INTERVAL '1 day'
     """)
 
-
 @dg.asset(
     group_name="bronze",
     description="제품 API에서 가져온 원시 제품 카탈로그",
@@ -897,7 +860,6 @@ def raw_products() -> pd.DataFrame:
         "category": ["basic", "basic", "premium"],
         "cost": [10.0, 15.0, 50.0],
     })
-
 
 # ── 정리된 자산 (Silver 레이어) ─────────────────────────────────
 
@@ -927,7 +889,6 @@ def enriched_orders(
 
     return df
 
-
 # ── 비즈니스 자산 (Gold 레이어) ──────────────────────────────────
 
 @dg.asset(
@@ -952,7 +913,6 @@ def daily_category_revenue(enriched_orders: pd.DataFrame) -> pd.DataFrame:
 
     metrics["aov"] = metrics["total_revenue"] / metrics["order_count"]
     return metrics
-
 
 @dg.asset(
     group_name="gold",
@@ -1037,7 +997,6 @@ daily_partitions = dg.DailyPartitionsDefinition(
     # - 데이터 소스가 데이터를 수집하기 시작한 시점과 일치
 )
 
-
 @dg.asset(
     partitions_def=daily_partitions,
     group_name="bronze",
@@ -1061,7 +1020,6 @@ def daily_raw_orders(context: dg.AssetExecutionContext) -> pd.DataFrame:
         "amount": [50.0] * 100,
         "order_date": [partition_date] * 100,
     })
-
 
 @dg.asset(
     partitions_def=daily_partitions,
@@ -1103,7 +1061,6 @@ region_time_partitions = dg.MultiPartitionsDefinition({
     "date": dg.DailyPartitionsDefinition(start_date="2024-01-01"),
     "region": dg.StaticPartitionsDefinition(["us", "europe", "asia"]),
 })
-
 
 @dg.asset(partitions_def=region_time_partitions)
 def regional_orders(context: dg.AssetExecutionContext) -> pd.DataFrame:
@@ -1180,7 +1137,6 @@ daily_refresh = dg.ScheduleDefinition(
     default_status=dg.DefaultScheduleStatus.RUNNING,
 )
 
-
 # 파티션 인식 스케줄
 @dg.schedule(
     cron_schedule="0 6 * * *",
@@ -1250,7 +1206,6 @@ def new_file_sensor(context: dg.SensorEvaluationContext):
             },
         )
 
-
 # 신선도 기반 센서: 자산이 오래됐을 때 트리거
 @dg.freshness_policy_sensor(
     asset_selection=dg.AssetSelection.groups("gold"),
@@ -1299,7 +1254,6 @@ def test_cleaned_orders():
     assert "refunded" not in result["status"].values
     assert result["amount"].dtype == float
 
-
 def test_order_metrics_aggregation():
     """order_metrics가 고객별로 올바르게 집계하는지 테스트한다."""
     cleaned = pd.DataFrame({
@@ -1347,7 +1301,6 @@ def test_revenue_report_with_mock_resources():
 
     assert result.success
     assert mock_s3.last_written_path == "reports/revenue/latest.parquet"
-
 
 def test_full_pipeline_integration():
     """전체 자산 그래프를 엔드투엔드로 테스트한다.
@@ -1504,7 +1457,6 @@ def my_dbt_assets(context: AssetExecutionContext, dbt: DbtCliResource):
       - 관측: Dagster가 dbt 모델의 신선도를 추적
     """
     yield from dbt.cli(["build"], context=context).stream()
-
 
 # Python 자산을 dbt 자산과 결합
 @dg.asset(

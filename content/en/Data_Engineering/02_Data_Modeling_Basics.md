@@ -15,16 +15,15 @@ After completing this lesson, you will be able to:
 
 ---
 
-## Theory & Principles
+## Overview
 
-Data modeling is one of those topics where the technique (star schema, SCD type 2) is taught long before the *why*. The why is a single architectural decision: are you optimizing for transactions (OLTP) or analytics (OLAP)? That choice determines whether you normalize or denormalize, whether you use row-store or column-store, and whether dimensional modeling even applies.
+Data modeling is the process of defining the structure, relationships, and constraints of data. In data warehouses and analytics systems, dimensional modeling is widely used.
 
-- **(A) OLTP vs OLAP** — the workload duality that justifies separate models for the same business data.
-- **(B) Normalization vs denormalization** — Codd's normal forms vs Kimball's star schema, and when each wins.
-- **(C) Dimensional modeling** — facts as measurements, dimensions as context, and the geometry of star vs snowflake.
-- **(D) Slowly Changing Dimensions** — six standard ways to handle the fact that dimension attributes change over time.
+---
 
-### A. OLTP vs OLAP: Two Workloads, Two Models
+## 1. Dimensional Modeling
+
+### Theory: OLTP vs OLAP: Two Workloads, Two Models
 
 The same business data — customers, orders, products — gets queried by two completely different access patterns.
 
@@ -61,7 +60,7 @@ Could a single normalized OLTP schema serve both workloads? In principle yes —
 
 The standard architecture: OLTP databases are the source of truth; an ETL/ELT pipeline (Lessons 3, 12) moves data into a separate OLAP warehouse modeled for analytics.
 
-### B. Normalization vs Denormalization
+### Theory: Normalization vs Denormalization
 
 Codd's normal forms (1NF through BCNF) eliminate redundancy. Each fact is stored exactly once; updates touch one row. This is correct for OLTP.
 
@@ -77,7 +76,7 @@ For OLAP, Kimball flipped the trade-off: storage is cheap, joins are expensive, 
 
 The asymmetry: in OLAP, writes happen once per ETL batch (idempotent overwrite, or upsert). Reads happen thousands of times. Optimizing reads at the cost of writes is the right trade.
 
-### C. Dimensional Modeling
+### Theory: Dimensional Modeling
 
 Kimball's dimensional model is the standard for warehouse schema design.
 
@@ -119,50 +118,6 @@ The single most important decision: at what grain does each fact row live?
 - **Accumulating snapshot:** one row per process instance, with timestamps for each milestone (one row per order, with `placed_at`, `paid_at`, `shipped_at`, `delivered_at`).
 
 Always model at the *finest* grain you have. You can always aggregate up; you cannot disaggregate.
-
-### D. Slowly Changing Dimensions
-
-Dimension attributes change over time — a customer moves cities, a product gets a new category. How do you preserve history without rewriting every fact row? Six standard SCD types:
-
-| Type | Behavior | Trade-off |
-|------|----------|-----------|
-| **Type 0** | Never change (e.g. birth date) | Trivial; only for truly immutable attributes |
-| **Type 1** | Overwrite, no history | Simplest; loses past — facts now appear under the new value |
-| **Type 2** | New row per change with `valid_from` / `valid_to` / `is_current` | Full history; fact rows reference the version active at fact time |
-| **Type 3** | Add `previous_value` column | Limited history (only one prior value); simple |
-| **Type 4** | Move history to a separate table | Keeps current dimension small; queries that need history join the history table |
-| **Type 6** | Hybrid Type 1 + 2 + 3 | Most flexible, most complex |
-
-Type 2 is the workhorse. The fact table's FK to the dimension references the *surrogate key* of the version active at the fact's event time, so a 2022 sale forever shows the 2022 customer city even if the customer moved in 2023.
-
-#### D.1 The surrogate key discipline
-
-Dimension tables use *surrogate keys* — meaningless integers — as primary keys, not the natural business key (customer_id from the source system). Why?
-
-1. **SCD Type 2 needs it.** If natural key were PK, you could not have multiple rows for the same customer. Surrogate key allows one customer to have many rows (one per historical version).
-2. **Decouples warehouse from source.** Source system's customer_id might change format; surrogate key is stable forever.
-3. **Smaller fact tables.** Surrogate key is 4-byte integer; natural key might be a 36-byte UUID string.
-
-### From Theory to the Practice Below
-
-Each section that follows operationalizes one piece of this framework:
-
-- §1 (Dimensional Modeling) operationalizes §C — facts, dimensions, star schema.
-- §2 (Star vs Snowflake) is §C.2 vs §C.3 in concrete schema.
-- §3 (Slowly Changing Dimensions) is §D in SQL — implementing Types 1, 2, 3.
-- §4 (Common Patterns) — date dimensions, surrogate keys, junk dimensions — applies §D.1 and §C in practice.
-- §5 (Data Vault) is an alternative to §C for highly auditable / regulatory environments.
-- §6 (Normalization Trade-offs) is §B — choosing 3NF vs star vs Data Vault per workload.
-
----
-
-## Overview
-
-Data modeling is the process of defining the structure, relationships, and constraints of data. In data warehouses and analytics systems, dimensional modeling is widely used.
-
----
-
-## 1. Dimensional Modeling
 
 ### 1.1 Dimensional Modeling Concept
 
@@ -314,7 +269,6 @@ CREATE TABLE dim_store (
     opened_date     DATE
 );
 
-
 -- 2. Create fact table
 -- BIGINT PK accommodates billions of rows; fact tables grow much faster
 -- than dimensions since every transaction generates a new row.
@@ -371,7 +325,6 @@ WHERE d.year = 2024
 GROUP BY d.year, d.month, d.month_name, p.category
 ORDER BY d.year, d.month, total_sales DESC;
 
-
 -- Top 10 products by region
 -- QUALIFY is a Snowflake/BigQuery extension that filters window-function
 -- results — avoids wrapping in a CTE just to filter on rank.
@@ -385,7 +338,6 @@ JOIN dim_store s ON f.store_sk = s.store_sk
 JOIN dim_product p ON f.product_sk = p.product_sk
 GROUP BY s.region, p.product_name
 QUALIFY rank <= 10;
-
 
 -- Purchase patterns by customer segment
 -- Filter on is_current = TRUE: with SCD Type 2, a customer may have multiple
@@ -489,7 +441,6 @@ CREATE TABLE fact_daily_inventory (
     inventory_value DECIMAL(12, 2)
 );
 
-
 -- Daily account balance snapshot
 CREATE TABLE fact_daily_account_balance (
     balance_sk      BIGINT PRIMARY KEY,
@@ -546,6 +497,29 @@ CREATE TABLE fact_order_fulfillment (
 ---
 
 ## 5. SCD (Slowly Changing Dimensions)
+
+### Theory: Slowly Changing Dimensions
+
+Dimension attributes change over time — a customer moves cities, a product gets a new category. How do you preserve history without rewriting every fact row? Six standard SCD types:
+
+| Type | Behavior | Trade-off |
+|------|----------|-----------|
+| **Type 0** | Never change (e.g. birth date) | Trivial; only for truly immutable attributes |
+| **Type 1** | Overwrite, no history | Simplest; loses past — facts now appear under the new value |
+| **Type 2** | New row per change with `valid_from` / `valid_to` / `is_current` | Full history; fact rows reference the version active at fact time |
+| **Type 3** | Add `previous_value` column | Limited history (only one prior value); simple |
+| **Type 4** | Move history to a separate table | Keeps current dimension small; queries that need history join the history table |
+| **Type 6** | Hybrid Type 1 + 2 + 3 | Most flexible, most complex |
+
+Type 2 is the workhorse. The fact table's FK to the dimension references the *surrogate key* of the version active at the fact's event time, so a 2022 sale forever shows the 2022 customer city even if the customer moved in 2023.
+
+#### D.1 The surrogate key discipline
+
+Dimension tables use *surrogate keys* — meaningless integers — as primary keys, not the natural business key (customer_id from the source system). Why?
+
+1. **SCD Type 2 needs it.** If natural key were PK, you could not have multiple rows for the same customer. Surrogate key allows one customer to have many rows (one per historical version).
+2. **Decouples warehouse from source.** Source system's customer_id might change format; surrogate key is stable forever.
+3. **Smaller fact tables.** Surrogate key is 4-byte integer; natural key might be a 36-byte UUID string.
 
 ### 5.1 SCD Type Overview
 
@@ -633,7 +607,6 @@ def scd_type2_update(
         target_df = pd.concat([target_df, new_records], ignore_index=True)
 
     return target_df
-
 
 # Usage example
 """
@@ -757,7 +730,6 @@ def generate_date_dimension(start_date: str, end_date: str) -> pd.DataFrame:
         records.append(record)
 
     return pd.DataFrame(records)
-
 
 # Usage example: 11-year span covers historical backfill + several years ahead
 date_dim = generate_date_dimension('2020-01-01', '2030-12-31')

@@ -15,17 +15,15 @@ After completing this lesson, you will be able to:
 
 ---
 
-## Theory & Principles
+## Overview
 
-CDC's deeper claim is not "near-real-time" — it is **correctness**. Polling for "rows where updated_at > last_checkpoint" misses deletes, misses fast intra-second updates, and races with the writer. Reading the database's own write-ahead log captures *every* mutation in commit order. CDC is the only correct way to mirror an OLTP database's state to anywhere else.
+Change Data Capture (CDC) captures row-level changes in databases and streams them as events. Rather than periodic batch extracts, CDC provides near-real-time data synchronization between systems. This lesson covers CDC concepts, Debezium architecture, Kafka Connect integration, event formats, schema evolution, and production patterns.
 
-- **(A) Polling vs log-based CDC** — what each approach captures and what it misses.
-- **(B) The write-ahead log (WAL) as the source of truth** — PostgreSQL's logical replication, MySQL's binlog, MongoDB's oplog.
-- **(C) Debezium's snapshot + stream model** — bootstrapping initial state, then catching up.
-- **(D) Event format and schema evolution** — Kafka Connect, the Debezium event envelope, the schema registry.
-- **(E) The transactional outbox pattern** — using CDC for application-level event sourcing without distributed transactions.
+---
 
-### A. Polling vs Log-based CDC
+## 1. Change Data Capture Fundamentals
+
+### Theory: Polling vs Log-based CDC
 
 #### A.1 Polling: the naive approach
 
@@ -58,7 +56,7 @@ What this captures: **every mutation, in commit order, with full before/after st
 
 This is what Debezium does. Same fundamental approach as MySQL replication, PostgreSQL logical replication, Oracle GoldenGate.
 
-### B. The Write-Ahead Log
+### Theory: The Write-Ahead Log
 
 The structure of the WAL varies by database:
 
@@ -87,115 +85,6 @@ MongoDB's *operations log* (oplog) is a capped collection of every mutation. Rep
 #### B.4 The common pattern
 
 All three: the database is already producing a log of every change for its own internal purposes (replication, recovery). CDC tools tap into that log. **No additional load on the primary**, no application changes needed, full mutation history captured.
-
-### C. Debezium's Snapshot + Stream Model
-
-A new CDC consumer needs both *historical state* and *ongoing changes*. Debezium handles this in three phases:
-
-#### C.1 Snapshot phase
-
-On first startup:
-1. Acquire a consistent point-in-time snapshot (typically with `FLUSH TABLES WITH READ LOCK` on MySQL, or a snapshot transaction on PostgreSQL).
-2. Read every row from every monitored table.
-3. Emit each row as a `READ` event to Kafka.
-4. Record the WAL/binlog position at snapshot start.
-
-This gives downstream the complete current state.
-
-#### C.2 Stream phase
-
-After snapshot completes:
-1. Resume reading the WAL/binlog from the recorded position.
-2. Emit each subsequent change as `INSERT`, `UPDATE`, or `DELETE` event.
-
-The handoff is exact — no events between snapshot start position and stream start position are missed.
-
-#### C.3 The duplicate problem
-
-A subtle issue: during snapshot, the WAL has *also been advancing* with new transactions. Debezium's snapshot at position P contains rows committed before P. The stream from position P forward will include those same transactions if their effects happened during the snapshot.
-
-Modern Debezium (2.0+) uses *incremental snapshots* that handle this correctly: they snapshot in chunks while simultaneously consuming the stream, deduplicating with primary key.
-
-### D. Event Format and Schema Evolution
-
-#### D.1 The Debezium envelope
-
-Each CDC event:
-
-```json
-{
-  "before": { "id": 1, "name": "Alice", "email": "alice@old.com" },
-  "after":  { "id": 1, "name": "Alice", "email": "alice@new.com" },
-  "source": { "ts_ms": 1700000000000, "table": "users", "db": "prod", "lsn": 12345 },
-  "op": "u",
-  "ts_ms": 1700000000050
-}
-```
-
-`op`: `c` (create/insert), `u` (update), `d` (delete), `r` (read/snapshot).
-`before` and `after`: row state. `before` is null for inserts; `after` is null for deletes.
-`source`: provenance — exactly which database, table, log position.
-`ts_ms`: when the event was written.
-
-Consumers can apply the change deterministically: for an update, "the row with PK X went from `before` to `after` at time `ts_ms`."
-
-#### D.2 Schema registry and evolution
-
-The event schemas (especially `before`/`after`) are formal — defined in Avro or JSON Schema, registered in Confluent Schema Registry. When the source table's schema changes (column added/removed), Debezium produces events with the new schema, the registry stores the new version, consumers using compatible deserializers handle the change.
-
-The Schema Registry enforces compatibility: by default, only backward-compatible changes (adding nullable columns, never removing or retyping) are allowed. This catches breaking schema changes at registration time, before they break consumers.
-
-#### D.3 Kafka Connect
-
-Debezium runs as a *Kafka Connect connector* — Connect is the framework that handles the operational concerns: distributed runtime, restart on failure, parallelism (one task per partition), metric reporting. Debezium itself is the source-specific logic (talking to the WAL, decoding events). Kafka Connect provides everything else.
-
-### E. The Transactional Outbox Pattern
-
-A specific application of CDC that solves a notorious problem: how do you publish events to Kafka **atomically** with a database transaction?
-
-The naive approach:
-
-```python
-def create_order(order):
-    db.insert("orders", order)              # transaction 1
-    kafka.publish("order_created", order)   # not in transaction
-```
-
-If the Kafka publish fails after the DB insert succeeds, you have an order with no event. If the DB commit fails after Kafka publish, you have an event with no order. Two-phase commit between DB and Kafka is impractical.
-
-The outbox pattern:
-
-```python
-def create_order(order):
-    with db.transaction():
-        db.insert("orders", order)
-        db.insert("outbox", {"event": "order_created", "payload": order})
-```
-
-Both inserts are in the same DB transaction; either both happen or neither does. The `outbox` table is monitored by Debezium; CDC events from the outbox become Kafka events. Atomicity is preserved.
-
-This is the single most important pattern for event-driven architectures backed by relational databases.
-
-### From Theory to the Code Below
-
-Each section that follows operationalizes one piece of this framework:
-
-- §1 (CDC Concepts) is §A — polling vs log-based.
-- §2 (Debezium Architecture) is §B + §D.3 — connectors, Kafka Connect, source-specific implementations.
-- §3 (PostgreSQL/MySQL Connectors) is §B.1 + §B.2 — concrete setup.
-- §4 (Event Format and Schema Evolution) is §D — envelope, schema registry, compatibility.
-- §5 (Snapshot Strategy) is §C — initial snapshot patterns and incremental snapshot.
-- §6 (Production Patterns) brings together §E (outbox), monitoring, restart, lag.
-
----
-
-## Overview
-
-Change Data Capture (CDC) captures row-level changes in databases and streams them as events. Rather than periodic batch extracts, CDC provides near-real-time data synchronization between systems. This lesson covers CDC concepts, Debezium architecture, Kafka Connect integration, event formats, schema evolution, and production patterns.
-
----
-
-## 1. Change Data Capture Fundamentals
 
 ### 1.1 Why CDC?
 
@@ -260,6 +149,34 @@ Approach Comparison:
 ---
 
 ## 2. Debezium Architecture
+
+### Theory: Debezium's Snapshot + Stream Model
+
+A new CDC consumer needs both *historical state* and *ongoing changes*. Debezium handles this in three phases:
+
+#### C.1 Snapshot phase
+
+On first startup:
+1. Acquire a consistent point-in-time snapshot (typically with `FLUSH TABLES WITH READ LOCK` on MySQL, or a snapshot transaction on PostgreSQL).
+2. Read every row from every monitored table.
+3. Emit each row as a `READ` event to Kafka.
+4. Record the WAL/binlog position at snapshot start.
+
+This gives downstream the complete current state.
+
+#### C.2 Stream phase
+
+After snapshot completes:
+1. Resume reading the WAL/binlog from the recorded position.
+2. Emit each subsequent change as `INSERT`, `UPDATE`, or `DELETE` event.
+
+The handoff is exact — no events between snapshot start position and stream start position are missed.
+
+#### C.3 The duplicate problem
+
+A subtle issue: during snapshot, the WAL has *also been advancing* with new transactions. Debezium's snapshot at position P contains rows committed before P. The stream from position P forward will include those same transactions if their effects happened during the snapshot.
+
+Modern Debezium (2.0+) uses *incremental snapshots* that handle this correctly: they snapshot in chunks while simultaneously consuming the stream, deduplicating with primary key.
 
 ### 2.1 Components
 
@@ -418,6 +335,39 @@ Snapshot Modes (how Debezium handles initial data):
 
 ## 4. Change Event Format
 
+### Theory: Event Format and Schema Evolution
+
+#### D.1 The Debezium envelope
+
+Each CDC event:
+
+```json
+{
+  "before": { "id": 1, "name": "Alice", "email": "alice@old.com" },
+  "after":  { "id": 1, "name": "Alice", "email": "alice@new.com" },
+  "source": { "ts_ms": 1700000000000, "table": "users", "db": "prod", "lsn": 12345 },
+  "op": "u",
+  "ts_ms": 1700000000050
+}
+```
+
+`op`: `c` (create/insert), `u` (update), `d` (delete), `r` (read/snapshot).
+`before` and `after`: row state. `before` is null for inserts; `after` is null for deletes.
+`source`: provenance — exactly which database, table, log position.
+`ts_ms`: when the event was written.
+
+Consumers can apply the change deterministically: for an update, "the row with PK X went from `before` to `after` at time `ts_ms`."
+
+#### D.2 Schema registry and evolution
+
+The event schemas (especially `before`/`after`) are formal — defined in Avro or JSON Schema, registered in Confluent Schema Registry. When the source table's schema changes (column added/removed), Debezium produces events with the new schema, the registry stores the new version, consumers using compatible deserializers handle the change.
+
+The Schema Registry enforces compatibility: by default, only backward-compatible changes (adding nullable columns, never removing or retyping) are allowed. This catches breaking schema changes at registration time, before they break consumers.
+
+#### D.3 Kafka Connect
+
+Debezium runs as a *Kafka Connect connector* — Connect is the framework that handles the operational concerns: distributed runtime, restart on failure, parallelism (one task per partition), metric reporting. Debezium itself is the source-specific logic (talking to the WAL, decoding events). Kafka Connect provides everything else.
+
 ### 4.1 Event Structure
 
 ```python
@@ -514,7 +464,6 @@ PostgreSQL REPLICA IDENTITY:
 import json
 from kafka import KafkaConsumer
 
-
 def create_cdc_consumer(bootstrap_servers, topic):
     """Create a Kafka consumer for Debezium CDC events."""
     consumer = KafkaConsumer(
@@ -536,7 +485,6 @@ def create_cdc_consumer(bootstrap_servers, topic):
         key_deserializer=lambda m: json.loads(m.decode("utf-8")) if m else None,
     )
     return consumer
-
 
 def process_change_event(event):
     """Process a single Debezium change event."""
@@ -572,22 +520,18 @@ def process_change_event(event):
         print(f"[SNAPSHOT] {table}: {after}")
         apply_insert(table, after)
 
-
 def apply_insert(table, row):
     """Apply INSERT to target system."""
     # Example: write to data warehouse, update cache, etc.
     pass
 
-
 def apply_update(table, old_row, new_row):
     """Apply UPDATE to target system."""
     pass
 
-
 def apply_delete(table, row):
     """Apply DELETE to target system."""
     pass
-
 
 def run_consumer():
     """Main consumer loop with manual offset commits."""
@@ -619,7 +563,6 @@ def run_consumer():
 import json
 from collections import defaultdict
 from kafka import KafkaConsumer
-
 
 class MaterializedView:
     """Maintain a materialized view from CDC events.
@@ -676,7 +619,6 @@ class MaterializedView:
     def __len__(self):
         return len(self.data)
 
-
 # Usage
 def run_materialized_view():
     """Build and query a materialized view from CDC events."""
@@ -709,6 +651,33 @@ def run_materialized_view():
 ---
 
 ## 6. Single Message Transforms (SMTs)
+
+### Theory: The Transactional Outbox Pattern
+
+A specific application of CDC that solves a notorious problem: how do you publish events to Kafka **atomically** with a database transaction?
+
+The naive approach:
+
+```python
+def create_order(order):
+    db.insert("orders", order)              # transaction 1
+    kafka.publish("order_created", order)   # not in transaction
+```
+
+If the Kafka publish fails after the DB insert succeeds, you have an order with no event. If the DB commit fails after Kafka publish, you have an event with no order. Two-phase commit between DB and Kafka is impractical.
+
+The outbox pattern:
+
+```python
+def create_order(order):
+    with db.transaction():
+        db.insert("orders", order)
+        db.insert("outbox", {"event": "order_created", "payload": order})
+```
+
+Both inserts are in the same DB transaction; either both happen or neither does. The `outbox` table is monitored by Debezium; CDC events from the outbox become Kafka events. Atomicity is preserved.
+
+This is the single most important pattern for event-driven architectures backed by relational databases.
 
 ### 6.1 Common Transforms
 

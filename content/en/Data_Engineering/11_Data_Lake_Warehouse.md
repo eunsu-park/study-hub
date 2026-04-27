@@ -15,158 +15,6 @@ After completing this lesson, you will be able to:
 
 ---
 
-## Theory & Principles
-
-The story of analytical storage is a back-and-forth between two extremes: the *warehouse* (rigid schema, expensive compute, ACID, SQL-only) and the *lake* (flexible files, cheap storage, no transactions, open compute). Each stage of the industry's evolution responded to a real limitation of the previous. Understanding *why* each architecture won, then was superseded, is more useful than memorizing the differences.
-
-- **(A) The warehouse-lake-lakehouse evolution** — what each addressed, what it left unsolved.
-- **(B) Schema-on-write vs schema-on-read** — the central trade-off with cost paid at different times.
-- **(C) Table formats: Delta Lake, Iceberg, Hudi** — how ACID transactions exist on top of object storage.
-- **(D) The medallion (bronze/silver/gold) discipline** — refinement levels and idempotent rebuild semantics.
-- **(E) Storage economics** — why the cloud pricing model favors lakehouse architectures.
-
-### A. The Warehouse-Lake-Lakehouse Evolution
-
-Three architectural waves, each addressing the previous's pain.
-
-#### A.1 Wave 1: data warehouse (1990s-2010s)
-
-Teradata, Oracle, SQL Server, then Redshift, Snowflake, BigQuery. The pitch: a relational database tuned for analytics. Schema enforced at write, columnar storage, MPP execution, optimizer with statistics. Analysts run SQL, get fast results.
-
-Limitations that drove the next wave:
-- **Storage and compute coupled** (early generation). Adding storage required adding compute hardware. Cost scaled badly.
-- **Schema rigidity.** Adding a column meant ALTER TABLE on petabytes; rejecting non-SQL data (images, free-text logs).
-- **Vendor lock-in.** Data lived in proprietary formats; getting it out for ML or non-SQL processing was painful.
-
-#### A.2 Wave 2: data lake (2010s)
-
-Hadoop HDFS, then S3/GCS/ADLS. Just dump files (Parquet, JSON, Avro, CSV) into cheap object storage. Multiple compute engines (Spark, Hive, Presto, Python notebooks) read the same files. Schema flexible, storage cheap, no vendor lock-in.
-
-What the lake won: storage cost (10-100x cheaper than warehouse), schema flexibility, multi-engine analytics, ML-friendliness.
-
-What it lost:
-- **No ACID transactions.** Concurrent writers corrupt each other. A reader during a write sees half-written data.
-- **No schema enforcement.** Garbage accumulates ("data swamp").
-- **No fine-grained updates / deletes.** Delete one row in a Parquet file requires rewriting the file.
-- **No indexing or stats.** Every query is a full scan unless someone built indexes externally.
-
-The "data swamp" became a real organizational problem: petabytes of data nobody can trust or query efficiently.
-
-#### A.3 Wave 3: lakehouse (2020-)
-
-The synthesis. Keep the lake's storage layout (files in S3) but add a *table format* on top that provides ACID transactions, schema evolution, time travel, and indexing. Three open implementations: **Delta Lake** (Databricks), **Apache Iceberg** (Netflix origin, now Apache), **Apache Hudi** (Uber origin, now Apache).
-
-The pitch: warehouse semantics (ACID, SQL, performance) on lake economics (cheap storage, multi-engine, open formats).
-
-### B. Schema-on-Write vs Schema-on-Read
-
-The fundamental axis these architectures arrange themselves on.
-
-#### B.1 Schema-on-write (warehouse default)
-
-Validate and structure data at load time. Bad rows are rejected or quarantined. The warehouse table always conforms to its declared schema.
-
-- **Cost paid at write time.** Producers must conform. New fields require migration.
-- **Confidence at read time.** Every query sees clean, typed data. Analysts move fast.
-- **Failure mode:** schema migrations are painful. A column rename in upstream source breaks the loader.
-
-#### B.2 Schema-on-read (lake default)
-
-Dump raw bytes; consumers parse and validate at read time. Adding a new field is free at write time.
-
-- **Cost paid at read time.** Every consumer pays parsing/validation cost. Schema bugs surface late.
-- **Flexibility at write time.** Producers move fast. New fields appear in JSON without migration.
-- **Failure mode:** garbage accumulates. Different consumers parse fields differently. Trust erodes.
-
-#### B.3 Lakehouse: schema-on-read at bronze, schema-on-write at silver/gold
-
-The pragmatic synthesis. Raw tier (bronze) accepts anything; validation happens during the bronze→silver transformation. Silver and gold tiers are typed, validated, schema-enforced. The "data swamp" risk is contained to bronze; everything downstream is clean.
-
-### C. Table Formats: Delta Lake, Iceberg, Hudi
-
-The technology that makes lakehouse work. All three solve the same problem with the same general approach: a *transaction log* that records each commit, alongside the actual data files.
-
-#### C.1 The transaction log pattern
-
-```
-/table_root/
-  _delta_log/                ← transaction log (Delta Lake naming; Iceberg uses metadata/)
-    000000.json              ← commit 0: "added file part-001.parquet"
-    000001.json              ← commit 1: "added file part-002.parquet, removed part-001.parquet"
-  part-001.parquet           ← actual data
-  part-002.parquet
-```
-
-To read the table at the current state, a reader:
-1. Lists the log files.
-2. Replays them in order to compute the current set of "live" data files.
-3. Reads only those files.
-
-To write, a writer:
-1. Stages new data files.
-2. Atomically appends a new log entry recording the change.
-3. Optimistic concurrency: if another writer's log entry won, retry.
-
-This gives:
-- **ACID writes.** The log entry is atomic; partial writes are invisible.
-- **Snapshot reads.** A reader at time T sees a consistent snapshot, regardless of concurrent writers.
-- **Time travel.** Read the table as of an old commit number — useful for debugging, audit, replay.
-- **Schema evolution.** Schema is in the log; old data files have their own schema; reader merges.
-- **Updates and deletes.** Implemented as "rewrite affected files + record old as removed in log".
-
-#### C.2 Differences in practice
-
-- **Delta Lake:** simplest, tightly tied to Spark/Databricks (good third-party support now). Default for Databricks customers.
-- **Apache Iceberg:** designed for multi-engine from day one. Better support in Trino, Flink, Snowflake. Most "open" choice.
-- **Apache Hudi:** best for streaming + frequent upserts. Has incremental processing primitives baked in.
-
-The choice often comes down to ecosystem rather than raw capability. All three are converging.
-
-### D. The Medallion Discipline
-
-The standard organizing pattern for lakehouse pipelines.
-
-#### D.1 The three tiers
-
-- **Bronze:** raw ingested data, append-only, schema-on-read. The source of truth; never deleted. CDC feeds, raw API responses, dumped files. Bronze data is messy; that's its purpose.
-- **Silver:** cleaned, deduplicated, joined, conformed to a schema. Type-checked, null-handled, business-key-enforced. Analyst-ready.
-- **Gold:** business-aggregated, denormalized, optimized for specific consumption — dashboards, ML features, reports. Often pre-joined wide tables.
-
-#### D.2 Idempotent rebuild
-
-The medallion's superpower: each tier is **rebuildable from the prior tier**. If silver has a bug, fix the bronze→silver code, drop silver, rebuild from bronze. Bronze never changes (append-only); silver and gold are derived.
-
-This is what makes the architecture survivable. Bug in production gold? Rebuild from silver in an hour. Bug in silver? Rebuild from bronze in a day. Bronze is your replay log.
-
-#### D.3 The orchestration model
-
-Each tier is built by orchestrated jobs (Airflow, Dagster, Prefect). The natural pattern: bronze ingestion runs continuously or hourly; silver and gold rebuild incrementally on a schedule. Failure of a downstream tier does not affect upstream — bronze keeps accumulating.
-
-### E. Storage Economics
-
-The economic reality that makes lakehouse possible.
-
-- **Object storage:** $0.023/GB-month (S3). Effectively unlimited capacity. Multi-region replication built in.
-- **Warehouse storage** (managed): typically 5-20x more expensive than raw object storage.
-- **Compute:** elastic, per-second billing. Spin up 100 nodes for an hour, pay for an hour, shut down.
-
-In this regime, **storage is free; compute is the bill**. The optimal architecture: store everything raw (bronze) at lake prices, transform on-demand with elastic compute, materialize only the silver/gold tiers most queries hit.
-
-The old warehouse model where storage was the dominant cost is obsolete. Lakehouse architectures align with how cloud pricing actually works.
-
-### From Theory to the Practice Below
-
-Each section that follows operationalizes one piece of this framework:
-
-- §1 (Data Lake) is §A.2 — the lake's promise and pitfalls.
-- §2 (Data Warehouse) is §A.1 — the warehouse's strengths.
-- §3 (Lakehouse) is §A.3 + §C — the synthesis and the table formats that enable it.
-- §4 (Storage Format Comparison) is the practical Parquet/Delta/Iceberg/Hudi choice.
-- §5 (Cloud Solutions) maps §A waves to specific products (Snowflake, BigQuery, Databricks, etc.).
-- §6 (Architecture Patterns) is §D — the medallion in practice.
-
----
-
 ## Overview
 
 Data storage architecture is central to an organization's data strategy. Understanding the characteristics and use cases of Data Lakes, Data Warehouses, and the Lakehouse architecture that combines both.
@@ -240,7 +88,6 @@ JOIN dim_date d ON f.date_sk = d.date_sk
 WHERE d.year >= 2023
 GROUP BY d.year, d.month, d.month_name
 ORDER BY d.year, d.month;
-
 
 -- Customer LTV by segment
 -- CTE isolates per-customer aggregation so the outer query can compute
@@ -386,7 +233,6 @@ def process_raw_orders():
         .partitionBy("year", "month") \
         .parquet("s3://my-data-lake/processed/orders/")
 
-
 # Processed → Curated (Silver → Gold)
 # Gold layer contains business-ready aggregates and dimensional models
 # optimized for fast queries — BI tools read from here directly.
@@ -415,6 +261,42 @@ def create_fact_sales():
 ---
 
 ## 3. Data Warehouse vs Data Lake
+
+### Theory: Schema-on-Write vs Schema-on-Read
+
+The fundamental axis these architectures arrange themselves on.
+
+#### B.1 Schema-on-write (warehouse default)
+
+Validate and structure data at load time. Bad rows are rejected or quarantined. The warehouse table always conforms to its declared schema.
+
+- **Cost paid at write time.** Producers must conform. New fields require migration.
+- **Confidence at read time.** Every query sees clean, typed data. Analysts move fast.
+- **Failure mode:** schema migrations are painful. A column rename in upstream source breaks the loader.
+
+#### B.2 Schema-on-read (lake default)
+
+Dump raw bytes; consumers parse and validate at read time. Adding a new field is free at write time.
+
+- **Cost paid at read time.** Every consumer pays parsing/validation cost. Schema bugs surface late.
+- **Flexibility at write time.** Producers move fast. New fields appear in JSON without migration.
+- **Failure mode:** garbage accumulates. Different consumers parse fields differently. Trust erodes.
+
+#### B.3 Lakehouse: schema-on-read at bronze, schema-on-write at silver/gold
+
+The pragmatic synthesis. Raw tier (bronze) accepts anything; validation happens during the bronze→silver transformation. Silver and gold tiers are typed, validated, schema-enforced. The "data swamp" risk is contained to bronze; everything downstream is clean.
+
+### Theory: Storage Economics
+
+The economic reality that makes lakehouse possible.
+
+- **Object storage:** $0.023/GB-month (S3). Effectively unlimited capacity. Multi-region replication built in.
+- **Warehouse storage** (managed): typically 5-20x more expensive than raw object storage.
+- **Compute:** elastic, per-second billing. Spin up 100 nodes for an hour, pay for an hour, shut down.
+
+In this regime, **storage is free; compute is the bill**. The optimal architecture: store everything raw (bronze) at lake prices, transform on-demand with elastic compute, materialize only the silver/gold tiers most queries hit.
+
+The old warehouse model where storage was the dominant cost is obsolete. Lakehouse architectures align with how cloud pricing actually works.
 
 ### 3.1 Comparison
 
@@ -470,6 +352,59 @@ def choose_architecture(requirements: dict) -> str:
 
 ## 4. Lakehouse
 
+### Theory: The Warehouse-Lake-Lakehouse Evolution
+
+Three architectural waves, each addressing the previous's pain.
+
+#### A.1 Wave 1: data warehouse (1990s-2010s)
+
+Teradata, Oracle, SQL Server, then Redshift, Snowflake, BigQuery. The pitch: a relational database tuned for analytics. Schema enforced at write, columnar storage, MPP execution, optimizer with statistics. Analysts run SQL, get fast results.
+
+Limitations that drove the next wave:
+- **Storage and compute coupled** (early generation). Adding storage required adding compute hardware. Cost scaled badly.
+- **Schema rigidity.** Adding a column meant ALTER TABLE on petabytes; rejecting non-SQL data (images, free-text logs).
+- **Vendor lock-in.** Data lived in proprietary formats; getting it out for ML or non-SQL processing was painful.
+
+#### A.2 Wave 2: data lake (2010s)
+
+Hadoop HDFS, then S3/GCS/ADLS. Just dump files (Parquet, JSON, Avro, CSV) into cheap object storage. Multiple compute engines (Spark, Hive, Presto, Python notebooks) read the same files. Schema flexible, storage cheap, no vendor lock-in.
+
+What the lake won: storage cost (10-100x cheaper than warehouse), schema flexibility, multi-engine analytics, ML-friendliness.
+
+What it lost:
+- **No ACID transactions.** Concurrent writers corrupt each other. A reader during a write sees half-written data.
+- **No schema enforcement.** Garbage accumulates ("data swamp").
+- **No fine-grained updates / deletes.** Delete one row in a Parquet file requires rewriting the file.
+- **No indexing or stats.** Every query is a full scan unless someone built indexes externally.
+
+The "data swamp" became a real organizational problem: petabytes of data nobody can trust or query efficiently.
+
+#### A.3 Wave 3: lakehouse (2020-)
+
+The synthesis. Keep the lake's storage layout (files in S3) but add a *table format* on top that provides ACID transactions, schema evolution, time travel, and indexing. Three open implementations: **Delta Lake** (Databricks), **Apache Iceberg** (Netflix origin, now Apache), **Apache Hudi** (Uber origin, now Apache).
+
+The pitch: warehouse semantics (ACID, SQL, performance) on lake economics (cheap storage, multi-engine, open formats).
+
+### Theory: The Medallion Discipline
+
+The standard organizing pattern for lakehouse pipelines.
+
+#### D.1 The three tiers
+
+- **Bronze:** raw ingested data, append-only, schema-on-read. The source of truth; never deleted. CDC feeds, raw API responses, dumped files. Bronze data is messy; that's its purpose.
+- **Silver:** cleaned, deduplicated, joined, conformed to a schema. Type-checked, null-handled, business-key-enforced. Analyst-ready.
+- **Gold:** business-aggregated, denormalized, optimized for specific consumption — dashboards, ML features, reports. Often pre-joined wide tables.
+
+#### D.2 Idempotent rebuild
+
+The medallion's superpower: each tier is **rebuildable from the prior tier**. If silver has a bug, fix the bronze→silver code, drop silver, rebuild from bronze. Bronze never changes (append-only); silver and gold are derived.
+
+This is what makes the architecture survivable. Bug in production gold? Rebuild from silver in an hour. Bug in silver? Rebuild from bronze in a day. Bronze is your replay log.
+
+#### D.3 The orchestration model
+
+Each tier is built by orchestrated jobs (Airflow, Dagster, Prefect). The natural pattern: bronze ingestion runs continuously or hourly; silver and gold rebuild incrementally on a schedule. Failure of a downstream tier does not affect upstream — bronze keeps accumulating.
+
 ### 4.1 Concept
 
 Lakehouse is an architecture that combines the flexibility of Data Lakes with the performance and management capabilities of Data Warehouses.
@@ -521,6 +456,46 @@ Lakehouse is an architecture that combines the flexibility of Data Lakes with th
 ---
 
 ## 5. Delta Lake
+
+### Theory: Table Formats: Delta Lake, Iceberg, Hudi
+
+The technology that makes lakehouse work. All three solve the same problem with the same general approach: a *transaction log* that records each commit, alongside the actual data files.
+
+#### C.1 The transaction log pattern
+
+```
+/table_root/
+  _delta_log/                ← transaction log (Delta Lake naming; Iceberg uses metadata/)
+    000000.json              ← commit 0: "added file part-001.parquet"
+    000001.json              ← commit 1: "added file part-002.parquet, removed part-001.parquet"
+  part-001.parquet           ← actual data
+  part-002.parquet
+```
+
+To read the table at the current state, a reader:
+1. Lists the log files.
+2. Replays them in order to compute the current set of "live" data files.
+3. Reads only those files.
+
+To write, a writer:
+1. Stages new data files.
+2. Atomically appends a new log entry recording the change.
+3. Optimistic concurrency: if another writer's log entry won, retry.
+
+This gives:
+- **ACID writes.** The log entry is atomic; partial writes are invisible.
+- **Snapshot reads.** A reader at time T sees a consistent snapshot, regardless of concurrent writers.
+- **Time travel.** Read the table as of an old commit number — useful for debugging, audit, replay.
+- **Schema evolution.** Schema is in the log; old data files have their own schema; reader merges.
+- **Updates and deletes.** Implemented as "rewrite affected files + record old as removed in log".
+
+#### C.2 Differences in practice
+
+- **Delta Lake:** simplest, tightly tied to Spark/Databricks (good third-party support now). Default for Databricks customers.
+- **Apache Iceberg:** designed for multi-engine from day one. Better support in Trino, Flink, Snowflake. Most "open" choice.
+- **Apache Hudi:** best for streaming + frequent upserts. Has incremental processing primitives baked in.
+
+The choice often comes down to ecosystem rather than raw capability. All three are converging.
 
 ### 5.1 Delta Lake Basics
 
@@ -589,7 +564,6 @@ delta_table.alias("target").merge(
     "amount": "source.amount"
 }).execute()
 
-
 # Time Travel (query historical versions)
 # Time travel is invaluable for debugging data issues — you can compare
 # the current state with a prior version to see exactly what changed.
@@ -604,10 +578,8 @@ df_yesterday = spark.read.format("delta") \
     .option("timestampAsOf", "2024-01-14") \
     .load("/data/delta/users")
 
-
 # Check history
 delta_table.history().show()
-
 
 # Vacuum (cleanup old files)
 # 168 hours (7 days) balances storage cost against the need for time travel.
@@ -616,14 +588,12 @@ delta_table.history().show()
 # confirming no concurrent readers depend on old files.
 delta_table.vacuum(retentionHours=168)  # 7 days retention
 
-
 # Schema evolution — mergeSchema=true allows adding new columns from
 # incoming data without breaking existing readers.
 # Without this, writes with new columns would fail with a schema mismatch error.
 spark.read.format("delta") \
     .option("mergeSchema", "true") \
     .load("/data/delta/users")
-
 
 # Z-Order optimization (query performance)
 # Z-ordering co-locates related data in the same files based on the specified

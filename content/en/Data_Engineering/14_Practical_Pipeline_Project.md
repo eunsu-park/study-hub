@@ -15,16 +15,15 @@ After completing this lesson, you will be able to:
 
 ---
 
-## Theory & Principles
+## Overview
 
-A practical end-to-end pipeline is where every concept from the prior lessons stops being abstract. The challenge is no longer "what does Airflow do" — it is "how do these pieces fit together so the system produces trusted data on schedule, recovers gracefully from failure, and is debuggable at 3 AM by an engineer who didn't write it." Four design disciplines turn a stack of tools into an actual production pipeline.
+In this lesson, we'll integrate all the technologies learned so far to build a real data pipeline. We'll design an end-to-end pipeline using Airflow for orchestration, Spark for large-scale processing, dbt for transformations, and Great Expectations for quality validation.
 
-- **(A) Data product thinking** — pipelines as products with consumers, SLAs, and contracts.
-- **(B) The medallion + orchestration architecture** — combining storage tiers (Lesson 11), transformations (Lesson 12), and orchestration (Lessons 4-6).
-- **(C) Observability: the three pillars for data pipelines** — metrics, logs, lineage; what to alert on, what to log.
-- **(D) SLOs and incident response** — defining "is the pipeline healthy" quantitatively, and responding when it isn't.
+---
 
-### A. Data Product Thinking
+## 1. Project Overview
+
+### Theory: Data Product Thinking
 
 The shift from "I built a pipeline" to "I shipped a data product."
 
@@ -53,137 +52,6 @@ Consumer commitments to producer:
 - "I will tell you what I depend on so you can plan changes."
 
 This is data contracts in spirit (Lesson 21 covers the formal version). Even informal versions reduce the rate of cross-team incidents dramatically.
-
-### B. The Medallion + Orchestration Architecture
-
-A reference architecture that combines lessons 1, 4, 7, 10, 11, 12, 13.
-
-#### B.1 The pipeline shape
-
-```
-sources (DBs, APIs, files)
-    ↓
-ingestion (Airbyte / Kafka / Spark) → bronze (raw lake)
-    ↓
-cleaning (Spark / dbt) ─────────────→ silver (typed, validated)
-    ↓
-modeling (dbt) ──────────────────────→ gold (denormalized, business-ready)
-    ↓
-serving (BI tools, ML feature store, APIs)
-```
-
-Each transition is orchestrated (Airflow, Dagster) and quality-gated (Great Expectations, dbt tests).
-
-#### B.2 The orchestration spine
-
-Airflow / Dagster / Prefect doesn't just schedule — it owns:
-- **Trigger logic.** Schedule, sensors waiting for files, event-driven via webhooks.
-- **Dependency management.** Don't run silver until bronze succeeds; don't run gold until silver succeeds.
-- **Retry policy.** Transient errors retry; persistent errors alert.
-- **Backfill.** When you find a 3-day-old bug, replay those 3 days deterministically.
-- **SLA monitoring.** "This DAG should finish by 6am; alert if not."
-
-The orchestrator is the operational brain. Choose it deliberately.
-
-#### B.3 Tool choice per layer
-
-| Layer | Typical tools | Why |
-|-------|---------------|-----|
-| Ingestion (batch) | Airbyte, Fivetran, custom Python | Simple, well-understood, vendor handles connector maintenance |
-| Ingestion (streaming) | Kafka + Connect, Debezium (CDC) | Low latency, replay, log-based correctness |
-| Heavy transformation | Spark | Distributed, handles >100 GB efficiently |
-| SQL transformation | dbt | Versioned, tested, lineage-tracked SQL |
-| Orchestration | Airflow, Dagster, Prefect | DAG management, schedule, retry, observability |
-| Quality | Great Expectations, dbt tests | Declarative expectations |
-| Storage (raw) | S3/GCS + Parquet | Cheap, multi-engine readable |
-| Storage (curated) | Delta / Iceberg / Snowflake / BigQuery | ACID, performance, SQL access |
-
-This is not "the only way" — but it is a stack that has converged for most companies in the 2024 era.
-
-### C. Observability: Three Pillars for Data
-
-#### C.1 Metrics: pipeline health as numbers
-
-What to measure:
-- **Pipeline latency.** P50, P95 of end-to-end time per run.
-- **Pipeline success rate.** % of runs completing without retry.
-- **Data freshness.** `now() - max(updated_at)` per table.
-- **Row count.** Per-day per-table; alert on >50% deviation from 7-day average.
-- **Test pass rate.** % of GE/dbt tests passing per run.
-
-These go to Prometheus / DataDog / CloudWatch. Dashboard them per pipeline. Alert when they break SLO.
-
-#### C.2 Logs: what happened, in detail
-
-Structured logs (JSON) per task / per stage. Include:
-- Timestamps.
-- Logical date (which date this run is processing).
-- Row counts per stage (input rows in, output rows out).
-- Duration per stage.
-- Error context (full stack trace, sample failing rows).
-
-Logs go to a central log aggregator (Elastic, CloudWatch Logs, Datadog Logs). Searchable by run_id and logical_date.
-
-#### C.3 Lineage: what depends on what
-
-Lineage IS the third pillar, specific to data engineering. When a metric anomaly fires, you ask "what tables feed this metric?" and walk the lineage upward to find where the deviation began. Without lineage, this is hours of manual SQL archaeology.
-
-Modern catalog tools (DataHub, OpenLineage) capture lineage automatically from dbt and Spark.
-
-### D. SLOs and Incident Response
-
-#### D.1 Defining SLOs
-
-A Service Level Objective for a pipeline:
-
-- **Freshness:** "data for day D available by 6am UTC of D+1, 99% of the time over a rolling 30-day window."
-- **Completeness:** "row count is within 5% of 7-day average, 99% of the time."
-- **Accuracy:** "all dbt tests pass, 99.5% of the time."
-
-Each SLO has an error budget (1% = ~7 hours/month for a daily pipeline). Burn the budget faster than that, halt feature work, focus on reliability.
-
-#### D.2 The incident playbook
-
-When SLO breaches, the on-call engineer needs:
-
-1. **Alert with context.** "Pipeline X failed at stage Y; logical date Z; last successful run was T ago; consumer SLA is impacted."
-2. **Runbook link.** "Common causes: A (fix: …), B (fix: …); escalate to team Z if neither applies."
-3. **Lineage view.** "These downstream tables/dashboards/models are blocked or stale."
-4. **Backfill plan.** Once the bug is fixed, the steps to replay missed runs.
-
-Without a playbook, every incident is reinvented from scratch. With one, on-call is calmer and faster.
-
-#### D.3 Postmortems
-
-After every meaningful incident, write a postmortem:
-- What happened (timeline).
-- Root cause (the actual underlying issue, not "X failed").
-- Detection (how did we know? was alerting adequate?).
-- Mitigation (what did we do? how long did it take?).
-- Prevention (what changes to code, process, or tooling will prevent recurrence?).
-
-Blameless. The goal is a system that handles the same class of failure better next time.
-
-### From Theory to the Code Below
-
-Each section that follows operationalizes one piece of this framework:
-
-- §1 (Project Overview) is §A — defining the data product, its consumers, its SLAs.
-- §2 (Architecture Design) is §B.1 — the medallion + orchestration shape applied.
-- §3 (Implementing the Ingestion Layer) is §B.3 row 1 — concrete Airbyte / Kafka / Spark patterns.
-- §4 (Building the Transformation Layer) is §B.3 rows 3-4 — Spark and dbt working together.
-- §5 (Quality and Monitoring) is §C and §D — instrumented pipeline with SLOs.
-- §6 (Production Deployment) is the integration: CI/CD, env separation, observability stack.
-
----
-
-## Overview
-
-In this lesson, we'll integrate all the technologies learned so far to build a real data pipeline. We'll design an end-to-end pipeline using Airflow for orchestration, Spark for large-scale processing, dbt for transformations, and Great Expectations for quality validation.
-
----
-
-## 1. Project Overview
 
 ### 1.1 Scenario
 
@@ -267,6 +135,52 @@ In this lesson, we'll integrate all the technologies learned so far to build a r
 ---
 
 ## 2. Project Structure
+
+### Theory: The Medallion + Orchestration Architecture
+
+A reference architecture that combines lessons 1, 4, 7, 10, 11, 12, 13.
+
+#### B.1 The pipeline shape
+
+```
+sources (DBs, APIs, files)
+    ↓
+ingestion (Airbyte / Kafka / Spark) → bronze (raw lake)
+    ↓
+cleaning (Spark / dbt) ─────────────→ silver (typed, validated)
+    ↓
+modeling (dbt) ──────────────────────→ gold (denormalized, business-ready)
+    ↓
+serving (BI tools, ML feature store, APIs)
+```
+
+Each transition is orchestrated (Airflow, Dagster) and quality-gated (Great Expectations, dbt tests).
+
+#### B.2 The orchestration spine
+
+Airflow / Dagster / Prefect doesn't just schedule — it owns:
+- **Trigger logic.** Schedule, sensors waiting for files, event-driven via webhooks.
+- **Dependency management.** Don't run silver until bronze succeeds; don't run gold until silver succeeds.
+- **Retry policy.** Transient errors retry; persistent errors alert.
+- **Backfill.** When you find a 3-day-old bug, replay those 3 days deterministically.
+- **SLA monitoring.** "This DAG should finish by 6am; alert if not."
+
+The orchestrator is the operational brain. Choose it deliberately.
+
+#### B.3 Tool choice per layer
+
+| Layer | Typical tools | Why |
+|-------|---------------|-----|
+| Ingestion (batch) | Airbyte, Fivetran, custom Python | Simple, well-understood, vendor handles connector maintenance |
+| Ingestion (streaming) | Kafka + Connect, Debezium (CDC) | Low latency, replay, log-based correctness |
+| Heavy transformation | Spark | Distributed, handles >100 GB efficiently |
+| SQL transformation | dbt | Versioned, tested, lineage-tracked SQL |
+| Orchestration | Airflow, Dagster, Prefect | DAG management, schedule, retry, observability |
+| Quality | Great Expectations, dbt tests | Declarative expectations |
+| Storage (raw) | S3/GCS + Parquet | Cheap, multi-engine readable |
+| Storage (curated) | Delta / Iceberg / Snowflake / BigQuery | ACID, performance, SQL access |
+
+This is not "the only way" — but it is a stack that has converged for most companies in the 2024 era.
 
 ### 2.1 Directory Structure
 
@@ -609,7 +523,6 @@ def main():
     print(f"Extracted {df.count()} rows from {args.table}")
     spark.stop()
 
-
 if __name__ == "__main__":
     main()
 ```
@@ -689,7 +602,6 @@ def main():
     print(f"Processed {processed_df.count()} events")
     spark.stop()
 
-
 if __name__ == "__main__":
     main()
 ```
@@ -762,7 +674,6 @@ def main():
         .parquet(f"{args.output}/customer_segments/")
 
     spark.stop()
-
 
 if __name__ == "__main__":
     main()
@@ -1033,6 +944,70 @@ models:
 
 ## 7. Monitoring and Alerts
 
+### Theory: Observability: Three Pillars for Data
+
+#### C.1 Metrics: pipeline health as numbers
+
+What to measure:
+- **Pipeline latency.** P50, P95 of end-to-end time per run.
+- **Pipeline success rate.** % of runs completing without retry.
+- **Data freshness.** `now() - max(updated_at)` per table.
+- **Row count.** Per-day per-table; alert on >50% deviation from 7-day average.
+- **Test pass rate.** % of GE/dbt tests passing per run.
+
+These go to Prometheus / DataDog / CloudWatch. Dashboard them per pipeline. Alert when they break SLO.
+
+#### C.2 Logs: what happened, in detail
+
+Structured logs (JSON) per task / per stage. Include:
+- Timestamps.
+- Logical date (which date this run is processing).
+- Row counts per stage (input rows in, output rows out).
+- Duration per stage.
+- Error context (full stack trace, sample failing rows).
+
+Logs go to a central log aggregator (Elastic, CloudWatch Logs, Datadog Logs). Searchable by run_id and logical_date.
+
+#### C.3 Lineage: what depends on what
+
+Lineage IS the third pillar, specific to data engineering. When a metric anomaly fires, you ask "what tables feed this metric?" and walk the lineage upward to find where the deviation began. Without lineage, this is hours of manual SQL archaeology.
+
+Modern catalog tools (DataHub, OpenLineage) capture lineage automatically from dbt and Spark.
+
+### Theory: SLOs and Incident Response
+
+#### D.1 Defining SLOs
+
+A Service Level Objective for a pipeline:
+
+- **Freshness:** "data for day D available by 6am UTC of D+1, 99% of the time over a rolling 30-day window."
+- **Completeness:** "row count is within 5% of 7-day average, 99% of the time."
+- **Accuracy:** "all dbt tests pass, 99.5% of the time."
+
+Each SLO has an error budget (1% = ~7 hours/month for a daily pipeline). Burn the budget faster than that, halt feature work, focus on reliability.
+
+#### D.2 The incident playbook
+
+When SLO breaches, the on-call engineer needs:
+
+1. **Alert with context.** "Pipeline X failed at stage Y; logical date Z; last successful run was T ago; consumer SLA is impacted."
+2. **Runbook link.** "Common causes: A (fix: …), B (fix: …); escalate to team Z if neither applies."
+3. **Lineage view.** "These downstream tables/dashboards/models are blocked or stale."
+4. **Backfill plan.** Once the bug is fixed, the steps to replay missed runs.
+
+Without a playbook, every incident is reinvented from scratch. With one, on-call is calmer and faster.
+
+#### D.3 Postmortems
+
+After every meaningful incident, write a postmortem:
+- What happened (timeline).
+- Root cause (the actual underlying issue, not "X failed").
+- Detection (how did we know? was alerting adequate?).
+- Mitigation (what did we do? how long did it take?).
+- Prevention (what changes to code, process, or tooling will prevent recurrence?).
+
+Blameless. The goal is a system that handles the same class of failure better next time.
+
 ### 7.1 Monitoring Dashboard
 
 ```python
@@ -1066,7 +1041,6 @@ class PipelineMetrics:
             "quality_score": self.quality_score,
             "errors": self.errors or []
         }
-
 
 def push_metrics_to_prometheus(metrics: PipelineMetrics):
     """Push metrics to Prometheus"""
@@ -1169,7 +1143,6 @@ class AlertManager:
             "https://events.pagerduty.com/v2/enqueue",
             json=payload
         )
-
 
 # Use in Airflow
 def alert_on_failure(context):
