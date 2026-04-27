@@ -20,15 +20,12 @@ After completing this lesson, you will be able to:
 
 Web Components are a suite of browser-native APIs that let you create reusable, encapsulated HTML elements. Unlike framework components (React, Vue, Svelte), Web Components work everywhere -- in any framework or no framework at all. They are built on three specifications: **Custom Elements**, **Shadow DOM**, and **HTML Templates**.
 
-Before the reference, read [**Theory & Principles**](#theory--principles) — Web Components are *three* specs combined (Custom Elements register tag-name → class mappings, Shadow DOM provides style/markup encapsulation via a parallel sub-tree, `<template>` is inert markup) — together they let you ship interoperable elements that work in any framework.
-
 ---
 
-## Theory & Principles
 
-The phrase "Web Components" feels like a single thing, but it is the *intersection* of three independent browser specs that compose into a custom-element story. Each spec solves one problem that frameworks otherwise solve in their own incompatible ways: how does the browser know about your element type (Custom Elements), how do you keep the element's internal markup and styles from leaking (Shadow DOM), how do you parse markup without immediately rendering it (Templates). Naming the three boundaries before reading the API tour makes the rest of the lesson read as "what each spec lets you do" instead of "yet another component model."
+## 1. Custom Elements
 
-### A. Custom Elements: Registering a Tag → Class Mapping
+### Theory: Custom Elements: Registering a Tag → Class Mapping
 
 `customElements.define('my-card', MyCard)` adds a row to the **CustomElementRegistry**: from now on, every `<my-card>` in the document — present or future — is upgraded to an instance of the `MyCard` class. The class must extend `HTMLElement` and the tag name must contain a hyphen (the hyphen is reserved by spec to distinguish custom from built-in elements; this is what guarantees that future HTML can add new built-in elements without colliding with yours).
 
@@ -52,83 +49,6 @@ Two design rules fall out of these:
 
 1. **The constructor cannot touch DOM.** It runs before the element is inserted; touching `innerHTML`, attributes, or children either fails or is silently undone when the parser later parses the actual children. Render in `connectedCallback`.
 2. **Attribute-driven state is reflected back.** `observedAttributes` is the *opt-in list* — only attributes named here trigger `attributeChangedCallback`. The convention is that important attributes (like `disabled`, `expanded`, `value`) are mirrored to JavaScript properties (`element.disabled`) and back, with both staying in sync. This is exactly how built-in elements like `<input>` work.
-
-### B. Shadow DOM: A Parallel Sub-Tree With Its Own Scope
-
-`element.attachShadow({ mode: 'open' })` returns a **shadow root** — a hidden document fragment attached to the element. Children of the shadow root render *in place of* the element's regular children; styles inside the shadow root *do not* affect the document, and document styles *do not* affect the shadow tree. This is the **encapsulation boundary**.
-
-Concrete implications:
-
-- **Selectors stop at the shadow.** `document.querySelector('.button')` cannot reach into a shadow root. With `mode: 'open'`, you can step in via `element.shadowRoot.querySelector('...')`. With `mode: 'closed'`, even that is denied.
-- **CSS does not leak.** A `<style>p { color: red }</style>` inside the shadow styles only `<p>` elements within that shadow. Conversely, the host page's `p { color: blue }` does not affect them.
-- **Events bubble out, retargeted.** A click inside the shadow becomes an event on the host element, with `event.target` rewritten to the host (so listeners cannot peek inside). Use `event.composedPath()` if you need the full path (and only when justified — peeking violates encapsulation).
-- **Slotting is the API for letting *outside* content in.** `<slot name="header"></slot>` inside the shadow renders content from the host's children with `slot="header"`. The slotted content keeps its document-side scope (styles from the document apply), giving you a clean "here is what consumers can fill in" interface.
-- **Theming is via CSS custom properties and `::part()`.** Custom properties pierce the boundary by design (`--button-color: blue` set on the host applies inside the shadow). `::part(name)` lets the host page style elements the component opts in via `part="name"`.
-
-This is what frameworks reinvent (CSS Modules, scoped CSS, styled-components, vDOM scoping). Shadow DOM bakes the same idea into the platform, with the same trade-offs: encapsulation is great until you need a designer to tweak something deep inside.
-
-### C. `<template>`: Inert Markup You Render When Ready
-
-A `<template>` element is HTML the browser parses but *does not render or run*. Its contents (`template.content`, a `DocumentFragment`) are not in the document, do not load images, do not run scripts, do not match CSS. You take a clone (`template.content.cloneNode(true)`) and append it where you want.
-
-This is the right primitive for component templating without strings:
-
-```html
-<template id="card-template">
-  <style>:host { display: block; }</style>
-  <header><slot name="title"></slot></header>
-  <div class="body"><slot></slot></div>
-</template>
-
-<script>
-class MyCard extends HTMLElement {
-  connectedCallback() {
-    const tpl = document.getElementById('card-template');
-    this.attachShadow({mode: 'open'}).append(tpl.content.cloneNode(true));
-  }
-}
-customElements.define('my-card', MyCard);
-</script>
-```
-
-Templates eliminate two failure modes of `innerHTML`-based components: no XSS (no string parsing of dynamic data), and no double-render cost (the parser handled it once, you clone the result).
-
-### D. Where Web Components Win, and Where Frameworks Win
-
-A useful comparison rather than a takedown:
-
-**Web Components win when:**
-
-- The element will be embedded in *unknown contexts* — design system buttons that need to work in a React app, a Vue app, a marketing site, an email signature.
-- The team needs to ship elements that survive framework migrations.
-- Framework-free static sites (Astro, Eleventy, plain HTML) need interactive parts.
-- Hard encapsulation is a feature (third-party widgets, embeds).
-
-**Frameworks (React, Vue, Svelte) win when:**
-
-- The whole app is one cohesive system you control.
-- You need a shared state mechanism across many components (Web Components have no built-in equivalent of React Context).
-- You want declarative templating with type-safe data flow (JSX + TypeScript).
-- The component tree changes frequently and you want diff-based reconciliation.
-
-The two are not mutually exclusive. A common architecture is "framework for the app, Web Components for the design-system primitives" — React rendering a tree that includes `<my-button>`, `<my-card>`, `<my-modal>` instances that work identically if the team migrates to Vue next year. Lit (the Google library) is the standard tool for writing Web Components ergonomically (declarative templates with `lit-html`, reactive properties, fewer lifecycle boilerplate lines).
-
-### From Theory to the Reference Below
-
-- **Custom Elements** (section 1) is §A — `customElements.define`, the four lifecycle callbacks, `observedAttributes`.
-- **Shadow DOM** (section 2) is §B — `attachShadow`, the encapsulation rules, slots, theming with custom properties and `::part`.
-- **HTML Templates** (section 3) is §C — the `<template>` tag, `content` fragment, cloning.
-- **Lifecycle Callbacks** (section 4) is §A made explicit — when each one fires and what to do in each.
-- **Attribute / property reflection** is §A's two-way mirroring pattern.
-- **Event handling across shadow boundaries** uses §B's retargeting and `composed: true` events.
-- **Theming** (custom properties + `::part`) is §B's safe-by-default styling escape hatch.
-- **Lit** (final section) reduces §A and §C to declarative syntax.
-
-Read the rest of the lesson knowing that every Web Components feature is one of those three specs doing its part of the job.
-
----
-
-## 1. Custom Elements
 
 ### 1.1 What are Custom Elements?
 
@@ -229,6 +149,20 @@ if (MyGreeting) {
 ---
 
 ## 2. Shadow DOM
+
+### Theory: Shadow DOM: A Parallel Sub-Tree With Its Own Scope
+
+`element.attachShadow({ mode: 'open' })` returns a **shadow root** — a hidden document fragment attached to the element. Children of the shadow root render *in place of* the element's regular children; styles inside the shadow root *do not* affect the document, and document styles *do not* affect the shadow tree. This is the **encapsulation boundary**.
+
+Concrete implications:
+
+- **Selectors stop at the shadow.** `document.querySelector('.button')` cannot reach into a shadow root. With `mode: 'open'`, you can step in via `element.shadowRoot.querySelector('...')`. With `mode: 'closed'`, even that is denied.
+- **CSS does not leak.** A `<style>p { color: red }</style>` inside the shadow styles only `<p>` elements within that shadow. Conversely, the host page's `p { color: blue }` does not affect them.
+- **Events bubble out, retargeted.** A click inside the shadow becomes an event on the host element, with `event.target` rewritten to the host (so listeners cannot peek inside). Use `event.composedPath()` if you need the full path (and only when justified — peeking violates encapsulation).
+- **Slotting is the API for letting *outside* content in.** `<slot name="header"></slot>` inside the shadow renders content from the host's children with `slot="header"`. The slotted content keeps its document-side scope (styles from the document apply), giving you a clean "here is what consumers can fill in" interface.
+- **Theming is via CSS custom properties and `::part()`.** Custom properties pierce the boundary by design (`--button-color: blue` set on the host applies inside the shadow). `::part(name)` lets the host page style elements the component opts in via `part="name"`.
+
+This is what frameworks reinvent (CSS Modules, scoped CSS, styled-components, vDOM scoping). Shadow DOM bakes the same idea into the platform, with the same trade-offs: encapsulation is great until you need a designer to tweak something deep inside.
 
 ### 2.1 What is Shadow DOM?
 
@@ -364,6 +298,32 @@ In practice, `open` is almost always preferred. `closed` provides weak encapsula
 ---
 
 ## 3. HTML Templates
+
+### Theory: `<template>`: Inert Markup You Render When Ready
+
+A `<template>` element is HTML the browser parses but *does not render or run*. Its contents (`template.content`, a `DocumentFragment`) are not in the document, do not load images, do not run scripts, do not match CSS. You take a clone (`template.content.cloneNode(true)`) and append it where you want.
+
+This is the right primitive for component templating without strings:
+
+```html
+<template id="card-template">
+  <style>:host { display: block; }</style>
+  <header><slot name="title"></slot></header>
+  <div class="body"><slot></slot></div>
+</template>
+
+<script>
+class MyCard extends HTMLElement {
+  connectedCallback() {
+    const tpl = document.getElementById('card-template');
+    this.attachShadow({mode: 'open'}).append(tpl.content.cloneNode(true));
+  }
+}
+customElements.define('my-card', MyCard);
+</script>
+```
+
+Templates eliminate two failure modes of `innerHTML`-based components: no XSS (no string parsing of dynamic data), and no double-render cost (the parser handled it once, you clone the result).
 
 ### 3.1 The `<template>` Element
 
@@ -1060,6 +1020,26 @@ styled-card::part(footer) {
 ---
 
 ## 9. Web Components vs Framework Components
+
+### Theory: Where Web Components Win, and Where Frameworks Win
+
+A useful comparison rather than a takedown:
+
+**Web Components win when:**
+
+- The element will be embedded in *unknown contexts* — design system buttons that need to work in a React app, a Vue app, a marketing site, an email signature.
+- The team needs to ship elements that survive framework migrations.
+- Framework-free static sites (Astro, Eleventy, plain HTML) need interactive parts.
+- Hard encapsulation is a feature (third-party widgets, embeds).
+
+**Frameworks (React, Vue, Svelte) win when:**
+
+- The whole app is one cohesive system you control.
+- You need a shared state mechanism across many components (Web Components have no built-in equivalent of React Context).
+- You want declarative templating with type-safe data flow (JSX + TypeScript).
+- The component tree changes frequently and you want diff-based reconciliation.
+
+The two are not mutually exclusive. A common architecture is "framework for the app, Web Components for the design-system primitives" — React rendering a tree that includes `<my-button>`, `<my-card>`, `<my-modal>` instances that work identically if the team migrates to Vue next year. Lit (the Google library) is the standard tool for writing Web Components ergonomically (declarative templates with `lit-html`, reactive properties, fewer lifecycle boilerplate lines).
 
 ### 9.1 Comparison
 

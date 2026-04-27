@@ -20,8 +20,6 @@ JavaScript의 유연성은 그것의 가장 큰 강점인 동시에 규모가 �
 
 ## 목차
 
-참조에 들어가기 전에, [**이론과 원리**](#이론과-원리) 섹션을 먼저 읽어보세요. TypeScript는 JavaScript 위에 *구조적(structural)* 타입 시스템을 더하며 런타임에는 지워집니다(erase). 일상의 안전 메커니즘은 타입 좁히기(narrowing), 매개변수화된 타입은 제네릭(generics), 그리고 `tsc`는 런타임 동작을 바꾸지 않는 빌드 타임 전용 컴파일러입니다.
-
 1. [TypeScript 소개](#1-typescript-소개)
 2. [기본 타입](#2-기본-타입)
 3. [인터페이스와 타입](#3-인터페이스와-타입)
@@ -32,114 +30,16 @@ JavaScript의 유연성은 그것의 가장 큰 강점인 동시에 규모가 �
 
 ---
 
-## 이론과 원리
 
-TypeScript는 어노테이션이 더해진 JavaScript처럼 보이지만, 그 아래의 설계는 결과적입니다. 세 속성이 거의 모든 TypeScript 결정의 모양을 잡습니다 — 타입은 **구조적(structural)** 이며(이름이 아니라 *모양* 으로 호환), 타입은 컴파일 시점에 **지워지고(erased)** (런타임 비용 0, 런타임 보장 0), 컴파일러는 코드 진행에 따라 타입을 좁히는 정교한 **흐름 분석(flow analysis)** 을 실행합니다. 문법 투어를 읽기 전에 이 셋에 이름을 붙이면, 다른 모든 것이 어휘 목록이 아니라 자명한 결과처럼 느껴집니다.
+## 1. TypeScript 소개
 
-### A. 구조적 타이핑: 모양으로 호환
-
-*명목적(nominal)* 타입 시스템(Java, C#)에서는 같은 멤버를 가진 두 타입도 이름이 다르면 호환되지 않습니다 — `class Dog { name: string }`과 `class Cat { name: string }`은 서로 대체될 수 없습니다. TypeScript는 *구조적* 입니다 — 값이 적절한 모양을 가지고 있다면, 어디서 왔는지에 관계없이 어떤 타입에 할당 가능합니다.
-
-```ts
-interface Named { name: string }
-
-function greet(n: Named) { console.log(n.name); }
-
-class Dog { constructor(public name: string) {} }
-greet(new Dog("Rex"));      // OK
-greet({ name: "Anonymous" }); // OK — 모양이 맞는 평범한 객체
-```
-
-기억할 만한 두 결과:
-
-1. **객체 리터럴은 *과잉 속성 검사(excess property check)* 를 받습니다.** `{ name: "x", color: "red" }`를 `greet`에 직접 넘기면, 그 값이 구조적으로 `Named`임에도 불구하고 인식되지 않는 `color` 필드에서 오류가 납니다. 변수에 먼저 보관하면 오류가 사라집니다 — 변수의 추론된 타입에 이미 `color`가 포함되어 있기 때문입니다. 이는 리터럴 자리의 오타를 잡기 위한 의도적 설계 선택입니다.
-2. **`unknown`과 `any`는 다릅니다.** `any`는 타입 검사에서 완전히 빠집니다 — 어떤 것이든 받고 어디든 할당 가능합니다. `unknown`은 어떤 것이든 받지만, 먼저 좁히지 않으면 *어디에도* 할당 불가능합니다. 경계 입력(JSON, DOM 이벤트)에는 `unknown`을 사용하고, `any`는 의도적인 비상구로만 사용하세요.
-
-### B. 타입 소거: 컴파일 타임만
+### 이론: 타입 소거: 컴파일 타임만
 
 TypeScript 타입은 런타임에 존재하지 않습니다. 컴파일러는 `.ts`를 읽고 타입을 검사한 뒤, 모든 타입 어노테이션이 제거된 `.js`를 emit합니다. 인터페이스에 대한 `instanceof` 테스트도, 제네릭 매개변수의 리플렉션도, 런타임 브랜딩도 *없습니다*. 이는 즉각적으로 세 함의를 가집니다.
 
 1. **타입만으로는 들어오는 데이터를 타입 검사할 수 없습니다.** `data as User`는 모양을 검증하지 않고, 컴파일러에게 "믿어 줘"라고 말할 뿐입니다. 경계(fetch에서 받은 JSON, 쿼리 스트링 파싱, DOM 입력)에서의 진짜 검증을 위해서는, 타입화된 값을 반환 *하면서도* 검사하는 런타임 검증기(Zod, Valibot, ArkType)와 TypeScript를 짝지으세요.
 2. **타입 오류는 컴파일러가 컴파일을 거부하는 경고입니다.** `// @ts-ignore`로 무시하면, JavaScript는 여전히 실행됩니다 — 안전망을 잃은 것뿐입니다. 그래서 CI 설정은 `strict: true`를 두고 타입 오류를 빌드 실패로 간주합니다.
 3. **일부 구문은 소거에서 살아남습니다.** `enum`, `class`, `namespace`, 매개변수 속성(`constructor(public x: number)`)은 JavaScript 출력을 emit합니다. 순수 타입(`interface`, `type`, 제네릭 매개변수)은 아무것도 emit하지 않습니다. 이식성을 위해 두 번째 범주를 선호하세요.
-
-### C. 타입 좁히기(Narrowing): 흐름 민감 분석
-
-TypeScript를 즐겁게 만드는 단일 기능이 **좁히기(narrowing)** 입니다 — 컴파일러는 각 제어 흐름 분기가 변수의 타입을 어떻게 정제하는지 추적합니다.
-
-```ts
-function format(x: string | number) {
-  if (typeof x === "string") {
-    return x.toUpperCase(); // 여기서 x는 string으로 좁혀짐
-  }
-  return x.toFixed(2);      // 여기서 x는 number로 좁혀짐
-}
-```
-
-컴파일러가 이해하는 좁히기 연산자에는 다음이 있습니다.
-
-- **`typeof x === "..."`** — 원시에 대해.
-- **`x instanceof Class`** — 클래스에 대해(런타임에 존재).
-- **`"key" in obj`** — 구조로 union 멤버를 구별.
-- 리터럴에 대한 **동등성**(`x === "loading"`).
-- **사용자 정의 타입 가드(custom type guard)** — 반환 타입이 `x is T`인 함수. `true`를 반환한 분기 안에서 컴파일러가 그것을 신뢰합니다.
-- **`!` 비-null 단언(non-null assertion)** — `x!`는 컴파일러에게 "이것이 null/undefined 아님을 안다"라고 말합니다. 드물게 사용하고, 좁히기를 선호하세요.
-
-이것이 가능하게 하는 가장 유용한 패턴이 **판별된 union(discriminated union)** 입니다 — 리터럴 필드를 공유하는 객체 타입의 union으로, 그 필드가 판별자로 사용됩니다.
-
-```ts
-type State =
-  | { status: "loading" }
-  | { status: "error"; message: string }
-  | { status: "success"; data: User };
-
-function render(s: State) {
-  switch (s.status) {
-    case "loading": ...
-    case "error":  s.message  // 좁혀짐: error 변형은 message를 가짐
-    case "success": s.data    // 좁혀짐: success 변형은 data를 가짐
-  }
-}
-```
-
-이는 정확히 이전 레슨의 §C 패턴이 타입 시스템에 인코딩된 것입니다. 새 상태를 추가하면 모든 `switch`가 그것을 처리하도록 강제됩니다(`never` 망라성 검사로).
-
-### D. 제네릭(Generics): 매개변수화된 타입
-
-**제네릭 매개변수(generic parameter)** 를 가진 함수나 타입은 *호출자* 가 타입을 채워 넣게 하고, 컴파일러는 그것을 본문 전체에 전파합니다. 정전인 예:
-
-```ts
-function first<T>(arr: T[]): T | undefined {
-  return arr[0];
-}
-
-const n = first([1, 2, 3]);          // T가 number로 추론 → n: number | undefined
-const s = first(["a", "b"]);         // T가 string으로 추론 → s: string | undefined
-```
-
-제네릭은 두 실패 모드를 피합니다 — `any`를 반환(다운스트림의 모든 타입 정보를 잃음)하고 N개 타입에 대해 같은 함수의 N개 사본을 쓰는 것.
-
-반복적으로 등장하는 두 정제 메커니즘:
-
-- **`extends`로 제약(constraint).** `<T extends { id: number }>`는 "T는 어떤 타입이든 될 수 있되, `id: number` 필드를 가져야 한다"라고 말합니다. 함수 안에서 `obj.id`는 이제 안전하게 읽을 수 있습니다.
-- **`keyof T`.** "T의 속성 이름의 union" 타입. 인덱스 접근(`T[K]`)과 결합하면, "T의 속성 K의 타입을 줘"를 표현하며, 이것이 `Pick`, `Omit`, `Record`가 지어지는 방식입니다.
-
-유틸리티 타입은 이 프리미티브 위의 레시피로 출하됩니다. `Partial<T>`는 모든 속성을 옵셔널로, `Required<T>`는 모두 필수로, `Pick<T, K>`는 명명된 속성만 유지, `Omit<T, K>`는 그것들을 떨어뜨림, `Record<K, V>`는 키 K와 값 V의 객체 타입을 짓고, `ReturnType<F>`는 함수의 반환 타입을 추출하며, `Awaited<P>`는 Promise의 resolve된 타입을 풀어 냅니다. `lib.es5.d.ts`의 정의를 읽을 수 있게 되면, 자신의 것도 쓸 수 있습니다.
-
-### 이론에서 아래 참조로
-
-- **TypeScript 소개**(섹션 1)는 §B의 컴파일 타임 전용 모델과 `tsc` 워크플로우를 다룹니다.
-- **기본 타입**(섹션 2)은 `string`, `number`, `boolean`, `unknown`, `any`, `never`, 그리고 배열과 튜플을 소개합니다 — 모두 §A의 구조적 규칙에 지배됩니다.
-- **인터페이스와 타입**(섹션 3)은 문법으로의 §A입니다 — 모양 선언, `interface`(확장 가능)와 `type`(합성 가능) 사이의 선택.
-- **함수 타입**(섹션 4)은 매개변수 타입, 반환 타입, 오버로드 — 그리고 매개변수 반변(contravariant) 규칙 — 을 다룹니다.
-- **제네릭**(섹션 5)은 §D입니다 — 매개변수, 제약, `keyof`, `extends`.
-- **유틸리티 타입**(섹션 6)은 §D 위의 표준 라이브러리입니다 — `Partial`, `Pick`, `Omit`, `Record`, `Awaited`, `ReturnType`.
-
-레슨의 나머지를, 모든 어노테이션이 컴파일러가 소거 전에 검사할 제약이며 — 좁히기가 느슨한 union 타입을 구체적 타입으로 바꾸는 일상의 메커니즘이라는 점을 알고 읽으세요.
-
----
-
-## 1. TypeScript 소개
 
 ### 1.1 TypeScript란?
 
@@ -220,6 +120,47 @@ ts-node hello.ts
 ---
 
 ## 2. 기본 타입
+
+### 이론: 타입 좁히기(Narrowing): 흐름 민감 분석
+
+TypeScript를 즐겁게 만드는 단일 기능이 **좁히기(narrowing)** 입니다 — 컴파일러는 각 제어 흐름 분기가 변수의 타입을 어떻게 정제하는지 추적합니다.
+
+```ts
+function format(x: string | number) {
+  if (typeof x === "string") {
+    return x.toUpperCase(); // 여기서 x는 string으로 좁혀짐
+  }
+  return x.toFixed(2);      // 여기서 x는 number로 좁혀짐
+}
+```
+
+컴파일러가 이해하는 좁히기 연산자에는 다음이 있습니다.
+
+- **`typeof x === "..."`** — 원시에 대해.
+- **`x instanceof Class`** — 클래스에 대해(런타임에 존재).
+- **`"key" in obj`** — 구조로 union 멤버를 구별.
+- 리터럴에 대한 **동등성**(`x === "loading"`).
+- **사용자 정의 타입 가드(custom type guard)** — 반환 타입이 `x is T`인 함수. `true`를 반환한 분기 안에서 컴파일러가 그것을 신뢰합니다.
+- **`!` 비-null 단언(non-null assertion)** — `x!`는 컴파일러에게 "이것이 null/undefined 아님을 안다"라고 말합니다. 드물게 사용하고, 좁히기를 선호하세요.
+
+이것이 가능하게 하는 가장 유용한 패턴이 **판별된 union(discriminated union)** 입니다 — 리터럴 필드를 공유하는 객체 타입의 union으로, 그 필드가 판별자로 사용됩니다.
+
+```ts
+type State =
+  | { status: "loading" }
+  | { status: "error"; message: string }
+  | { status: "success"; data: User };
+
+function render(s: State) {
+  switch (s.status) {
+    case "loading": ...
+    case "error":  s.message  // 좁혀짐: error 변형은 message를 가짐
+    case "success": s.data    // 좁혀짐: success 변형은 data를 가짐
+  }
+}
+```
+
+이는 정확히 이전 레슨의 §C 패턴이 타입 시스템에 인코딩된 것입니다. 새 상태를 추가하면 모든 `switch`가 그것을 처리하도록 강제됩니다(`never` 망라성 검사로).
 
 ### 2.1 원시 타입
 
@@ -384,6 +325,25 @@ function getLength(str: string | null): number {
 ---
 
 ## 3. 인터페이스와 타입
+
+### 이론: 구조적 타이핑: 모양으로 호환
+
+*명목적(nominal)* 타입 시스템(Java, C#)에서는 같은 멤버를 가진 두 타입도 이름이 다르면 호환되지 않습니다 — `class Dog { name: string }`과 `class Cat { name: string }`은 서로 대체될 수 없습니다. TypeScript는 *구조적* 입니다 — 값이 적절한 모양을 가지고 있다면, 어디서 왔는지에 관계없이 어떤 타입에 할당 가능합니다.
+
+```ts
+interface Named { name: string }
+
+function greet(n: Named) { console.log(n.name); }
+
+class Dog { constructor(public name: string) {} }
+greet(new Dog("Rex"));      // OK
+greet({ name: "Anonymous" }); // OK — 모양이 맞는 평범한 객체
+```
+
+기억할 만한 두 결과:
+
+1. **객체 리터럴은 *과잉 속성 검사(excess property check)* 를 받습니다.** `{ name: "x", color: "red" }`를 `greet`에 직접 넘기면, 그 값이 구조적으로 `Named`임에도 불구하고 인식되지 않는 `color` 필드에서 오류가 납니다. 변수에 먼저 보관하면 오류가 사라집니다 — 변수의 추론된 타입에 이미 `color`가 포함되어 있기 때문입니다. 이는 리터럴 자리의 오타를 잡기 위한 의도적 설계 선택입니다.
+2. **`unknown`과 `any`는 다릅니다.** `any`는 타입 검사에서 완전히 빠집니다 — 어떤 것이든 받고 어디든 할당 가능합니다. `unknown`은 어떤 것이든 받지만, 먼저 좁히지 않으면 *어디에도* 할당 불가능합니다. 경계 입력(JSON, DOM 이벤트)에는 `unknown`을 사용하고, `any`는 의도적인 비상구로만 사용하세요.
 
 ### 3.1 인터페이스 기본
 
@@ -576,6 +536,28 @@ button.click(); // OK
 ---
 
 ## 5. 제네릭
+
+### 이론: 제네릭(Generics): 매개변수화된 타입
+
+**제네릭 매개변수(generic parameter)** 를 가진 함수나 타입은 *호출자* 가 타입을 채워 넣게 하고, 컴파일러는 그것을 본문 전체에 전파합니다. 정전인 예:
+
+```ts
+function first<T>(arr: T[]): T | undefined {
+  return arr[0];
+}
+
+const n = first([1, 2, 3]);          // T가 number로 추론 → n: number | undefined
+const s = first(["a", "b"]);         // T가 string으로 추론 → s: string | undefined
+```
+
+제네릭은 두 실패 모드를 피합니다 — `any`를 반환(다운스트림의 모든 타입 정보를 잃음)하고 N개 타입에 대해 같은 함수의 N개 사본을 쓰는 것.
+
+반복적으로 등장하는 두 정제 메커니즘:
+
+- **`extends`로 제약(constraint).** `<T extends { id: number }>`는 "T는 어떤 타입이든 될 수 있되, `id: number` 필드를 가져야 한다"라고 말합니다. 함수 안에서 `obj.id`는 이제 안전하게 읽을 수 있습니다.
+- **`keyof T`.** "T의 속성 이름의 union" 타입. 인덱스 접근(`T[K]`)과 결합하면, "T의 속성 K의 타입을 줘"를 표현하며, 이것이 `Pick`, `Omit`, `Record`가 지어지는 방식입니다.
+
+유틸리티 타입은 이 프리미티브 위의 레시피로 출하됩니다. `Partial<T>`는 모든 속성을 옵셔널로, `Required<T>`는 모두 필수로, `Pick<T, K>`는 명명된 속성만 유지, `Omit<T, K>`는 그것들을 떨어뜨림, `Record<K, V>`는 키 K와 값 V의 객체 타입을 짓고, `ReturnType<F>`는 함수의 반환 타입을 추출하며, `Awaited<P>`는 Promise의 resolve된 타입을 풀어 냅니다. `lib.es5.d.ts`의 정의를 읽을 수 있게 되면, 자신의 것도 쓸 수 있습니다.
 
 ### 5.1 제네릭 기본
 

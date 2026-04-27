@@ -23,8 +23,6 @@ Every web page you visit -- from a simple blog to a complex web application -- b
 
 ## Table of Contents
 
-Before the reference, read [**Theory & Principles**](#theory--principles) — HTML is not just "tags around text" but a declarative description of a *tree* that the browser turns into the DOM, the accessibility tree, and the rendering surface.
-
 1. [What is HTML?](#what-is-html)
 2. [HTML Document Structure](#html-document-structure)
 3. [Basic Tags](#basic-tags)
@@ -36,62 +34,6 @@ Before the reference, read [**Theory & Principles**](#theory--principles) — HT
 
 ---
 
-## Theory & Principles
-
-It is tempting to read HTML as a list of "tags you put around text." That mental model gets you through `<h1>` and `<p>` and falls apart by the time you meet semantic elements, accessibility, and the DOM. The honest description is structural: an HTML document is a serialized **tree**, and everything else — styling, scripting, accessibility, SEO — is a consumer of that tree. Once you see the tree as the real artifact and the angle brackets as merely its on-disk format, the rules of the language stop feeling arbitrary.
-
-### A. The Document Is a Tree, Not a Stream of Tags
-
-When the browser receives bytes labeled `text/html`, it does not "render the tags top to bottom." It hands them to a tokenizer, which produces tokens like `StartTag(p)` and `Character('a')`, and then to a tree construction stage that builds the **DOM (Document Object Model)** — an in-memory tree of node objects. Three implications fall out of this:
-
-1. **Nesting is *containment*, not adjacency.** Writing `<p>hello <strong>world</strong></p>` says the `<strong>` node is a child of the `<p>` node. The browser is allowed to recover from sloppy markup (HTML5 has explicit error-handling rules), but the recovered tree may not be the one you wanted.
-2. **The whole document is exactly one tree.** There is one root node (`<html>`), with `<head>` and `<body>` as its only children. Anything you write outside `<body>` that should be content gets implicitly moved into the body by the parser.
-3. **Whitespace and order *do* matter,** because they end up as text nodes and as the order of children. The visual layout that CSS later produces is downstream of this order.
-
-The DOM tree is the surface that JavaScript reads with `document.querySelector` and that CSS targets with selectors. Mis-modeling the tree mis-models everything that depends on it.
-
-### B. Elements vs. Tags vs. Attributes
-
-Three terms get confused in casual speech, but the parser treats them as distinct objects:
-
-- A **tag** is the textual delimiter: `<a>` is a start tag, `</a>` is an end tag. Tags exist only on disk.
-- An **element** is the *node* in the tree that those tags delimit. `<a href="/x">click</a>` is one element with one child text node.
-- An **attribute** is a name/value pair attached to the element node. `href` and `class` are attributes; they live on the element, not on the tag.
-
-This distinction explains a swarm of "small" rules. **Void elements** like `<img>` and `<br>` have no end tag because, by spec, they cannot have children — there is nothing for the end tag to close. **Boolean attributes** like `disabled` and `required` are *present or absent*; `disabled="false"` does *not* make a button enabled, because the parser only checks presence. **Case-insensitive tag names but case-sensitive attribute values**: `<INPUT TYPE="email">` parses identically to `<input type="email">`, but `aria-label="OK"` and `aria-label="ok"` are different strings to a screen reader.
-
-### C. Semantic HTML and the Accessibility Tree
-
-The browser builds a *second* tree alongside the DOM: the **accessibility tree**, exposed to assistive technology (screen readers, voice control, switch devices) through the platform's accessibility API. Every DOM element maps to either an accessibility node with an **implicit role** (a `<button>` becomes `role="button"`, a `<nav>` becomes `role="navigation"`) or to nothing at all (a generic `<div>` is invisible to AT unless given a role).
-
-This is what people mean by "semantic HTML": picking elements whose implicit roles match the meaning of the content, so the accessibility tree is correct *for free*. Two visually identical buttons —
-
-```html
-<button type="button" onclick="save()">Save</button>
-<div onclick="save()">Save</div>
-```
-
-— produce two completely different accessibility trees. The first is reachable by Tab, announces itself as "Save, button," and fires on Enter and Space. The second is invisible to a screen reader, not reachable by Tab, and does nothing on keyboard input. The fix is not "add ARIA"; the fix is to use the element whose implicit role already says what you mean. ARIA exists to patch cases where no native element fits — it is the escape hatch, not the default.
-
-### D. Block vs. Inline, and Why It Is Really About Boxes
-
-The distinction between "block-level" elements (`<div>`, `<p>`, `<section>`) and "inline" elements (`<span>`, `<a>`, `<strong>`) is often presented as an HTML rule. It is really a CSS rule applied through the browser's user-agent stylesheet. Each element receives a default `display` value — `block`, `inline`, `inline-block`, `list-item`, `table`, `flex` — and that value controls how the element generates **boxes** in the layout tree. This matters for two reasons:
-
-1. **The HTML content model does enforce one part of it.** A `<p>` element cannot contain a `<div>`; the parser will close the `<p>` early and start a new sibling. Nesting block-level elements inside inline contexts is a content-model violation that produces a tree you did not intend.
-2. **`display` can override the default.** `<a>` is inline by default but becomes a block link card with `display: block`. The element keeps its semantic role; only its layout participation changes. The HTML decides *what it is*; the CSS decides *how it lays out*.
-
-Confusing the two leads to real bugs: writing `<a><div>...</div></a>` works in HTML5 (the spec allows transparent content for `<a>`) but writing `<p><div>...</div></p>` silently produces two siblings instead of nesting.
-
-### From Theory to the Reference Below
-
-- **What is HTML / Document Structure** (sections 1–2) describes the on-disk syntax that the parser turns into the tree from §A.
-- **Basic Tags / Text Formatting / Lists** (sections 3–5) introduces specific elements; each one is a node type with content-model rules from §B.
-- **Links and Images** (section 6) covers void elements, attributes, and `alt` text — the latter being a direct write into the accessibility tree from §C.
-- **Semantic HTML** (section 7) is §C made concrete: which native elements carry which implicit roles, and when to reach for them instead of `<div>`.
-
-Read the rest of the lesson with the tree in mind: each tag you write is a node you are placing in two trees at once — the DOM that JavaScript and CSS see, and the accessibility tree that assistive technology sees.
-
----
 
 ## What is HTML?
 
@@ -110,6 +52,16 @@ Read the rest of the lesson with the tree in mind: each tag you write is a node 
 ---
 
 ## HTML Document Structure
+
+### Theory: The Document Is a Tree, Not a Stream of Tags
+
+When the browser receives bytes labeled `text/html`, it does not "render the tags top to bottom." It hands them to a tokenizer, which produces tokens like `StartTag(p)` and `Character('a')`, and then to a tree construction stage that builds the **DOM (Document Object Model)** — an in-memory tree of node objects. Three implications fall out of this:
+
+1. **Nesting is *containment*, not adjacency.** Writing `<p>hello <strong>world</strong></p>` says the `<strong>` node is a child of the `<p>` node. The browser is allowed to recover from sloppy markup (HTML5 has explicit error-handling rules), but the recovered tree may not be the one you wanted.
+2. **The whole document is exactly one tree.** There is one root node (`<html>`), with `<head>` and `<body>` as its only children. Anything you write outside `<body>` that should be content gets implicitly moved into the body by the parser.
+3. **Whitespace and order *do* matter,** because they end up as text nodes and as the order of children. The visual layout that CSS later produces is downstream of this order.
+
+The DOM tree is the surface that JavaScript reads with `document.querySelector` and that CSS targets with selectors. Mis-modeling the tree mis-models everything that depends on it.
 
 ### Basic Structure
 
@@ -173,6 +125,16 @@ Contains the actual content displayed on the page.
 
 ## Basic Tags
 
+### Theory: Elements vs. Tags vs. Attributes
+
+Three terms get confused in casual speech, but the parser treats them as distinct objects:
+
+- A **tag** is the textual delimiter: `<a>` is a start tag, `</a>` is an end tag. Tags exist only on disk.
+- An **element** is the *node* in the tree that those tags delimit. `<a href="/x">click</a>` is one element with one child text node.
+- An **attribute** is a name/value pair attached to the element node. `href` and `class` are attributes; they live on the element, not on the tag.
+
+This distinction explains a swarm of "small" rules. **Void elements** like `<img>` and `<br>` have no end tag because, by spec, they cannot have children — there is nothing for the end tag to close. **Boolean attributes** like `disabled` and `required` are *present or absent*; `disabled="false"` does *not* make a button enabled, because the parser only checks presence. **Case-insensitive tag names but case-sensitive attribute values**: `<INPUT TYPE="email">` parses identically to `<input type="email">`, but `aria-label="OK"` and `aria-label="ok"` are different strings to a screen reader.
+
 ### 1. Headings
 
 ```html
@@ -230,6 +192,15 @@ Contains the actual content displayed on the page.
 ---
 
 ## Text Formatting
+
+### Theory: Block vs. Inline, and Why It Is Really About Boxes
+
+The distinction between "block-level" elements (`<div>`, `<p>`, `<section>`) and "inline" elements (`<span>`, `<a>`, `<strong>`) is often presented as an HTML rule. It is really a CSS rule applied through the browser's user-agent stylesheet. Each element receives a default `display` value — `block`, `inline`, `inline-block`, `list-item`, `table`, `flex` — and that value controls how the element generates **boxes** in the layout tree. This matters for two reasons:
+
+1. **The HTML content model does enforce one part of it.** A `<p>` element cannot contain a `<div>`; the parser will close the `<p>` early and start a new sibling. Nesting block-level elements inside inline contexts is a content-model violation that produces a tree you did not intend.
+2. **`display` can override the default.** `<a>` is inline by default but becomes a block link card with `display: block`. The element keeps its semantic role; only its layout participation changes. The HTML decides *what it is*; the CSS decides *how it lays out*.
+
+Confusing the two leads to real bugs: writing `<a><div>...</div></a>` works in HTML5 (the spec allows transparent content for `<a>`) but writing `<p><div>...</div></p>` silently produces two siblings instead of nesting.
 
 ### Inline vs Block Elements
 
@@ -398,6 +369,19 @@ Contains the actual content displayed on the page.
 ---
 
 ## Semantic HTML
+
+### Theory: Semantic HTML and the Accessibility Tree
+
+The browser builds a *second* tree alongside the DOM: the **accessibility tree**, exposed to assistive technology (screen readers, voice control, switch devices) through the platform's accessibility API. Every DOM element maps to either an accessibility node with an **implicit role** (a `<button>` becomes `role="button"`, a `<nav>` becomes `role="navigation"`) or to nothing at all (a generic `<div>` is invisible to AT unless given a role).
+
+This is what people mean by "semantic HTML": picking elements whose implicit roles match the meaning of the content, so the accessibility tree is correct *for free*. Two visually identical buttons —
+
+```html
+<button type="button" onclick="save()">Save</button>
+<div onclick="save()">Save</div>
+```
+
+— produce two completely different accessibility trees. The first is reachable by Tab, announces itself as "Save, button," and fires on Enter and Space. The second is invisible to a screen reader, not reachable by Tab, and does nothing on keyboard input. The fix is not "add ARIA"; the fix is to use the element whose implicit role already says what you mean. ARIA exists to patch cases where no native element fits — it is the escape hatch, not the default.
 
 Semantic HTML uses tags that convey meaning, making content easier to understand for both developers and browsers.
 

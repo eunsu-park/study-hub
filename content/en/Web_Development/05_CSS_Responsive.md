@@ -20,8 +20,6 @@ More than half of all web traffic now comes from mobile devices, and that share 
 
 ## Table of Contents
 
-Before the reference, read [**Theory & Principles**](#theory--principles) — responsive design is a viewport-aware coordinate system on top of CSS, with the viewport meta tag, media queries, container queries, relative units, and `srcset`/`picture` each serving a precise role in adapting to *capability*, not just screen width.
-
 1. [Responsive Design Basics](#responsive-design-basics)
 2. [Viewport Settings](#viewport-settings)
 3. [Media Queries](#media-queries)
@@ -34,100 +32,6 @@ Before the reference, read [**Theory & Principles**](#theory--principles) — re
 
 ---
 
-## Theory & Principles
-
-"Responsive design" sounds like a style choice, but it is mostly a *coordinate system* problem. The browser hands you a pixel grid sized by the user's device and viewport; your job is to write CSS whose values are functions of that grid rather than constants. The toolkit is small: a viewport meta tag, relative units, media (and container) queries, and a small image-resource picker. Each of those targets a specific failure mode of "fixed-pixel" CSS, and together they let one stylesheet serve a 4-inch phone and a 32-inch monitor.
-
-### A. CSS Pixels, Device Pixels, and the Viewport Meta Tag
-
-A "pixel" in CSS (`px`) is not a hardware pixel. It is a **device-independent (CSS) pixel**, defined so that 1 CSS pixel ≈ 1/96 inch at a normal viewing distance. The browser scales CSS pixels to physical pixels using the **device pixel ratio** (DPR): a Retina display with DPR 2 paints each `1px` border into a 2×2 block of hardware pixels.
-
-On mobile, there is a *second* layer of indirection: the **layout viewport** (the canvas your CSS uses) and the **visual viewport** (the slice currently visible). Without intervention, mobile Safari and Chrome default the layout viewport to ~980px so that desktop sites do not collapse, then zoom out to fit the screen. The fix is a single line in `<head>`:
-
-```html
-<meta name="viewport" content="width=device-width, initial-scale=1">
-```
-
-This tells the browser: "Make the layout viewport equal the visual viewport, no zoom." Without it, your media queries fire at the wrong widths and `1rem` looks 3× too small. Every modern responsive design assumes this tag is present; omitting it silently breaks everything else in this lesson.
-
-### B. Media Queries and Container Queries: Two Coordinate Systems
-
-A **media query** asks a question about the *viewport or device*: width, height, orientation, color gamut, hover capability, color scheme preference, reduced-motion preference. The CSS inside applies only when the answer is true:
-
-```css
-@media (min-width: 768px) and (orientation: landscape) { ... }
-@media (prefers-color-scheme: dark) { ... }
-@media (hover: hover) and (pointer: fine) { ... }
-```
-
-Each query is evaluated against the viewport, not against any element. This is exactly what you want for top-level layout decisions ("show the sidebar on tablets and up") and exactly the *wrong* tool for component-level decisions ("the card should switch to vertical when its column is narrow"). A card placed in a 300px sidebar on a 1440px screen has no way to know it is cramped.
-
-**Container queries** fix this. A parent declares `container-type: inline-size`, and descendants can query *that container's* width:
-
-```css
-.card-container { container-type: inline-size; }
-
-@container (max-width: 320px) {
-  .card { flex-direction: column; }
-}
-```
-
-The card now adapts based on where it lives, not where the viewport edges are. The dividing line is: media queries for *page layout*, container queries for *component layout*.
-
-### C. Relative Units: Making Length a Function of Context
-
-CSS gives you a small algebra of units. Each one anchors length to a different reference:
-
-- **`px`** — absolute (well, relative to the device pixel ratio). Use sparingly, mostly for borders and shadows.
-- **`em`** — relative to the *element's own* `font-size`. Compounds through nesting: an `em`-sized child of an `em`-sized parent multiplies.
-- **`rem`** — relative to the *root* (`<html>`) `font-size`. Does not compound; respects the user's browser default font size.
-- **`%`** — relative to the parent in the relevant axis (width for `width`, font-size for `font-size`, etc.).
-- **`vw`, `vh`, `vmin`, `vmax`** — percentage of viewport width/height.
-- **`svh`, `lvh`, `dvh`** — small/large/dynamic viewport height, accounting for mobile URL bars that show and hide.
-- **`ch`** — width of the "0" character; useful for `max-width: 65ch` to set a readable line length.
-
-Two functions tie these together. **`calc()`** does arithmetic across units: `calc(100% - 2rem)`. **`clamp(min, preferred, max)`** picks the middle value while clamping to the bounds: `font-size: clamp(1rem, 2vw + 0.5rem, 1.5rem)` produces a font that grows with the viewport but never goes outside the readable range — *fluid typography in one declaration*, no media queries needed.
-
-### D. Responsive Images: Letting the Browser Pick
-
-A single `<img src="hero.jpg">` ships the same bytes to every device. Two HTML mechanisms let the browser pick the right resource:
-
-- **`srcset` + `sizes`** for *resolution switching* — same image, different pixel densities or display sizes:
-
-  ```html
-  <img src="hero-800.jpg"
-       srcset="hero-400.jpg 400w, hero-800.jpg 800w, hero-1600.jpg 1600w"
-       sizes="(min-width: 768px) 50vw, 100vw"
-       alt="...">
-  ```
-  The browser computes the rendered size from `sizes`, multiplies by DPR, and picks the smallest entry from `srcset` that is ≥ that target width.
-
-- **`<picture>`** for *art direction* — different *cropping* or *file format* per breakpoint:
-
-  ```html
-  <picture>
-    <source media="(min-width: 768px)" srcset="hero-wide.avif" type="image/avif">
-    <source srcset="hero-square.avif" type="image/avif">
-    <img src="hero-square.jpg" alt="...">
-  </picture>
-  ```
-  The browser picks the first `<source>` that matches and that it can decode; the `<img>` is the fallback.
-
-The CSS counterpart is `object-fit` (`cover`, `contain`, `fill`, `none`), which decides how the chosen image fills its box without distortion.
-
-### From Theory to the Reference Below
-
-- **Responsive Design Basics** (section 1) names the three principles (fluid grids, flexible images, media queries) — together they implement §A's coordinate system.
-- **Viewport Settings** (section 2) is the meta tag from §A; without it nothing else is correct.
-- **Media Queries** (section 3) is §B's first coordinate system, with breakpoint and feature-query syntax.
-- **Responsive Units** (section 4) is §C's algebra: `rem`, `em`, `vw`, `clamp()`.
-- **Responsive Images** (section 5) is §D: `srcset`, `sizes`, `<picture>`.
-- **Responsive Typography** (section 6) combines §C's `clamp()` with §B's media queries for fluid text.
-- **Mobile First** (section 8) is the methodological consequence: write base styles for the smallest viewport and *add* with `min-width` queries.
-
-Read the rest of the lesson knowing that every breakpoint, unit, and `srcset` entry is a parameter on the same coordinate-aware machine.
-
----
 
 ## Responsive Design Basics
 
@@ -149,6 +53,18 @@ Large:   1025px ~        (large desktop)
 ---
 
 ## Viewport Settings
+
+### Theory: CSS Pixels, Device Pixels, and the Viewport Meta Tag
+
+A "pixel" in CSS (`px`) is not a hardware pixel. It is a **device-independent (CSS) pixel**, defined so that 1 CSS pixel ≈ 1/96 inch at a normal viewing distance. The browser scales CSS pixels to physical pixels using the **device pixel ratio** (DPR): a Retina display with DPR 2 paints each `1px` border into a 2×2 block of hardware pixels.
+
+On mobile, there is a *second* layer of indirection: the **layout viewport** (the canvas your CSS uses) and the **visual viewport** (the slice currently visible). Without intervention, mobile Safari and Chrome default the layout viewport to ~980px so that desktop sites do not collapse, then zoom out to fit the screen. The fix is a single line in `<head>`:
+
+```html
+<meta name="viewport" content="width=device-width, initial-scale=1">
+```
+
+This tells the browser: "Make the layout viewport equal the visual viewport, no zoom." Without it, your media queries fire at the wrong widths and `1rem` looks 3× too small. Every modern responsive design assumes this tag is present; omitting it silently breaks everything else in this lesson.
 
 ### Essential meta Tag
 
@@ -176,6 +92,30 @@ Required for all responsive pages.
 ---
 
 ## Media Queries
+
+### Theory: Media Queries and Container Queries: Two Coordinate Systems
+
+A **media query** asks a question about the *viewport or device*: width, height, orientation, color gamut, hover capability, color scheme preference, reduced-motion preference. The CSS inside applies only when the answer is true:
+
+```css
+@media (min-width: 768px) and (orientation: landscape) { ... }
+@media (prefers-color-scheme: dark) { ... }
+@media (hover: hover) and (pointer: fine) { ... }
+```
+
+Each query is evaluated against the viewport, not against any element. This is exactly what you want for top-level layout decisions ("show the sidebar on tablets and up") and exactly the *wrong* tool for component-level decisions ("the card should switch to vertical when its column is narrow"). A card placed in a 300px sidebar on a 1440px screen has no way to know it is cramped.
+
+**Container queries** fix this. A parent declares `container-type: inline-size`, and descendants can query *that container's* width:
+
+```css
+.card-container { container-type: inline-size; }
+
+@container (max-width: 320px) {
+  .card { flex-direction: column; }
+}
+```
+
+The card now adapts based on where it lives, not where the viewport edges are. The dividing line is: media queries for *page layout*, container queries for *component layout*.
 
 ### Basic Syntax
 
@@ -311,6 +251,20 @@ Required for all responsive pages.
 
 ## Responsive Units
 
+### Theory: Relative Units: Making Length a Function of Context
+
+CSS gives you a small algebra of units. Each one anchors length to a different reference:
+
+- **`px`** — absolute (well, relative to the device pixel ratio). Use sparingly, mostly for borders and shadows.
+- **`em`** — relative to the *element's own* `font-size`. Compounds through nesting: an `em`-sized child of an `em`-sized parent multiplies.
+- **`rem`** — relative to the *root* (`<html>`) `font-size`. Does not compound; respects the user's browser default font size.
+- **`%`** — relative to the parent in the relevant axis (width for `width`, font-size for `font-size`, etc.).
+- **`vw`, `vh`, `vmin`, `vmax`** — percentage of viewport width/height.
+- **`svh`, `lvh`, `dvh`** — small/large/dynamic viewport height, accounting for mobile URL bars that show and hide.
+- **`ch`** — width of the "0" character; useful for `max-width: 65ch` to set a readable line length.
+
+Two functions tie these together. **`calc()`** does arithmetic across units: `calc(100% - 2rem)`. **`clamp(min, preferred, max)`** picks the middle value while clamping to the bounds: `font-size: clamp(1rem, 2vw + 0.5rem, 1.5rem)` produces a font that grows with the viewport but never goes outside the readable range — *fluid typography in one declaration*, no media queries needed.
+
 ### Relative Units Comparison
 
 | Unit | Based On | Use For |
@@ -389,6 +343,33 @@ h1 {
 ---
 
 ## Responsive Images
+
+### Theory: Responsive Images: Letting the Browser Pick
+
+A single `<img src="hero.jpg">` ships the same bytes to every device. Two HTML mechanisms let the browser pick the right resource:
+
+- **`srcset` + `sizes`** for *resolution switching* — same image, different pixel densities or display sizes:
+
+  ```html
+  <img src="hero-800.jpg"
+       srcset="hero-400.jpg 400w, hero-800.jpg 800w, hero-1600.jpg 1600w"
+       sizes="(min-width: 768px) 50vw, 100vw"
+       alt="...">
+  ```
+  The browser computes the rendered size from `sizes`, multiplies by DPR, and picks the smallest entry from `srcset` that is ≥ that target width.
+
+- **`<picture>`** for *art direction* — different *cropping* or *file format* per breakpoint:
+
+  ```html
+  <picture>
+    <source media="(min-width: 768px)" srcset="hero-wide.avif" type="image/avif">
+    <source srcset="hero-square.avif" type="image/avif">
+    <img src="hero-square.jpg" alt="...">
+  </picture>
+  ```
+  The browser picks the first `<source>` that matches and that it can decode; the `<img>` is the fallback.
+
+The CSS counterpart is `object-fit` (`cover`, `contain`, `fill`, `none`), which decides how the chosen image fills its box without distortion.
 
 ### Basic Responsive Image
 
@@ -1161,8 +1142,6 @@ body {
 ```
 
 </details>
-
----
 
 ---
 

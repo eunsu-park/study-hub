@@ -21,8 +21,6 @@ The DOM is the bridge between your HTML document and JavaScript. While HTML is a
 
 ## Table of Contents
 
-Before the reference, read [**Theory & Principles**](#theory--principles) — the DOM is a *live* mutable tree (mutating it can trigger reflow), events flow through that tree in three phases (capture → target → bubble) which is what makes delegation work, and `innerHTML` vs. `textContent` is a security boundary, not a style choice.
-
 1. [DOM Basics](#dom-basics)
 2. [Element Selection](#element-selection)
 3. [Element Content Manipulation](#element-content-manipulation)
@@ -37,11 +35,10 @@ Before the reference, read [**Theory & Principles**](#theory--principles) — th
 
 ---
 
-## Theory & Principles
 
-The DOM API has *hundreds* of methods, but the design behind it is small. The DOM is a **live mutable tree** that mirrors what is on screen; mutations trigger the browser's render pipeline; and a uniform **event flow** lets you handle interactions efficiently without subscribing to every node individually. Once those three ideas are clear, the dozens of `appendChild`/`addEventListener`/`classList` methods stop looking like a vocabulary list and start looking like operations on a data structure.
+## DOM Basics
 
-### A. The DOM Is a Live Mirror of the Render Tree
+### Theory: The DOM Is a Live Mirror of the Render Tree
 
 When the browser parses HTML, it builds the DOM. When CSS is parsed, it builds the CSSOM. The two combine into the **render tree**, which the layout stage turns into geometry, and the paint stage turns into pixels. The DOM is *live*: mutations propagate forward through this pipeline.
 
@@ -57,72 +54,6 @@ This has two consequences that are easy to miss:
 2. **Not all writes cost the same.** Changing `color` triggers paint only. Changing `width` triggers layout (and everything downstream). Animating `transform` and `opacity` is composited on the GPU and skips layout and paint entirely — which is why those are the two properties recommended for animations.
 
 The DOM is also live in the *collection* sense. `getElementsByTagName('div')` returns a `HTMLCollection` that updates as you add or remove `<div>`s; iterating it while mutating it is a footgun. `querySelectorAll` returns a *static* `NodeList`, which is usually what you want.
-
-### B. Selection Returns Nodes; Nodes Are More Than Elements
-
-`querySelector('.x')` returns the first **Element** matching a CSS selector, or `null`. `querySelectorAll('.x')` returns all matching Elements as a `NodeList`. `getElementById('x')` is the fastest of the three for a single ID.
-
-Subtleties:
-
-- **Elements are a subset of Nodes.** Text content lives in **Text nodes**, comments in **Comment nodes**. Walking a parent's `.childNodes` returns all of them, including whitespace-only text nodes between tags. Walking `.children` returns only Elements.
-- **Selectors run against the document, not against time.** An element you create with `document.createElement('div')` is *not in the document* until you append it; `document.querySelector` will not find it. The element exists, but it has no parent and no place in the tree.
-
-This is why dynamic UIs adopt one of two patterns: build a subtree off-document, then append it once (one layout); or use a `DocumentFragment` to batch insertions (the fragment dissolves on append, contributing zero overhead).
-
-### C. The Event Flow: Capture → Target → Bubble
-
-Every event the user generates dispatches through the DOM in three phases:
-
-1. **Capture phase**: the event walks *down* from `window` through the ancestors to the target. Listeners registered with `{ capture: true }` (third argument `true`) fire here.
-2. **Target phase**: the event reaches the element where it occurred. Listeners on the target fire (in registration order).
-3. **Bubble phase**: the event walks back *up* through the ancestors. This is the default — most listeners run here.
-
-```
-window → document → html → body → ... → target  (capture)
-                                          ↓
-target.fire()                              (target)
-                                          ↓
-target → ... → body → html → document → window  (bubble)
-```
-
-Three controls live on the event object:
-
-- **`event.stopPropagation()`** halts the walk after the current phase finishes. Other listeners on the same node still run.
-- **`event.stopImmediatePropagation()`** halts the walk *and* skips remaining listeners on the same node.
-- **`event.preventDefault()`** keeps the event flowing but cancels the browser's default action (form submit, link navigation, scroll, etc.). It does not stop other listeners.
-
-`event.target` is the element where the event originated (deepest in the tree). `event.currentTarget` is the element whose listener is currently running. They differ during capture and bubble; they coincide only at the target phase. This is the entire mechanism behind **event delegation**.
-
-### D. Delegation, `innerHTML` Safety, and Why `textContent` Exists
-
-**Event delegation** is the practical payoff of §C. Instead of attaching one listener per row in a 1000-row table, you attach *one* listener to the table and use `event.target.closest('tr')` to find which row was clicked. Three benefits:
-
-1. **Memory:** one listener, not one thousand.
-2. **Dynamic content:** rows added later still trigger the listener — you did not have to know they would exist.
-3. **Cleanup:** removing a row does not need to remove its listener; there was none.
-
-The other place this lesson hides a sharp edge is `innerHTML`. Setting `el.innerHTML = userInput` parses the string as HTML and inserts the resulting subtree. If `userInput` contains `<img src=x onerror=alert(1)>`, you have just executed attacker-controlled JavaScript with the privileges of your origin — the canonical **XSS** (Cross-Site Scripting) vulnerability. The defense is *not* "escape characters yourself"; it is *use the right API*:
-
-- **`textContent`** — sets text only; the string is never parsed as HTML.
-- **`createElement` + `setAttribute` + `appendChild`** — builds nodes structurally; no parsing.
-- **`innerHTML`** — only with literal strings or strings sanitized by a vetted library (DOMPurify, etc.).
-
-The browser also offers the `DOMParser`, the new `Sanitizer` API, and Trusted Types as defense-in-depth. The single rule, though, is: *user input does not become HTML without an explicit sanitization step*.
-
-### From Theory to the Reference Below
-
-- **DOM Basics** (section 1) introduces the tree from §A — element nodes, text nodes, document nodes.
-- **Element Selection** (section 2) is §B: `querySelector`, `querySelectorAll`, `getElementById`, with the live-vs-static collection distinction.
-- **Content / Attribute / Class / Style Manipulation** (sections 3–6) are mutations that feed §A's render pipeline; `textContent` vs. `innerHTML` is §D's security boundary.
-- **Element Creation / Deletion** (section 7) uses the off-document pattern from §B to avoid layout thrashing.
-- **Event Basics / Types / Delegation** (sections 8–10) are §C and §D — the flow, the catalogue, and the pattern that exploits the flow.
-- **Form Handling** (section 11) plugs the Constraint Validation API from lesson 02 into the event system from §C.
-
-Read the rest of the lesson knowing that every method is either a tree mutation, a tree query, or a hook into the event flow.
-
----
-
-## DOM Basics
 
 ### DOM Tree Structure
 
@@ -193,6 +124,17 @@ previousElement  element  nextElement
 ---
 
 ## Element Selection
+
+### Theory: Selection Returns Nodes; Nodes Are More Than Elements
+
+`querySelector('.x')` returns the first **Element** matching a CSS selector, or `null`. `querySelectorAll('.x')` returns all matching Elements as a `NodeList`. `getElementById('x')` is the fastest of the three for a single ID.
+
+Subtleties:
+
+- **Elements are a subset of Nodes.** Text content lives in **Text nodes**, comments in **Comment nodes**. Walking a parent's `.childNodes` returns all of them, including whitespace-only text nodes between tags. Walking `.children` returns only Elements.
+- **Selectors run against the document, not against time.** An element you create with `document.createElement('div')` is *not in the document* until you append it; `document.querySelector` will not find it. The element exists, but it has no parent and no place in the tree.
+
+This is why dynamic UIs adopt one of two patterns: build a subtree off-document, then append it once (one layout); or use a `DocumentFragment` to batch insertions (the fragment dissolves on append, contributing zero overhead).
 
 ### Single Element Selection
 
@@ -602,6 +544,30 @@ parent.replaceChild(newEl, oldEl);
 
 ## Event Basics
 
+### Theory: The Event Flow: Capture → Target → Bubble
+
+Every event the user generates dispatches through the DOM in three phases:
+
+1. **Capture phase**: the event walks *down* from `window` through the ancestors to the target. Listeners registered with `{ capture: true }` (third argument `true`) fire here.
+2. **Target phase**: the event reaches the element where it occurred. Listeners on the target fire (in registration order).
+3. **Bubble phase**: the event walks back *up* through the ancestors. This is the default — most listeners run here.
+
+```
+window → document → html → body → ... → target  (capture)
+                                          ↓
+target.fire()                              (target)
+                                          ↓
+target → ... → body → html → document → window  (bubble)
+```
+
+Three controls live on the event object:
+
+- **`event.stopPropagation()`** halts the walk after the current phase finishes. Other listeners on the same node still run.
+- **`event.stopImmediatePropagation()`** halts the walk *and* skips remaining listeners on the same node.
+- **`event.preventDefault()`** keeps the event flowing but cancels the browser's default action (form submit, link navigation, scroll, etc.). It does not stop other listeners.
+
+`event.target` is the element where the event originated (deepest in the tree). `event.currentTarget` is the element whose listener is currently running. They differ during capture and bubble; they coincide only at the target phase. This is the entire mechanism behind **event delegation**.
+
 ### Registering Event Listeners
 
 ```javascript
@@ -867,6 +833,22 @@ element.addEventListener('touchstart', (e) => {
 ---
 
 ## Event Delegation
+
+### Theory: Delegation, `innerHTML` Safety, and Why `textContent` Exists
+
+**Event delegation** is the practical payoff of §C. Instead of attaching one listener per row in a 1000-row table, you attach *one* listener to the table and use `event.target.closest('tr')` to find which row was clicked. Three benefits:
+
+1. **Memory:** one listener, not one thousand.
+2. **Dynamic content:** rows added later still trigger the listener — you did not have to know they would exist.
+3. **Cleanup:** removing a row does not need to remove its listener; there was none.
+
+The other place this lesson hides a sharp edge is `innerHTML`. Setting `el.innerHTML = userInput` parses the string as HTML and inserts the resulting subtree. If `userInput` contains `<img src=x onerror=alert(1)>`, you have just executed attacker-controlled JavaScript with the privileges of your origin — the canonical **XSS** (Cross-Site Scripting) vulnerability. The defense is *not* "escape characters yourself"; it is *use the right API*:
+
+- **`textContent`** — sets text only; the string is never parsed as HTML.
+- **`createElement` + `setAttribute` + `appendChild`** — builds nodes structurally; no parsing.
+- **`innerHTML`** — only with literal strings or strings sanitized by a vetted library (DOMPurify, etc.).
+
+The browser also offers the `DOMParser`, the new `Sanitizer` API, and Trusted Types as defense-in-depth. The single rule, though, is: *user input does not become HTML without an explicit sanitization step*.
 
 ### Concept
 
@@ -1275,8 +1257,6 @@ textarea.addEventListener('input', (e) => {
 ```
 
 </details>
-
----
 
 ---
 

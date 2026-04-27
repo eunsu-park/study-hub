@@ -21,79 +21,8 @@ If HTML provides the bones of a web page, CSS provides its entire visual identit
 
 > **Analogy:** Think of HTML and CSS as building and decorating a room. HTML builds the walls and furniture (structure), and CSS is the interior designer who chooses wall colors, furniture upholstery, and lighting. Selectors are how the designer points at a specific wall ("the one next to the window"), and properties are the design choices applied to it.
 
-Before the reference, read [**Theory & Principles**](#theory--principles) — CSS is the deterministic algorithm "selector + cascade + inheritance + specificity → final value per property per element," and the box model decides what those values mean visually.
-
 ---
 
-## Theory & Principles
-
-CSS feels like a list of properties because it ships as a list of properties. The behavior, though, is an *algorithm* the browser runs once per element per layout pass. Every "why doesn't this work" debugging session ends in the same place: the algorithm picked a different value than you expected, for a perfectly traceable reason. This section names the moving parts so the rules of the next sections stop looking like trivia.
-
-### A. The Cascade: How a Property Gets Its Value
-
-For each element and each property, the browser must produce exactly one value. It does so by collecting every declaration that targets the element from every source, then *cascading* them according to a fixed priority list:
-
-1. **Origin and importance.** Declarations come from three origins: the user-agent stylesheet (the browser's defaults), the user stylesheet (rare, set by the reader), and the author stylesheet (your CSS). Within each origin, declarations marked `!important` outrank normal ones, and the order of origins flips for `!important` (user-agent important > author important > user important > author normal > user normal > user-agent normal).
-2. **Specificity.** Among declarations of the same origin and importance, the one with higher **specificity** wins. Specificity is a triple `(a, b, c)` compared lexicographically: `a` counts ID selectors, `b` counts class/attribute/pseudo-class selectors, and `c` counts type/pseudo-element selectors. The universal selector `*` and combinators contribute zero. A `style=""` attribute (inline style) effectively beats any selector except `!important`.
-3. **Source order.** When everything above ties, the declaration that appears later in the source wins. This is why "cascade" is the right word — equal-specificity rules cascade past each other in document order.
-
-A common pitfall: `!important` is not "make this win" — it is "promote this to a different cascade tier." If two `!important` rules collide, specificity and source order arbitrate among *them*. Spamming `!important` makes the next bug harder to find, not easier.
-
-### B. Inheritance and the Computed Value Pipeline
-
-After cascade picks a winner, the browser still has to turn it into a number a layout engine can use. CSS defines a five-stage pipeline:
-
-```
-declared → cascaded → specified → computed → used → actual
-```
-
-- **Declared** is what the cascade saw.
-- **Cascaded** is the winner.
-- **Specified** is the cascaded value, or — if no rule applied — the **inherited** value from the parent for inheritable properties (`color`, `font-*`, `line-height`, `visibility`, ...) and the **initial** value for the rest (`margin`, `border`, `display`, ...).
-- **Computed** resolves relative units against the element's own context: `em` against the element's own font-size, percentages on `width` against the *containing block*, `currentColor` against the element's `color`. Computed values are what `getComputedStyle()` returns.
-- **Used** is computed plus layout: a `width: 50%` becomes "320px" only after the parent's width is known.
-- **Actual** rounds for the device pixel grid.
-
-Two consequences:
-
-1. **`inherit`, `initial`, `unset`, `revert` are explicit moves on this pipeline.** `inherit` forces the inherited value even where it would not normally apply; `initial` resets to the spec's initial value; `unset` does whichever of those is appropriate for the property; `revert` rolls back to the user-agent stylesheet.
-2. **Pixels are not the unit on disk.** `font-size: 1rem` is computed against the *root* element's font size; if the user has set their browser default to 20px, your `1rem` is 20px, not 16px. Hard-coding `font-size: 16px` quietly ignores user preferences.
-
-### C. The Box Model and `box-sizing`
-
-Every element generates a rectangular **box** with four nested rectangles: **content**, then **padding**, then **border**, then **margin**. The default `box-sizing: content-box` means the `width` and `height` properties refer to the *content* box, and padding/border are added *outside* that. So `width: 200px; padding: 20px; border: 2px solid` produces a box that is `244px` wide overall.
-
-`box-sizing: border-box` redefines `width` and `height` to refer to the *border* box: the same declarations now produce a box that is exactly `200px` wide overall, with the content area shrinking to fit the padding and border. Modern stylesheets almost universally start with:
-
-```css
-*, *::before, *::after { box-sizing: border-box; }
-```
-
-because intuitive arithmetic ("`width: 50%` means half the row, including the gutter I added") is far more useful than the historical default. Margins also have their own quirks — adjacent vertical margins between block-level elements **collapse** to the larger of the two, which is why two `<p>` elements with `margin: 16px 0` separate by `16px`, not `32px`.
-
-### D. Selectors as Predicates
-
-A CSS selector is a *predicate over the DOM tree*. The browser runs each selector against each element to decide whether the rule's declarations apply, and selectors are evaluated **right-to-left** because that prunes the search faster: in `nav ul li a`, the engine starts from `a` elements and walks up the tree to check ancestry, rather than starting from `<nav>` and walking down.
-
-Two practical rules follow:
-
-1. **The rightmost compound is the "key" selector.** The browser visits every element matching it on every change; making the key selector cheap (`a` not `*`) is the single most useful CSS perf rule.
-2. **Combinators describe tree relationships, not visual ones.** `A B` means "B that is a descendant of A," `A > B` means "B that is a *direct child* of A," `A + B` means "B that is the *next sibling* of A," `A ~ B` means "B that is a *later sibling* of A." None of these refer to visual position; they refer to the DOM.
-
-Pseudo-classes (`:hover`, `:focus`, `:nth-child(2n+1)`, `:not(.x)`) extend the predicate to runtime state. Pseudo-elements (`::before`, `::after`, `::first-line`) generate boxes that the parser did not — they exist in the layout tree but not in the DOM.
-
-### From Theory to the Reference Below
-
-- **What is CSS / Application Methods / Syntax** (sections 1–3) gives you the surface form whose declarations feed the cascade in §A.
-- **Selectors** (section 4) is the predicate language from §D, with specificity values from §A.
-- **Box Model** (section 5) is §C, plus the property names that fill in each rectangle.
-- **Specificity / Cascade** (sections 6–7) makes §A explicit so you can predict which rule will win.
-- **Inheritance** (section 8) is the pipeline middle from §B, with the named keywords (`inherit`, `initial`, `unset`).
-- **Colors / Typography / Backgrounds / Effects** are the property catalog whose values are evaluated through this whole machinery.
-
-Read the rest of the lesson knowing that every property is a value the cascade decided on, computed against your element's context, and painted into a box.
-
----
 
 ## 1. What is CSS?
 
@@ -196,6 +125,17 @@ h1 {
 ---
 
 ## 4. Selectors
+
+### Theory: Selectors as Predicates
+
+A CSS selector is a *predicate over the DOM tree*. The browser runs each selector against each element to decide whether the rule's declarations apply, and selectors are evaluated **right-to-left** because that prunes the search faster: in `nav ul li a`, the engine starts from `a` elements and walks up the tree to check ancestry, rather than starting from `<nav>` and walking down.
+
+Two practical rules follow:
+
+1. **The rightmost compound is the "key" selector.** The browser visits every element matching it on every change; making the key selector cheap (`a` not `*`) is the single most useful CSS perf rule.
+2. **Combinators describe tree relationships, not visual ones.** `A B` means "B that is a descendant of A," `A > B` means "B that is a *direct child* of A," `A + B` means "B that is the *next sibling* of A," `A ~ B` means "B that is a *later sibling* of A." None of these refer to visual position; they refer to the DOM.
+
+Pseudo-classes (`:hover`, `:focus`, `:nth-child(2n+1)`, `:not(.x)`) extend the predicate to runtime state. Pseudo-elements (`::before`, `::after`, `::first-line`) generate boxes that the parser did not — they exist in the layout tree but not in the DOM.
 
 ### Basic Selectors
 
@@ -489,6 +429,18 @@ color: hsla(0, 100%, 50%, 0.5);
 ---
 
 ## 7. Box Model
+
+### Theory: The Box Model and `box-sizing`
+
+Every element generates a rectangular **box** with four nested rectangles: **content**, then **padding**, then **border**, then **margin**. The default `box-sizing: content-box` means the `width` and `height` properties refer to the *content* box, and padding/border are added *outside* that. So `width: 200px; padding: 20px; border: 2px solid` produces a box that is `244px` wide overall.
+
+`box-sizing: border-box` redefines `width` and `height` to refer to the *border* box: the same declarations now produce a box that is exactly `200px` wide overall, with the content area shrinking to fit the padding and border. Modern stylesheets almost universally start with:
+
+```css
+*, *::before, *::after { box-sizing: border-box; }
+```
+
+because intuitive arithmetic ("`width: 50%` means half the row, including the gutter I added") is far more useful than the historical default. Margins also have their own quirks — adjacent vertical margins between block-level elements **collapse** to the larger of the two, which is why two `<p>` elements with `margin: 16px 0` separate by `16px`, not `32px`.
 
 ```
 ┌─────────────────────────────────────────────────────┐
@@ -828,6 +780,16 @@ input:focus {
 
 ## 12. Specificity
 
+### Theory: The Cascade: How a Property Gets Its Value
+
+For each element and each property, the browser must produce exactly one value. It does so by collecting every declaration that targets the element from every source, then *cascading* them according to a fixed priority list:
+
+1. **Origin and importance.** Declarations come from three origins: the user-agent stylesheet (the browser's defaults), the user stylesheet (rare, set by the reader), and the author stylesheet (your CSS). Within each origin, declarations marked `!important` outrank normal ones, and the order of origins flips for `!important` (user-agent important > author important > user important > author normal > user normal > user-agent normal).
+2. **Specificity.** Among declarations of the same origin and importance, the one with higher **specificity** wins. Specificity is a triple `(a, b, c)` compared lexicographically: `a` counts ID selectors, `b` counts class/attribute/pseudo-class selectors, and `c` counts type/pseudo-element selectors. The universal selector `*` and combinators contribute zero. A `style=""` attribute (inline style) effectively beats any selector except `!important`.
+3. **Source order.** When everything above ties, the declaration that appears later in the source wins. This is why "cascade" is the right word — equal-specificity rules cascade past each other in document order.
+
+A common pitfall: `!important` is not "make this win" — it is "promote this to a different cascade tier." If two `!important` rules collide, specificity and source order arbitrate among *them*. Spamming `!important` makes the next bug harder to find, not easier.
+
 ### Specificity Calculation
 
 ```
@@ -874,6 +836,26 @@ When specificity is equal, the later declared style is applied.
 ---
 
 ## 13. Inheritance
+
+### Theory: Inheritance and the Computed Value Pipeline
+
+After cascade picks a winner, the browser still has to turn it into a number a layout engine can use. CSS defines a five-stage pipeline:
+
+```
+declared → cascaded → specified → computed → used → actual
+```
+
+- **Declared** is what the cascade saw.
+- **Cascaded** is the winner.
+- **Specified** is the cascaded value, or — if no rule applied — the **inherited** value from the parent for inheritable properties (`color`, `font-*`, `line-height`, `visibility`, ...) and the **initial** value for the rest (`margin`, `border`, `display`, ...).
+- **Computed** resolves relative units against the element's own context: `em` against the element's own font-size, percentages on `width` against the *containing block*, `currentColor` against the element's `color`. Computed values are what `getComputedStyle()` returns.
+- **Used** is computed plus layout: a `width: 50%` becomes "320px" only after the parent's width is known.
+- **Actual** rounds for the device pixel grid.
+
+Two consequences:
+
+1. **`inherit`, `initial`, `unset`, `revert` are explicit moves on this pipeline.** `inherit` forces the inherited value even where it would not normally apply; `initial` resets to the spec's initial value; `unset` does whichever of those is appropriate for the property; `revert` rolls back to the user-agent stylesheet.
+2. **Pixels are not the unit on disk.** `font-size: 1rem` is computed against the *root* element's font size; if the user has set their browser default to 20px, your `1rem` is 20px, not 16px. Hard-coding `font-size: 16px` quietly ignores user preferences.
 
 ### Inherited Properties
 
@@ -1103,8 +1085,6 @@ Create a card with image, title, description, and button.
 ### Exercise 3: Navigation Bar
 
 Create a horizontal menu and add hover effects.
-
----
 
 ---
 

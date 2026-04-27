@@ -22,8 +22,6 @@ Knowing CSS properties is only half the battle; the other half is arranging elem
 
 ## Table of Contents
 
-Before the reference, read [**Theory & Principles**](#theory--principles) — Flexbox and Grid are different *layout algorithms* the browser runs, each with a precise free-space distribution rule (`flex` factors, `fr` units), and `position` is a separate dimension that decides which formatting context a box participates in.
-
 1. [Traditional Layout](#traditional-layout)
 2. [Flexbox](#flexbox)
 3. [CSS Grid](#css-grid)
@@ -34,11 +32,10 @@ Before the reference, read [**Theory & Principles**](#theory--principles) — Fl
 
 ---
 
-## Theory & Principles
 
-CSS layout looks like an ad-hoc collection of properties — `display`, `position`, `flex-grow`, `grid-template-columns`, `top` — until you notice that each value of `display` actually selects a *different layout algorithm* the browser runs, with its own model of axes, free space, and child interactions. Once you can name the algorithm, every property becomes a knob on a known machine instead of a mystery.
+## Traditional Layout
 
-### A. Formatting Contexts: The Algorithm Selector
+### Theory: Formatting Contexts: The Algorithm Selector
 
 Every box participates in the layout of its parent according to a **formatting context**. The parent's `display` value chooses which one:
 
@@ -49,69 +46,6 @@ Every box participates in the layout of its parent according to a **formatting c
 - `display: table` → a **table formatting context** with row/column constraints.
 
 This is why `display: block` versus `display: flex` on a parent changes how its children behave even when nothing else changed: you swapped the algorithm. It is also why establishing a *new* BFC (with `overflow: hidden`, `display: flow-root`, or by floating) is the standard fix for collapsing margins and overflowing floats — the new BFC is, by definition, isolated from those cross-context effects.
-
-### B. The Flex Algorithm: Distributing Free Space Along One Axis
-
-Flexbox is a one-dimensional layout. The container has a **main axis** (horizontal by default, vertical with `flex-direction: column`) and a perpendicular **cross axis**. Layout proceeds in two passes:
-
-1. **Compute the main-axis size of each item.** Each item starts at its `flex-basis` (defaulting to its content size). The container then measures the **free space** = container main size − sum of basis sizes. If positive, free space is distributed across items in proportion to `flex-grow`. If negative, items shrink in proportion to `flex-shrink × flex-basis`. The shorthand `flex: 1` expands to `flex: 1 1 0`, meaning "take an equal share of the row, ignoring my content size."
-2. **Align in the cross axis.** Each item's cross size is determined by the container's `align-items` (default `stretch`) or by the item's `align-self`. `justify-content` then distributes leftover *main-axis* free space among items as gaps; `align-content` does the same on the cross axis when there are multiple lines (with `flex-wrap: wrap`).
-
-Two consequences worth memorizing:
-
-1. **`width` on a flex item is a *suggestion*.** The grow/shrink factors override it. Setting `flex-shrink: 0` is the way to say "respect my width even when there is not enough room."
-2. **`gap` is the only correct way to space flex items.** Margins on items collapse with the container in unintuitive ways and double up between items; `gap` applies between items only.
-
-### C. The Grid Algorithm: Two-Axis Track Sizing with `fr`
-
-Grid is a two-dimensional layout — items can occupy a region of `(row, column)` coordinates. The container declares **tracks** (rows and columns) with `grid-template-rows` and `grid-template-columns`, each track sized by:
-
-- **Length** (`200px`, `8rem`) — fixed.
-- **Percentage** (`25%`) — of the container.
-- **`auto`** — fits the largest item assigned to the track.
-- **`min-content` / `max-content`** — the smallest/largest unbreakable size of the content.
-- **`minmax(min, max)`** — clamped between the two.
-- **`fr`** — a fraction of the *remaining* space, after fixed and content-based tracks have been satisfied. `1fr 2fr` means "split what is left in a 1:2 ratio."
-
-The composite trick is `repeat(auto-fill, minmax(250px, 1fr))`: ask for as many 250px-or-larger columns as fit, each taking equal share of the remaining space. This is the entire mechanism behind responsive card grids without a single media query.
-
-Items are placed into tracks by:
-
-- **`grid-column` / `grid-row`** with line numbers, `span N`, or named lines.
-- **`grid-area`** with a name from `grid-template-areas`, which gives you ASCII-art layout declarations that double as documentation.
-- **Auto placement** — items without explicit placement fill empty cells in document order.
-
-The fundamental difference from Flex is that Grid does both axes *simultaneously*: a row's height can depend on the tallest item across columns, and a column's width can depend on the widest item across rows.
-
-### D. Positioning Schemes Are Orthogonal to the Above
-
-`position` does not pick a layout algorithm; it picks a **positioning scheme** that decides which boxes are involved at all:
-
-- `static` (default) → in normal flow.
-- `relative` → in normal flow, but offset visually by `top`/`right`/`bottom`/`left`. Crucially, the original space is *kept* — sibling layout does not change.
-- `absolute` → *removed from normal flow*. Positioned with `top`/`left` against the nearest **positioned ancestor** (any ancestor with `position` other than `static`). Sibling layout closes up as if the element were not there.
-- `fixed` → removed from flow, positioned against the **viewport** (or the nearest containing block established by `transform`, `filter`, or `will-change`).
-- `sticky` → in normal flow until a scroll threshold is hit, then behaves as fixed within the **scroll container's padding box**.
-
-Two consequences:
-
-1. **`position: absolute` needs a positioned ancestor or it walks up to `<html>`.** `position: relative; inset: 0;` on a wrapper is the standard way to make an absolutely-positioned tooltip stay inside a card.
-2. **`z-index` only works on positioned elements** (and on flex/grid items). `z-index` also creates **stacking contexts**, which trap descendants — a child with `z-index: 999` cannot escape a parent with `z-index: 1`.
-
-### From Theory to the Reference Below
-
-- **Traditional Layout** (section 1) covers the BFC behavior of §A and the `float` legacy.
-- **Flexbox** (section 2) is §B's algorithm with property names: `flex-direction`, `justify-content`, `align-items`, `flex-grow/shrink/basis`, `gap`.
-- **CSS Grid** (section 3) is §C: `grid-template-rows/columns`, `repeat`, `minmax`, `fr`, `grid-template-areas`.
-- **Subgrid** (section 4) extends §C so a child grid inherits parent track lines.
-- **Flexbox vs Grid** (section 5) is the explicit "1D vs 2D" choice between §B and §C.
-- **Position** (section 6) implements §D — including `sticky` and the stacking-context trap.
-
-Read the rest of the lesson with the algorithms named: every property below is a parameter to one of them.
-
----
-
-## Traditional Layout
 
 ### Float (Legacy)
 
@@ -136,6 +70,18 @@ An older method, now mainly used only for text wrapping.
 ---
 
 ## Flexbox
+
+### Theory: The Flex Algorithm: Distributing Free Space Along One Axis
+
+Flexbox is a one-dimensional layout. The container has a **main axis** (horizontal by default, vertical with `flex-direction: column`) and a perpendicular **cross axis**. Layout proceeds in two passes:
+
+1. **Compute the main-axis size of each item.** Each item starts at its `flex-basis` (defaulting to its content size). The container then measures the **free space** = container main size − sum of basis sizes. If positive, free space is distributed across items in proportion to `flex-grow`. If negative, items shrink in proportion to `flex-shrink × flex-basis`. The shorthand `flex: 1` expands to `flex: 1 1 0`, meaning "take an equal share of the row, ignoring my content size."
+2. **Align in the cross axis.** Each item's cross size is determined by the container's `align-items` (default `stretch`) or by the item's `align-self`. `justify-content` then distributes leftover *main-axis* free space among items as gaps; `align-content` does the same on the cross axis when there are multiple lines (with `flex-wrap: wrap`).
+
+Two consequences worth memorizing:
+
+1. **`width` on a flex item is a *suggestion*.** The grow/shrink factors override it. Setting `flex-shrink: 0` is the way to say "respect my width even when there is not enough room."
+2. **`gap` is the only correct way to space flex items.** Margins on items collapse with the container in unintuitive ways and double up between items; `gap` applies between items only.
 
 A one-dimensional layout system that arranges elements in **rows** or **columns**.
 
@@ -433,6 +379,27 @@ footer {
 ---
 
 ## CSS Grid
+
+### Theory: The Grid Algorithm: Two-Axis Track Sizing with `fr`
+
+Grid is a two-dimensional layout — items can occupy a region of `(row, column)` coordinates. The container declares **tracks** (rows and columns) with `grid-template-rows` and `grid-template-columns`, each track sized by:
+
+- **Length** (`200px`, `8rem`) — fixed.
+- **Percentage** (`25%`) — of the container.
+- **`auto`** — fits the largest item assigned to the track.
+- **`min-content` / `max-content`** — the smallest/largest unbreakable size of the content.
+- **`minmax(min, max)`** — clamped between the two.
+- **`fr`** — a fraction of the *remaining* space, after fixed and content-based tracks have been satisfied. `1fr 2fr` means "split what is left in a 1:2 ratio."
+
+The composite trick is `repeat(auto-fill, minmax(250px, 1fr))`: ask for as many 250px-or-larger columns as fit, each taking equal share of the remaining space. This is the entire mechanism behind responsive card grids without a single media query.
+
+Items are placed into tracks by:
+
+- **`grid-column` / `grid-row`** with line numbers, `span N`, or named lines.
+- **`grid-area`** with a name from `grid-template-areas`, which gives you ASCII-art layout declarations that double as documentation.
+- **Auto placement** — items without explicit placement fill empty cells in document order.
+
+The fundamental difference from Flex is that Grid does both axes *simultaneously*: a row's height can depend on the tallest item across columns, and a column's width can depend on the widest item across rows.
 
 A two-dimensional layout system that controls **rows and columns** simultaneously.
 
@@ -902,6 +869,21 @@ You can also use subgrid for columns — useful when a child spans multiple pare
 
 ## Position
 
+### Theory: Positioning Schemes Are Orthogonal to the Above
+
+`position` does not pick a layout algorithm; it picks a **positioning scheme** that decides which boxes are involved at all:
+
+- `static` (default) → in normal flow.
+- `relative` → in normal flow, but offset visually by `top`/`right`/`bottom`/`left`. Crucially, the original space is *kept* — sibling layout does not change.
+- `absolute` → *removed from normal flow*. Positioned with `top`/`left` against the nearest **positioned ancestor** (any ancestor with `position` other than `static`). Sibling layout closes up as if the element were not there.
+- `fixed` → removed from flow, positioned against the **viewport** (or the nearest containing block established by `transform`, `filter`, or `will-change`).
+- `sticky` → in normal flow until a scroll threshold is hit, then behaves as fixed within the **scroll container's padding box**.
+
+Two consequences:
+
+1. **`position: absolute` needs a positioned ancestor or it walks up to `<html>`.** `position: relative; inset: 0;` on a wrapper is the standard way to make an absolutely-positioned tooltip stay inside a card.
+2. **`z-index` only works on positioned elements** (and on flex/grid items). `z-index` also creates **stacking contexts**, which trap descendants — a child with `z-index: 999` cannot escape a parent with `z-index: 1`.
+
 Sets positioning method for elements.
 
 ### position Property Values
@@ -1323,8 +1305,6 @@ Center a div in the middle of the screen (3 methods).
 ```
 
 </details>
-
----
 
 ---
 

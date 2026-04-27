@@ -20,8 +20,6 @@ Building a great website means nothing if no one can find it. Search engines are
 
 ## Table of Contents
 
-Before the reference, read [**Theory & Principles**](#theory--principles) — search engines run a *three-stage pipeline* (crawl → index → rank), and every SEO tactic — `robots.txt`, sitemap, canonical, meta tags, structured data, Core Web Vitals — is an intervention in one specific stage.
-
 1. [SEO Overview](#1-seo-overview)
 2. [Meta Tags](#2-meta-tags)
 3. [Structured Data](#3-structured-data)
@@ -32,65 +30,12 @@ Before the reference, read [**Theory & Principles**](#theory--principles) — se
 
 ---
 
-## Theory & Principles
-
-SEO advice on the open web tends to be a grab-bag of rituals — "use h1 once," "add schema," "improve Core Web Vitals." The underlying system is simpler than the rituals make it look: every search engine runs a three-stage pipeline (**crawl → index → rank**), and every SEO action is an intervention at one specific stage. Naming the stages turns the rituals into a small, predictable rulebook.
-
-### A. Crawl: How Pages Get Discovered
-
-A crawler (Googlebot, Bingbot, GPTBot) walks the web by following links and reading sitemaps. For each domain it discovers, it has a **crawl budget** — a soft cap on requests per unit time, derived from the site's responsiveness, error rate, and perceived importance. A slow or error-prone site burns its budget on retries; a fast, well-structured site spends it on new content.
-
-Three controls shape crawl behavior:
-
-- **`robots.txt`** at `https://example.com/robots.txt` — tells crawlers which paths to skip. It is a *suggestion* (well-behaved crawlers obey, malicious ones do not) and it controls *access*, not *indexing*. A `Disallow:` page can still appear in results if other pages link to it; the URL appears without a description.
-- **`<meta name="robots" content="noindex">`** in the page's `<head>` — tells the crawler "you may fetch this, but do not put it in the index." This is the correct way to hide a page from results. Crucially, the crawler must be allowed to *fetch* the page to see this directive.
-- **`sitemap.xml`** referenced from `robots.txt` — a list of URLs you want crawled, with optional last-modified dates. Sitemaps do not boost ranking; they help the crawler find pages that links alone might miss (orphan pages, deep pages, paginated archives).
-
-The implicit fourth control is *being fast*. A 5-second TTFB or a 500 response train teaches the crawler to come back less often.
-
-### B. Index: What Gets Stored, and Where
-
-For each crawled page, the indexer parses the HTML, executes the JavaScript (Googlebot uses a recent Chromium), extracts text, builds the accessibility tree (yes — accessibility is now part of indexing), and decides what to *store* in the inverted index.
-
-Several signals govern the storage decision:
-
-- **`<title>` and `<meta name="description">`** — what the search result snippet shows. The title is the strongest single on-page ranking signal for the keywords it contains; the description does not directly rank but determines click-through rate.
-- **`<link rel="canonical" href="...">`** — for when the same content lives at multiple URLs (`?utm_source=...`, sort orders, paginated views). The canonical tells the indexer "the real URL is this; consolidate signals there." Without it, links to alternate URLs split your authority across them.
-- **Heading hierarchy.** A single `<h1>` per page describes the page; nested `<h2>`/`<h3>`/... outline its structure. Indexers weight heading words more than body words.
-- **Structured data via JSON-LD** — a script tag with `application/ld+json` content describing the page in [schema.org](https://schema.org) vocabulary. This unlocks **rich results**: star ratings on product pages, FAQ accordions in search results, event dates, recipe images. JSON-LD is the recommended format because it is decoupled from the visible HTML.
-- **Open Graph and Twitter Cards** — `<meta property="og:*">` tags that govern how a URL renders when shared on social media. Not a search ranking signal, but a major driver of click-through from social.
-
-Indexing is also where **JavaScript-rendered content** can fall through the cracks. If a page is empty `<div id="root"></div>` and only fills in via React after fetch, Googlebot must render it before it sees content — which adds latency and a second-pass queue. Server-side rendering, static generation, or incremental rendering (Next.js, Nuxt, Astro) sidesteps this.
-
-### C. Rank: How Stored Pages Get Ordered
-
-For each query, the engine retrieves matching documents from the inverted index and orders them. Ranking signals are hundreds-deep at Google scale, but they cluster into four categories:
-
-1. **Relevance** — does the page actually answer the query? Term frequency, semantic similarity (now via large language models), and entity/topic matching.
-2. **Authority** — do other reputable pages link here? PageRank-style link graph signals, augmented by domain trust signals.
-3. **User intent fit** — does the page match the *kind* of result the user is looking for (informational, transactional, navigational, local)? Freshness, format, locality.
-4. **User experience** — Core Web Vitals (LCP, INP, CLS — see lesson 18), HTTPS, mobile-friendliness, intrusive interstitials, accessibility.
-
-You cannot directly engineer relevance and authority — those depend on writing useful content that other people choose to link to. You *can* directly engineer category 4: the technical foundations.
-
-### D. Why "Black-Hat" Tactics Stop Working
-
-Each generation of the algorithm has retired a class of shortcut: keyword stuffing (1990s), link farms (2000s), exact-match domains (2010s), thin AI content (2020s). The modern signal stack is sophisticated enough — and the penalty for caught manipulation severe enough — that the durable strategy is the one this lesson teaches: ship pages that are easy to crawl, easy to index, and genuinely useful to readers. Everything else is a wager that the next algorithm update will not catch you.
-
-### From Theory to the Reference Below
-
-- **SEO Overview** (section 1) names the pipeline from §A–§C.
-- **Meta Tags** (section 2) is §B's storage controls — `<title>`, `<meta description>`, canonical, robots meta, Open Graph.
-- **Structured Data** (section 3) is §B's rich-results unlock — JSON-LD with schema.org vocabulary.
-- **Technical SEO** (section 4) is §A's crawl controls — `robots.txt`, sitemap, redirects, mobile-friendly.
-- **Content SEO** (section 5) is §C's relevance category — keyword research, headings, internal linking.
-- **Measurement and Tools** (section 6) covers Search Console (the engine's view of your site) and Lighthouse (your view of the engine's view).
-
-Read the rest of the lesson with the pipeline in mind: every directive, tag, and file controls one specific stage.
-
----
 
 ## 1. SEO Overview
+
+### Theory: Why "Black-Hat" Tactics Stop Working
+
+Each generation of the algorithm has retired a class of shortcut: keyword stuffing (1990s), link farms (2000s), exact-match domains (2010s), thin AI content (2020s). The modern signal stack is sophisticated enough — and the penalty for caught manipulation severe enough — that the durable strategy is the one this lesson teaches: ship pages that are easy to crawl, easy to index, and genuinely useful to readers. Everything else is a wager that the next algorithm update will not catch you.
 
 ### 1.1 What is SEO?
 
@@ -233,6 +178,20 @@ Read the rest of the lesson with the pipeline in mind: every directive, tag, and
 ---
 
 ## 3. Structured Data
+
+### Theory: Index: What Gets Stored, and Where
+
+For each crawled page, the indexer parses the HTML, executes the JavaScript (Googlebot uses a recent Chromium), extracts text, builds the accessibility tree (yes — accessibility is now part of indexing), and decides what to *store* in the inverted index.
+
+Several signals govern the storage decision:
+
+- **`<title>` and `<meta name="description">`** — what the search result snippet shows. The title is the strongest single on-page ranking signal for the keywords it contains; the description does not directly rank but determines click-through rate.
+- **`<link rel="canonical" href="...">`** — for when the same content lives at multiple URLs (`?utm_source=...`, sort orders, paginated views). The canonical tells the indexer "the real URL is this; consolidate signals there." Without it, links to alternate URLs split your authority across them.
+- **Heading hierarchy.** A single `<h1>` per page describes the page; nested `<h2>`/`<h3>`/... outline its structure. Indexers weight heading words more than body words.
+- **Structured data via JSON-LD** — a script tag with `application/ld+json` content describing the page in [schema.org](https://schema.org) vocabulary. This unlocks **rich results**: star ratings on product pages, FAQ accordions in search results, event dates, recipe images. JSON-LD is the recommended format because it is decoupled from the visible HTML.
+- **Open Graph and Twitter Cards** — `<meta property="og:*">` tags that govern how a URL renders when shared on social media. Not a search ranking signal, but a major driver of click-through from social.
+
+Indexing is also where **JavaScript-rendered content** can fall through the cracks. If a page is empty `<div id="root"></div>` and only fills in via React after fetch, Googlebot must render it before it sees content — which adds latency and a second-pass queue. Server-side rendering, static generation, or incremental rendering (Next.js, Nuxt, Astro) sidesteps this.
 
 ### 3.1 JSON-LD Basics
 
@@ -410,6 +369,18 @@ Read the rest of the lesson with the pipeline in mind: every directive, tag, and
 
 ## 4. Technical SEO
 
+### Theory: Crawl: How Pages Get Discovered
+
+A crawler (Googlebot, Bingbot, GPTBot) walks the web by following links and reading sitemaps. For each domain it discovers, it has a **crawl budget** — a soft cap on requests per unit time, derived from the site's responsiveness, error rate, and perceived importance. A slow or error-prone site burns its budget on retries; a fast, well-structured site spends it on new content.
+
+Three controls shape crawl behavior:
+
+- **`robots.txt`** at `https://example.com/robots.txt` — tells crawlers which paths to skip. It is a *suggestion* (well-behaved crawlers obey, malicious ones do not) and it controls *access*, not *indexing*. A `Disallow:` page can still appear in results if other pages link to it; the URL appears without a description.
+- **`<meta name="robots" content="noindex">`** in the page's `<head>` — tells the crawler "you may fetch this, but do not put it in the index." This is the correct way to hide a page from results. Crucially, the crawler must be allowed to *fetch* the page to see this directive.
+- **`sitemap.xml`** referenced from `robots.txt` — a list of URLs you want crawled, with optional last-modified dates. Sitemaps do not boost ranking; they help the crawler find pages that links alone might miss (orphan pages, deep pages, paginated archives).
+
+The implicit fourth control is *being fast*. A 5-second TTFB or a 500 response train teaches the crawler to come back less often.
+
 ### 4.1 Sitemap (sitemap.xml)
 
 ```xml
@@ -544,6 +515,17 @@ body {
 ---
 
 ## 5. Content SEO
+
+### Theory: Rank: How Stored Pages Get Ordered
+
+For each query, the engine retrieves matching documents from the inverted index and orders them. Ranking signals are hundreds-deep at Google scale, but they cluster into four categories:
+
+1. **Relevance** — does the page actually answer the query? Term frequency, semantic similarity (now via large language models), and entity/topic matching.
+2. **Authority** — do other reputable pages link here? PageRank-style link graph signals, augmented by domain trust signals.
+3. **User intent fit** — does the page match the *kind* of result the user is looking for (informational, transactional, navigational, local)? Freshness, format, locality.
+4. **User experience** — Core Web Vitals (LCP, INP, CLS — see lesson 18), HTTPS, mobile-friendliness, intrusive interstitials, accessibility.
+
+You cannot directly engineer relevance and authority — those depend on writing useful content that other people choose to link to. You *can* directly engineer category 4: the technical foundations.
 
 ### 5.1 Keyword Optimization
 

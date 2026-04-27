@@ -20,8 +20,6 @@ Almost everything interesting a web application does involves waiting: waiting f
 
 ## Table of Contents
 
-Before the reference, read [**Theory & Principles**](#theory--principles) — JavaScript is single-threaded and runs work through an event loop with two queues (macrotasks and microtasks); Promises live in the microtask queue, which is what makes `await` feel synchronous; and `fetch` plus `AbortController` are how the platform exposes cancellation back into that loop.
-
 1. [Synchronous vs Asynchronous](#synchronous-vs-asynchronous)
 2. [Callbacks](#callbacks)
 3. [Promise](#promise)
@@ -32,11 +30,10 @@ Before the reference, read [**Theory & Principles**](#theory--principles) — Ja
 
 ---
 
-## Theory & Principles
 
-JavaScript runs on a *single thread*. There is one call stack, one place where your code is executing, and at any moment exactly one function is on top. Yet a typical page makes dozens of network calls, runs animations, and reacts to clicks without freezing. The trick that makes this work is the **event loop** — a scheduler that interleaves your synchronous code with externally-triggered work via two queues (microtasks and macrotasks). Promises and `async`/`await` are not magic; they are syntax over those queues. Once that picture is clear, every async bug becomes a question of "which queue did the next thing land in?"
+## Synchronous vs Asynchronous
 
-### A. The Event Loop, the Stack, and the Two Queues
+### Theory: The Event Loop, the Stack, and the Two Queues
 
 The runtime exposes three structures to your code:
 
@@ -54,80 +51,6 @@ Two consequences hidden in this loop:
 
 1. **Microtasks always run before the next macrotask.** A `Promise.resolve().then(f)` scheduled during the current task runs *before* a `setTimeout(g, 0)` scheduled at the same instant. This is why `Promise.resolve().then(...)` is the right tool for "run after the current synchronous work, but before anything else"; `setTimeout(..., 0)` defers further than people expect.
 2. **A long synchronous task starves *everything*.** Layout, paint, animations, even pending `await`s — all blocked. The 16ms-per-frame budget for 60fps is not "16ms for animation"; it is 16ms total, including your handler, microtasks, and the browser's render work.
-
-### B. Promises: Three States, One Microtask Per Reaction
-
-A Promise is a single-value, single-shot container with three states: **pending**, **fulfilled** (with a value), or **rejected** (with a reason). Once it transitions out of pending, it cannot transition again. `then(onFulfilled, onRejected)` registers reactions, and each registered reaction is enqueued as a *microtask* when the state settles.
-
-Three rules emerge from this and explain almost every Promise question:
-
-1. **`then` always returns a *new* Promise.** That is what makes chains work. The new Promise resolves to the return value of the handler; if the handler returns a Promise, the chain "absorbs" it (a thenable returning a thenable does not produce a Promise-of-Promise).
-2. **Errors propagate down the chain to the next `catch`.** A `.catch` is just `.then(undefined, handler)`. An *unhandled* rejection by the time the microtask runs without a downstream handler triggers the `unhandledrejection` event.
-3. **`new Promise(executor)` runs the executor *synchronously*.** The executor body runs as part of the constructor call; only the reactions registered with `.then` are async.
-
-The static combinators correspond to set operations on Promise outcomes:
-
-- **`Promise.all([...])`** — fulfills with an array when *all* fulfill; rejects on the *first* rejection. Use for "I need all of these."
-- **`Promise.allSettled([...])`** — never rejects; resolves to an array of `{status, value|reason}` once all settle. Use for "I want each result, even the failures."
-- **`Promise.race([...])`** — settles with the first to settle (fulfilled or rejected). Use for timeouts.
-- **`Promise.any([...])`** — fulfills with the first to fulfill; rejects only if *all* reject (with `AggregateError`). Use for "any of these mirrors will do."
-
-### C. `async`/`await` Is Sugar Over `.then`
-
-An `async` function is *always* a function that returns a Promise. A `return value` becomes `Promise.resolve(value)`; a `throw err` becomes `Promise.reject(err)`. An `await expr` does three things in order:
-
-1. Evaluates `expr` to a Promise (wrapping non-Promise values in `Promise.resolve`).
-2. Suspends the function, popping its frame off the call stack.
-3. Schedules the rest of the function as a microtask reaction on that Promise.
-
-This is *exactly* `.then(...)`, written so the linear control flow reads like synchronous code. `try`/`catch` works because rejection becomes a thrown error inside the suspended function when it resumes.
-
-The single most common bug is misuse of sequential vs. parallel:
-
-```js
-// Sequential — total time = a + b + c
-const x = await fetchA();
-const y = await fetchB();
-const z = await fetchC();
-
-// Parallel — total time = max(a, b, c)
-const [x, y, z] = await Promise.all([fetchA(), fetchB(), fetchC()]);
-```
-
-`await` makes the code linear, but linearity is not always desired. Start the Promises *first*, then `await` them in `Promise.all`.
-
-### D. `fetch`, `AbortController`, and Cancellation
-
-`fetch(url, options)` returns a Promise of a `Response`. Two subtleties trip up newcomers:
-
-1. **`fetch` does not reject on HTTP errors.** A 404 or 500 still fulfills the Promise — the request *succeeded*; the server just returned a non-2xx. Code that wants exceptions for HTTP errors must check `response.ok` (or `response.status`) and throw explicitly. Only network failures, CORS rejections, and aborts trigger the Promise to reject.
-2. **The body is a stream consumed once.** `response.json()`, `response.text()`, `response.arrayBuffer()` each read and lock the body; calling two of them on the same response throws.
-
-Cancellation is wired through **`AbortController`**:
-
-```js
-const controller = new AbortController();
-const promise = fetch(url, { signal: controller.signal });
-controller.abort(); // promise rejects with DOMException 'AbortError'
-```
-
-The same `signal` works with the streams API, addEventListener (`{ signal }` removes the listener when aborted), and most platform Promise APIs added since 2020. `AbortSignal.timeout(ms)` returns a signal that fires automatically — the cleanest way to give any Promise a deadline.
-
-### From Theory to the Reference Below
-
-- **Synchronous vs Asynchronous** (section 1) introduces the concurrency model that §A formalizes.
-- **Callbacks** (section 2) is the original API style — works, but composes poorly because it has no way to express §B's chain.
-- **Promise** (section 3) is §B: states, then-chains, catch, the static combinators.
-- **async/await** (section 4) is §C: sugar over §B with `try`/`catch` for errors.
-- **Fetch API** (section 5) is §D's first half — request/response, body streams, `response.ok`.
-- **Error Handling** (section 6) covers rejection propagation from §B and `unhandledrejection`.
-- **Practical Patterns** (section 7) ties it all together: retry with backoff, `AbortController` cancellation, debounce/throttle (which use the macrotask queue from §A).
-
-Read the rest of the lesson knowing that every async primitive is either scheduling work onto a queue or wrapping a queued reaction in nicer syntax.
-
----
-
-## Synchronous vs Asynchronous
 
 ### Synchronous
 
@@ -253,6 +176,23 @@ getUser(userId, function(user) {
 ---
 
 ## Promise
+
+### Theory: Promises: Three States, One Microtask Per Reaction
+
+A Promise is a single-value, single-shot container with three states: **pending**, **fulfilled** (with a value), or **rejected** (with a reason). Once it transitions out of pending, it cannot transition again. `then(onFulfilled, onRejected)` registers reactions, and each registered reaction is enqueued as a *microtask* when the state settles.
+
+Three rules emerge from this and explain almost every Promise question:
+
+1. **`then` always returns a *new* Promise.** That is what makes chains work. The new Promise resolves to the return value of the handler; if the handler returns a Promise, the chain "absorbs" it (a thenable returning a thenable does not produce a Promise-of-Promise).
+2. **Errors propagate down the chain to the next `catch`.** A `.catch` is just `.then(undefined, handler)`. An *unhandled* rejection by the time the microtask runs without a downstream handler triggers the `unhandledrejection` event.
+3. **`new Promise(executor)` runs the executor *synchronously*.** The executor body runs as part of the constructor call; only the reactions registered with `.then` are async.
+
+The static combinators correspond to set operations on Promise outcomes:
+
+- **`Promise.all([...])`** — fulfills with an array when *all* fulfill; rejects on the *first* rejection. Use for "I need all of these."
+- **`Promise.allSettled([...])`** — never rejects; resolves to an array of `{status, value|reason}` once all settle. Use for "I want each result, even the failures."
+- **`Promise.race([...])`** — settles with the first to settle (fulfilled or rejected). Use for timeouts.
+- **`Promise.any([...])`** — fulfills with the first to fulfill; rejects only if *all* reject (with `AggregateError`). Use for "any of these mirrors will do."
 
 ### What is Promise?
 
@@ -388,6 +328,30 @@ loadImage('image.jpg')
 
 ## async/await
 
+### Theory: `async`/`await` Is Sugar Over `.then`
+
+An `async` function is *always* a function that returns a Promise. A `return value` becomes `Promise.resolve(value)`; a `throw err` becomes `Promise.reject(err)`. An `await expr` does three things in order:
+
+1. Evaluates `expr` to a Promise (wrapping non-Promise values in `Promise.resolve`).
+2. Suspends the function, popping its frame off the call stack.
+3. Schedules the rest of the function as a microtask reaction on that Promise.
+
+This is *exactly* `.then(...)`, written so the linear control flow reads like synchronous code. `try`/`catch` works because rejection becomes a thrown error inside the suspended function when it resumes.
+
+The single most common bug is misuse of sequential vs. parallel:
+
+```js
+// Sequential — total time = a + b + c
+const x = await fetchA();
+const y = await fetchB();
+const z = await fetchC();
+
+// Parallel — total time = max(a, b, c)
+const [x, y, z] = await Promise.all([fetchA(), fetchB(), fetchC()]);
+```
+
+`await` makes the code linear, but linearity is not always desired. Start the Promises *first*, then `await` them in `Promise.all`.
+
 ### Basic Usage
 
 async function always returns a Promise. await waits for Promise to resolve.
@@ -479,6 +443,23 @@ export const config = await response.json();
 ---
 
 ## Fetch API
+
+### Theory: `fetch`, `AbortController`, and Cancellation
+
+`fetch(url, options)` returns a Promise of a `Response`. Two subtleties trip up newcomers:
+
+1. **`fetch` does not reject on HTTP errors.** A 404 or 500 still fulfills the Promise — the request *succeeded*; the server just returned a non-2xx. Code that wants exceptions for HTTP errors must check `response.ok` (or `response.status`) and throw explicitly. Only network failures, CORS rejections, and aborts trigger the Promise to reject.
+2. **The body is a stream consumed once.** `response.json()`, `response.text()`, `response.arrayBuffer()` each read and lock the body; calling two of them on the same response throws.
+
+Cancellation is wired through **`AbortController`**:
+
+```js
+const controller = new AbortController();
+const promise = fetch(url, { signal: controller.signal });
+controller.abort(); // promise rejects with DOMException 'AbortError'
+```
+
+The same `signal` works with the streams API, addEventListener (`{ signal }` removes the listener when aborted), and most platform Promise APIs added since 2020. `AbortSignal.timeout(ms)` returns a signal that fires automatically — the cleanest way to give any Promise a deadline.
 
 ### Basic Usage
 
@@ -1151,8 +1132,6 @@ form.addEventListener('submit', async (e) => {
 ```
 
 </details>
-
----
 
 ---
 

@@ -23,8 +23,6 @@ JavaScript is the programming language of the web browser. While HTML and CSS ar
 
 ## Table of Contents
 
-Before the reference, read [**Theory & Principles**](#theory--principles) — JavaScript's defining model is *value vs. reference* (primitives copy, objects share), with `let`/`const` lexical scoping and closures resting on the same execution-context tree, and ES6+ syntax mostly being declarative sugar over those fundamentals.
-
 1. [Getting Started with JavaScript](#getting-started-with-javascript)
 2. [Variables and Constants](#variables-and-constants)
 3. [Data Types](#data-types)
@@ -38,100 +36,6 @@ Before the reference, read [**Theory & Principles**](#theory--principles) — Ja
 
 ---
 
-## Theory & Principles
-
-JavaScript is small at its core and immense at its edges. The core fits on a postcard: every value is either a **primitive** stored *by value* or an **object** stored *by reference*; every function call creates an **execution context** that pushes onto a single call stack; every name resolves through a chain of **lexical environments** captured when the function was defined. Almost every "weird JavaScript" article you have read is a story about one of those three ideas. Holding them in mind makes the rest of the lesson — operators, loops, ES6+ shorthand — feel less like trivia and more like syntax over a small machine.
-
-### A. Primitives vs. Objects: Value Copy vs. Reference Copy
-
-JavaScript has seven primitive types — `string`, `number`, `boolean`, `null`, `undefined`, `symbol`, `bigint` — and one composite category, `object` (which includes arrays, functions, dates, maps, etc.). The distinction is not academic; it is *what assignment does*:
-
-```js
-// Primitives: copy the value.
-let a = 5;
-let b = a;     // b gets a separate 5
-b = 10;
-console.log(a); // 5  -- unchanged
-
-// Objects: copy the reference.
-let x = { count: 5 };
-let y = x;     // y points at the same object
-y.count = 10;
-console.log(x.count); // 10  -- mutated through y
-```
-
-The same rule explains argument passing (primitives arrive as copies, objects as shared references), equality (`===` on objects compares references, not contents), and why `const` does *not* mean "the contents cannot change": `const obj = {}; obj.x = 1;` is legal because `const` only forbids rebinding the *name*, not mutating the *object* the name points at.
-
-Two practical consequences:
-
-1. **To copy an object, you have to ask.** `Object.assign({}, src)`, `{...src}`, and `structuredClone(src)` are the shallow / shallow / deep options. Not knowing the difference is a top source of "I changed one thing and another mysteriously changed too" bugs.
-2. **`null` vs. `undefined` is intentional.** `undefined` is "no value was ever assigned"; `null` is "I assigned a value, and the value is intentionally empty." `==` blurs them; `===` keeps them separate. Modern code uses `??` (nullish coalescing) to mean "default if `null` or `undefined`, but allow `0` and `''`."
-
-### B. Scope, Hoisting, and the `var`/`let`/`const` Ladder
-
-Every `function` (and every `{ ... }` block, since ES6) creates a **lexical environment** — a record mapping names to values. When you read a name, the engine searches the current environment, then its parent, then its parent's parent, until it hits the global environment or fails (a `ReferenceError`). This chain is fixed at *parse time* by where the code is written, not at call time by who called whom. That is what "lexical" means.
-
-The three declaration keywords differ in how they enter that environment:
-
-- **`var`** — function-scoped (block-ignorant), hoisted to the top of the function and initialized to `undefined`. Reading a `var` before its written line returns `undefined`, not an error. This is the source of countless bugs and is why `var` is no longer recommended.
-- **`let`** — block-scoped, hoisted but *not* initialized. The space between the top of the block and the `let` line is the **temporal dead zone**: reading the name throws `ReferenceError`. This is a feature: it surfaces use-before-declare as an error.
-- **`const`** — same as `let`, plus rebinding the name throws. It does *not* freeze the value (see §A).
-
-The classic loop bug —
-
-```js
-for (var i = 0; i < 3; i++) {
-  setTimeout(() => console.log(i), 0); // 3, 3, 3
-}
-```
-
-— exists because `var` shares one binding across all three iterations. Switching to `let` makes each iteration get its own binding, and the output is `0, 1, 2`. The behavior change is not magic; it follows directly from where the binding lives.
-
-### C. Functions as First-Class Values, and Closures
-
-Functions in JavaScript are **first-class**: they are values you can assign to variables, pass as arguments, return from other functions, and store in arrays. Combined with lexical scope from §B, this gives you **closures** for free: a function returned from another function still has access to the outer function's variables, because its lexical environment includes them.
-
-```js
-function counter() {
-  let n = 0;
-  return () => ++n; // captures `n`
-}
-
-const inc = counter();
-inc(); // 1
-inc(); // 2  -- same `n`, persistent across calls
-```
-
-`n` is not on the call stack anymore (the outer call returned), but the inner function still references it, so the garbage collector keeps it alive. Every callback, every event listener, every `setTimeout` is a closure over the surrounding scope; this is also why memory leaks can hide behind "I just added a listener."
-
-Three function syntaxes you will see and they are not interchangeable:
-
-- **Function declaration** (`function f() {}`) — hoisted with its body.
-- **Function expression** (`const f = function () {}`) — assigned at runtime; the variable is hoisted, the function value is not.
-- **Arrow function** (`const f = () => {}`) — function expression, plus does *not* bind its own `this`, `arguments`, or `super`. `this` inside an arrow is the `this` of the enclosing scope. This makes arrows ideal for callbacks (no `that = this` hack) and inappropriate for object methods that need their own `this`.
-
-### D. Type Coercion and the Operator Set
-
-JavaScript is *dynamically* and *weakly* typed: a variable's type is decided per assignment, and many operators implicitly coerce their operands. Coercion rules are a chapter on their own; the safe defaults are short:
-
-- **`===` and `!==`** instead of `==` and `!=`. The triple-equals compares both type and value; the double-equals does coercion that almost no one remembers correctly.
-- **`Number(x)`, `String(x)`, `Boolean(x)`** for explicit conversion. Avoid `+x` (relies on unary plus coercion) for clarity.
-- **Truthiness** is an implicit `Boolean(x)` happening in `if`, `&&`, `||`, ternaries. Six values are *falsy*: `false`, `0`, `''`, `null`, `undefined`, `NaN`. Everything else, including `[]`, `{}`, and `'0'`, is truthy.
-- **`||` vs. `??`.** `a || b` returns `b` when `a` is falsy (so `0 || 5` is `5`). `a ?? b` returns `b` only when `a` is `null`/`undefined` (so `0 ?? 5` is `0`). Use `??` whenever `0` or `''` is a legitimate value.
-- **Optional chaining `?.`** short-circuits to `undefined` when the left side is `null` or `undefined`, instead of throwing. `user?.profile?.email` is the modern idiom for "deep read that may not exist."
-
-### From Theory to the Reference Below
-
-- **Variables and Constants** (section 2) is §B made concrete: `let`, `const`, the TDZ, and why to avoid `var`.
-- **Data Types** (section 3) is §A: the seven primitives plus the object family, with the `typeof` operator.
-- **Operators** (section 4) covers the coercion-aware operators from §D, including `??` and `?.`.
-- **Conditionals / Loops** (sections 5–6) consume the truthiness and iteration semantics.
-- **Functions** (section 7) implements §C: declarations, expressions, arrows, and parameter features.
-- **Arrays / Objects / ES6+ Syntax** (sections 8–10) build on §A — destructuring, spread, and modern array methods are sugar over copying references and iterating in order.
-
-Read the rest of the lesson knowing that every "ES6+ feature" is shorthand for one of these four ideas applied carefully.
-
----
 
 ## Getting Started with JavaScript
 
@@ -196,6 +100,26 @@ console.table([{a: 1}, {a: 2}]);  // Table format
 ---
 
 ## Variables and Constants
+
+### Theory: Scope, Hoisting, and the `var`/`let`/`const` Ladder
+
+Every `function` (and every `{ ... }` block, since ES6) creates a **lexical environment** — a record mapping names to values. When you read a name, the engine searches the current environment, then its parent, then its parent's parent, until it hits the global environment or fails (a `ReferenceError`). This chain is fixed at *parse time* by where the code is written, not at call time by who called whom. That is what "lexical" means.
+
+The three declaration keywords differ in how they enter that environment:
+
+- **`var`** — function-scoped (block-ignorant), hoisted to the top of the function and initialized to `undefined`. Reading a `var` before its written line returns `undefined`, not an error. This is the source of countless bugs and is why `var` is no longer recommended.
+- **`let`** — block-scoped, hoisted but *not* initialized. The space between the top of the block and the `let` line is the **temporal dead zone**: reading the name throws `ReferenceError`. This is a feature: it surfaces use-before-declare as an error.
+- **`const`** — same as `let`, plus rebinding the name throws. It does *not* freeze the value (see §A).
+
+The classic loop bug —
+
+```js
+for (var i = 0; i < 3; i++) {
+  setTimeout(() => console.log(i), 0); // 3, 3, 3
+}
+```
+
+— exists because `var` shares one binding across all three iterations. Switching to `let` makes each iteration get its own binding, and the output is `0, 1, 2`. The behavior change is not magic; it follows directly from where the binding lives.
 
 ### let (Variable)
 
@@ -267,6 +191,31 @@ let globalVar = 'Accessible everywhere';
 ---
 
 ## Data Types
+
+### Theory: Primitives vs. Objects: Value Copy vs. Reference Copy
+
+JavaScript has seven primitive types — `string`, `number`, `boolean`, `null`, `undefined`, `symbol`, `bigint` — and one composite category, `object` (which includes arrays, functions, dates, maps, etc.). The distinction is not academic; it is *what assignment does*:
+
+```js
+// Primitives: copy the value.
+let a = 5;
+let b = a;     // b gets a separate 5
+b = 10;
+console.log(a); // 5  -- unchanged
+
+// Objects: copy the reference.
+let x = { count: 5 };
+let y = x;     // y points at the same object
+y.count = 10;
+console.log(x.count); // 10  -- mutated through y
+```
+
+The same rule explains argument passing (primitives arrive as copies, objects as shared references), equality (`===` on objects compares references, not contents), and why `const` does *not* mean "the contents cannot change": `const obj = {}; obj.x = 1;` is legal because `const` only forbids rebinding the *name*, not mutating the *object* the name points at.
+
+Two practical consequences:
+
+1. **To copy an object, you have to ask.** `Object.assign({}, src)`, `{...src}`, and `structuredClone(src)` are the shallow / shallow / deep options. Not knowing the difference is a top source of "I changed one thing and another mysteriously changed too" bugs.
+2. **`null` vs. `undefined` is intentional.** `undefined` is "no value was ever assigned"; `null` is "I assigned a value, and the value is intentionally empty." `==` blurs them; `===` keeps them separate. Modern code uses `??` (nullish coalescing) to mean "default if `null` or `undefined`, but allow `0` and `''`."
 
 ### Primitive Types
 
@@ -360,6 +309,16 @@ Boolean('hello')   // true
 ---
 
 ## Operators
+
+### Theory: Type Coercion and the Operator Set
+
+JavaScript is *dynamically* and *weakly* typed: a variable's type is decided per assignment, and many operators implicitly coerce their operands. Coercion rules are a chapter on their own; the safe defaults are short:
+
+- **`===` and `!==`** instead of `==` and `!=`. The triple-equals compares both type and value; the double-equals does coercion that almost no one remembers correctly.
+- **`Number(x)`, `String(x)`, `Boolean(x)`** for explicit conversion. Avoid `+x` (relies on unary plus coercion) for clarity.
+- **Truthiness** is an implicit `Boolean(x)` happening in `if`, `&&`, `||`, ternaries. Six values are *falsy*: `false`, `0`, `''`, `null`, `undefined`, `NaN`. Everything else, including `[]`, `{}`, and `'0'`, is truthy.
+- **`||` vs. `??`.** `a || b` returns `b` when `a` is falsy (so `0 || 5` is `5`). `a ?? b` returns `b` only when `a` is `null`/`undefined` (so `0 ?? 5` is `0`). Use `??` whenever `0` or `''` is a legitimate value.
+- **Optional chaining `?.`** short-circuits to `undefined` when the left side is `null` or `undefined`, instead of throwing. `user?.profile?.email` is the modern idiom for "deep read that may not exist."
 
 ### Arithmetic Operators
 
@@ -598,6 +557,29 @@ for (let i = 0; i < 5; i++) {
 ---
 
 ## Functions
+
+### Theory: Functions as First-Class Values, and Closures
+
+Functions in JavaScript are **first-class**: they are values you can assign to variables, pass as arguments, return from other functions, and store in arrays. Combined with lexical scope from §B, this gives you **closures** for free: a function returned from another function still has access to the outer function's variables, because its lexical environment includes them.
+
+```js
+function counter() {
+  let n = 0;
+  return () => ++n; // captures `n`
+}
+
+const inc = counter();
+inc(); // 1
+inc(); // 2  -- same `n`, persistent across calls
+```
+
+`n` is not on the call stack anymore (the outer call returned), but the inner function still references it, so the garbage collector keeps it alive. Every callback, every event listener, every `setTimeout` is a closure over the surrounding scope; this is also why memory leaks can hide behind "I just added a listener."
+
+Three function syntaxes you will see and they are not interchangeable:
+
+- **Function declaration** (`function f() {}`) — hoisted with its body.
+- **Function expression** (`const f = function () {}`) — assigned at runtime; the variable is hoisted, the function value is not.
+- **Arrow function** (`const f = () => {}`) — function expression, plus does *not* bind its own `this`, `arguments`, or `super`. `this` inside an arrow is the `this` of the enclosing scope. This makes arrows ideal for callbacks (no `that = this` hack) and inappropriate for object methods that need their own `this`.
 
 ### Function Declaration
 
@@ -1159,8 +1141,6 @@ console.log(result);  // ['Lee', 'Park']
 ```
 
 </details>
-
----
 
 ---
 

@@ -20,15 +20,12 @@
 
 웹 컴포넌트(Web Components)는 재사용 가능하고 캡슐화된 HTML 요소를 만들 수 있게 해주는 브라우저 네이티브 API 모음입니다. 프레임워크 컴포넌트(React, Vue, Svelte)와 달리, 웹 컴포넌트는 어디서나 작동합니다 -- 어떤 프레임워크에서든, 또는 프레임워크 없이도 사용 가능합니다. 세 가지 명세를 기반으로 합니다: **커스텀 요소(Custom Elements)**, **Shadow DOM**, **HTML 템플릿(HTML Templates)**.
 
-참조에 들어가기 전에, [**이론과 원리**](#이론과-원리) 섹션을 먼저 읽어보세요. 웹 컴포넌트는 *세* 명세의 결합입니다 — 커스텀 요소(Custom Elements)는 태그명 → 클래스 매핑을 등록, Shadow DOM은 평행 서브 트리를 통한 스타일/마크업 캡슐화 제공, `<template>`은 비활성 마크업입니다 — 함께면 어떤 프레임워크에서도 작동하는 상호 운용 가능 요소를 출하할 수 있습니다.
-
 ---
 
-## 이론과 원리
 
-"웹 컴포넌트"라는 표현은 단일한 것처럼 느껴지지만, 사실은 커스텀 요소 이야기로 합성되는 세 독립적 브라우저 명세의 *교집합* 입니다. 각 명세는 프레임워크가 보통 자신만의 호환되지 않는 방식으로 푸는 한 가지 문제를 풉니다 — 브라우저가 여러분의 요소 타입을 어떻게 아는지(커스텀 요소), 요소의 내부 마크업과 스타일이 새지 않게 어떻게 유지하는지(Shadow DOM), 마크업을 즉시 렌더하지 않고 어떻게 파싱하는지(템플릿). API 투어를 읽기 전에 세 경계에 이름을 붙이면, 레슨의 나머지가 "또 다른 컴포넌트 모델"이 아니라 "각 명세가 무엇을 가능하게 하는가"로 읽힙니다.
+## 1. 커스텀 요소(Custom Elements)
 
-### A. 커스텀 요소(Custom Elements): 태그 → 클래스 매핑 등록
+### 이론: 커스텀 요소(Custom Elements): 태그 → 클래스 매핑 등록
 
 `customElements.define('my-card', MyCard)`는 **CustomElementRegistry** 에 한 행을 추가합니다 — 이제부터 문서의 모든 `<my-card>` — 현재 또는 미래 — 가 `MyCard` 클래스의 인스턴스로 업그레이드됩니다. 클래스는 `HTMLElement`를 확장해야 하고 태그명에 하이픈이 있어야 합니다(하이픈은 명세에 의해 커스텀과 빌트인 요소를 구별하기 위해 예약됨 — 이것이 미래의 HTML이 새 빌트인 요소를 추가해도 여러분의 것과 충돌하지 않음을 보장합니다).
 
@@ -52,83 +49,6 @@ class MyCard extends HTMLElement {
 
 1. **생성자는 DOM을 만질 수 없습니다.** 요소가 삽입되기 전에 실행됩니다 — `innerHTML`, 속성, 자식을 만지면 실패하거나 파서가 나중에 실제 자식을 파싱할 때 조용히 되돌려집니다. `connectedCallback`에서 렌더하세요.
 2. **속성 주도 상태는 다시 반영됩니다.** `observedAttributes`는 *옵트 인 목록* 입니다 — 여기에 명명된 속성만 `attributeChangedCallback`을 발동합니다. 관례는 중요한 속성(`disabled`, `expanded`, `value` 같은)이 JavaScript 프로퍼티(`element.disabled`)에 미러링되고 다시 동기화 유지된다는 것입니다. 이는 정확히 `<input>` 같은 빌트인 요소가 작동하는 방식입니다.
-
-### B. Shadow DOM: 자체 스코프를 가진 평행 서브 트리
-
-`element.attachShadow({ mode: 'open' })`은 **shadow root** 를 반환합니다 — 요소에 부착된 숨겨진 문서 프래그먼트. shadow root의 자식은 요소의 일반 자식 *대신* 렌더되고, shadow root 내부의 스타일은 문서에 영향을 주지 *않으며*, 문서 스타일은 shadow 트리에 영향을 주지 *않습니다*. 이것이 **캡슐화 경계(encapsulation boundary)** 입니다.
-
-구체적 함의:
-
-- **선택자는 shadow에서 멈춥니다.** `document.querySelector('.button')`은 shadow root 안으로 도달할 수 없습니다. `mode: 'open'`이면 `element.shadowRoot.querySelector('...')`로 들어갈 수 있습니다. `mode: 'closed'`면 그것조차 거부됩니다.
-- **CSS는 새지 않습니다.** shadow 내부의 `<style>p { color: red }</style>`는 그 shadow 내의 `<p>` 요소만 스타일합니다. 반대로, 호스트 페이지의 `p { color: blue }`는 그것들에 영향을 주지 않습니다.
-- **이벤트는 재타겟팅(retargeted)되어 밖으로 버블됩니다.** shadow 내의 클릭은 호스트 요소의 이벤트가 되며, `event.target`이 호스트로 다시 쓰입니다(리스너가 안을 엿볼 수 없도록). 전체 경로가 필요하면 `event.composedPath()`를 사용하되, 정당화될 때만 — 엿보기는 캡슐화를 위반합니다.
-- **슬롯팅(Slotting)은 *외부* 콘텐츠를 들이는 API입니다.** shadow 내부의 `<slot name="header"></slot>`은 `slot="header"`인 호스트 자식의 콘텐츠를 렌더합니다. 슬롯된 콘텐츠는 문서 측 스코프를 유지(문서의 스타일이 적용)하여, "여기가 소비자가 채울 수 있는 곳"이라는 깔끔한 인터페이스를 줍니다.
-- **테마는 CSS 커스텀 속성과 `::part()`를 통해.** 커스텀 속성은 설계상 경계를 뚫습니다(호스트에 설정된 `--button-color: blue`가 shadow 안에 적용). `::part(name)`은 호스트 페이지가 `part="name"`을 통해 컴포넌트가 옵트 인한 요소를 스타일하게 합니다.
-
-이것이 프레임워크가 재발명하는 것입니다(CSS Modules, scoped CSS, styled-components, vDOM 스코프). Shadow DOM은 같은 발상을 플랫폼에 굽고, 같은 트레이드오프를 가집니다 — 캡슐화는 디자이너가 깊은 안쪽의 무언가를 조정해야 할 때까지는 훌륭합니다.
-
-### C. `<template>`: 준비될 때 렌더하는 비활성 마크업
-
-`<template>` 요소는 브라우저가 파싱하지만 렌더하거나 실행하지 *않는* HTML입니다. 그 콘텐츠(`template.content`, `DocumentFragment`)는 문서에 있지 않고, 이미지를 로드하지 않고, 스크립트를 실행하지 않고, CSS에 매칭되지 않습니다. 클론(`template.content.cloneNode(true)`)을 가져와 원하는 곳에 추가합니다.
-
-이는 문자열 없는 컴포넌트 템플릿팅에 옳은 프리미티브입니다.
-
-```html
-<template id="card-template">
-  <style>:host { display: block; }</style>
-  <header><slot name="title"></slot></header>
-  <div class="body"><slot></slot></div>
-</template>
-
-<script>
-class MyCard extends HTMLElement {
-  connectedCallback() {
-    const tpl = document.getElementById('card-template');
-    this.attachShadow({mode: 'open'}).append(tpl.content.cloneNode(true));
-  }
-}
-customElements.define('my-card', MyCard);
-</script>
-```
-
-템플릿은 `innerHTML` 기반 컴포넌트의 두 실패 모드를 제거합니다 — XSS 없음(동적 데이터의 문자열 파싱 없음), 그리고 이중 렌더 비용 없음(파서가 한 번 처리했고, 결과를 클론).
-
-### D. 웹 컴포넌트가 이기는 곳, 프레임워크가 이기는 곳
-
-깎아내림이 아니라 유용한 비교:
-
-**웹 컴포넌트가 이길 때:**
-
-- 요소가 *알 수 없는 컨텍스트* 에 임베드될 때 — React 앱, Vue 앱, 마케팅 사이트, 이메일 서명에서 작동해야 하는 디자인 시스템 버튼.
-- 팀이 프레임워크 마이그레이션에서 살아남는 요소를 출하해야 할 때.
-- 프레임워크 없는 정적 사이트(Astro, Eleventy, 평범한 HTML)가 인터랙티브 부분을 필요로 할 때.
-- 강한 캡슐화가 기능일 때(서드파티 위젯, 임베드).
-
-**프레임워크(React, Vue, Svelte)가 이길 때:**
-
-- 전체 앱이 여러분이 통제하는 하나의 응집된 시스템일 때.
-- 많은 컴포넌트를 가로지르는 공유 상태 메커니즘이 필요할 때(웹 컴포넌트는 React Context의 내장 등가물이 없음).
-- 타입 안전한 데이터 흐름과 함께 선언적 템플릿팅을 원할 때(JSX + TypeScript).
-- 컴포넌트 트리가 자주 바뀌고 diff 기반 reconciliation을 원할 때.
-
-둘은 상호 배타적이지 않습니다. 흔한 아키텍처는 "앱에는 프레임워크, 디자인 시스템 프리미티브에는 웹 컴포넌트" — React가 `<my-button>`, `<my-card>`, `<my-modal>` 인스턴스를 포함한 트리를 렌더하고, 팀이 내년에 Vue로 마이그레이션해도 동일하게 작동합니다. Lit(Google 라이브러리)은 웹 컴포넌트를 인체공학적으로 쓰는 표준 도구입니다(`lit-html`로 선언적 템플릿, 반응형 프로퍼티, 더 적은 라이프사이클 보일러플레이트 줄).
-
-### 이론에서 아래 참조로
-
-- **커스텀 요소**(섹션 1)는 §A입니다 — `customElements.define`, 네 라이프사이클 콜백, `observedAttributes`.
-- **Shadow DOM**(섹션 2)은 §B입니다 — `attachShadow`, 캡슐화 규칙, 슬롯, 커스텀 속성과 `::part`로 테마.
-- **HTML 템플릿**(섹션 3)은 §C입니다 — `<template>` 태그, `content` 프래그먼트, 클로닝.
-- **생명주기 콜백**(섹션 4)은 §A를 명시화합니다 — 각각이 언제 발사되고 그 안에서 무엇을 할지.
-- **속성 / 프로퍼티 반영** 은 §A의 양방향 미러링 패턴입니다.
-- **Shadow 경계를 가로지르는 이벤트 처리** 는 §B의 재타겟팅과 `composed: true` 이벤트를 사용합니다.
-- **테마**(커스텀 속성 + `::part`)는 §B의 안전-기본 스타일링 비상구입니다.
-- **Lit**(마지막 섹션)은 §A와 §C를 선언적 문법으로 줄입니다.
-
-레슨의 나머지를, 모든 웹 컴포넌트 기능이 그 세 명세 중 하나가 자기 일의 일부를 하는 것임을 알고 읽으세요.
-
----
-
-## 1. 커스텀 요소(Custom Elements)
 
 ### 1.1 커스텀 요소란?
 
@@ -229,6 +149,20 @@ if (MyGreeting) {
 ---
 
 ## 2. Shadow DOM
+
+### 이론: Shadow DOM: 자체 스코프를 가진 평행 서브 트리
+
+`element.attachShadow({ mode: 'open' })`은 **shadow root** 를 반환합니다 — 요소에 부착된 숨겨진 문서 프래그먼트. shadow root의 자식은 요소의 일반 자식 *대신* 렌더되고, shadow root 내부의 스타일은 문서에 영향을 주지 *않으며*, 문서 스타일은 shadow 트리에 영향을 주지 *않습니다*. 이것이 **캡슐화 경계(encapsulation boundary)** 입니다.
+
+구체적 함의:
+
+- **선택자는 shadow에서 멈춥니다.** `document.querySelector('.button')`은 shadow root 안으로 도달할 수 없습니다. `mode: 'open'`이면 `element.shadowRoot.querySelector('...')`로 들어갈 수 있습니다. `mode: 'closed'`면 그것조차 거부됩니다.
+- **CSS는 새지 않습니다.** shadow 내부의 `<style>p { color: red }</style>`는 그 shadow 내의 `<p>` 요소만 스타일합니다. 반대로, 호스트 페이지의 `p { color: blue }`는 그것들에 영향을 주지 않습니다.
+- **이벤트는 재타겟팅(retargeted)되어 밖으로 버블됩니다.** shadow 내의 클릭은 호스트 요소의 이벤트가 되며, `event.target`이 호스트로 다시 쓰입니다(리스너가 안을 엿볼 수 없도록). 전체 경로가 필요하면 `event.composedPath()`를 사용하되, 정당화될 때만 — 엿보기는 캡슐화를 위반합니다.
+- **슬롯팅(Slotting)은 *외부* 콘텐츠를 들이는 API입니다.** shadow 내부의 `<slot name="header"></slot>`은 `slot="header"`인 호스트 자식의 콘텐츠를 렌더합니다. 슬롯된 콘텐츠는 문서 측 스코프를 유지(문서의 스타일이 적용)하여, "여기가 소비자가 채울 수 있는 곳"이라는 깔끔한 인터페이스를 줍니다.
+- **테마는 CSS 커스텀 속성과 `::part()`를 통해.** 커스텀 속성은 설계상 경계를 뚫습니다(호스트에 설정된 `--button-color: blue`가 shadow 안에 적용). `::part(name)`은 호스트 페이지가 `part="name"`을 통해 컴포넌트가 옵트 인한 요소를 스타일하게 합니다.
+
+이것이 프레임워크가 재발명하는 것입니다(CSS Modules, scoped CSS, styled-components, vDOM 스코프). Shadow DOM은 같은 발상을 플랫폼에 굽고, 같은 트레이드오프를 가집니다 — 캡슐화는 디자이너가 깊은 안쪽의 무언가를 조정해야 할 때까지는 훌륭합니다.
 
 ### 2.1 Shadow DOM이란?
 
@@ -364,6 +298,32 @@ class SecretWidget extends HTMLElement {
 ---
 
 ## 3. HTML 템플릿(HTML Templates)
+
+### 이론: `<template>`: 준비될 때 렌더하는 비활성 마크업
+
+`<template>` 요소는 브라우저가 파싱하지만 렌더하거나 실행하지 *않는* HTML입니다. 그 콘텐츠(`template.content`, `DocumentFragment`)는 문서에 있지 않고, 이미지를 로드하지 않고, 스크립트를 실행하지 않고, CSS에 매칭되지 않습니다. 클론(`template.content.cloneNode(true)`)을 가져와 원하는 곳에 추가합니다.
+
+이는 문자열 없는 컴포넌트 템플릿팅에 옳은 프리미티브입니다.
+
+```html
+<template id="card-template">
+  <style>:host { display: block; }</style>
+  <header><slot name="title"></slot></header>
+  <div class="body"><slot></slot></div>
+</template>
+
+<script>
+class MyCard extends HTMLElement {
+  connectedCallback() {
+    const tpl = document.getElementById('card-template');
+    this.attachShadow({mode: 'open'}).append(tpl.content.cloneNode(true));
+  }
+}
+customElements.define('my-card', MyCard);
+</script>
+```
+
+템플릿은 `innerHTML` 기반 컴포넌트의 두 실패 모드를 제거합니다 — XSS 없음(동적 데이터의 문자열 파싱 없음), 그리고 이중 렌더 비용 없음(파서가 한 번 처리했고, 결과를 클론).
 
 ### 3.1 `<template>` 요소
 
@@ -1060,6 +1020,26 @@ styled-card::part(footer) {
 ---
 
 ## 9. 웹 컴포넌트 vs 프레임워크 컴포넌트
+
+### 이론: 웹 컴포넌트가 이기는 곳, 프레임워크가 이기는 곳
+
+깎아내림이 아니라 유용한 비교:
+
+**웹 컴포넌트가 이길 때:**
+
+- 요소가 *알 수 없는 컨텍스트* 에 임베드될 때 — React 앱, Vue 앱, 마케팅 사이트, 이메일 서명에서 작동해야 하는 디자인 시스템 버튼.
+- 팀이 프레임워크 마이그레이션에서 살아남는 요소를 출하해야 할 때.
+- 프레임워크 없는 정적 사이트(Astro, Eleventy, 평범한 HTML)가 인터랙티브 부분을 필요로 할 때.
+- 강한 캡슐화가 기능일 때(서드파티 위젯, 임베드).
+
+**프레임워크(React, Vue, Svelte)가 이길 때:**
+
+- 전체 앱이 여러분이 통제하는 하나의 응집된 시스템일 때.
+- 많은 컴포넌트를 가로지르는 공유 상태 메커니즘이 필요할 때(웹 컴포넌트는 React Context의 내장 등가물이 없음).
+- 타입 안전한 데이터 흐름과 함께 선언적 템플릿팅을 원할 때(JSX + TypeScript).
+- 컴포넌트 트리가 자주 바뀌고 diff 기반 reconciliation을 원할 때.
+
+둘은 상호 배타적이지 않습니다. 흔한 아키텍처는 "앱에는 프레임워크, 디자인 시스템 프리미티브에는 웹 컴포넌트" — React가 `<my-button>`, `<my-card>`, `<my-modal>` 인스턴스를 포함한 트리를 렌더하고, 팀이 내년에 Vue로 마이그레이션해도 동일하게 작동합니다. Lit(Google 라이브러리)은 웹 컴포넌트를 인체공학적으로 쓰는 표준 도구입니다(`lit-html`로 선언적 템플릿, 반응형 프로퍼티, 더 적은 라이프사이클 보일러플레이트 줄).
 
 ### 9.1 비교
 

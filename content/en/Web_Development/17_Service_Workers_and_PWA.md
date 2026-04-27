@@ -19,90 +19,8 @@ After completing this lesson, you will be able to:
 
 Progressive Web Apps bridge the gap between web pages and native applications. They load like regular web pages but offer capabilities traditionally reserved for native apps -- offline access, push notifications, and home screen installation. At the heart of every PWA is the **Service Worker**, a programmable network proxy that gives you fine-grained control over caching and network requests.
 
-Before the reference, read [**Theory & Principles**](#theory--principles) — a Service Worker is a *separate JavaScript execution context* that intercepts every network request from its scope, has a strict lifecycle (install → wait → activate), and exposes the Cache Storage API as the unit of offline state.
-
 ---
 
-## Theory & Principles
-
-A Service Worker is the most powerful — and most footgun-prone — primitive on the web platform. It is a JavaScript file that runs in a *separate, persistent worker thread*, sits between your pages and the network, and can intercept, modify, or fabricate every HTTP request. That power explains everything else about its design: the strict lifecycle, the limited APIs, the security restrictions. Naming the four invariants below makes "why is my Service Worker not updating" stop being a recurring mystery.
-
-### A. The Service Worker Is a Network-Layer Proxy
-
-When a page registers `navigator.serviceWorker.register('/sw.js')`, the browser starts a Service Worker process scoped to the registration's path. From that point, every `fetch()`, every `<img src>`, every navigation request from any page within that scope passes through the worker's `fetch` event:
-
-```js
-// sw.js
-self.addEventListener('fetch', event => {
-  event.respondWith(
-    caches.match(event.request).then(cached => cached || fetch(event.request))
-  );
-});
-```
-
-The worker is allowed to: serve from a cache instead of the network, serve a *different* response than the network would have, fail the request, redirect, log analytics, or pass through. The page has no way to opt out. This is what makes offline web apps possible — and what makes a buggy Service Worker capable of rendering a site permanently broken until the user clears storage.
-
-Two security constraints follow:
-
-1. **Service Workers run only over HTTPS** (with `localhost` as the development exception). A man-in-the-middle attacker who could install a Service Worker on `http://yourbank.com` would own every request thereafter, forever.
-2. **Scope is path-prefix.** A worker registered at `/app/sw.js` controls `/app/*`. Registering at `/sw.js` controls the whole origin. The `Service-Worker-Allowed` response header can widen scope, but the default is restrictive on purpose.
-
-### B. The Lifecycle: Install, Wait, Activate
-
-Service Workers do not just appear. They go through a fixed lifecycle that is the source of most "why are my changes not visible" bugs:
-
-1. **Register** — the page calls `navigator.serviceWorker.register(...)`. The browser downloads `sw.js` and parses it.
-2. **Install** — the worker fires `install`. This is where you populate caches with critical assets (`event.waitUntil(caches.open('v1').then(c => c.addAll([...])))`).
-3. **Wait** — the new worker enters *waiting* state. **It does not take control yet.** The previous version of the worker is still in charge of every open page in its scope.
-4. **Activate** — when every page controlled by the old worker has been closed (or the new worker calls `self.skipWaiting()` and the page calls `self.clients.claim()`), the new worker fires `activate`. This is where you delete old caches.
-5. **Idle / fetch** — the worker handles `fetch`/`message` events. The browser may terminate it when idle and restart on the next event.
-
-Three consequences hidden in this:
-
-- **Updating the worker requires a full reload of all controlled pages**, by default. If you call `self.skipWaiting()` in `install`, you cut over immediately — but a navigation that was mid-flight may now talk to a worker with a different cache layout. Use carefully.
-- **The browser checks for a new `sw.js` on every navigation** (with cache-busting headers). A *byte-for-byte* identical file does not trigger an update; even one changed byte does. Versioning the worker is automatic this way.
-- **Caches are never deleted automatically.** The `activate` event is your only safe place to clean up old cache versions, because by then no page is reading from them.
-
-### C. Cache Storage and the Strategy Catalog
-
-The **Cache Storage API** (`caches.open(name)`) gives you named caches of `Request → Response` pairs. It is *not* the HTTP cache and it is *not* `localStorage`; it is a separate storage area visible only to Service Workers (and `window` if needed). Two properties to know:
-
-1. **It survives across sessions.** A user closes the tab; reopens it tomorrow; the cache is still there.
-2. **You manage eviction.** The browser may evict under storage pressure, but ordinary "delete old version" cleanup is your code's responsibility (in `activate`).
-
-How you combine `caches.match()` and `fetch()` defines a **caching strategy**:
-
-- **Cache First** — `caches.match() || fetch()`. Best for assets that never change at a given URL (hashed bundle filenames). Fastest possible, never hits the network when the cache hits.
-- **Network First** — try `fetch()`, fall back to `caches.match()`. Best for HTML and API responses where freshness wins.
-- **Stale-While-Revalidate** — return `caches.match()` *immediately*, fire `fetch()` in the background to update the cache for next time. Best for "fast and reasonably fresh."
-- **Network Only** — pass `fetch()` through unchanged. For analytics, mutations, anything that must hit the server.
-- **Cache Only** — return only from cache. For pre-installed offline assets that cannot be re-fetched.
-
-Workbox is Google's library that codifies these strategies as one-liners (`new CacheFirst({...})`) plus expiration, range request, and broadcast-update plugins. For non-trivial PWAs, hand-rolling these is a maintenance liability; Workbox is the practical default.
-
-### D. Beyond Caching: Push, Background Sync, Periodic Sync
-
-The Service Worker's persistent existence outside a page lets it do things classic JavaScript cannot:
-
-- **Push notifications** (Push API + Notifications API). The server holds a subscription endpoint (from `pushManager.subscribe()`); when the server sends a push message via the browser's push service, the worker receives a `push` event *even if no tab is open*, and can show a notification. Each push must result in a notification (some browsers enforce this) — silent pushes are not the right tool.
-- **Background Sync** — defer a `fetch` until connectivity returns. The page registers `sync` with a tag; when network comes back, the worker fires `sync` with that tag and can replay the deferred operation. Useful for "save this draft" actions that should not be lost on a flaky connection.
-- **Periodic Background Sync** — fire on a periodic schedule (e.g. once a day) regardless of whether the page is open. Used for prefetching news, weather, podcast episodes. Limited to installed PWAs and gated by site engagement.
-
-The web manifest (`manifest.json`) is the orthogonal piece that makes the experience *feel* installable: `name`, `icons`, `start_url`, `display: standalone`, `theme_color`. Combined with HTTPS, a Service Worker, and a few other criteria, it triggers the browser's "Install app" prompt. Manifest without a Service Worker is just a label; Service Worker without a manifest is just a faster website. Together, they are the PWA.
-
-### From Theory to the Reference Below
-
-- **Progressive Web App Fundamentals** (section 1) is §A and the manifest from §D — what counts as a PWA.
-- **Service Worker Lifecycle** (section 2) is §B — install, wait, activate, the `skipWaiting`/`claim` controls.
-- **Caching Strategies** (section 3) is §C — Cache First, Network First, Stale-While-Revalidate, when to use which.
-- **Building Offline Functionality** (section 4) is the practical assembly: pre-cache the app shell on `install`, route requests with the right strategy on `fetch`, fall back to an offline page when both fail.
-- **Push notifications** and **Background Sync** are the §D extensions.
-- **Workbox** wraps §C in a maintainable API.
-- **Lighthouse PWA audit** measures conformance with the criteria from §A and §D.
-
-Read the rest of the lesson knowing that every Service Worker rule is a consequence of running outside the page, between the page and the network.
-
----
 
 ## 1. Progressive Web App Fundamentals
 
@@ -214,6 +132,22 @@ const isStandalone = window.matchMedia('(display-mode: standalone)').matches
 ---
 
 ## 2. Service Worker Lifecycle
+
+### Theory: The Lifecycle: Install, Wait, Activate
+
+Service Workers do not just appear. They go through a fixed lifecycle that is the source of most "why are my changes not visible" bugs:
+
+1. **Register** — the page calls `navigator.serviceWorker.register(...)`. The browser downloads `sw.js` and parses it.
+2. **Install** — the worker fires `install`. This is where you populate caches with critical assets (`event.waitUntil(caches.open('v1').then(c => c.addAll([...])))`).
+3. **Wait** — the new worker enters *waiting* state. **It does not take control yet.** The previous version of the worker is still in charge of every open page in its scope.
+4. **Activate** — when every page controlled by the old worker has been closed (or the new worker calls `self.skipWaiting()` and the page calls `self.clients.claim()`), the new worker fires `activate`. This is where you delete old caches.
+5. **Idle / fetch** — the worker handles `fetch`/`message` events. The browser may terminate it when idle and restart on the next event.
+
+Three consequences hidden in this:
+
+- **Updating the worker requires a full reload of all controlled pages**, by default. If you call `self.skipWaiting()` in `install`, you cut over immediately — but a navigation that was mid-flight may now talk to a worker with a different cache layout. Use carefully.
+- **The browser checks for a new `sw.js` on every navigation** (with cache-busting headers). A *byte-for-byte* identical file does not trigger an update; even one changed byte does. Versioning the worker is automatic this way.
+- **Caches are never deleted automatically.** The `activate` event is your only safe place to clean up old cache versions, because by then no page is reading from them.
 
 ### 2.1 What is a Service Worker?
 
@@ -341,6 +275,26 @@ self.clients.claim();
 
 ## 3. Caching Strategies
 
+### Theory: The Service Worker Is a Network-Layer Proxy
+
+When a page registers `navigator.serviceWorker.register('/sw.js')`, the browser starts a Service Worker process scoped to the registration's path. From that point, every `fetch()`, every `<img src>`, every navigation request from any page within that scope passes through the worker's `fetch` event:
+
+```js
+// sw.js
+self.addEventListener('fetch', event => {
+  event.respondWith(
+    caches.match(event.request).then(cached => cached || fetch(event.request))
+  );
+});
+```
+
+The worker is allowed to: serve from a cache instead of the network, serve a *different* response than the network would have, fail the request, redirect, log analytics, or pass through. The page has no way to opt out. This is what makes offline web apps possible — and what makes a buggy Service Worker capable of rendering a site permanently broken until the user clears storage.
+
+Two security constraints follow:
+
+1. **Service Workers run only over HTTPS** (with `localhost` as the development exception). A man-in-the-middle attacker who could install a Service Worker on `http://yourbank.com` would own every request thereafter, forever.
+2. **Scope is path-prefix.** A worker registered at `/app/sw.js` controls `/app/*`. Registering at `/sw.js` controls the whole origin. The `Service-Worker-Allowed` response header can widen scope, but the default is restrictive on purpose.
+
 ### 3.1 Cache First (Cache Falling Back to Network)
 
 Best for **static assets** that rarely change (CSS, JS bundles, images).
@@ -431,6 +385,23 @@ event.respondWith(fetch(event.request));
 ---
 
 ## 4. Building Offline Functionality
+
+### Theory: Cache Storage and the Strategy Catalog
+
+The **Cache Storage API** (`caches.open(name)`) gives you named caches of `Request → Response` pairs. It is *not* the HTTP cache and it is *not* `localStorage`; it is a separate storage area visible only to Service Workers (and `window` if needed). Two properties to know:
+
+1. **It survives across sessions.** A user closes the tab; reopens it tomorrow; the cache is still there.
+2. **You manage eviction.** The browser may evict under storage pressure, but ordinary "delete old version" cleanup is your code's responsibility (in `activate`).
+
+How you combine `caches.match()` and `fetch()` defines a **caching strategy**:
+
+- **Cache First** — `caches.match() || fetch()`. Best for assets that never change at a given URL (hashed bundle filenames). Fastest possible, never hits the network when the cache hits.
+- **Network First** — try `fetch()`, fall back to `caches.match()`. Best for HTML and API responses where freshness wins.
+- **Stale-While-Revalidate** — return `caches.match()` *immediately*, fire `fetch()` in the background to update the cache for next time. Best for "fast and reasonably fresh."
+- **Network Only** — pass `fetch()` through unchanged. For analytics, mutations, anything that must hit the server.
+- **Cache Only** — return only from cache. For pre-installed offline assets that cannot be re-fetched.
+
+Workbox is Google's library that codifies these strategies as one-liners (`new CacheFirst({...})`) plus expiration, range request, and broadcast-update plugins. For non-trivial PWAs, hand-rolling these is a maintenance liability; Workbox is the practical default.
 
 ### 4.1 The App Shell Model
 
@@ -590,6 +561,16 @@ async function getLesson(db, id) {
 ---
 
 ## 5. Push Notifications
+
+### Theory: Beyond Caching: Push, Background Sync, Periodic Sync
+
+The Service Worker's persistent existence outside a page lets it do things classic JavaScript cannot:
+
+- **Push notifications** (Push API + Notifications API). The server holds a subscription endpoint (from `pushManager.subscribe()`); when the server sends a push message via the browser's push service, the worker receives a `push` event *even if no tab is open*, and can show a notification. Each push must result in a notification (some browsers enforce this) — silent pushes are not the right tool.
+- **Background Sync** — defer a `fetch` until connectivity returns. The page registers `sync` with a tag; when network comes back, the worker fires `sync` with that tag and can replay the deferred operation. Useful for "save this draft" actions that should not be lost on a flaky connection.
+- **Periodic Background Sync** — fire on a periodic schedule (e.g. once a day) regardless of whether the page is open. Used for prefetching news, weather, podcast episodes. Limited to installed PWAs and gated by site engagement.
+
+The web manifest (`manifest.json`) is the orthogonal piece that makes the experience *feel* installable: `name`, `icons`, `start_url`, `display: standalone`, `theme_color`. Combined with HTTPS, a Service Worker, and a few other criteria, it triggers the browser's "Install app" prompt. Manifest without a Service Worker is just a label; Service Worker without a manifest is just a faster website. Together, they are the PWA.
 
 ### 5.1 Push API Overview
 
