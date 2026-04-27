@@ -20,147 +20,6 @@ After completing this lesson, you will be able to:
 
 Real-world data is rarely stored in a single table. Customers, orders, and products each live in their own table, and the power of a relational database comes from connecting them on the fly. JOIN is the SQL mechanism that reassembles related data from multiple tables into a single, meaningful result set -- making it one of the most important operations you will use every day.
 
-Before the `JOIN` syntax, read [**Theory & Principles**](#theory--principles) — the three algorithms PostgreSQL has to actually perform a join (Nested Loop, Hash Join, Merge Join), how the planner picks one, and what semi-join and anti-join mean.
-
----
-
-## Theory & Principles
-
-The word `JOIN` appears in your SQL, but PostgreSQL has *three completely different algorithms* it might use to execute it: Nested Loop, Hash Join, and Merge Join. They have wildly different cost shapes — one is O(N·M), one is O(N+M), one needs sorted inputs. Picking the wrong one can be the difference between 50 ms and 50 minutes. The good news: you do not pick. The planner does, based on table sizes, indexes, and statistics. The better news: once you know how the three algorithms work, you can read `EXPLAIN` output and see exactly *why* the planner picked what it did — and how to nudge it when it picks badly.
-
-This section covers:
-
-- **(A)** Nested Loop Join — when N·M is fine, and the index-driven version that makes it cheap.
-- **(B)** Hash Join — building an in-memory hash table on one side, probing with the other.
-- **(C)** Merge Join — joining two sorted streams in one linear pass.
-- **(D)** Semi-join, anti-join, and OUTER joins — special-purpose variants of the above three.
-
-### A. Nested Loop Join
-
-The simplest join algorithm. For each row in the **outer** table, scan the **inner** table for matches:
-
-```
-for each row r1 in outer:
-    for each row r2 in inner:
-        if r1.key = r2.key:
-            emit (r1, r2)
-```
-
-Cost: O(N · M) where N and M are the row counts. Looks terrible — and is, if both sides are big. But two factors save it.
-
-#### A.1 The indexed inner side
-
-If the inner table has an index on the join key, the inner loop is *not* a full scan — it is an O(log M) index probe. Total cost becomes O(N · log M), which beats hashing for small N.
-
-```sql
-SELECT * FROM small_table s JOIN big_table b ON s.id = b.s_id;
--- Plan: Nested Loop
---         Outer: Seq Scan on small_table  (10 rows)
---         Inner: Index Scan on big_table.s_id  (1 probe per outer row)
-```
-
-This is the typical "small table joined to indexed big table" pattern, and it is often the fastest join in PostgreSQL despite the bad-sounding name.
-
-#### A.2 When Nested Loop loses
-
-When the outer side has many rows and there is no usable index on the inner side. The planner switches to Hash Join in that case.
-
-### B. Hash Join
-
-Build phase: read the smaller table once and insert every row into an in-memory hash table keyed by the join column. Probe phase: read the larger table once; for each row, hash the join column and look up matches in the hash table.
-
-```
-build:
-    H = {}
-    for each row r in smaller_table:
-        H[hash(r.key)].append(r)
-
-probe:
-    for each row s in larger_table:
-        for r in H[hash(s.key)]:
-            if r.key == s.key:        # hash collision check
-                emit (r, s)
-```
-
-Cost: O(N + M) — linear in both sides. Wins when both sides are large and you do not care about output order.
-
-#### B.1 Memory and `work_mem`
-
-The hash table must fit in `work_mem`. If it does not, PostgreSQL falls back to a **partitioned hash join**: it partitions both inputs by hash buckets to disk, then hash-joins each partition pair separately. This costs an extra read+write pass per side. Watching `EXPLAIN ANALYZE` for `Batches: N` greater than 1 means a partitioned hash — and bumping `work_mem` for that session might give a large speedup.
-
-#### B.2 Why "smaller side as build"
-
-The hash table has constant-size overhead per row plus the row itself. Building it on the smaller side keeps memory pressure down. The planner figures this out from row-count estimates (which is why bad statistics can lead to a build-on-the-wrong-side disaster).
-
-#### B.3 Hash collisions
-
-Two distinct keys can hash to the same bucket. The probe always rechecks the actual key after the bucket lookup, so correctness is preserved — but heavy collisions degrade the linear cost toward quadratic in the worst case. PostgreSQL uses a 32-bit hash with extendible hashing to keep buckets balanced.
-
-### C. Merge Join
-
-If both inputs are *sorted* on the join key, you can join them in a single linear pass like merging two sorted lists:
-
-```
-i, j = 0, 0
-while i < |A| and j < |B|:
-    if A[i].key < B[j].key: i += 1
-    elif A[i].key > B[j].key: j += 1
-    else:
-        emit (A[i], B[j])
-        # advance both, plus handle duplicates within either side
-        ...
-```
-
-Cost: O(N + M) for the merge itself, plus O(N log N + M log M) if the inputs need to be sorted first.
-
-#### C.1 When Merge Join wins
-
-- Both sides are *already* sorted (e.g., reading from a B-tree index in key order). The sort cost vanishes; merge wins outright.
-- The output needs to be sorted on the join key anyway (subsequent `ORDER BY`).
-- Memory is tight: merge join only needs a buffer for one row from each side, while hash join may not fit in `work_mem`.
-
-#### C.2 When Merge Join loses
-
-- Inputs are not pre-sorted and the tables are large enough that the sort is expensive.
-- The join key has very low cardinality — handling many equal keys requires a "rescan" of the inner side, which complicates the linear bound.
-
-### D. Semi-join, Anti-join, and OUTER joins
-
-The three algorithms above are about *how* to match rows. They are independent of *what* to do with matches and non-matches, which is determined by the join *type*.
-
-#### D.1 INNER JOIN
-
-Emit only rows that match on both sides. The default.
-
-#### D.2 LEFT OUTER JOIN
-
-Emit all rows from the left side; for left rows with no matching right row, emit `NULL`s for the right columns. Implementation: same as INNER, but track which left rows have produced output. At the end, emit any unmatched left rows with NULL right columns.
-
-#### D.3 Semi-join — `EXISTS` and `IN`
-
-`SELECT * FROM A WHERE EXISTS (SELECT 1 FROM B WHERE B.x = A.x);` is a **semi-join**: emit each row from A *at most once*, regardless of how many B rows match. Crucially, the right side is *probed*, not joined — duplicates on the right side do not duplicate the output.
-
-The planner can implement semi-join as a hash semi-join (build hash on B, probe with A, stop on first match per outer row) or as a nested loop with a `LIMIT 1` on the inner. Much cheaper than INNER JOIN + DISTINCT.
-
-#### D.4 Anti-join — `NOT EXISTS`
-
-`SELECT * FROM A WHERE NOT EXISTS (SELECT 1 FROM B WHERE B.x = A.x);` is an **anti-join**: emit each row from A *only if no* B row matches. Same engine, opposite emission rule. This is what you should use instead of `NOT IN (subquery)` — anti-join handles NULLs correctly while `NOT IN` does not (lesson 5 §C.1).
-
-#### D.5 FULL OUTER JOIN
-
-The symmetric LEFT — emit unmatched rows from both sides. Implemented by running the chosen algorithm twice (once each direction) or by carefully tracking matched-on-both-sides during a single hash/merge pass.
-
-### From Theory to the SQL Below
-
-Each of the following sections is one of these algorithms made concrete:
-
-- **`INNER JOIN ... ON`** — most often planned as Hash Join (large + large) or indexed Nested Loop (small + indexed-big) (§A, §B).
-- **`LEFT JOIN`, `RIGHT JOIN`, `FULL JOIN`** — same algorithms with the §D outer-emission rule layered on.
-- **`CROSS JOIN`** — pure Nested Loop with no join condition; produces N·M rows.
-- **`USING (col)`, `NATURAL JOIN`** — syntactic sugar over `ON`; the planner sees the same condition.
-- **Self joins** — same algorithms; the planner is unaware that the two sides are the same physical table.
-- **`EXPLAIN ANALYZE`** — shows which algorithm and which side was outer/inner. Always check this before tuning.
-
 ---
 
 ## 1. JOIN Concept
@@ -252,6 +111,36 @@ Result:
  Mike Park│ park@email.com   │ Headset      │  150000
 ```
 
+### Theory: Nested Loop Join
+
+The simplest join algorithm. For each row in the **outer** table, scan the **inner** table for matches:
+
+```
+for each row r1 in outer:
+    for each row r2 in inner:
+        if r1.key = r2.key:
+            emit (r1, r2)
+```
+
+Cost: O(N · M) where N and M are the row counts. Looks terrible — and is, if both sides are big. But two factors save it.
+
+#### A.1 The indexed inner side
+
+If the inner table has an index on the join key, the inner loop is *not* a full scan — it is an O(log M) index probe. Total cost becomes O(N · log M), which beats hashing for small N.
+
+```sql
+SELECT * FROM small_table s JOIN big_table b ON s.id = b.s_id;
+-- Plan: Nested Loop
+--         Outer: Seq Scan on small_table  (10 rows)
+--         Inner: Index Scan on big_table.s_id  (1 probe per outer row)
+```
+
+This is the typical "small table joined to indexed big table" pattern, and it is often the fastest join in PostgreSQL despite the bad-sounding name.
+
+#### A.2 When Nested Loop loses
+
+When the outer side has many rows and there is no usable index on the inner side. The planner switches to Hash Join in that case.
+
 ### Use Table Aliases
 
 ```sql
@@ -296,6 +185,32 @@ Result:
  Mike Park  │ Headset      │  150000
  Sarah Choi │ NULL         │ NULL      ← User with no orders included
 ```
+
+### Theory: Semi-join, Anti-join, and OUTER joins
+
+The three algorithms above are about *how* to match rows. They are independent of *what* to do with matches and non-matches, which is determined by the join *type*.
+
+#### D.1 INNER JOIN
+
+Emit only rows that match on both sides. The default.
+
+#### D.2 LEFT OUTER JOIN
+
+Emit all rows from the left side; for left rows with no matching right row, emit `NULL`s for the right columns. Implementation: same as INNER, but track which left rows have produced output. At the end, emit any unmatched left rows with NULL right columns.
+
+#### D.3 Semi-join — `EXISTS` and `IN`
+
+`SELECT * FROM A WHERE EXISTS (SELECT 1 FROM B WHERE B.x = A.x);` is a **semi-join**: emit each row from A *at most once*, regardless of how many B rows match. Crucially, the right side is *probed*, not joined — duplicates on the right side do not duplicate the output.
+
+The planner can implement semi-join as a hash semi-join (build hash on B, probe with A, stop on first match per outer row) or as a nested loop with a `LIMIT 1` on the inner. Much cheaper than INNER JOIN + DISTINCT.
+
+#### D.4 Anti-join — `NOT EXISTS`
+
+`SELECT * FROM A WHERE NOT EXISTS (SELECT 1 FROM B WHERE B.x = A.x);` is an **anti-join**: emit each row from A *only if no* B row matches. Same engine, opposite emission rule. This is what you should use instead of `NOT IN (subquery)` — anti-join handles NULLs correctly while `NOT IN` does not (lesson 5 §C.1).
+
+#### D.5 FULL OUTER JOIN
+
+The symmetric LEFT — emit unmatched rows from both sides. Implemented by running the chosen algorithm twice (once each direction) or by carefully tracking matched-on-both-sides during a single hash/merge pass.
 
 ### Find Users Without Orders
 
@@ -479,6 +394,65 @@ JOIN categories c ON p.category_id = c.id;
 ```
 
 ---
+
+### Theory: Hash Join
+
+Build phase: read the smaller table once and insert every row into an in-memory hash table keyed by the join column. Probe phase: read the larger table once; for each row, hash the join column and look up matches in the hash table.
+
+```
+build:
+    H = {}
+    for each row r in smaller_table:
+        H[hash(r.key)].append(r)
+
+probe:
+    for each row s in larger_table:
+        for r in H[hash(s.key)]:
+            if r.key == s.key:        # hash collision check
+                emit (r, s)
+```
+
+Cost: O(N + M) — linear in both sides. Wins when both sides are large and you do not care about output order.
+
+#### B.1 Memory and `work_mem`
+
+The hash table must fit in `work_mem`. If it does not, PostgreSQL falls back to a **partitioned hash join**: it partitions both inputs by hash buckets to disk, then hash-joins each partition pair separately. This costs an extra read+write pass per side. Watching `EXPLAIN ANALYZE` for `Batches: N` greater than 1 means a partitioned hash — and bumping `work_mem` for that session might give a large speedup.
+
+#### B.2 Why "smaller side as build"
+
+The hash table has constant-size overhead per row plus the row itself. Building it on the smaller side keeps memory pressure down. The planner figures this out from row-count estimates (which is why bad statistics can lead to a build-on-the-wrong-side disaster).
+
+#### B.3 Hash collisions
+
+Two distinct keys can hash to the same bucket. The probe always rechecks the actual key after the bucket lookup, so correctness is preserved — but heavy collisions degrade the linear cost toward quadratic in the worst case. PostgreSQL uses a 32-bit hash with extendible hashing to keep buckets balanced.
+
+### Theory: Merge Join
+
+If both inputs are *sorted* on the join key, you can join them in a single linear pass like merging two sorted lists:
+
+```
+i, j = 0, 0
+while i < |A| and j < |B|:
+    if A[i].key < B[j].key: i += 1
+    elif A[i].key > B[j].key: j += 1
+    else:
+        emit (A[i], B[j])
+        # advance both, plus handle duplicates within either side
+        ...
+```
+
+Cost: O(N + M) for the merge itself, plus O(N log N + M log M) if the inputs need to be sorted first.
+
+#### C.1 When Merge Join wins
+
+- Both sides are *already* sorted (e.g., reading from a B-tree index in key order). The sort cost vanishes; merge wins outright.
+- The output needs to be sorted on the join key anyway (subsequent `ORDER BY`).
+- Memory is tight: merge join only needs a buffer for one row from each side, while hash join may not fit in `work_mem`.
+
+#### C.2 When Merge Join loses
+
+- Inputs are not pre-sorted and the tables are large enough that the sort is expensive.
+- The join key has very low cardinality — handling many equal keys requires a "rescan" of the inner side, which complicates the linear bound.
 
 ## 10. JOIN Conditions and WHERE
 

@@ -21,181 +21,6 @@ After completing this lesson, you will be able to:
 
 Databases excel at summarizing large volumes of data into concise, actionable numbers. Questions like "What are our total sales by region?" or "Which product category generates the highest average revenue?" require aggregate functions and grouping. Mastering these operations turns a flat table of transactions into the dashboards, reports, and KPIs that drive business decisions.
 
-Before the aggregate functions, read [**Theory & Principles**](#theory--principles) — what an aggregate state actually is, the two algorithms (HashAggregate vs GroupAggregate) PostgreSQL uses for `GROUP BY`, and the OLAP semantics behind `ROLLUP`/`CUBE`/`GROUPING SETS`.
-
----
-
-## Theory & Principles
-
-`SELECT region, SUM(sales) FROM orders GROUP BY region;` looks like one operation but is actually three coordinated phases — partitioning rows into groups, maintaining a running state per group, and emitting one row per group at the end. PostgreSQL has two completely different algorithms for the partitioning phase (HashAggregate and GroupAggregate), and the choice has the same kind of impact on performance as the join algorithm choice in lesson 6. `ROLLUP` and `CUBE` extend this with multi-dimensional grouping that comes from the OLAP world — and they share the same machinery.
-
-This section covers:
-
-- **(A)** The aggregate state machine: `init → transition → final` and why aggregates are not "just functions".
-- **(B)** HashAggregate vs GroupAggregate — the two algorithms for `GROUP BY`, and how the planner picks.
-- **(C)** `HAVING` vs `WHERE` — the order in which they apply and why moving a predicate to `WHERE` is faster.
-- **(D)** `ROLLUP`, `CUBE`, `GROUPING SETS` — multi-dimensional aggregation and the `GROUPING()` indicator function.
-
-### A. The Aggregate State Machine
-
-An aggregate function is not one function — it is **three** functions plus a **state**:
-
-| Component | Role |
-|-----------|------|
-| `initcond` | initial state value (e.g. 0 for `SUM`, NULL for `MAX`) |
-| `sfunc` (state transition) | called per input row: `state := sfunc(state, new_value)` |
-| `finalfunc` (optional) | called once at end: `result := finalfunc(state)` |
-| `stype` | data type of the running state |
-
-For `SUM(x)`:
-
-- `stype` = `numeric`, `initcond` = 0
-- `sfunc(s, x)` = `s + x`
-- `finalfunc` = identity (omitted)
-
-For `AVG(x)`:
-
-- `stype` = a `(sum, count)` pair, `initcond` = `(0, 0)`
-- `sfunc((sum, count), x)` = `(sum + x, count + 1)`
-- `finalfunc((sum, count))` = `sum / count`
-
-For `array_agg(x)`:
-
-- `stype` = an internal accumulator
-- `sfunc` appends; `finalfunc` materializes the array
-
-Why this matters: aggregates compose with parallel execution. PostgreSQL parallel-aggregate splits the input across workers, has each worker run the per-row `sfunc`, then a coordinator combines the per-worker states using a `combinefunc` (`SUM`'s combine is `+`, `AVG`'s is element-wise pair sum). User-defined aggregates that supply a `combinefunc` are parallelizable; those that do not are not.
-
-### B. HashAggregate vs GroupAggregate
-
-Given `GROUP BY region`, PostgreSQL has two ways to organize the per-group state:
-
-#### B.1 HashAggregate
-
-Maintain an in-memory hash table keyed by `region`. For each input row, hash the `region`, look up the state in the bucket, run `sfunc`. At the end, emit one row per bucket.
-
-```
-H = {}
-for row r in input:
-    state = H.get(r.region, initcond)
-    H[r.region] = sfunc(state, r.sales)
-for region, state in H.items():
-    emit (region, finalfunc(state))
-```
-
-- **Cost**: O(N) plus hash table memory proportional to number of groups.
-- **Wins when**: the number of distinct groups is small enough that the hash table fits in `work_mem`. Order is not preserved — output appears in hash order.
-- **Spill behavior**: PostgreSQL 13+ spills hash partitions to disk if `work_mem` is exceeded. Earlier versions just refused HashAggregate in that case.
-
-#### B.2 GroupAggregate
-
-Sort the input by the GROUP BY columns, then walk the sorted stream. Whenever the key changes, emit the previous group and reset state.
-
-```
-sort input by region
-state, prev = initcond, None
-for row r in sorted_input:
-    if r.region != prev:
-        if prev is not None: emit (prev, finalfunc(state))
-        state, prev = initcond, r.region
-    state = sfunc(state, r.sales)
-emit (prev, finalfunc(state))
-```
-
-- **Cost**: O(N log N) for the sort, then O(N) for the walk. State memory is *constant* — only one group's state at a time.
-- **Wins when**: input is already sorted (e.g. from an index scan on `region`), or when the number of groups is too large for HashAggregate.
-- **Bonus**: output is sorted on the GROUP BY columns, useful if a downstream `ORDER BY` matches.
-
-The planner picks based on estimated number of groups, available indexes, and `work_mem`. `EXPLAIN` shows which one was chosen as `HashAggregate` or `GroupAggregate`.
-
-### C. WHERE Before GROUP BY, HAVING After
-
-The logical order of a `SELECT` clause execution:
-
-```
-1. FROM     → assemble joined rows
-2. WHERE    → filter rows BEFORE grouping
-3. GROUP BY → partition into groups
-4. (aggregate functions evaluated per group)
-5. HAVING   → filter GROUPS after aggregation
-6. SELECT   → project columns
-7. ORDER BY → sort
-8. LIMIT    → truncate
-```
-
-The two filtering steps live on opposite sides of the aggregation:
-
-```sql
--- Filter rows before counting
-SELECT region, COUNT(*) FROM orders
-WHERE order_date >= '2026-01-01'   -- per-row predicate
-GROUP BY region;
-
--- Filter groups after counting
-SELECT region, COUNT(*) FROM orders
-GROUP BY region
-HAVING COUNT(*) > 100;             -- per-group predicate
-```
-
-#### C.1 Why moving a predicate from HAVING to WHERE is a speedup
-
-If a predicate references only base columns (not aggregates), put it in `WHERE`. WHERE shrinks the input *before* hashing or sorting, so every later step does less work. HAVING runs *after* the entire aggregate pass, having paid the full cost on rows that are then discarded.
-
-```sql
--- Slow: HAVING on a non-aggregate
-SELECT region, SUM(sales) FROM orders
-GROUP BY region
-HAVING region <> 'EU';            -- ← should be WHERE
-
--- Fast
-SELECT region, SUM(sales) FROM orders
-WHERE region <> 'EU'
-GROUP BY region;
-```
-
-The planner sometimes catches this and rewrites it; do not rely on it.
-
-### D. ROLLUP, CUBE, GROUPING SETS — Multi-Dimensional Aggregation
-
-These come from OLAP and let you compute several `GROUP BY` granularities in one query.
-
-#### D.1 ROLLUP — hierarchical totals
-
-`GROUP BY ROLLUP (a, b, c)` produces:
-
-- Groups by `(a, b, c)`
-- Subtotals by `(a, b)` (one row per `(a, b)` summed across all `c`)
-- Subtotals by `(a)` (summed across all `(b, c)`)
-- A grand total (all of `a, b, c` rolled up)
-
-Useful for hierarchical reports — region → country → city, with country and region subtotals visible in the same result set.
-
-#### D.2 CUBE — every combination of dimensions
-
-`GROUP BY CUBE (a, b, c)` produces 2³ = 8 grouping levels — every subset of `{a, b, c}`. Useful for cross-tabulation where you want to slice by every possible combination.
-
-#### D.3 GROUPING SETS — pick exactly which combinations
-
-`GROUP BY GROUPING SETS ((a, b), (a, c), ())` produces only the listed combinations. ROLLUP and CUBE are syntactic sugar over GROUPING SETS.
-
-#### D.4 The `GROUPING()` indicator function
-
-In a ROLLUP/CUBE/GROUPING SETS query, NULL appears in two distinct meanings: a *real* NULL value in the data, or a *placeholder* for "rolled up across all values of this column". The `GROUPING(col)` function disambiguates — it returns 1 if `col` is NULL because of rollup, 0 otherwise. Combine into a bitmap for multiple columns: `GROUPING(a, b)` returns a 2-bit integer.
-
-#### D.5 Implementation
-
-PostgreSQL implements GROUPING SETS by running the aggregate algorithm once per grouping set (or, when possible, sharing sort/hash work across overlapping sets). The cost is roughly the cost of one GROUP BY times the number of grouping sets — a CUBE over 5 columns is 32× the cost.
-
-### From Theory to the SQL Below
-
-Each of the following sections is one of these mechanisms made concrete:
-
-- **`COUNT()`, `SUM()`, `AVG()`, `MIN()`, `MAX()`, `STRING_AGG()`, `ARRAY_AGG()`** — concrete aggregates with their `(initcond, sfunc, finalfunc)` triples (§A).
-- **`GROUP BY col`** — triggers HashAggregate or GroupAggregate (§B).
-- **`HAVING` clause** — filters after aggregation; should hold only aggregate-dependent predicates (§C).
-- **`ROLLUP`, `CUBE`, `GROUPING SETS`** — multi-dimensional grouping (§D).
-- **`DISTINCT` inside aggregates** (`COUNT(DISTINCT col)`) — forces a sort or hash on the per-group input, more expensive than plain aggregates.
-
 ---
 
 ## 1. Aggregate Functions
@@ -241,6 +66,36 @@ INSERT INTO sales (product, category, amount, quantity, sale_date, region) VALUE
 ---
 
 ## 3. COUNT - Counting
+
+### Theory: The Aggregate State Machine
+
+An aggregate function is not one function — it is **three** functions plus a **state**:
+
+| Component | Role |
+|-----------|------|
+| `initcond` | initial state value (e.g. 0 for `SUM`, NULL for `MAX`) |
+| `sfunc` (state transition) | called per input row: `state := sfunc(state, new_value)` |
+| `finalfunc` (optional) | called once at end: `result := finalfunc(state)` |
+| `stype` | data type of the running state |
+
+For `SUM(x)`:
+
+- `stype` = `numeric`, `initcond` = 0
+- `sfunc(s, x)` = `s + x`
+- `finalfunc` = identity (omitted)
+
+For `AVG(x)`:
+
+- `stype` = a `(sum, count)` pair, `initcond` = `(0, 0)`
+- `sfunc((sum, count), x)` = `(sum + x, count + 1)`
+- `finalfunc((sum, count))` = `sum / count`
+
+For `array_agg(x)`:
+
+- `stype` = an internal accumulator
+- `sfunc` appends; `finalfunc` materializes the array
+
+Why this matters: aggregates compose with parallel execution. PostgreSQL parallel-aggregate splits the input across workers, has each worker run the per-row `sfunc`, then a coordinator combines the per-worker states using a `combinefunc` (`SUM`'s combine is `+`, `AVG`'s is element-wise pair sum). User-defined aggregates that supply a `combinefunc` are parallelizable; those that do not are not.
 
 ### Total Row Count
 
@@ -344,6 +199,48 @@ FROM sales;
 
 Groups data by specific columns for aggregation.
 
+### Theory: HashAggregate vs GroupAggregate
+
+Given `GROUP BY region`, PostgreSQL has two ways to organize the per-group state:
+
+#### B.1 HashAggregate
+
+Maintain an in-memory hash table keyed by `region`. For each input row, hash the `region`, look up the state in the bucket, run `sfunc`. At the end, emit one row per bucket.
+
+```
+H = {}
+for row r in input:
+    state = H.get(r.region, initcond)
+    H[r.region] = sfunc(state, r.sales)
+for region, state in H.items():
+    emit (region, finalfunc(state))
+```
+
+- **Cost**: O(N) plus hash table memory proportional to number of groups.
+- **Wins when**: the number of distinct groups is small enough that the hash table fits in `work_mem`. Order is not preserved — output appears in hash order.
+- **Spill behavior**: PostgreSQL 13+ spills hash partitions to disk if `work_mem` is exceeded. Earlier versions just refused HashAggregate in that case.
+
+#### B.2 GroupAggregate
+
+Sort the input by the GROUP BY columns, then walk the sorted stream. Whenever the key changes, emit the previous group and reset state.
+
+```
+sort input by region
+state, prev = initcond, None
+for row r in sorted_input:
+    if r.region != prev:
+        if prev is not None: emit (prev, finalfunc(state))
+        state, prev = initcond, r.region
+    state = sfunc(state, r.sales)
+emit (prev, finalfunc(state))
+```
+
+- **Cost**: O(N log N) for the sort, then O(N) for the walk. State memory is *constant* — only one group's state at a time.
+- **Wins when**: input is already sorted (e.g. from an index scan on `region`), or when the number of groups is too large for HashAggregate.
+- **Bonus**: output is sorted on the GROUP BY columns, useful if a downstream `ORDER BY` matches.
+
+The planner picks based on estimated number of groups, available indexes, and `work_mem`. `EXPLAIN` shows which one was chosen as `HashAggregate` or `GroupAggregate`.
+
 ### Basic GROUP BY
 
 ```sql
@@ -435,6 +332,53 @@ FROM sales
 GROUP BY category
 HAVING SUM(amount) >= 500000;
 ```
+
+### Theory: WHERE Before GROUP BY, HAVING After
+
+The logical order of a `SELECT` clause execution:
+
+```
+1. FROM     → assemble joined rows
+2. WHERE    → filter rows BEFORE grouping
+3. GROUP BY → partition into groups
+4. (aggregate functions evaluated per group)
+5. HAVING   → filter GROUPS after aggregation
+6. SELECT   → project columns
+7. ORDER BY → sort
+8. LIMIT    → truncate
+```
+
+The two filtering steps live on opposite sides of the aggregation:
+
+```sql
+-- Filter rows before counting
+SELECT region, COUNT(*) FROM orders
+WHERE order_date >= '2026-01-01'   -- per-row predicate
+GROUP BY region;
+
+-- Filter groups after counting
+SELECT region, COUNT(*) FROM orders
+GROUP BY region
+HAVING COUNT(*) > 100;             -- per-group predicate
+```
+
+#### C.1 Why moving a predicate from HAVING to WHERE is a speedup
+
+If a predicate references only base columns (not aggregates), put it in `WHERE`. WHERE shrinks the input *before* hashing or sorting, so every later step does less work. HAVING runs *after* the entire aggregate pass, having paid the full cost on rows that are then discarded.
+
+```sql
+-- Slow: HAVING on a non-aggregate
+SELECT region, SUM(sales) FROM orders
+GROUP BY region
+HAVING region <> 'EU';            -- ← should be WHERE
+
+-- Fast
+SELECT region, SUM(sales) FROM orders
+WHERE region <> 'EU'
+GROUP BY region;
+```
+
+The planner sometimes catches this and rewrites it; do not rely on it.
 
 ### WHERE + HAVING
 
@@ -559,6 +503,37 @@ FROM sales;
 ---
 
 ## 14. ROLLUP and CUBE
+
+### Theory: ROLLUP, CUBE, GROUPING SETS — Multi-Dimensional Aggregation
+
+These come from OLAP and let you compute several `GROUP BY` granularities in one query.
+
+#### D.1 ROLLUP — hierarchical totals
+
+`GROUP BY ROLLUP (a, b, c)` produces:
+
+- Groups by `(a, b, c)`
+- Subtotals by `(a, b)` (one row per `(a, b)` summed across all `c`)
+- Subtotals by `(a)` (summed across all `(b, c)`)
+- A grand total (all of `a, b, c` rolled up)
+
+Useful for hierarchical reports — region → country → city, with country and region subtotals visible in the same result set.
+
+#### D.2 CUBE — every combination of dimensions
+
+`GROUP BY CUBE (a, b, c)` produces 2³ = 8 grouping levels — every subset of `{a, b, c}`. Useful for cross-tabulation where you want to slice by every possible combination.
+
+#### D.3 GROUPING SETS — pick exactly which combinations
+
+`GROUP BY GROUPING SETS ((a, b), (a, c), ())` produces only the listed combinations. ROLLUP and CUBE are syntactic sugar over GROUPING SETS.
+
+#### D.4 The `GROUPING()` indicator function
+
+In a ROLLUP/CUBE/GROUPING SETS query, NULL appears in two distinct meanings: a *real* NULL value in the data, or a *placeholder* for "rolled up across all values of this column". The `GROUPING(col)` function disambiguates — it returns 1 if `col` is NULL because of rollup, 0 otherwise. Combine into a bitmap for multiple columns: `GROUPING(a, b)` returns a 2-bit integer.
+
+#### D.5 Implementation
+
+PostgreSQL implements GROUPING SETS by running the aggregate algorithm once per grouping set (or, when possible, sharing sort/hash work across overlapping sets). The cost is roughly the cost of one GROUP BY times the number of grouping sets — a CUBE over 5 columns is 32× the cost.
 
 ### ROLLUP - Add Subtotals
 

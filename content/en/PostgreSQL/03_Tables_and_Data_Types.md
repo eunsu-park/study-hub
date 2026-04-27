@@ -20,22 +20,28 @@ After completing this lesson, you will be able to:
 
 Tables are the fundamental building blocks of any relational database. Every piece of data your application stores -- user profiles, product catalogs, financial transactions -- ultimately lives inside a table with carefully chosen columns, data types, and constraints. Getting the schema right at design time prevents countless headaches later, from subtle data corruption to slow queries.
 
-Before the `CREATE TABLE` syntax, read [**Theory & Principles**](#theory--principles) — how PostgreSQL physically lays out a row inside an 8 KB page, how big values overflow into the TOAST mechanism, and how every data type's storage size flows from these two facts.
+---
+
+## 1. Table Basic Concepts
+
+A table is a structure that stores data organized into rows and columns.
+
+```
+┌──────────────────────────────────────────────────────┐
+│                    users table                        │
+├────────┬──────────┬─────────────────┬───────────────┤
+│   id   │   name   │      email      │  created_at   │
+├────────┼──────────┼─────────────────┼───────────────┤
+│   1    │  김철수  │ kim@email.com   │ 2024-01-15    │
+│   2    │  이영희  │ lee@email.com   │ 2024-01-16    │
+│   3    │  박민수  │ park@email.com  │ 2024-01-17    │
+└────────┴──────────┴─────────────────┴───────────────┘
+  Column                 ↑ each row is one record
+```
 
 ---
 
-## Theory & Principles
-
-A `CREATE TABLE` statement is a contract about more than the column names. The choice of `INTEGER` vs `BIGINT`, `VARCHAR(255)` vs `TEXT`, or `TIMESTAMP` vs `TIMESTAMPTZ` translates directly into bytes per row, alignment padding, page utilization, and whether a value can be stored inline or has to be pushed out to a separate file. Once you understand the page layout, the TOAST mechanism, and the per-type storage cost, schema decisions stop being tribal knowledge and become arithmetic.
-
-This section covers:
-
-- **(A)** The PostgreSQL page: 8 KB pages, page header, line pointers, tuple bodies.
-- **(B)** A tuple from byte 0: header, null bitmap, alignment, and the column data area.
-- **(C)** TOAST — how values larger than ~2 KB are sliced, optionally compressed, and stored out of line.
-- **(D)** Per-type storage costs and the alignment trap that wastes space if columns are ordered carelessly.
-
-### A. The 8 KB Page
+### Theory: The 8 KB Page
 
 PostgreSQL reads and writes the heap in fixed-size **pages** (also called blocks). The default size is **8 KB** and is fixed at compile time — every table file is an integer number of pages, every buffer in `shared_buffers` is one page, every WAL update tracks pages.
 
@@ -65,7 +71,9 @@ Indexes need stable references to rows, but tuples can be deleted, updated (crea
 
 Every row has a `ctid` you can `SELECT`: it is exactly `(page_number, line_pointer_index)`. `ctid` is *not* stable across updates — an UPDATE that changes a row may relocate it, giving it a new ctid (the old line pointer becomes a "redirect" to the new one).
 
-### B. Tuple Layout
+## 2. Table Creation
+
+### Theory: Tuple Layout
 
 Each row is a **tuple** structured like this:
 
@@ -106,32 +114,42 @@ The bitmap has one bit per column, padded to 8 bytes. PostgreSQL does *not* allo
 
 Every PostgreSQL data type has an **alignment requirement** — `int2` aligns to 2 bytes, `int4` to 4, `int8` and `timestamp` to 8, `text` to 4 (the length word). The tuple builder inserts padding bytes between columns to satisfy alignment. This is the source of one of the most common storage gotchas — see §D.
 
-### C. TOAST — The Oversized-Attribute Storage Technique
+### Basic Syntax
 
-A row cannot exceed one page (8 KB). But a `text` or `bytea` value can easily be megabytes. PostgreSQL resolves this with **TOAST** (The Oversized-Attribute Storage Technique).
+```sql
+CREATE TABLE table_name (
+    column1 data_type [constraints],
+    column2 data_type [constraints],
+    ...
+);
+```
 
-#### C.1 The TOAST decision tree
+### Basic Example
 
-When a tuple would exceed the **TOAST threshold** (`TOAST_TUPLE_THRESHOLD`, default ~2 KB, i.e. ~1/4 of the page), the planner runs this loop on the largest TOAST-able column:
+```sql
+CREATE TABLE users (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(100) NOT NULL,
+    email VARCHAR(255) UNIQUE NOT NULL,
+    age INTEGER,
+    created_at TIMESTAMP DEFAULT NOW()
+);
+```
 
-1. **Compress** the value (PGLZ or LZ4 in modern versions). If it now fits, write it inline.
-2. If still too large, **slice it into ~2 KB chunks** and write the chunks to the table's TOAST table (a separate relation auto-created at `CREATE TABLE` time, named `pg_toast.pg_toast_<oid>`).
-3. The main row stores a small **TOAST pointer** (18 bytes) referencing the chunks by OID and total length.
+### Create Only If Not Exists
 
-Each TOAST-able column has a per-column **storage strategy** you can change with `ALTER TABLE ... SET STORAGE`:
+```sql
+CREATE TABLE IF NOT EXISTS users (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(100) NOT NULL
+);
+```
 
-| Strategy | Compress? | Out-of-line? |
-|----------|-----------|--------------|
-| `PLAIN`  | no        | no (only for non-TOAST-able types) |
-| `EXTENDED` (default for TEXT/BYTEA) | yes | yes |
-| `EXTERNAL` | no | yes (faster for `substring` calls) |
-| `MAIN`   | yes | only if still too big after compression |
+---
 
-#### C.2 Why TOAST matters in practice
+## 3. Numeric Data Types
 
-A `SELECT id FROM big_log_table` is fast even if every row has a 1 MB body, because the body lives in the TOAST table and is not read unless explicitly projected. Conversely, `SELECT body` triggers a join to the TOAST table — invisibly, but it adds I/O. This is the database-level reason why "select only what you need" is not just code style.
-
-### D. Per-Type Storage and the Alignment Trap
+### Theory: Per-Type Storage and the Alignment Trap
 
 A representative subset of PostgreSQL types and their storage:
 
@@ -168,74 +186,6 @@ The "bad" version wastes 8 bytes per row to satisfy `int8`'s 8-byte alignment af
 #### D.2 Variable-length types and the 1-byte short header
 
 `text`, `bytea`, and `varchar` use a length prefix. PostgreSQL has a clever optimization — for values up to 126 bytes, it uses a **1-byte short header** instead of the standard 4 bytes. So a column of mostly-short strings is much cheaper than the 4-byte overhead would suggest.
-
-### From Theory to the SQL Below
-
-Each of the following sections is one of these ideas made concrete:
-
-- **`CREATE TABLE` column list** — declares column types; PostgreSQL computes alignment, padding, and storage strategy from this list (§B.3, §D).
-- **Choosing `TEXT` vs `VARCHAR(n)`** — both use the same TOAST-able storage; `varchar(n)` adds a length check (§C, §D).
-- **`TIMESTAMP` vs `TIMESTAMPTZ`** — both 8 bytes; the difference is interpretation, not storage (§D).
-- **`PRIMARY KEY`, `UNIQUE`, `NOT NULL`** — `NOT NULL` lets PostgreSQL skip the null bitmap (§B.2); `PRIMARY KEY` builds an index whose pages have the same 8 KB layout (§A).
-- **`ALTER TABLE ... SET STORAGE`** — changes the TOAST strategy of one column (§C.1).
-
----
-
-## 1. Table Basic Concepts
-
-A table is a structure that stores data organized into rows and columns.
-
-```
-┌──────────────────────────────────────────────────────┐
-│                    users table                        │
-├────────┬──────────┬─────────────────┬───────────────┤
-│   id   │   name   │      email      │  created_at   │
-├────────┼──────────┼─────────────────┼───────────────┤
-│   1    │  김철수  │ kim@email.com   │ 2024-01-15    │
-│   2    │  이영희  │ lee@email.com   │ 2024-01-16    │
-│   3    │  박민수  │ park@email.com  │ 2024-01-17    │
-└────────┴──────────┴─────────────────┴───────────────┘
-  Column                 ↑ each row is one record
-```
-
----
-
-## 2. Table Creation
-
-### Basic Syntax
-
-```sql
-CREATE TABLE table_name (
-    column1 data_type [constraints],
-    column2 data_type [constraints],
-    ...
-);
-```
-
-### Basic Example
-
-```sql
-CREATE TABLE users (
-    id SERIAL PRIMARY KEY,
-    name VARCHAR(100) NOT NULL,
-    email VARCHAR(255) UNIQUE NOT NULL,
-    age INTEGER,
-    created_at TIMESTAMP DEFAULT NOW()
-);
-```
-
-### Create Only If Not Exists
-
-```sql
-CREATE TABLE IF NOT EXISTS users (
-    id SERIAL PRIMARY KEY,
-    name VARCHAR(100) NOT NULL
-);
-```
-
----
-
-## 3. Numeric Data Types
 
 ### Integer Types
 
@@ -436,6 +386,31 @@ SELECT attributes->'colors'->0 FROM products WHERE name = 'Keyboard';  -- "white
 ```
 
 ---
+
+### Theory: TOAST — The Oversized-Attribute Storage Technique
+
+A row cannot exceed one page (8 KB). But a `text` or `bytea` value can easily be megabytes. PostgreSQL resolves this with **TOAST** (The Oversized-Attribute Storage Technique).
+
+#### C.1 The TOAST decision tree
+
+When a tuple would exceed the **TOAST threshold** (`TOAST_TUPLE_THRESHOLD`, default ~2 KB, i.e. ~1/4 of the page), the planner runs this loop on the largest TOAST-able column:
+
+1. **Compress** the value (PGLZ or LZ4 in modern versions). If it now fits, write it inline.
+2. If still too large, **slice it into ~2 KB chunks** and write the chunks to the table's TOAST table (a separate relation auto-created at `CREATE TABLE` time, named `pg_toast.pg_toast_<oid>`).
+3. The main row stores a small **TOAST pointer** (18 bytes) referencing the chunks by OID and total length.
+
+Each TOAST-able column has a per-column **storage strategy** you can change with `ALTER TABLE ... SET STORAGE`:
+
+| Strategy | Compress? | Out-of-line? |
+|----------|-----------|--------------|
+| `PLAIN`  | no        | no (only for non-TOAST-able types) |
+| `EXTENDED` (default for TEXT/BYTEA) | yes | yes |
+| `EXTERNAL` | no | yes (faster for `substring` calls) |
+| `MAIN`   | yes | only if still too big after compression |
+
+#### C.2 Why TOAST matters in practice
+
+A `SELECT id FROM big_log_table` is fast even if every row has a 1 MB body, because the body lives in the TOAST table and is not read unless explicitly projected. Conversely, `SELECT body` triggers a join to the TOAST table — invisibly, but it adds I/O. This is the database-level reason why "select only what you need" is not just code style.
 
 ## 8. Other Data Types
 

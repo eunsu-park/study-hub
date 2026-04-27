@@ -21,110 +21,6 @@
 
 PostgreSQL은 오늘날 사용 가능한 가장 발전된 오픈소스 관계형 데이터베이스(Relational Database) 중 하나입니다. 소규모 웹 애플리케이션을 구축하든 대규모 분석 플랫폼을 설계하든, PostgreSQL은 전문 개발자와 데이터 엔지니어가 의지하는 안정성, 확장성, 그리고 표준 준수를 제공합니다. 이 레슨은 설치부터 첫 번째 접속, 그리고 PostgreSQL 여정의 출발점이 되는 필수 명령어들을 단계별로 안내합니다.
 
-설치 절차에 들어가기 전, [**이론과 원리**](#이론과-원리) 절을 먼저 읽으세요 — ACID가 실제로 보장하는 것, `psql` 연결 뒤에 숨은 클라이언트/서버 프로세스 모델, 그리고 데이터베이스 내부의 모든 객체에 이름을 부여하는 OID 시스템을 다룹니다.
-
----
-
-## 이론과 원리
-
-`psql`에 입력한 SQL 한 줄은 어딘가 추상적인 곳에서 실행되는 것이 아닙니다. 특정 OS 아키텍처를 거쳐 특정 프로세스에 도달하고, 특정 내구성 규칙의 지배를 받는 페이지를 변경하며, 내부 번호로 식별되는 객체를 참조합니다. 아래 네 가지 개념 — ACID, postmaster/backend 프로세스 모델, 시스템 카탈로그(system catalog), OID — 는 이후 모든 레슨이 발 딛고 서는 불변량(invariant)입니다.
-
-이 절에서 다루는 내용:
-
-- **(A)** ACID 네 글자가 실제로 약속하는 것과 PostgreSQL이 이를 구현하는 방식.
-- **(B)** 클라이언트/서버 프로세스 모델: postmaster, backend, background worker.
-- **(C)** PostgreSQL의 "메타데이터를 테이블로 저장하는" 설계인 시스템 카탈로그(`pg_catalog`).
-- **(D)** 모든 객체에 안정적인 내부 이름을 부여하는 OID(Object Identifier) 시스템.
-
-### A. ACID, 한 글자씩 풀어보기
-
-ACID는 동시성, 충돌(crash), 부분 실패(partial failure) 상황에서 무엇이 살아남는지를 규정한 계약입니다. 각 글자에는 PostgreSQL의 구체적인 메커니즘이 대응됩니다.
-
-#### A.1 Atomicity(원자성) — 전부 아니면 전무
-
-트랜잭션은 전체가 커밋되거나 어떠한 관측 가능한 효과도 남기지 않습니다. 내부적으로 모든 변경은 트랜잭션 ID(`xid`)와 함께 먼저 **WAL(Write-Ahead Log)** 에 기록됩니다. `COMMIT`이 일어나면 단일 WAL 레코드가 그 `xid`를 commit으로 표시하고, `ROLLBACK`이나 충돌이 발생하면 그 레코드가 끝까지 쓰이지 않으므로 변경 사항은 영원히 누구에게도 보이지 않습니다(이후 `VACUUM`에 의해 회수). "절반만 보이는" 상태는 존재하지 않으며, visibility는 단일 바이트로 뒤집힙니다.
-
-#### A.2 Consistency(일관성) — 트랜잭션 경계에서 불변량 유지
-
-트랜잭션이 시작되기 전에 모든 무결성 제약(`NOT NULL`, `CHECK`, 외래 키, unique index, deferred constraint)을 만족했다면, 커밋 후에도 만족합니다. PostgreSQL은 행이 삽입되는 시점에(또는 `DEFERRABLE` 제약의 경우 commit 시점에) 제약을 검사합니다. 어느 하나라도 실패하면 트랜잭션 전체가 abort되며 — 이는 다시 Atomicity로 이어집니다.
-
-#### A.3 Isolation(격리성) — 동시 트랜잭션은 서로의 진행 중 상태를 보지 못함
-
-PostgreSQL은 **MVCC**(Multi-Version Concurrency Control)를 사용합니다. 모든 행 버전(row version)은 `xmin`(그 행을 생성한 `xid`)과 `xmax`(그 행을 삭제/대체한 `xid`)를 들고 다닙니다. 어떤 reader는 `xmin`이 commit되었고 *자신의 snapshot에서 보이며* `xmax`가 그렇지 않은 경우에만 그 행을 봅니다. 따라서 reader는 writer를 절대 막지 않으며, writer 또한 reader를 막지 않습니다 — 락 기반 시스템이 따라올 수 없는 속성입니다. 11번 레슨에서 자세히 다룹니다.
-
-#### A.4 Durability(영속성) — commit된 데이터는 충돌 후에도 살아남음
-
-`COMMIT`은 WAL 레코드가 디스크에 `fsync`될 때까지 반환하지 않습니다(설정 가능하지만 기본값이 그렇습니다). 1ms 후 서버 전원이 나가도, 재시작 시 WAL을 replay해서 commit된 모든 변경을 복원합니다. heap 파일 자체는 lazy하게 쓰입니다 — 영속성은 로그에서 오는 것이지, 테이블 파일에서 오는 것이 아닙니다.
-
-### B. 클라이언트/서버 프로세스 모델
-
-PostgreSQL "서버"는 단일 프로세스가 아닙니다. 트리(tree) 구조입니다.
-
-```
-postmaster (parent)
-├── backend for client #1   (연결당 프로세스 1개)
-├── backend for client #2
-├── background writer       (dirty buffer flush)
-├── WAL writer              (WAL flush)
-├── checkpointer            (consistent point 기록)
-├── autovacuum launcher     (autovacuum worker spawn)
-└── stats collector / logical replication launcher / ...
-```
-
-#### B.1 postmaster
-
-`pg_ctl start`가 가장 먼저 띄우는 프로세스입니다. 설정된 TCP 포트(기본 5432)와 Unix-domain socket을 listen합니다. 자기 자신은 SQL을 실행하지 **않으며**, 연결을 받을 때마다 새 backend 프로세스를 `fork()`해서 socket을 자식에게 넘깁니다. 이로부터 다음이 따라옵니다:
-
-- 연결 비용이 높습니다(연결당 OS 프로세스 하나). 그래서 PgBouncer 같은 **connection pooler**가 존재합니다.
-- postmaster가 죽어도 실행 중인 쿼리가 반드시 죽는 것은 아닙니다 — 다만 재시작 전까지 신규 연결을 받을 수 없습니다.
-
-#### B.2 Backend
-
-클라이언트 하나당 OS 프로세스 하나. backend 안에 parser, planner, executor, MVCC visibility 검사, 그리고 연결-로컬 catalog cache가 모두 들어 있습니다. `work_mem`이나 `temp_buffers` 같은 메모리는 backend 단위로 할당되므로, `max_connections`가 크고 `work_mem`이 큰 조합은 시스템 RAM을 고갈시킬 수 있습니다.
-
-#### B.3 Background worker
-
-backend 안에서 동기적으로 처리하면 막힐 작업들을 별도 프로세스에서 처리합니다: dirty buffer 디스크 flush, WAL flush, autovacuum 실행, 병렬 인덱스 빌드, standby 복제 등. backend와 동일한 shared memory segment를 공유하며, 그것이 바로 `shared_buffers`입니다.
-
-### C. 시스템 카탈로그 — 메타데이터를 테이블로
-
-PostgreSQL은 자기 자신의 스키마를 PostgreSQL 테이블에 저장하며, 그 스키마 이름이 `pg_catalog`입니다. 모든 데이터베이스, 테이블, 컬럼, 인덱스, 함수, 역할(role), 테이블스페이스(tablespace)는 어느 카탈로그 테이블의 한 행입니다.
-
-| 카탈로그 | 저장 내용 |
-|---------|----------|
-| `pg_database` | 클러스터 내 데이터베이스 한 행씩 |
-| `pg_namespace` | 스키마 한 행씩 |
-| `pg_class` | "relation"(테이블, 인덱스, 뷰, 시퀀스, 머티리얼라이즈드 뷰) 한 행씩 |
-| `pg_attribute` | 모든 relation의 컬럼 한 행씩 |
-| `pg_type` | 데이터 타입 한 행씩 |
-| `pg_proc` | 함수/프로시저 한 행씩 |
-| `pg_authid` | 역할 한 행씩 |
-
-이 설계가 가져오는 두 가지 실용적 결과:
-
-1. **`psql`이 보여주는 모든 것(`\l`, `\dt`, `\d`)은 단지 `pg_catalog`에 대한 SQL 쿼리입니다.** `psql`에서 `\set ECHO_HIDDEN on`을 켜고 `\d+`를 실행하면 실제로 발사되는 `SELECT` 문을 볼 수 있습니다.
-2. **카탈로그 자체도 ACID와 MVCC를 따릅니다.** `CREATE TABLE`은 `pg_class`와 `pg_attribute`에 행을 삽입하는 트랜잭션입니다. DDL을 `BEGIN; ... ROLLBACK;`으로 감싸면, 그 테이블은 존재한 적이 없게 됩니다.
-
-SQL 표준의 벤더 중립적 메타데이터 뷰는 별도 스키마인 `information_schema`로 제공됩니다. PostgreSQL 고유 기능을 들여다볼 때는 `pg_catalog`, 이식 가능한 도구를 만들 때는 `information_schema`를 사용합니다.
-
-### D. OID — 객체 식별자
-
-`pg_catalog`의 모든 객체는 4바이트 unsigned integer 주키(primary key)인 **OID**(Object Identifier)를 가집니다. `SELECT * FROM users`를 작성하면 parser는 *문자열* `"users"`를 executor에 넘기지 않습니다 — `pg_class` 행의 OID로 이름을 해석한 뒤, 이후 모든 단계에서 OID를 사용합니다.
-
-OID 덕분에 테이블 rename이 저렴합니다(`pg_class`의 한 행만 바뀌고, 이를 참조하는 인덱스/뷰/외래 키는 동일한 `relid`를 그대로 유지). 또 OID가 클러스터 단위가 아니라 데이터베이스 단위로 unique이기 때문에 cross-database 객체 참조가 허용되지 않는 이유이기도 합니다.
-
-사용자 테이블은 PostgreSQL 12부터 기본적으로 `OID` 시스템 컬럼을 갖지 않게 되었습니다(`WITH OIDS`는 deprecated). 시스템 카탈로그의 행은 여전히 OID를 가지며 의사 컬럼(pseudo-column) `oid`로 접근합니다 — `SELECT oid, datname FROM pg_database;`가 이를 읽는 표준적인 방법입니다.
-
-### 이론에서 아래 명령으로
-
-이어지는 각 절은 위 개념들이 구체화된 형태입니다:
-
-- **설치** — 5432 포트를 listen하는 postmaster 프로세스를 띄움 (§B.1).
-- **`psql` 연결** — postmaster에 TCP/Unix socket을 열고, postmaster가 backend를 fork (§B.2).
-- **`\l`, `\dt`, `\d`** — `pg_database`, `pg_class`, `pg_attribute`에 대한 SQL 쿼리의 단축 표기 (§C).
-- **`SELECT`, `CREATE DATABASE`** — 모든 statement는 암묵적/명시적 트랜잭션 안에서 ACID 보장을 받음 (§A).
-- **객체 명명 규칙** — 생성하는 모든 named object에 카탈로그가 OID를 부여 (§D).
-
 ---
 
 ## 1. PostgreSQL이란?
@@ -267,6 +163,57 @@ psql (PostgreSQL) 16.1
 
 psql은 PostgreSQL의 대화형 터미널 클라이언트입니다.
 
+### 이론: 클라이언트/서버 프로세스 모델
+
+PostgreSQL "서버"는 단일 프로세스가 아닙니다. 트리(tree) 구조입니다.
+
+```
+postmaster (parent)
+├── backend for client #1   (연결당 프로세스 1개)
+├── backend for client #2
+├── background writer       (dirty buffer flush)
+├── WAL writer              (WAL flush)
+├── checkpointer            (consistent point 기록)
+├── autovacuum launcher     (autovacuum worker spawn)
+└── stats collector / logical replication launcher / ...
+```
+
+#### B.1 postmaster
+
+`pg_ctl start`가 가장 먼저 띄우는 프로세스입니다. 설정된 TCP 포트(기본 5432)와 Unix-domain socket을 listen합니다. 자기 자신은 SQL을 실행하지 **않으며**, 연결을 받을 때마다 새 backend 프로세스를 `fork()`해서 socket을 자식에게 넘깁니다. 이로부터 다음이 따라옵니다:
+
+- 연결 비용이 높습니다(연결당 OS 프로세스 하나). 그래서 PgBouncer 같은 **connection pooler**가 존재합니다.
+- postmaster가 죽어도 실행 중인 쿼리가 반드시 죽는 것은 아닙니다 — 다만 재시작 전까지 신규 연결을 받을 수 없습니다.
+
+#### B.2 Backend
+
+클라이언트 하나당 OS 프로세스 하나. backend 안에 parser, planner, executor, MVCC visibility 검사, 그리고 연결-로컬 catalog cache가 모두 들어 있습니다. `work_mem`이나 `temp_buffers` 같은 메모리는 backend 단위로 할당되므로, `max_connections`가 크고 `work_mem`이 큰 조합은 시스템 RAM을 고갈시킬 수 있습니다.
+
+#### B.3 Background worker
+
+backend 안에서 동기적으로 처리하면 막힐 작업들을 별도 프로세스에서 처리합니다: dirty buffer 디스크 flush, WAL flush, autovacuum 실행, 병렬 인덱스 빌드, standby 복제 등. backend와 동일한 shared memory segment를 공유하며, 그것이 바로 `shared_buffers`입니다.
+
+### 이론: 시스템 카탈로그 — 메타데이터를 테이블로
+
+PostgreSQL은 자기 자신의 스키마를 PostgreSQL 테이블에 저장하며, 그 스키마 이름이 `pg_catalog`입니다. 모든 데이터베이스, 테이블, 컬럼, 인덱스, 함수, 역할(role), 테이블스페이스(tablespace)는 어느 카탈로그 테이블의 한 행입니다.
+
+| 카탈로그 | 저장 내용 |
+|---------|----------|
+| `pg_database` | 클러스터 내 데이터베이스 한 행씩 |
+| `pg_namespace` | 스키마 한 행씩 |
+| `pg_class` | "relation"(테이블, 인덱스, 뷰, 시퀀스, 머티리얼라이즈드 뷰) 한 행씩 |
+| `pg_attribute` | 모든 relation의 컬럼 한 행씩 |
+| `pg_type` | 데이터 타입 한 행씩 |
+| `pg_proc` | 함수/프로시저 한 행씩 |
+| `pg_authid` | 역할 한 행씩 |
+
+이 설계가 가져오는 두 가지 실용적 결과:
+
+1. **`psql`이 보여주는 모든 것(`\l`, `\dt`, `\d`)은 단지 `pg_catalog`에 대한 SQL 쿼리입니다.** `psql`에서 `\set ECHO_HIDDEN on`을 켜고 `\d+`를 실행하면 실제로 발사되는 `SELECT` 문을 볼 수 있습니다.
+2. **카탈로그 자체도 ACID와 MVCC를 따릅니다.** `CREATE TABLE`은 `pg_class`와 `pg_attribute`에 행을 삽입하는 트랜잭션입니다. DDL을 `BEGIN; ... ROLLBACK;`으로 감싸면, 그 테이블은 존재한 적이 없게 됩니다.
+
+SQL 표준의 벤더 중립적 메타데이터 뷰는 별도 스키마인 `information_schema`로 제공됩니다. PostgreSQL 고유 기능을 들여다볼 때는 `pg_catalog`, 이식 가능한 도구를 만들 때는 `information_schema`를 사용합니다.
+
 ### 접속 방법
 
 ```bash
@@ -332,6 +279,26 @@ psql에서 `\`로 시작하는 명령어들입니다.
 ---
 
 ## 6. 첫 번째 쿼리 실행
+
+### 이론: ACID, 한 글자씩 풀어보기
+
+ACID는 동시성, 충돌(crash), 부분 실패(partial failure) 상황에서 무엇이 살아남는지를 규정한 계약입니다. 각 글자에는 PostgreSQL의 구체적인 메커니즘이 대응됩니다.
+
+#### A.1 Atomicity(원자성) — 전부 아니면 전무
+
+트랜잭션은 전체가 커밋되거나 어떠한 관측 가능한 효과도 남기지 않습니다. 내부적으로 모든 변경은 트랜잭션 ID(`xid`)와 함께 먼저 **WAL(Write-Ahead Log)** 에 기록됩니다. `COMMIT`이 일어나면 단일 WAL 레코드가 그 `xid`를 commit으로 표시하고, `ROLLBACK`이나 충돌이 발생하면 그 레코드가 끝까지 쓰이지 않으므로 변경 사항은 영원히 누구에게도 보이지 않습니다(이후 `VACUUM`에 의해 회수). "절반만 보이는" 상태는 존재하지 않으며, visibility는 단일 바이트로 뒤집힙니다.
+
+#### A.2 Consistency(일관성) — 트랜잭션 경계에서 불변량 유지
+
+트랜잭션이 시작되기 전에 모든 무결성 제약(`NOT NULL`, `CHECK`, 외래 키, unique index, deferred constraint)을 만족했다면, 커밋 후에도 만족합니다. PostgreSQL은 행이 삽입되는 시점에(또는 `DEFERRABLE` 제약의 경우 commit 시점에) 제약을 검사합니다. 어느 하나라도 실패하면 트랜잭션 전체가 abort되며 — 이는 다시 Atomicity로 이어집니다.
+
+#### A.3 Isolation(격리성) — 동시 트랜잭션은 서로의 진행 중 상태를 보지 못함
+
+PostgreSQL은 **MVCC**(Multi-Version Concurrency Control)를 사용합니다. 모든 행 버전(row version)은 `xmin`(그 행을 생성한 `xid`)과 `xmax`(그 행을 삭제/대체한 `xid`)를 들고 다닙니다. 어떤 reader는 `xmin`이 commit되었고 *자신의 snapshot에서 보이며* `xmax`가 그렇지 않은 경우에만 그 행을 봅니다. 따라서 reader는 writer를 절대 막지 않으며, writer 또한 reader를 막지 않습니다 — 락 기반 시스템이 따라올 수 없는 속성입니다. 11번 레슨에서 자세히 다룹니다.
+
+#### A.4 Durability(영속성) — commit된 데이터는 충돌 후에도 살아남음
+
+`COMMIT`은 WAL 레코드가 디스크에 `fsync`될 때까지 반환하지 않습니다(설정 가능하지만 기본값이 그렇습니다). 1ms 후 서버 전원이 나가도, 재시작 시 WAL을 replay해서 commit된 모든 변경을 복원합니다. heap 파일 자체는 lazy하게 쓰입니다 — 영속성은 로그에서 오는 것이지, 테이블 파일에서 오는 것이 아닙니다.
 
 ### 간단한 계산
 
@@ -427,6 +394,14 @@ WHERE active = true;
 ---
 
 ## 8. 데이터베이스 생성 및 삭제
+
+### 이론: OID — 객체 식별자
+
+`pg_catalog`의 모든 객체는 4바이트 unsigned integer 주키(primary key)인 **OID**(Object Identifier)를 가집니다. `SELECT * FROM users`를 작성하면 parser는 *문자열* `"users"`를 executor에 넘기지 않습니다 — `pg_class` 행의 OID로 이름을 해석한 뒤, 이후 모든 단계에서 OID를 사용합니다.
+
+OID 덕분에 테이블 rename이 저렴합니다(`pg_class`의 한 행만 바뀌고, 이를 참조하는 인덱스/뷰/외래 키는 동일한 `relid`를 그대로 유지). 또 OID가 클러스터 단위가 아니라 데이터베이스 단위로 unique이기 때문에 cross-database 객체 참조가 허용되지 않는 이유이기도 합니다.
+
+사용자 테이블은 PostgreSQL 12부터 기본적으로 `OID` 시스템 컬럼을 갖지 않게 되었습니다(`WITH OIDS`는 deprecated). 시스템 카탈로그의 행은 여전히 OID를 가지며 의사 컬럼(pseudo-column) `oid`로 접근합니다 — `SELECT oid, datname FROM pg_database;`가 이를 읽는 표준적인 방법입니다.
 
 ### 데이터베이스 생성
 

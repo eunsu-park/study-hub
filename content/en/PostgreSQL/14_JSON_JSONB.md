@@ -21,8 +21,6 @@ Modern applications frequently deal with semi-structured data -- user preference
 
 ## Table of Contents
 
-Before the operators and functions, read [**Theory & Principles**](#theory--principles) — JSONB's binary parse-tree representation, GIN's inverted-index structure for containment queries, and the JSON path language semantics.
-
 1. [JSON vs JSONB](#1-json-vs-jsonb)
 2. [Storing JSON Data](#2-storing-json-data)
 3. [JSON Operators](#3-json-operators)
@@ -33,18 +31,9 @@ Before the operators and functions, read [**Theory & Principles**](#theory--prin
 
 ---
 
-## Theory & Principles
+## 1. JSON vs JSONB
 
-JSON support in PostgreSQL is not a thin wrapper over text. JSONB stores documents as a *parsed binary tree*, GIN indexes invert that tree into a per-key posting list, and the JSON path language (PG 12+) compiles into an executor that walks the tree without re-parsing. Understanding the on-disk shape of JSONB and the structure of a GIN index is what makes the difference between "a JSONB query that scans the whole table" and "a JSONB query that uses an index probe in microseconds".
-
-This section covers:
-
-- **(A)** The on-disk JSONB format: header, key-value pairs, sorting, and TOAST.
-- **(B)** GIN as inverted index: posting lists, the `jsonb_ops` vs `jsonb_path_ops` operator classes.
-- **(C)** The arrow/path operators (`->`, `->>`, `#>`, `#>>`) and the containment operator (`@>`).
-- **(D)** JSON path language and `jsonb_path_query` — declarative tree traversal.
-
-### A. JSONB On-Disk Format
+### Theory: JSONB On-Disk Format
 
 A JSON value (`{"a": 1, "b": [2, 3]}`) gets stored as JSONB by *parsing* it once and writing the parse tree in a compact binary format.
 
@@ -71,116 +60,6 @@ Compared to JSON-as-text, JSONB:
 #### A.2 TOAST and JSONB
 
 JSONB columns are TOAST-able (lesson 03 §C). Documents larger than ~2 KB are compressed and/or moved to the TOAST table. Crucial consequence: extracting a single key from a 1 MB document still requires reading and decompressing the entire document — there is no partial-tree access. Designs that store many tiny documents are usually faster than designs that store one giant document.
-
-### B. GIN — Inverted Index for JSONB
-
-A GIN (Generalized Inverted Index) on a JSONB column flips the structure: instead of "for each row, what does it contain", store "for each value, which rows contain it".
-
-#### B.1 The two operator classes
-
-PostgreSQL ships two GIN operator classes for JSONB:
-
-**`jsonb_ops`** (default) — indexes every key, every value, and every key:value pair.
-
-```
-For row 5: {"tags": ["red", "fast"], "color": "red"}
-GIN inserts entries for: 'tags', 'red', 'fast', 'color', 'tags':'red', 'tags':'fast', 'color':'red'
-```
-
-Supports `@>`, `?`, `?|`, `?&` operators. Bigger index, slower writes, but flexible.
-
-**`jsonb_path_ops`** — indexes only complete paths-to-leaf-values, hashed.
-
-```
-For row 5: {"tags": ["red", "fast"], "color": "red"}
-GIN inserts entries for: hash('tags'->'red'), hash('tags'->'fast'), hash('color'->'red')
-```
-
-Supports `@>` only (containment). Roughly 1/3 the size, 3× faster lookups for `@>` queries — but cannot answer "does this row have key X" (`?`).
-
-#### B.2 The lookup algorithm
-
-For `WHERE jsonb_col @> '{"color": "red"}'`:
-
-1. **Extract searchable items** from the query value: `'color', 'red', 'color':'red'` (or just `hash(color->red)` for `path_ops`).
-2. **Look up each item** in the GIN B-tree to get a posting list of row TIDs.
-3. **Intersect** the posting lists.
-4. For each surviving TID, **rechek** the actual row to confirm full containment (the index is over individual elements; AND-of-elements is not the same as containment, so verification is needed).
-
-The recheck step means GIN gives a *candidate set* — usually small enough that the recheck cost is negligible.
-
-### C. Arrow Operators and Containment
-
-The operators in this lesson break into two categories.
-
-#### C.1 Path extraction — `->`, `->>`, `#>`, `#>>`
-
-| Operator | Type returned | Meaning |
-|----------|---------------|---------|
-| `->` | jsonb | Get child by key (object) or by index (array) |
-| `->>` | text | Same, but cast result to text |
-| `#>` | jsonb | Get descendant via path array |
-| `#>>` | text | Same as `#>`, cast to text |
-
-```sql
-'{"a":{"b":1}}'::jsonb -> 'a'           -- {"b":1}    (jsonb)
-'{"a":{"b":1}}'::jsonb -> 'a' ->> 'b'   -- '1'        (text)
-'{"a":{"b":1}}'::jsonb #> '{a,b}'       -- 1          (jsonb)
-'{"a":{"b":1}}'::jsonb #>> '{a,b}'      -- '1'        (text)
-```
-
-These are `IMMUTABLE` and indexable as expression indexes. `CREATE INDEX ON t ((data->>'email'));` makes `WHERE data->>'email' = ?` use a B-tree.
-
-#### C.2 Containment and existence — `@>`, `?`, `?|`, `?&`
-
-| Operator | Meaning |
-|----------|---------|
-| `@>` | Left contains right (deep, semantic) |
-| `?` | Top-level key exists |
-| `?|` | Any of the listed keys exist |
-| `?&` | All of the listed keys exist |
-
-Containment `@>` is the workhorse. `'{"a":1, "b":2}'::jsonb @> '{"a":1}'::jsonb` is true because the left includes everything in the right. This uses GIN for speed.
-
-### D. JSON Path Language — `jsonb_path_query`
-
-PostgreSQL 12 added the SQL/JSON path language (the same one Oracle and the SQL standard use). A path expression compiles to an executor that walks the JSONB tree.
-
-#### D.1 Basic syntax
-
-```sql
-SELECT jsonb_path_query(
-    '{"users":[{"name":"Alice","age":30},{"name":"Bob","age":25}]}',
-    '$.users[*] ? (@.age > 28).name'
-);
--- Returns: "Alice"
-```
-
-- `$` — root of the document
-- `.users` — child by key
-- `[*]` — every array element
-- `? (predicate)` — filter
-- `@` — current item in a filter
-- `.name` — final extraction
-
-#### D.2 vs the arrow operators
-
-Arrow operators are simple but limited — one step at a time, no filtering. JSON path expresses the entire traversal as one declarative expression that the executor optimizes as a unit. For deeply nested or filtered queries, JSON path is both shorter and faster.
-
-### From Theory to the SQL Below
-
-Each of the following sections is one of these mechanisms made concrete:
-
-- **`json` vs `jsonb`** — text vs binary parse tree (§A).
-- **`->`, `->>`, `#>`, `#>>`** — path extraction (§C.1).
-- **`@>`, `?`, `?|`, `?&`** — containment and existence, accelerated by GIN (§B, §C.2).
-- **`CREATE INDEX ... USING gin (jsonb_col)`** — default `jsonb_ops`; flexible but big.
-- **`CREATE INDEX ... USING gin (jsonb_col jsonb_path_ops)`** — smaller, faster for `@>` only.
-- **`jsonb_path_query`, `jsonb_path_exists`, `@@`** — full SQL/JSON path language (§D).
-
----
-
-## 1. JSON vs JSONB
 
 ### 1.1 Type Comparison
 
@@ -316,6 +195,39 @@ SET attributes = jsonb_set(
 
 ## 3. JSON Operators
 
+### Theory: Arrow Operators and Containment
+
+The operators in this lesson break into two categories.
+
+#### C.1 Path extraction — `->`, `->>`, `#>`, `#>>`
+
+| Operator | Type returned | Meaning |
+|----------|---------------|---------|
+| `->` | jsonb | Get child by key (object) or by index (array) |
+| `->>` | text | Same, but cast result to text |
+| `#>` | jsonb | Get descendant via path array |
+| `#>>` | text | Same as `#>`, cast to text |
+
+```sql
+'{"a":{"b":1}}'::jsonb -> 'a'           -- {"b":1}    (jsonb)
+'{"a":{"b":1}}'::jsonb -> 'a' ->> 'b'   -- '1'        (text)
+'{"a":{"b":1}}'::jsonb #> '{a,b}'       -- 1          (jsonb)
+'{"a":{"b":1}}'::jsonb #>> '{a,b}'      -- '1'        (text)
+```
+
+These are `IMMUTABLE` and indexable as expression indexes. `CREATE INDEX ON t ((data->>'email'));` makes `WHERE data->>'email' = ?` use a B-tree.
+
+#### C.2 Containment and existence — `@>`, `?`, `?|`, `?&`
+
+| Operator | Meaning |
+|----------|---------|
+| `@>` | Left contains right (deep, semantic) |
+| `?` | Top-level key exists |
+| `?|` | Any of the listed keys exist |
+| `?&` | All of the listed keys exist |
+
+Containment `@>` is the workhorse. `'{"a":1, "b":2}'::jsonb @> '{"a":1}'::jsonb` is true because the left includes everything in the right. This uses GIN for speed.
+
 ### 3.1 Access Operators
 
 ```sql
@@ -424,6 +336,31 @@ WHERE attributes->'stock' = 'null'::jsonb;
 
 ## 4. JSON Functions
 
+### Theory: JSON Path Language — `jsonb_path_query`
+
+PostgreSQL 12 added the SQL/JSON path language (the same one Oracle and the SQL standard use). A path expression compiles to an executor that walks the JSONB tree.
+
+#### D.1 Basic syntax
+
+```sql
+SELECT jsonb_path_query(
+    '{"users":[{"name":"Alice","age":30},{"name":"Bob","age":25}]}',
+    '$.users[*] ? (@.age > 28).name'
+);
+-- Returns: "Alice"
+```
+
+- `$` — root of the document
+- `.users` — child by key
+- `[*]` — every array element
+- `? (predicate)` — filter
+- `@` — current item in a filter
+- `.name` — final extraction
+
+#### D.2 vs the arrow operators
+
+Arrow operators are simple but limited — one step at a time, no filtering. JSON path expresses the entire traversal as one declarative expression that the executor optimizes as a unit. For deeply nested or filtered queries, JSON path is both shorter and faster.
+
 ### 4.1 Extraction Functions
 
 ```sql
@@ -514,6 +451,43 @@ FROM products, jsonb_array_elements(attributes->'tags') AS elem;
 ---
 
 ## 5. Indexing and Performance
+
+### Theory: GIN — Inverted Index for JSONB
+
+A GIN (Generalized Inverted Index) on a JSONB column flips the structure: instead of "for each row, what does it contain", store "for each value, which rows contain it".
+
+#### B.1 The two operator classes
+
+PostgreSQL ships two GIN operator classes for JSONB:
+
+**`jsonb_ops`** (default) — indexes every key, every value, and every key:value pair.
+
+```
+For row 5: {"tags": ["red", "fast"], "color": "red"}
+GIN inserts entries for: 'tags', 'red', 'fast', 'color', 'tags':'red', 'tags':'fast', 'color':'red'
+```
+
+Supports `@>`, `?`, `?|`, `?&` operators. Bigger index, slower writes, but flexible.
+
+**`jsonb_path_ops`** — indexes only complete paths-to-leaf-values, hashed.
+
+```
+For row 5: {"tags": ["red", "fast"], "color": "red"}
+GIN inserts entries for: hash('tags'->'red'), hash('tags'->'fast'), hash('color'->'red')
+```
+
+Supports `@>` only (containment). Roughly 1/3 the size, 3× faster lookups for `@>` queries — but cannot answer "does this row have key X" (`?`).
+
+#### B.2 The lookup algorithm
+
+For `WHERE jsonb_col @> '{"color": "red"}'`:
+
+1. **Extract searchable items** from the query value: `'color', 'red', 'color':'red'` (or just `hash(color->red)` for `path_ops`).
+2. **Look up each item** in the GIN B-tree to get a posting list of row TIDs.
+3. **Intersect** the posting lists.
+4. For each surviving TID, **rechek** the actual row to confirm full containment (the index is over individual elements; AND-of-elements is not the same as containment, so verification is needed).
+
+The recheck step means GIN gives a *candidate set* — usually small enough that the recheck cost is negligible.
 
 ### 5.1 GIN Index
 

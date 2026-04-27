@@ -21,48 +21,27 @@
 
 테스트되지 않은 백업 전략을 가진 데이터베이스는 재앙을 기다리는 것과 다름없습니다. 하드웨어 장애, 인적 오류, 소프트웨어 버그는 언제든지 발생할 수 있으며, 그럴 때 백업은 사소한 불편과 치명적인 데이터 손실을 가르는 차이가 됩니다. 백업 외에도 성능 모니터링, 연결 관리, 유지보수 작업 등의 일상적인 운영(day-to-day operations)은 PostgreSQL 설치 환경을 건강하고 응답성 있게 유지합니다. 이 레슨에서는 모든 PostgreSQL 실무자에게 필요한 핵심 DBA 툴킷을 다룹니다.
 
-백업 명령어로 들어가기 전, [**이론과 원리**](#이론과-원리) 절을 먼저 읽으세요 — WAL redo 알고리즘, Point-In-Time Recovery(PITR)이 실제로 무엇을 replay하는지, 그리고 logical(`pg_dump`)과 physical(`pg_basebackup`) 백업의 차이를 다룹니다.
+---
+
+## 1. 백업의 중요성
+
+데이터베이스 백업은 데이터 손실을 방지하는 가장 중요한 작업입니다.
+
+```
+┌──────────────────────────────────────────────────────────┐
+│                    백업 전략                              │
+├──────────────────────────────────────────────────────────┤
+│  • 정기 백업: 매일/매주 전체 백업                         │
+│  • 증분 백업: 변경분만 백업 (WAL 아카이빙)               │
+│  • 복제: 실시간 복제 서버 구성                           │
+└──────────────────────────────────────────────────────────┘
+```
 
 ---
 
-## 이론과 원리
+## 2. pg_dump - 논리적 백업
 
-백업은 그것을 사용할 수 있는 *복구* 알고리즘과 짝을 이룰 때만 유용합니다. PostgreSQL에는 완전히 다른 두 백업 철학이 있습니다 — **logical**(CREATE+INSERT의 SQL 스크립트)과 **physical**(데이터 디렉터리의 binary copy) — 그리고 각각 다른 RPO/RTO tradeoff를 가진 다른 메커니즘으로 복구합니다. 둘 모두의 기반은 WAL(02번 레슨 §D)이며, 그 redo 알고리즘이 알려진 양호 base 이후의 모든 commit된 변경을 replay함으로써 Point-In-Time Recovery를 가능하게 합니다. 백업에 무엇이 있는지, WAL이 무엇을 담고 있는지, `pg_basebackup`과 `pg_dump`가 실제로 무엇을 캡처하는지 이해하는 것이 "백업이 있다"와 "복구할 수 있다"의 차이입니다.
-
-이 절에서 다루는 내용:
-
-- **(A)** WAL redo — PostgreSQL이 WAL 레코드를 replay해서 heap을 재구성하는 방식.
-- **(B)** `pg_dump`로 logical 백업 — 무엇을 캡처하고, 무엇을 건너뛰고, 언제 데이터를 잃는지.
-- **(C)** `pg_basebackup`으로 physical 백업 — 파일 단위 copy + WAL streaming + 일관성 보장.
-- **(D)** Point-In-Time Recovery(PITR) — base 백업 + archived WAL + 복구 target time.
-
-### A. WAL Redo 알고리즘
-
-02번 레슨 §D는 WAL을 "로그가 먼저 쓰이고, 데이터 파일은 lazy하게 갱신됨"으로 소개. 복구는 그 역과정입니다.
-
-#### A.1 무엇이 replay되는가
-
-PostgreSQL이 충돌 후 시작될 때(또는 primary로부터 WAL을 읽는 standby로서), **redo 루프**를 실행:
-
-```
-position = 마지막으로 완료된 checkpoint의 LSN
-while position에 더 많은 WAL 레코드가 있는 동안:
-    record = read_wal(position)
-    apply(record)         # idempotent — 레코드 재적용은 안전
-    position = record.next_lsn
-```
-
-각 WAL 레코드는 *물리적* 페이지 변경을 기술. 적용은 기록된 바이트를 기록된 페이지 offset에 쓰는 것. 적용은 **idempotent** — 변경이 이미 페이지에 있으면(충돌 전 페이지가 쓰였기 때문) 재적용은 같은 바이트 패턴을 만듭니다. 그래서 WAL replay가 디스크에 정확히 무엇이 닿았는지 알 필요 없이 "마지막 checkpoint"부터 안전하게 시작할 수 있습니다.
-
-#### A.2 Full-page image
-
-checkpoint 이후, 각 페이지를 건드리는 *첫* WAL 레코드는 diff뿐 아니라 **8 KB 페이지 전체 image**를 담음. 이는 torn write(전원이 나갈 때 부분적으로 쓰인 페이지)로부터 보호 — full-page image는 디스크에 무엇이 있든 페이지를 처음부터 재구성할 수 있음. 비용은 checkpoint 직후의 상당한 WAL 양 burst — `wal_compression`이 이를 줄임.
-
-#### A.3 복구 종료
-
-복구는 WAL의 끝에서 멈춤. 충돌 복구는 `pg_wal/`의 현재 WAL 끝. PITR는 target(`recovery_target_time`, `recovery_target_xid` 등)을 지정하고 그 지점에 도달하면 복구가 멈춤. 멈춘 뒤 데이터베이스가 연결을 위해 열림.
-
-### B. Logical 백업 — `pg_dump`
+### 이론: Logical 백업 — `pg_dump`
 
 `pg_dump`는 일반 client처럼 서버에 연결해서, 빈 데이터베이스에 대해 실행하면 스키마와 데이터를 재생성하는 SQL statement 시퀀스를 생성.
 
@@ -93,93 +72,6 @@ checkpoint 이후, 각 페이지를 건드리는 *첫* WAL 레코드는 diff뿐 
 `pg_dump`는 단일 REPEATABLE READ 트랜잭션(또는 `--serializable-deferrable`로 SERIALIZABLE)에서 실행되므로, dump는 단일 snapshot을 표현 — dump 동안 데이터베이스가 수정되어도 내부적으로 일관됨. dump는 "dump 시작 시점"입니다. dump 중 commit된 것은 출력에 *없음*.
 
 이것이 근본적 tradeoff — logical 백업은 느림(테이블당 큰 SELECT 1번 + 모든 애플리케이션 수준 행 포맷팅)이고 시간 차원에서 손실(PITR 없음), 그러나 버전 portable, 포맷 portable, on-disk 손상에서 살아남음.
-
-### C. Physical 백업 — `pg_basebackup`
-
-`pg_basebackup`은 서버가 실행 중일 때 `PGDATA` 디렉터리 전체를 복사. copy 동안 WAL도 stream해서 결과 백업이 일관되게 함.
-
-#### C.1 메커니즘
-
-1. **Replication 프로토콜로 연결**(replication 가능 role 필요).
-2. **Primary에 `pg_start_backup('label');` 알림**(또는 내부 등가의 `--checkpoint=fast` 모드 실행).
-3. **`PGDATA/` 아래 모든 파일을 destination에 복사**.
-4. **복사 중 생성된 WAL 레코드를 병렬 stream**.
-5. **Primary에 `pg_stop_backup();` 알리고**, stop 시점의 WAL position 캡처.
-6. 결과는 stop position까지의 WAL과 결합되어 self-consistent 상태로 replay 가능한 `PGDATA` snapshot.
-
-복원된 데이터베이스는 `pg_stop_backup()`의 LSN — 그 시점까지 commit된 모든 트랜잭션 포함.
-
-#### C.2 무엇을 캡처
-
-- `PGDATA`의 모든 것 — heap, 인덱스, 시스템 카탈로그, stop까지의 WAL, 설정 파일.
-- 테이블스페이스(destination에서 재배치하려면 `--tablespace-mapping` 사용).
-
-이는 복구 시점 source의 데이터 디렉터리와 byte-for-byte 동일. 복원은 "fresh `PGDATA`에 파일을 추출하고 서버 시작" — logical 복원보다 훨씬 빠름.
-
-#### C.3 한계
-
-- **메이저 버전 동일만**. on-disk 포맷이 PG 14와 PG 15 사이에 바뀜, 한 메이저 버전의 `pg_basebackup`을 다른 메이저 버전으로 복원 불가.
-- **아키텍처와 OS endianness 동일**(대부분).
-- **부분 선택 불가**. 클러스터 전체, 모든 데이터베이스, 모든 테이블.
-
-### D. Point-In-Time Recovery (PITR)
-
-PITR는 physical base backup과 WAL 파일의 연속 archive를 결합해서 base 백업 *이후의 어떤* 시점으로든 복구.
-
-#### D.1 설정
-
-1. **WAL archiving 활성화**. `archive_mode = on`과 `archive_command = 'cp %p /archive/%f'`(또는 S3 push 등) 설정. 가득 차는 모든 WAL segment가 archive에 복사됨.
-2. **`pg_basebackup`으로 base 백업**. 시작 시간 기록.
-3. **WAL이 생성되는 대로 연속 archive**. archive는 시간이 지나면서 커지지만 각 segment는 작음(기본 16 MB).
-
-#### D.2 특정 시점으로 복구
-
-"어제 14:32:00"으로 복구하려면:
-
-1. base 백업을 fresh `PGDATA`에 복원.
-2. `restore_command = 'cp /archive/%f %p'`와 `recovery_target_time = '2026-04-25 14:32:00'` 설정.
-3. 서버 시작. PostgreSQL이 base 백업의 LSN부터 archive의 WAL을 replay하고, target time에서 멈추고, 데이터베이스를 엶.
-
-"어떤 시점"의 granularity는 WAL 레코드 단위 — 사실상 COMMIT 단위.
-
-#### D.3 RPO와 RTO
-
-- **PITR의 RPO(Recovery Point Objective)** — WAL archive 간격만큼 낮음. `archive_timeout = 60s`이면 최대 60초의 작업을 잃을 수 있음.
-- **PITR의 RTO(Recovery Time Objective)** — base 백업 복사 시간 + 그 이후 WAL replay 시간. 1 TB base + 24시간 WAL이면 시간 단위가 될 수 있음.
-
-더 짧은 RTO를 위해 **streaming replication**(16번 레슨) 사용 — hot standby가 이미 떠 있고 WAL을 연속 replay 중이므로, failover가 초 단위.
-
-### 이론에서 아래 명령으로
-
-이어지는 각 절은 위 메커니즘이 구체화된 형태입니다:
-
-- **`pg_dump`, `pg_dumpall`** — logical 백업, 버전 portable, PITR 없음 (§B).
-- **`pg_restore`** — `pg_dump` archive를 target 데이터베이스에 replay.
-- **`pg_basebackup`** — physical 백업, 메이저 버전 동일만, 빠른 복원 (§C).
-- **WAL archiving (`archive_mode`, `archive_command`)** — PITR의 기반 (§D.1).
-- **`recovery_target_time`, `recovery_target_xid`** — replay를 멈출 지점 선택 (§D.2).
-- **`VACUUM`, `ANALYZE`, `REINDEX`** — 4번과 9번 레슨에서 다룬 운영 유지보수.
-- **`pg_stat_*` view** — 활동, lock, 연결의 runtime 모니터링.
-
----
-
-## 1. 백업의 중요성
-
-데이터베이스 백업은 데이터 손실을 방지하는 가장 중요한 작업입니다.
-
-```
-┌──────────────────────────────────────────────────────────┐
-│                    백업 전략                              │
-├──────────────────────────────────────────────────────────┤
-│  • 정기 백업: 매일/매주 전체 백업                         │
-│  • 증분 백업: 변경분만 백업 (WAL 아카이빙)               │
-│  • 복제: 실시간 복제 서버 구성                           │
-└──────────────────────────────────────────────────────────┘
-```
-
----
-
-## 2. pg_dump - 논리적 백업
 
 ### 기본 백업
 
@@ -260,6 +152,33 @@ pg_dumpall -U postgres --roles-only > roles.sql
 
 ## 4. pg_restore - 복원
 
+### 이론: Point-In-Time Recovery (PITR)
+
+PITR는 physical base backup과 WAL 파일의 연속 archive를 결합해서 base 백업 *이후의 어떤* 시점으로든 복구.
+
+#### D.1 설정
+
+1. **WAL archiving 활성화**. `archive_mode = on`과 `archive_command = 'cp %p /archive/%f'`(또는 S3 push 등) 설정. 가득 차는 모든 WAL segment가 archive에 복사됨.
+2. **`pg_basebackup`으로 base 백업**. 시작 시간 기록.
+3. **WAL이 생성되는 대로 연속 archive**. archive는 시간이 지나면서 커지지만 각 segment는 작음(기본 16 MB).
+
+#### D.2 특정 시점으로 복구
+
+"어제 14:32:00"으로 복구하려면:
+
+1. base 백업을 fresh `PGDATA`에 복원.
+2. `restore_command = 'cp /archive/%f %p'`와 `recovery_target_time = '2026-04-25 14:32:00'` 설정.
+3. 서버 시작. PostgreSQL이 base 백업의 LSN부터 archive의 WAL을 replay하고, target time에서 멈추고, 데이터베이스를 엶.
+
+"어떤 시점"의 granularity는 WAL 레코드 단위 — 사실상 COMMIT 단위.
+
+#### D.3 RPO와 RTO
+
+- **PITR의 RPO(Recovery Point Objective)** — WAL archive 간격만큼 낮음. `archive_timeout = 60s`이면 최대 60초의 작업을 잃을 수 있음.
+- **PITR의 RTO(Recovery Time Objective)** — base 백업 복사 시간 + 그 이후 WAL replay 시간. 1 TB base + 24시간 WAL이면 시간 단위가 될 수 있음.
+
+더 짧은 RTO를 위해 **streaming replication**(16번 레슨) 사용 — hot standby가 이미 떠 있고 WAL을 연속 replay 중이므로, failover가 초 단위.
+
 ### SQL 파일 복원
 
 ```bash
@@ -325,6 +244,34 @@ pg_basebackup -D /backup/path -U postgres -Ft -z -P
 # -z: gzip 압축
 # -P: 진행률 표시
 ```
+
+### 이론: Physical 백업 — `pg_basebackup`
+
+`pg_basebackup`은 서버가 실행 중일 때 `PGDATA` 디렉터리 전체를 복사. copy 동안 WAL도 stream해서 결과 백업이 일관되게 함.
+
+#### C.1 메커니즘
+
+1. **Replication 프로토콜로 연결**(replication 가능 role 필요).
+2. **Primary에 `pg_start_backup('label');` 알림**(또는 내부 등가의 `--checkpoint=fast` 모드 실행).
+3. **`PGDATA/` 아래 모든 파일을 destination에 복사**.
+4. **복사 중 생성된 WAL 레코드를 병렬 stream**.
+5. **Primary에 `pg_stop_backup();` 알리고**, stop 시점의 WAL position 캡처.
+6. 결과는 stop position까지의 WAL과 결합되어 self-consistent 상태로 replay 가능한 `PGDATA` snapshot.
+
+복원된 데이터베이스는 `pg_stop_backup()`의 LSN — 그 시점까지 commit된 모든 트랜잭션 포함.
+
+#### C.2 무엇을 캡처
+
+- `PGDATA`의 모든 것 — heap, 인덱스, 시스템 카탈로그, stop까지의 WAL, 설정 파일.
+- 테이블스페이스(destination에서 재배치하려면 `--tablespace-mapping` 사용).
+
+이는 복구 시점 source의 데이터 디렉터리와 byte-for-byte 동일. 복원은 "fresh `PGDATA`에 파일을 추출하고 서버 시작" — logical 복원보다 훨씬 빠름.
+
+#### C.3 한계
+
+- **메이저 버전 동일만**. on-disk 포맷이 PG 14와 PG 15 사이에 바뀜, 한 메이저 버전의 `pg_basebackup`을 다른 메이저 버전으로 복원 불가.
+- **아키텍처와 OS endianness 동일**(대부분).
+- **부분 선택 불가**. 클러스터 전체, 모든 데이터베이스, 모든 테이블.
 
 ### WAL 아카이빙 설정
 
@@ -500,6 +447,32 @@ FROM pg_stat_database;
 ---
 
 ## 9. 유지보수
+
+### 이론: WAL Redo 알고리즘
+
+02번 레슨 §D는 WAL을 "로그가 먼저 쓰이고, 데이터 파일은 lazy하게 갱신됨"으로 소개. 복구는 그 역과정입니다.
+
+#### A.1 무엇이 replay되는가
+
+PostgreSQL이 충돌 후 시작될 때(또는 primary로부터 WAL을 읽는 standby로서), **redo 루프**를 실행:
+
+```
+position = 마지막으로 완료된 checkpoint의 LSN
+while position에 더 많은 WAL 레코드가 있는 동안:
+    record = read_wal(position)
+    apply(record)         # idempotent — 레코드 재적용은 안전
+    position = record.next_lsn
+```
+
+각 WAL 레코드는 *물리적* 페이지 변경을 기술. 적용은 기록된 바이트를 기록된 페이지 offset에 쓰는 것. 적용은 **idempotent** — 변경이 이미 페이지에 있으면(충돌 전 페이지가 쓰였기 때문) 재적용은 같은 바이트 패턴을 만듭니다. 그래서 WAL replay가 디스크에 정확히 무엇이 닿았는지 알 필요 없이 "마지막 checkpoint"부터 안전하게 시작할 수 있습니다.
+
+#### A.2 Full-page image
+
+checkpoint 이후, 각 페이지를 건드리는 *첫* WAL 레코드는 diff뿐 아니라 **8 KB 페이지 전체 image**를 담음. 이는 torn write(전원이 나갈 때 부분적으로 쓰인 페이지)로부터 보호 — full-page image는 디스크에 무엇이 있든 페이지를 처음부터 재구성할 수 있음. 비용은 checkpoint 직후의 상당한 WAL 양 burst — `wal_compression`이 이를 줄임.
+
+#### A.3 복구 종료
+
+복구는 WAL의 끝에서 멈춤. 충돌 복구는 `pg_wal/`의 현재 WAL 끝. PITR는 target(`recovery_target_time`, `recovery_target_xid` 등)을 지정하고 그 지점에 도달하면 복구가 멈춤. 멈춘 뒤 데이터베이스가 연결을 위해 열림.
 
 ### VACUUM
 

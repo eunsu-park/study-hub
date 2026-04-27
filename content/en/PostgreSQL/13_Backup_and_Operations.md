@@ -21,48 +21,27 @@ After completing this lesson, you will be able to:
 
 A database without a tested backup strategy is a disaster waiting to happen. Hardware failures, human errors, and software bugs can strike at any time, and when they do, your backup is the difference between a minor inconvenience and catastrophic data loss. Beyond backups, day-to-day operations -- monitoring performance, managing connections, and running maintenance tasks -- keep your PostgreSQL installation healthy and responsive. This lesson covers the essential DBA toolkit that every PostgreSQL practitioner needs.
 
-Before the backup commands, read [**Theory & Principles**](#theory--principles) — the WAL redo algorithm, what Point-In-Time Recovery (PITR) actually replays, and the difference between logical (`pg_dump`) and physical (`pg_basebackup`) backups.
+---
+
+## 1. Importance of Backup
+
+Database backup is the most important task to prevent data loss.
+
+```
+┌──────────────────────────────────────────────────────────┐
+│                    Backup Strategy                        │
+├──────────────────────────────────────────────────────────┤
+│  • Regular backups: Daily/weekly full backup              │
+│  • Incremental backups: WAL archiving                     │
+│  • Replication: Real-time replica servers                 │
+└──────────────────────────────────────────────────────────┘
+```
 
 ---
 
-## Theory & Principles
+## 2. pg_dump - Logical Backup
 
-A backup is only useful when paired with a *recovery* algorithm that can use it. PostgreSQL has two completely different backup philosophies — **logical** (a SQL script of CREATE+INSERT) and **physical** (a binary copy of the data directory) — and they recover via different mechanisms with different RPO/RTO tradeoffs. Underlying both is the WAL (lesson 02 §D), whose redo algorithm makes Point-In-Time Recovery possible by replaying every committed change since a known-good base. Understanding what is in your backup, what your WAL contains, and what `pg_basebackup` vs `pg_dump` actually capture is the difference between "we have backups" and "we can recover".
-
-This section covers:
-
-- **(A)** WAL redo: how PostgreSQL replays WAL records to reconstruct the heap.
-- **(B)** Logical backup with `pg_dump`: what it captures, what it skips, and when it loses data.
-- **(C)** Physical backup with `pg_basebackup`: file-level copy + WAL streaming + the consistency guarantees.
-- **(D)** Point-In-Time Recovery (PITR): base backup + archived WAL + recovery target time.
-
-### A. The WAL Redo Algorithm
-
-Lesson 02 §D introduced the WAL as "the log is written first, the data file is updated lazily". Recovery is the inverse process.
-
-#### A.1 What is replayed
-
-When PostgreSQL starts up after a crash (or as a standby reading WAL from a primary), it runs the **redo loop**:
-
-```
-position = LSN of last completed checkpoint
-while WAL has more records at position:
-    record = read_wal(position)
-    apply(record)         # idempotent — re-applying a record is safe
-    position = record.next_lsn
-```
-
-Each WAL record describes a *physical* page change. Applying it means writing the recorded bytes to the recorded page offset. The application is **idempotent** — if the change is already on the page (because the page was written before crash), re-applying produces the same byte pattern. This is why WAL replay can safely start from "the last checkpoint" rather than needing to know exactly what made it to disk.
-
-#### A.2 Full-page images
-
-After a checkpoint, the *first* WAL record that touches each page contains the **entire 8 KB page image**, not just the diff. This protects against torn writes (a page partially written when power was lost): full-page images can rebuild the page from scratch, regardless of what was on disk. The cost is significant WAL volume bursts right after checkpoints — `wal_compression` reduces this.
-
-#### A.3 Recovery termination
-
-Recovery stops at the end of the WAL. For crash recovery, that is wherever the WAL currently ends in `pg_wal/`. For PITR, you specify a target (`recovery_target_time`, `recovery_target_xid`, etc.) and recovery stops when it reaches that point. After stopping, the database opens for connections.
-
-### B. Logical Backup — `pg_dump`
+### Theory: Logical Backup — `pg_dump`
 
 `pg_dump` connects to the server like any client and produces a sequence of SQL statements that, when executed against an empty database, recreate the schema and data.
 
@@ -93,93 +72,6 @@ Output formats:
 `pg_dump` runs in a single REPEATABLE READ transaction (or SERIALIZABLE with `--serializable-deferrable`), so the dump represents a single snapshot — internally consistent, even if the database is being modified during the dump. The dump is "as of dump start". Anything committed during the dump is *not* in the output.
 
 This is the fundamental tradeoff: logical backups are slow (one big SELECT per table, plus all the application-level row formatting) and lossy in the time dimension (no PITR), but they are version-portable, format-portable, and survive on-disk corruption.
-
-### C. Physical Backup — `pg_basebackup`
-
-`pg_basebackup` copies the entire `PGDATA` directory while the server is running. It also streams WAL during the copy so the resulting backup is consistent.
-
-#### C.1 The mechanism
-
-1. **Connect via the replication protocol** (requires a replication-capable role).
-2. **Tell the primary** `pg_start_backup('label');` (or run in `--checkpoint=fast` mode for an internal equivalent).
-3. **Copy every file** under `PGDATA/` to the destination.
-4. **Stream WAL records** generated during the copy in parallel.
-5. **Tell the primary** `pg_stop_backup();` and capture the WAL position at stop.
-6. The result is a `PGDATA` snapshot that, combined with the WAL up to the stop position, can replay to a self-consistent state.
-
-The recovered database is at the LSN of `pg_stop_backup()` — every committed transaction up to that point is included.
-
-#### C.2 What it captures
-
-- Everything in `PGDATA`: heap, indexes, system catalogs, WAL up to stop, configuration files.
-- Tablespaces (use `--tablespace-mapping` to relocate them on the destination).
-
-This is byte-for-byte identical to the source's data directory at recovery time. Restoration is "extract files into a fresh `PGDATA`, start the server" — much faster than logical restore.
-
-#### C.3 Limitations
-
-- **Same major version only**. The on-disk format changes between PG 14 and PG 15; you cannot restore a `pg_basebackup` from one major version into another.
-- **Same architecture and OS endianness** (mostly).
-- **Cannot select subsets**. It is the entire cluster, all databases, all tables.
-
-### D. Point-In-Time Recovery (PITR)
-
-PITR combines a physical base backup with a continuous archive of WAL files to recover to *any* point in time after the base backup.
-
-#### D.1 Setting up
-
-1. **Enable WAL archiving**. Set `archive_mode = on` and `archive_command = 'cp %p /archive/%f'` (or push to S3, etc.). Every WAL segment that fills up is copied to the archive.
-2. **Take a base backup** with `pg_basebackup`. Record the start time.
-3. **Continuously archive WAL** as it is generated. The archive grows over time but each segment is small (16 MB by default).
-
-#### D.2 Recovering to a specific time
-
-To recover to "yesterday at 14:32:00":
-
-1. Restore the base backup to a fresh `PGDATA`.
-2. Set `restore_command = 'cp /archive/%f %p'` and `recovery_target_time = '2026-04-25 14:32:00'`.
-3. Start the server. PostgreSQL replays WAL from the archive starting at the base backup's LSN, stops at the target time, and opens the database.
-
-The granularity of "any point in time" is per-WAL-record — effectively per-COMMIT.
-
-#### D.3 RPO and RTO
-
-- **RPO (Recovery Point Objective)** with PITR: as low as the WAL archive interval. With `archive_timeout = 60s`, you can lose at most 60 seconds of work.
-- **RTO (Recovery Time Objective)** with PITR: time to copy the base backup + time to replay the WAL since then. For a 1 TB base + 24 hours of WAL, this can be hours.
-
-For tighter RTO, use **streaming replication** (lesson 16) — a hot standby is already up and replaying WAL continuously, so failover is seconds.
-
-### From Theory to the Commands Below
-
-Each of the following sections is one of these mechanisms made concrete:
-
-- **`pg_dump`, `pg_dumpall`** — logical backup, version-portable, no PITR (§B).
-- **`pg_restore`** — replays a `pg_dump` archive into a target database.
-- **`pg_basebackup`** — physical backup, same major version only, fast restore (§C).
-- **WAL archiving (`archive_mode`, `archive_command`)** — the foundation of PITR (§D.1).
-- **`recovery_target_time`, `recovery_target_xid`** — choose what point to stop replay at (§D.2).
-- **`VACUUM`, `ANALYZE`, `REINDEX`** — operational maintenance covered in lessons 4 and 9.
-- **`pg_stat_*` views** — runtime monitoring of activity, locks, connections.
-
----
-
-## 1. Importance of Backup
-
-Database backup is the most important task to prevent data loss.
-
-```
-┌──────────────────────────────────────────────────────────┐
-│                    Backup Strategy                        │
-├──────────────────────────────────────────────────────────┤
-│  • Regular backups: Daily/weekly full backup              │
-│  • Incremental backups: WAL archiving                     │
-│  • Replication: Real-time replica servers                 │
-└──────────────────────────────────────────────────────────┘
-```
-
----
-
-## 2. pg_dump - Logical Backup
 
 ### Basic Backup
 
@@ -260,6 +152,33 @@ pg_dumpall -U postgres --roles-only > roles.sql
 
 ## 4. pg_restore - Restore
 
+### Theory: Point-In-Time Recovery (PITR)
+
+PITR combines a physical base backup with a continuous archive of WAL files to recover to *any* point in time after the base backup.
+
+#### D.1 Setting up
+
+1. **Enable WAL archiving**. Set `archive_mode = on` and `archive_command = 'cp %p /archive/%f'` (or push to S3, etc.). Every WAL segment that fills up is copied to the archive.
+2. **Take a base backup** with `pg_basebackup`. Record the start time.
+3. **Continuously archive WAL** as it is generated. The archive grows over time but each segment is small (16 MB by default).
+
+#### D.2 Recovering to a specific time
+
+To recover to "yesterday at 14:32:00":
+
+1. Restore the base backup to a fresh `PGDATA`.
+2. Set `restore_command = 'cp /archive/%f %p'` and `recovery_target_time = '2026-04-25 14:32:00'`.
+3. Start the server. PostgreSQL replays WAL from the archive starting at the base backup's LSN, stops at the target time, and opens the database.
+
+The granularity of "any point in time" is per-WAL-record — effectively per-COMMIT.
+
+#### D.3 RPO and RTO
+
+- **RPO (Recovery Point Objective)** with PITR: as low as the WAL archive interval. With `archive_timeout = 60s`, you can lose at most 60 seconds of work.
+- **RTO (Recovery Time Objective)** with PITR: time to copy the base backup + time to replay the WAL since then. For a 1 TB base + 24 hours of WAL, this can be hours.
+
+For tighter RTO, use **streaming replication** (lesson 16) — a hot standby is already up and replaying WAL continuously, so failover is seconds.
+
 ### Restoring SQL Files
 
 ```bash
@@ -325,6 +244,34 @@ pg_basebackup -D /backup/path -U postgres -Ft -z -P
 # -z: gzip compression
 # -P: Show progress
 ```
+
+### Theory: Physical Backup — `pg_basebackup`
+
+`pg_basebackup` copies the entire `PGDATA` directory while the server is running. It also streams WAL during the copy so the resulting backup is consistent.
+
+#### C.1 The mechanism
+
+1. **Connect via the replication protocol** (requires a replication-capable role).
+2. **Tell the primary** `pg_start_backup('label');` (or run in `--checkpoint=fast` mode for an internal equivalent).
+3. **Copy every file** under `PGDATA/` to the destination.
+4. **Stream WAL records** generated during the copy in parallel.
+5. **Tell the primary** `pg_stop_backup();` and capture the WAL position at stop.
+6. The result is a `PGDATA` snapshot that, combined with the WAL up to the stop position, can replay to a self-consistent state.
+
+The recovered database is at the LSN of `pg_stop_backup()` — every committed transaction up to that point is included.
+
+#### C.2 What it captures
+
+- Everything in `PGDATA`: heap, indexes, system catalogs, WAL up to stop, configuration files.
+- Tablespaces (use `--tablespace-mapping` to relocate them on the destination).
+
+This is byte-for-byte identical to the source's data directory at recovery time. Restoration is "extract files into a fresh `PGDATA`, start the server" — much faster than logical restore.
+
+#### C.3 Limitations
+
+- **Same major version only**. The on-disk format changes between PG 14 and PG 15; you cannot restore a `pg_basebackup` from one major version into another.
+- **Same architecture and OS endianness** (mostly).
+- **Cannot select subsets**. It is the entire cluster, all databases, all tables.
 
 ### WAL Archiving Setup
 
@@ -500,6 +447,32 @@ FROM pg_stat_database;
 ---
 
 ## 9. Maintenance
+
+### Theory: The WAL Redo Algorithm
+
+Lesson 02 §D introduced the WAL as "the log is written first, the data file is updated lazily". Recovery is the inverse process.
+
+#### A.1 What is replayed
+
+When PostgreSQL starts up after a crash (or as a standby reading WAL from a primary), it runs the **redo loop**:
+
+```
+position = LSN of last completed checkpoint
+while WAL has more records at position:
+    record = read_wal(position)
+    apply(record)         # idempotent — re-applying a record is safe
+    position = record.next_lsn
+```
+
+Each WAL record describes a *physical* page change. Applying it means writing the recorded bytes to the recorded page offset. The application is **idempotent** — if the change is already on the page (because the page was written before crash), re-applying produces the same byte pattern. This is why WAL replay can safely start from "the last checkpoint" rather than needing to know exactly what made it to disk.
+
+#### A.2 Full-page images
+
+After a checkpoint, the *first* WAL record that touches each page contains the **entire 8 KB page image**, not just the diff. This protects against torn writes (a page partially written when power was lost): full-page images can rebuild the page from scratch, regardless of what was on disk. The cost is significant WAL volume bursts right after checkpoints — `wal_compression` reduces this.
+
+#### A.3 Recovery termination
+
+Recovery stops at the end of the WAL. For crash recovery, that is wherever the WAL currently ends in `pg_wal/`. For PITR, you specify a target (`recovery_target_time`, `recovery_target_xid`, etc.) and recovery stops when it reaches that point. After stopping, the database opens for connections.
 
 ### VACUUM
 

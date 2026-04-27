@@ -21,151 +21,6 @@
 
 트리거(Trigger)를 사용하면 비즈니스 규칙을 데이터베이스 계층에 직접 내장할 수 있어, 감사 추적 유지, 데이터 유효성 검사, 파생 컬럼 갱신 같은 중요한 로직이 데이터 변경 시 자동으로 실행됩니다. 모든 애플리케이션이 올바른 함수를 호출하는 것을 기억하는 대신, 데이터베이스 자체가 일관성을 강제합니다. 이는 트리거를 모든 운영 PostgreSQL 시스템에서 데이터 무결성(Data Integrity)을 위한 필수 도구로 만듭니다.
 
-문법으로 들어가기 전, [**이론과 원리**](#이론과-원리) 절을 먼저 읽으세요 — row-level vs statement-level 구분, BEFORE/AFTER timing 규칙, `NEW`와 `OLD`가 실제로 무엇을 담고 있는지, 그리고 트리거가 호출자로부터 상속하는 트랜잭션 scope를 다룹니다.
-
----
-
-## 이론과 원리
-
-트리거는 애플리케이션 코드의 callback처럼 보이지만, 근본적으로 다른 환경에서 실행됩니다. 자기를 발사한 statement와 같은 트랜잭션 안에서 실행되고, 같은 MVCC snapshot을 보고, 곧 쓰일 행을 수정(BEFORE)하거나 방금 쓰인 행에 반응(AFTER)할 수 있으며, 행 수에 무관하게 *영향받은 행마다 1번* 또는 *statement당 1번* 실행될 수 있습니다. timing(BEFORE/AFTER), level(ROW/STATEMENT), event(INSERT/UPDATE/DELETE/TRUNCATE)의 선택이 24가지 트리거 종류를 만들고 — 트리거 코드의 명백해 보이는 버그 대부분이 잘못된 조합 선택에서 옵니다.
-
-이 절에서 다루는 내용:
-
-- **(A)** 12-cell 트리거 매트릭스 — BEFORE/AFTER × ROW/STATEMENT × INSERT/UPDATE/DELETE.
-- **(B)** 각 cell에서 `NEW`와 `OLD`가 무엇이고, BEFORE ROW 트리거가 어떻게 쓰이는 내용을 바꿀 수 있는지.
-- **(C)** 트리거와 트랜잭션 scope — 같은 xact, 같은 snapshot, 같은 lock, deferred vs immediate.
-- **(D)** 트리거 순서, 재귀, `WHEN` 술어.
-
-### A. 트리거 매트릭스
-
-두 timing × 두 level × 네 event = 잠재적으로 16 조합, 그러나 TRUNCATE는 statement-level에서만 발사되므로 14 valid cell. 가장 흔한 12개:
-
-|       | INSERT | UPDATE | DELETE |
-|-------|--------|--------|--------|
-| **BEFORE ROW** | NEW 존재, NEW 수정 가능, 행을 건너뛰려면 NULL 반환 | NEW + OLD, NEW 수정 가능 | OLD 존재, delete를 abort하려면 NULL 반환 |
-| **AFTER ROW** | NEW 동결 | NEW + OLD 동결 | OLD 동결 |
-| **BEFORE STATEMENT** | 모든 행 전에 1번 실행 | 1번 실행 | 1번 실행 |
-| **AFTER STATEMENT** | 모든 행 후에 1번 실행 | 1번 실행 | 1번 실행 |
-
-#### A.1 BEFORE ROW — "intercept" 트리거
-
-*각 행에 대해, 엔진이 변경을 적용하기 전에* 발사. 트리거 함수는 곧 쓰일 행(`NEW`)을, UPDATE의 경우 변경 전 행(`OLD`)도 받음. 함수는:
-
-- **`NEW`를 in-place로 수정**하고 `RETURN NEW;` 가능 — 수정된 행이 쓰임.
-- `RETURN NULL;` 가능 — 엔진이 **이 행을 통째로 건너뜀**(INSERT/UPDATE 발생 안 함).
-- `RAISE EXCEPTION` 가능 — 전체 statement abort(잡히지 않으면 트랜잭션 abort).
-
-BEFORE ROW는 입력 검증, 파생 컬럼 채우기(`NEW.normalized_email := lower(NEW.email)`), 조건부 행 억제에 사용.
-
-#### A.2 AFTER ROW — "react" 트리거
-
-*각 행에 대해, 엔진이 변경을 적용한 후* 발사. `NEW`와 `OLD`는 read-only — 행은 이미 디스크로 가는 중. 트리거 반환값 무시됨.
-
-AFTER ROW는 audit 로깅(`change_log` 테이블에 INSERT), 캐시 무효화, NOTIFY 전송, 또는 변경이 실제로 commit된 쓰기에 성공했을 때만 일어나야 하는 부수 효과에 사용.
-
-#### A.3 BEFORE/AFTER STATEMENT — statement당 1번
-
-statement가 영향준 행 수와 무관하게 1번 발사 — statement가 0행에 영향을 줘도. `NEW`와 `OLD`는 NULL — 특정 행이 없기 때문. PostgreSQL 10+는 영향받은 행 집합을 **transition table**로 노출:
-
-```sql
-CREATE TRIGGER ... AFTER UPDATE ON orders
-REFERENCING OLD TABLE AS old_rows NEW TABLE AS new_rows
-FOR EACH STATEMENT
-EXECUTE FUNCTION audit_changes();
-```
-
-트리거 함수 안에서 `old_rows`와 `new_rows`는 영향받은 모든 행을 담은 임시 테이블처럼 query 가능. "행마다 1개가 아니라 1개의 로그 항목으로 batch UPDATE를 audit"에 유용.
-
-### B. `NEW`와 `OLD`가 무엇인가
-
-둘 다 트리거가 붙은 테이블의 행과 같은 타입의 *record*. 모든 컬럼 + 시스템 컬럼(`tableoid`, `xmin`, `xmax`, `ctid`)을 가짐.
-
-| Event | `NEW` | `OLD` |
-|-------|-------|-------|
-| INSERT | 곧 삽입될 행(BEFORE) 또는 방금 삽입된 행(AFTER) | undefined / NULL |
-| UPDATE | 변경 후 행 | 변경 전 행 |
-| DELETE | undefined / NULL | 곧/방금 삭제될 행 |
-
-#### B.1 BEFORE INSERT 예 — `NEW`는 mutable
-
-```sql
-CREATE FUNCTION normalize_email() RETURNS trigger AS $$
-BEGIN
-    NEW.email := lower(trim(NEW.email));
-    IF NEW.email = '' THEN
-        RETURN NULL;  -- email이 비어 있는 행을 조용히 건너뜀
-    END IF;
-    RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
-
-CREATE TRIGGER trg_normalize BEFORE INSERT ON users
-FOR EACH ROW EXECUTE FUNCTION normalize_email();
-```
-
-결국 디스크에 닿는 행은 정규화된 email을 가짐. 애플리케이션 코드가 알 필요 없음.
-
-#### B.2 "반드시 반환" 규칙
-
-BEFORE ROW 트리거는 `RETURN NEW`, `RETURN OLD`(DELETE의 경우), 또는 `RETURN NULL` 해야 함. 반환을 잊는 것이 가장 흔한 PL/pgSQL 버그 중 하나 — 엔진이 반환을 NULL로 읽고 행을 조용히 drop.
-
-AFTER ROW 트리거는 `RETURN NULL` 또는 `RETURN NEW` 가능 — 값 무시됨. 관례적 스타일은 INSERT/UPDATE에 `RETURN NEW;`, DELETE에 `RETURN OLD;`.
-
-### C. 트랜잭션과 lock scope
-
-트리거는 발사 statement와 **같은 트랜잭션 안에서** 실행. 이는 협상 불가.
-
-#### C.1 같은 xid, 같은 snapshot
-
-트리거는 호출 statement와 같은 MVCC snapshot을 봄. statement에 visible한 행은 트리거에도 visible, invisible한 행은 invisible. 트리거의 쓰기는 같은 xid 사용 — 호출 statement의 쓰기와 함께 commit되거나 rollback됨.
-
-이로부터:
-
-- **트리거는 `COMMIT`이나 `BEGIN` 불가**(트랜잭션 안에 있음, 이유는 10번 레슨 §D.1).
-- **트리거의 쓰기는 발사 statement의 쓰기와 atomic**. 실패한 트리거는 전체 statement를 abort.
-- **트리거가 또 다른 트리거를 발사(cascade)** — 같은 트랜잭션 안에서 실행. "트리거 트랜잭션" 경계 없음.
-
-#### C.2 Constraint 트리거 — DEFERRED vs IMMEDIATE
-
-대부분의 트리거는 statement 동안 즉시 발사. **Constraint 트리거**는 `DEFERRABLE INITIALLY DEFERRED`일 수 있고, 그 경우 commit 시점에 발사. 트랜잭션 중간에는 성립할 수 없는 inter-table 불변량을 강제하는 데 사용(예 — 두 INSERT로 set up되어야 하는 순환 외래 키).
-
-#### C.3 Lock 획득
-
-트리거가 다른 테이블을 읽거나 쓰면, 호출 트랜잭션의 lock 집합 안에서 적절한 lock을 획득. Deadlock 검출(11번 레슨 §D.3)은 트리거의 lock을 다른 lock과 동일하게 봄 — 발사마다 두 테이블을 일관되지 않은 순서로 update하는 트리거는 deadlock 대기 중.
-
-### D. 다중 트리거, 재귀, `WHEN`
-
-#### D.1 트리거 순서
-
-같은 테이블의 같은 event에 두 트리거가 발사되면, PostgreSQL은 **트리거 이름의 알파벳 순으로** 발사. `t01_validate`, `t02_normalize`, `t03_audit` 같은 이름은 생성 순서에 의존하지 않고 순서를 통제하는 관례적 방식.
-
-#### D.2 재귀
-
-트리거 body가 같은 또는 다른 트리거를 발사하는 INSERT/UPDATE/DELETE를 issue할 수 있음. Unbounded 재귀가 가능(흔한 버그), PostgreSQL은 일반 statement nesting limit 외에 내장 재귀 깊이 제한이 없음. 방어적 코드 — 재진입 검출에 `pg_trigger_depth()` 사용, 또는 cycle을 깨기 위해 세션 변수 유지.
-
-#### D.3 `WHEN` 절 — 트리거를 통째로 건너뛰기
-
-```sql
-CREATE TRIGGER ... AFTER UPDATE ON orders
-FOR EACH ROW
-WHEN (OLD.status IS DISTINCT FROM NEW.status)
-EXECUTE FUNCTION on_status_change();
-```
-
-`WHEN` 술어는 트리거 시스템에 의해 함수 호출 *전*에, `NEW`와 `OLD`가 사용 가능한 상태로 평가됨. false면 함수가 아예 호출되지 않음. 함수에 들어가서 즉시 반환하는 것보다 훨씬 저렴 — 변경의 작은 부분집합만 신경 쓰는 트리거에 유용.
-
-### 이론에서 아래 SQL로
-
-이어지는 각 절은 위 메커니즘이 구체화된 형태입니다:
-
-- **`CREATE FUNCTION ... RETURNS trigger`** — `NEW`/`OLD`에 접근 가능한 트리거 함수 (§B).
-- **`CREATE TRIGGER ... BEFORE / AFTER ... FOR EACH ROW / STATEMENT`** — §A의 cell 중 하나 선택.
-- **`RETURN NEW` / `RETURN NULL`** — 행이 쓰일지 통제 (§B.2).
-- **`REFERENCING OLD TABLE / NEW TABLE`** — STATEMENT-level 트리거의 transition table (§A.3).
-- **`WHEN (...)`** — 함수 호출을 통째로 건너뛰는 술어 (§D.3).
-- **`pg_trigger_depth()`** — 트리거 함수 안의 재귀 가드 (§D.2).
-- **`DEFERRABLE INITIALLY DEFERRED`** — commit 시점에 발사되는 constraint 트리거 (§C.2).
-
 ---
 
 ## 1. 트리거 개념
@@ -213,6 +68,46 @@ EXECUTE FUNCTION trigger_function_name();
 ---
 
 ## 3. BEFORE vs AFTER
+
+### 이론: 트리거 매트릭스
+
+두 timing × 두 level × 네 event = 잠재적으로 16 조합, 그러나 TRUNCATE는 statement-level에서만 발사되므로 14 valid cell. 가장 흔한 12개:
+
+|       | INSERT | UPDATE | DELETE |
+|-------|--------|--------|--------|
+| **BEFORE ROW** | NEW 존재, NEW 수정 가능, 행을 건너뛰려면 NULL 반환 | NEW + OLD, NEW 수정 가능 | OLD 존재, delete를 abort하려면 NULL 반환 |
+| **AFTER ROW** | NEW 동결 | NEW + OLD 동결 | OLD 동결 |
+| **BEFORE STATEMENT** | 모든 행 전에 1번 실행 | 1번 실행 | 1번 실행 |
+| **AFTER STATEMENT** | 모든 행 후에 1번 실행 | 1번 실행 | 1번 실행 |
+
+#### A.1 BEFORE ROW — "intercept" 트리거
+
+*각 행에 대해, 엔진이 변경을 적용하기 전에* 발사. 트리거 함수는 곧 쓰일 행(`NEW`)을, UPDATE의 경우 변경 전 행(`OLD`)도 받음. 함수는:
+
+- **`NEW`를 in-place로 수정**하고 `RETURN NEW;` 가능 — 수정된 행이 쓰임.
+- `RETURN NULL;` 가능 — 엔진이 **이 행을 통째로 건너뜀**(INSERT/UPDATE 발생 안 함).
+- `RAISE EXCEPTION` 가능 — 전체 statement abort(잡히지 않으면 트랜잭션 abort).
+
+BEFORE ROW는 입력 검증, 파생 컬럼 채우기(`NEW.normalized_email := lower(NEW.email)`), 조건부 행 억제에 사용.
+
+#### A.2 AFTER ROW — "react" 트리거
+
+*각 행에 대해, 엔진이 변경을 적용한 후* 발사. `NEW`와 `OLD`는 read-only — 행은 이미 디스크로 가는 중. 트리거 반환값 무시됨.
+
+AFTER ROW는 audit 로깅(`change_log` 테이블에 INSERT), 캐시 무효화, NOTIFY 전송, 또는 변경이 실제로 commit된 쓰기에 성공했을 때만 일어나야 하는 부수 효과에 사용.
+
+#### A.3 BEFORE/AFTER STATEMENT — statement당 1번
+
+statement가 영향준 행 수와 무관하게 1번 발사 — statement가 0행에 영향을 줘도. `NEW`와 `OLD`는 NULL — 특정 행이 없기 때문. PostgreSQL 10+는 영향받은 행 집합을 **transition table**로 노출:
+
+```sql
+CREATE TRIGGER ... AFTER UPDATE ON orders
+REFERENCING OLD TABLE AS old_rows NEW TABLE AS new_rows
+FOR EACH STATEMENT
+EXECUTE FUNCTION audit_changes();
+```
+
+트리거 함수 안에서 `old_rows`와 `new_rows`는 영향받은 모든 행을 담은 임시 테이블처럼 query 가능. "행마다 1개가 아니라 1개의 로그 항목으로 batch UPDATE를 audit"에 유용.
 
 ### BEFORE 트리거
 
@@ -288,6 +183,41 @@ EXECUTE FUNCTION log_price_change();
 
 ---
 
+### 이론: `NEW`와 `OLD`가 무엇인가
+
+둘 다 트리거가 붙은 테이블의 행과 같은 타입의 *record*. 모든 컬럼 + 시스템 컬럼(`tableoid`, `xmin`, `xmax`, `ctid`)을 가짐.
+
+| Event | `NEW` | `OLD` |
+|-------|-------|-------|
+| INSERT | 곧 삽입될 행(BEFORE) 또는 방금 삽입된 행(AFTER) | undefined / NULL |
+| UPDATE | 변경 후 행 | 변경 전 행 |
+| DELETE | undefined / NULL | 곧/방금 삭제될 행 |
+
+#### B.1 BEFORE INSERT 예 — `NEW`는 mutable
+
+```sql
+CREATE FUNCTION normalize_email() RETURNS trigger AS $$
+BEGIN
+    NEW.email := lower(trim(NEW.email));
+    IF NEW.email = '' THEN
+        RETURN NULL;  -- email이 비어 있는 행을 조용히 건너뜀
+    END IF;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trg_normalize BEFORE INSERT ON users
+FOR EACH ROW EXECUTE FUNCTION normalize_email();
+```
+
+결국 디스크에 닿는 행은 정규화된 email을 가짐. 애플리케이션 코드가 알 필요 없음.
+
+#### B.2 "반드시 반환" 규칙
+
+BEFORE ROW 트리거는 `RETURN NEW`, `RETURN OLD`(DELETE의 경우), 또는 `RETURN NULL` 해야 함. 반환을 잊는 것이 가장 흔한 PL/pgSQL 버그 중 하나 — 엔진이 반환을 NULL로 읽고 행을 조용히 drop.
+
+AFTER ROW 트리거는 `RETURN NULL` 또는 `RETURN NEW` 가능 — 값 무시됨. 관례적 스타일은 INSERT/UPDATE에 `RETURN NEW;`, DELETE에 `RETURN OLD;`.
+
 ## 5. FOR EACH ROW vs FOR EACH STATEMENT
 
 ### FOR EACH ROW
@@ -334,6 +264,27 @@ EXECUTE FUNCTION send_alert();
 ```
 
 ---
+
+### 이론: 다중 트리거, 재귀, `WHEN`
+
+#### D.1 트리거 순서
+
+같은 테이블의 같은 event에 두 트리거가 발사되면, PostgreSQL은 **트리거 이름의 알파벳 순으로** 발사. `t01_validate`, `t02_normalize`, `t03_audit` 같은 이름은 생성 순서에 의존하지 않고 순서를 통제하는 관례적 방식.
+
+#### D.2 재귀
+
+트리거 body가 같은 또는 다른 트리거를 발사하는 INSERT/UPDATE/DELETE를 issue할 수 있음. Unbounded 재귀가 가능(흔한 버그), PostgreSQL은 일반 statement nesting limit 외에 내장 재귀 깊이 제한이 없음. 방어적 코드 — 재진입 검출에 `pg_trigger_depth()` 사용, 또는 cycle을 깨기 위해 세션 변수 유지.
+
+#### D.3 `WHEN` 절 — 트리거를 통째로 건너뛰기
+
+```sql
+CREATE TRIGGER ... AFTER UPDATE ON orders
+FOR EACH ROW
+WHEN (OLD.status IS DISTINCT FROM NEW.status)
+EXECUTE FUNCTION on_status_change();
+```
+
+`WHEN` 술어는 트리거 시스템에 의해 함수 호출 *전*에, `NEW`와 `OLD`가 사용 가능한 상태로 평가됨. false면 함수가 아예 호출되지 않음. 함수에 들어가서 즉시 반환하는 것보다 훨씬 저렴 — 변경의 작은 부분집합만 신경 쓰는 트리거에 유용.
 
 ## 7. 실습 예제
 
@@ -569,6 +520,28 @@ $$ LANGUAGE plpgsql;
 ---
 
 ## 10. 주의사항
+
+### 이론: 트랜잭션과 lock scope
+
+트리거는 발사 statement와 **같은 트랜잭션 안에서** 실행. 이는 협상 불가.
+
+#### C.1 같은 xid, 같은 snapshot
+
+트리거는 호출 statement와 같은 MVCC snapshot을 봄. statement에 visible한 행은 트리거에도 visible, invisible한 행은 invisible. 트리거의 쓰기는 같은 xid 사용 — 호출 statement의 쓰기와 함께 commit되거나 rollback됨.
+
+이로부터:
+
+- **트리거는 `COMMIT`이나 `BEGIN` 불가**(트랜잭션 안에 있음, 이유는 10번 레슨 §D.1).
+- **트리거의 쓰기는 발사 statement의 쓰기와 atomic**. 실패한 트리거는 전체 statement를 abort.
+- **트리거가 또 다른 트리거를 발사(cascade)** — 같은 트랜잭션 안에서 실행. "트리거 트랜잭션" 경계 없음.
+
+#### C.2 Constraint 트리거 — DEFERRED vs IMMEDIATE
+
+대부분의 트리거는 statement 동안 즉시 발사. **Constraint 트리거**는 `DEFERRABLE INITIALLY DEFERRED`일 수 있고, 그 경우 commit 시점에 발사. 트랜잭션 중간에는 성립할 수 없는 inter-table 불변량을 강제하는 데 사용(예 — 두 INSERT로 set up되어야 하는 순환 외래 키).
+
+#### C.3 Lock 획득
+
+트리거가 다른 테이블을 읽거나 쓰면, 호출 트랜잭션의 lock 집합 안에서 적절한 lock을 획득. Deadlock 검출(11번 레슨 §D.3)은 트리거의 lock을 다른 lock과 동일하게 봄 — 발사마다 두 테이블을 일관되지 않은 순서로 update하는 트리거는 deadlock 대기 중.
 
 ### 무한 루프 방지
 

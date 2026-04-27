@@ -22,8 +22,6 @@ A query that runs in 5 milliseconds versus 5 seconds can be the difference betwe
 
 ## Table of Contents
 
-Before EXPLAIN, read [**Theory & Principles**](#theory--principles) — the planner's cost model (`seq_page_cost`, `random_page_cost`, `cpu_*`), how `pg_statistic` selectivity estimates feed into it, the join-order search problem and dynamic programming, and the fallback Genetic Query Optimizer (GEQO).
-
 1. [EXPLAIN ANALYZE Deep Dive](#1-explain-analyze-deep-dive)
 2. [Query Planner](#2-query-planner)
 3. [Index Strategies](#3-index-strategies)
@@ -34,98 +32,11 @@ Before EXPLAIN, read [**Theory & Principles**](#theory--principles) — the plan
 
 ---
 
-## Theory & Principles
+## 1. EXPLAIN ANALYZE Deep Dive
 
-PostgreSQL's optimizer is a *cost-based* planner. For every query it considers many plans (different scan methods, different join orders, different join algorithms), assigns each a numeric **cost** based on a small set of tunable constants and the table statistics, and picks the lowest-cost plan. Reading `EXPLAIN` is meaningful only if you understand what those costs mean and where they come from. This section is the foundation that every later optimization tip rests on — without it, "I added an index and it got slower" is mysterious; with it, the answer falls out of the cost arithmetic.
+> **Analogy -- The Query Optimizer as GPS**: Just as a GPS evaluates multiple routes (highway vs. side streets vs. toll road) and picks the fastest based on current conditions, PostgreSQL's query planner evaluates multiple execution strategies (sequential scan, index scan, hash join, merge join) and chooses the one with the lowest estimated cost. Understanding EXPLAIN output is like reading the GPS's chosen route -- it tells you exactly which "roads" the database will take to reach your data.
 
-This section covers:
-
-- **(A)** The cost model: the constants (`seq_page_cost`, `random_page_cost`, `cpu_tuple_cost`, etc.) and the formula.
-- **(B)** Statistics in `pg_statistic`: histograms, MCVs (most common values), correlation, and selectivity estimation.
-- **(C)** The plan tree and the `EXPLAIN` output: nodes, costs, rows, actual vs estimated.
-- **(D)** Join-order search: dynamic programming, search-space explosion, and the Genetic Query Optimizer (GEQO).
-
-### A. The Cost Model
-
-Every plan node has a cost expressed as a unit-less number. The planner picks the plan with the lowest **total cost**. The cost is a weighted sum of three things: pages read sequentially, pages read randomly, and CPU time per row processed.
-
-#### A.1 The constants
-
-| Parameter | Default | Meaning |
-|-----------|---------|---------|
-| `seq_page_cost` | 1.0 | Cost to read one page sequentially |
-| `random_page_cost` | 4.0 | Cost to read one page at a random offset |
-| `cpu_tuple_cost` | 0.01 | Cost to process one tuple |
-| `cpu_index_tuple_cost` | 0.005 | Cost to process one index entry |
-| `cpu_operator_cost` | 0.0025 | Cost of an operator/function call |
-| `parallel_tuple_cost` | 0.1 | Cost of transferring one tuple from worker to leader |
-| `parallel_setup_cost` | 1000 | Cost of starting parallel workers |
-
-These are *relative* costs. The defaults assume HDD-era random I/O is 4× more expensive than sequential I/O. **For SSD-backed storage, lower `random_page_cost` to ~1.1**. This single change can swing the planner from sequential scans (which were optimal on spinning disks) toward index scans (which are optimal when random I/O is cheap).
-
-#### A.2 The formula for a sequential scan
-
-```
-seq_scan_cost = seq_page_cost × pages_in_table
-              + cpu_tuple_cost × rows_in_table
-              + cpu_operator_cost × rows_in_table × operators_per_row
-```
-
-For a 10,000-page table with 1,000,000 rows, that is `1.0 × 10000 + 0.01 × 1000000 + ... ≈ 20000`.
-
-#### A.3 The formula for an index scan
-
-```
-index_scan_cost = index_pages_read × random_page_cost      (descend the B-tree)
-                + cpu_index_tuple_cost × matching_index_entries
-                + matching_rows × random_page_cost          (heap fetches)
-                + cpu_tuple_cost × matching_rows
-                + cpu_operator_cost × matching_rows
-```
-
-The `matching_rows × random_page_cost` term is what makes index scans expensive at high selectivity — at 10% of a 10,000-page table, that is `100,000 × 4.0 = 400,000` versus the sequential scan's `20,000`. The planner correctly picks the sequential scan in that range.
-
-### B. Statistics — Where the Row Counts Come From
-
-The cost formula needs to know `matching_rows` and `pages_in_table`. The planner gets these from `pg_statistic`, populated by `ANALYZE`.
-
-#### B.1 What `ANALYZE` collects
-
-For each column, `ANALYZE` samples some rows (`default_statistics_target` × 300, default 30000) and computes:
-
-- **Number of distinct values** (`n_distinct`)
-- **Most common values (MCVs)** — typically 100 most frequent values and their per-value frequency.
-- **Histogram** — the remaining values divided into N buckets of equal frequency (default 100 buckets).
-- **Null fraction** (`null_frac`)
-- **Correlation** between physical row order and logical column order (used to estimate the cost of an index scan that produces ordered output).
-- **Average column width** (`avg_width`).
-
-Stored in `pg_statistic` (or the `pg_stats` view for human readability).
-
-#### B.2 Selectivity estimation
-
-For `WHERE col = value`:
-
-- If `value` is in the MCV list, selectivity = its frequency. Exact.
-- Otherwise, selectivity = `(1 - sum_of_MCV_frequencies - null_frac) / (n_distinct - count_of_MCVs)`. Average of the long tail.
-
-For `WHERE col BETWEEN a AND b`:
-
-- Selectivity = (number of histogram buckets between a and b) / total buckets, with linear interpolation inside the boundary buckets.
-
-For `WHERE col1 = ? AND col2 = ?`:
-
-- By default, the planner assumes the columns are **independent** and multiplies the per-column selectivities. This is the most common source of bad estimates — when columns are correlated (e.g., `country = 'KR' AND city = 'Seoul'`), the assumption produces wildly wrong row counts.
-
-#### B.3 Extended statistics — fixing correlation underestimation
-
-`CREATE STATISTICS s_country_city (dependencies, ndistinct) ON country, city FROM addresses;` tells the planner to track joint statistics for those columns. After the next `ANALYZE`, selectivity estimates for combined predicates use the actual correlation instead of independence assumption.
-
-#### B.4 Why bad statistics produce bad plans
-
-If the planner estimates a join will return 10 rows when it actually returns 10,000, it picks Nested Loop (great for 10 rows, terrible for 10,000). The fix is rarely "tune `random_page_cost`" — it is `ANALYZE` (especially after large data changes) and, for correlated columns, `CREATE STATISTICS`.
-
-### C. The Plan Tree and EXPLAIN
+### Theory: The Plan Tree and EXPLAIN
 
 The planner's output is a tree of plan nodes. The leaves are scans (Seq Scan, Index Scan, …); interior nodes are operations (Nested Loop, Hash Join, Sort, Aggregate, …); the root produces the final result rows.
 
@@ -157,42 +68,6 @@ Each line shows:
 - **Costs much higher than nearby alternatives** — sometimes a small index can drop the cost by 2-3 orders of magnitude.
 - **`Rows Removed by Filter`** — a high number means the scan returned many rows that the filter discarded. Often fixable by an index covering the filter column.
 - **`Heap Fetches`** in an index-only scan — non-zero means the visibility map is stale; a `VACUUM` may help.
-
-### D. Join-Order Search and GEQO
-
-For N-way joins, the planner must consider many possible join orderings.
-
-#### D.1 The search space
-
-For `N` tables, the number of *trees* to consider (left-deep, bushy, etc.) grows exponentially: roughly `(2N)! / N!` for bushy trees. For 10 tables, that is millions; for 20 tables, astronomical.
-
-#### D.2 Dynamic programming (default)
-
-The planner uses **bottom-up dynamic programming**: for each pair of tables, find the cheapest join; for each triple, find the cheapest extension; and so on. The cost of intermediate joins is reused, so the algorithm is O(2^N · N^2) — manageable for ~12 tables but exponential beyond.
-
-#### D.3 GEQO — fallback for big joins
-
-When `from_collapse_limit + join_collapse_limit` worth of joinable tables exceeds `geqo_threshold` (default 12), PostgreSQL switches to the **Genetic Query Optimizer**: it represents join orders as chromosomes, uses crossover and mutation to evolve a population, and runs for a configurable number of generations. The result is *not guaranteed optimal* but is much faster to compute than exhaustive DP for ≥20 tables.
-
-You can disable GEQO with `SET geqo = off;` if you want exhaustive search at the cost of planning time, or raise `geqo_threshold` to push the boundary.
-
-### From Theory to the SQL Below
-
-Each of the following sections is one of these mechanisms made concrete:
-
-- **`EXPLAIN`, `EXPLAIN ANALYZE`, `EXPLAIN (BUFFERS)`** — read the plan tree (§C).
-- **`SET random_page_cost = 1.1`** — tune for SSD storage (§A.1).
-- **`ANALYZE table_name`** — refresh `pg_statistic` (§B.1).
-- **`CREATE STATISTICS s ON col1, col2 FROM t`** — extended statistics for correlated columns (§B.3).
-- **Index strategies** — picking columns, partial, expression, and covering indexes from lesson 9 (§A.3).
-- **`SET enable_seqscan = off`** — debugging tool to force the planner away from a plan; never use in production.
-- **`SET geqo_threshold = 20`** — raise the GEQO cutoff if you have many-way joins and DP planning time is acceptable (§D.3).
-
----
-
-## 1. EXPLAIN ANALYZE Deep Dive
-
-> **Analogy -- The Query Optimizer as GPS**: Just as a GPS evaluates multiple routes (highway vs. side streets vs. toll road) and picks the fastest based on current conditions, PostgreSQL's query planner evaluates multiple execution strategies (sequential scan, index scan, hash join, merge join) and chooses the one with the lowest estimated cost. Understanding EXPLAIN output is like reading the GPS's chosen route -- it tells you exactly which "roads" the database will take to reach your data.
 
 ### 1.1 EXPLAIN Options
 
@@ -314,6 +189,46 @@ ANALYZE users;
 ---
 
 ## 2. Query Planner
+
+### Theory: The Cost Model
+
+Every plan node has a cost expressed as a unit-less number. The planner picks the plan with the lowest **total cost**. The cost is a weighted sum of three things: pages read sequentially, pages read randomly, and CPU time per row processed.
+
+#### A.1 The constants
+
+| Parameter | Default | Meaning |
+|-----------|---------|---------|
+| `seq_page_cost` | 1.0 | Cost to read one page sequentially |
+| `random_page_cost` | 4.0 | Cost to read one page at a random offset |
+| `cpu_tuple_cost` | 0.01 | Cost to process one tuple |
+| `cpu_index_tuple_cost` | 0.005 | Cost to process one index entry |
+| `cpu_operator_cost` | 0.0025 | Cost of an operator/function call |
+| `parallel_tuple_cost` | 0.1 | Cost of transferring one tuple from worker to leader |
+| `parallel_setup_cost` | 1000 | Cost of starting parallel workers |
+
+These are *relative* costs. The defaults assume HDD-era random I/O is 4× more expensive than sequential I/O. **For SSD-backed storage, lower `random_page_cost` to ~1.1**. This single change can swing the planner from sequential scans (which were optimal on spinning disks) toward index scans (which are optimal when random I/O is cheap).
+
+#### A.2 The formula for a sequential scan
+
+```
+seq_scan_cost = seq_page_cost × pages_in_table
+              + cpu_tuple_cost × rows_in_table
+              + cpu_operator_cost × rows_in_table × operators_per_row
+```
+
+For a 10,000-page table with 1,000,000 rows, that is `1.0 × 10000 + 0.01 × 1000000 + ... ≈ 20000`.
+
+#### A.3 The formula for an index scan
+
+```
+index_scan_cost = index_pages_read × random_page_cost      (descend the B-tree)
+                + cpu_index_tuple_cost × matching_index_entries
+                + matching_rows × random_page_cost          (heap fetches)
+                + cpu_tuple_cost × matching_rows
+                + cpu_operator_cost × matching_rows
+```
+
+The `matching_rows × random_page_cost` term is what makes index scans expensive at high selectivity — at 10% of a 10,000-page table, that is `100,000 × 4.0 = 400,000` versus the sequential scan's `20,000`. The planner correctly picks the sequential scan in that range.
 
 ### 2.1 Planner Process
 
@@ -536,6 +451,24 @@ CREATE INDEX CONCURRENTLY idx_users_email ON users(email);
 
 ## 4. Join Optimization
 
+### Theory: Join-Order Search and GEQO
+
+For N-way joins, the planner must consider many possible join orderings.
+
+#### D.1 The search space
+
+For `N` tables, the number of *trees* to consider (left-deep, bushy, etc.) grows exponentially: roughly `(2N)! / N!` for bushy trees. For 10 tables, that is millions; for 20 tables, astronomical.
+
+#### D.2 Dynamic programming (default)
+
+The planner uses **bottom-up dynamic programming**: for each pair of tables, find the cheapest join; for each triple, find the cheapest extension; and so on. The cost of intermediate joins is reused, so the algorithm is O(2^N · N^2) — manageable for ~12 tables but exponential beyond.
+
+#### D.3 GEQO — fallback for big joins
+
+When `from_collapse_limit + join_collapse_limit` worth of joinable tables exceeds `geqo_threshold` (default 12), PostgreSQL switches to the **Genetic Query Optimizer**: it represents join orders as chromosomes, uses crossover and mutation to evolve a population, and runs for a configurable number of generations. The result is *not guaranteed optimal* but is much faster to compute than exhaustive DP for ≥20 tables.
+
+You can disable GEQO with `SET geqo = off;` if you want exhaustive search at the cost of planning time, or raise `geqo_threshold` to push the boundary.
+
 ### 4.1 Join Method Comparison
 
 ```
@@ -634,6 +567,46 @@ JOIN users u ON o.user_id = u.id;
 ---
 
 ## 5. Statistics and Cost Estimation
+
+### Theory: Statistics — Where the Row Counts Come From
+
+The cost formula needs to know `matching_rows` and `pages_in_table`. The planner gets these from `pg_statistic`, populated by `ANALYZE`.
+
+#### B.1 What `ANALYZE` collects
+
+For each column, `ANALYZE` samples some rows (`default_statistics_target` × 300, default 30000) and computes:
+
+- **Number of distinct values** (`n_distinct`)
+- **Most common values (MCVs)** — typically 100 most frequent values and their per-value frequency.
+- **Histogram** — the remaining values divided into N buckets of equal frequency (default 100 buckets).
+- **Null fraction** (`null_frac`)
+- **Correlation** between physical row order and logical column order (used to estimate the cost of an index scan that produces ordered output).
+- **Average column width** (`avg_width`).
+
+Stored in `pg_statistic` (or the `pg_stats` view for human readability).
+
+#### B.2 Selectivity estimation
+
+For `WHERE col = value`:
+
+- If `value` is in the MCV list, selectivity = its frequency. Exact.
+- Otherwise, selectivity = `(1 - sum_of_MCV_frequencies - null_frac) / (n_distinct - count_of_MCVs)`. Average of the long tail.
+
+For `WHERE col BETWEEN a AND b`:
+
+- Selectivity = (number of histogram buckets between a and b) / total buckets, with linear interpolation inside the boundary buckets.
+
+For `WHERE col1 = ? AND col2 = ?`:
+
+- By default, the planner assumes the columns are **independent** and multiplies the per-column selectivities. This is the most common source of bad estimates — when columns are correlated (e.g., `country = 'KR' AND city = 'Seoul'`), the assumption produces wildly wrong row counts.
+
+#### B.3 Extended statistics — fixing correlation underestimation
+
+`CREATE STATISTICS s_country_city (dependencies, ndistinct) ON country, city FROM addresses;` tells the planner to track joint statistics for those columns. After the next `ANALYZE`, selectivity estimates for combined predicates use the actual correlation instead of independence assumption.
+
+#### B.4 Why bad statistics produce bad plans
+
+If the planner estimates a join will return 10 rows when it actually returns 10,000, it picks Nested Loop (great for 10 rows, terrible for 10,000). The fix is rarely "tune `random_page_cost`" — it is `ANALYZE` (especially after large data changes) and, for correlated columns, `CREATE STATISTICS`.
 
 ### 5.1 Statistics Collection
 

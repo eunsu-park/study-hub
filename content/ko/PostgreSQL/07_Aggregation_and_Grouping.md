@@ -21,181 +21,6 @@
 
 데이터베이스는 방대한 양의 데이터를 간결하고 실용적인 수치로 요약하는 데 탁월합니다. "지역별 총 매출은 얼마인가?" 또는 "어떤 상품 카테고리의 평균 매출이 가장 높은가?"와 같은 질문에는 집계 함수와 그룹화가 필요합니다. 이러한 연산을 숙달하면 단순한 거래 테이블을 비즈니스 의사결정을 이끄는 대시보드, 보고서, KPI로 변환할 수 있습니다.
 
-집계 함수로 들어가기 전, [**이론과 원리**](#이론과-원리) 절을 먼저 읽으세요 — 집계 state란 실제로 무엇인지, PostgreSQL이 `GROUP BY`에 사용하는 두 알고리즘(HashAggregate vs GroupAggregate), 그리고 `ROLLUP`/`CUBE`/`GROUPING SETS` 뒤에 있는 OLAP 의미론을 다룹니다.
-
----
-
-## 이론과 원리
-
-`SELECT region, SUM(sales) FROM orders GROUP BY region;`는 한 연산처럼 보이지만, 실제로는 세 단계의 협력입니다 — 행을 그룹으로 분할, 그룹별로 running state 유지, 마지막에 그룹당 한 행씩 emit. PostgreSQL은 분할 단계에 완전히 다른 두 알고리즘(HashAggregate, GroupAggregate)을 가지며, 그 선택은 6번 레슨의 join 알고리즘 선택과 같은 종류의 성능 영향을 줍니다. `ROLLUP`과 `CUBE`는 이를 OLAP 세계에서 온 다차원 그룹핑으로 확장하며, 같은 기계장치를 공유합니다.
-
-이 절에서 다루는 내용:
-
-- **(A)** 집계 state 머신 — `init → transition → final`, 그리고 집계가 "그저 함수"가 아닌 이유.
-- **(B)** HashAggregate vs GroupAggregate — `GROUP BY`의 두 알고리즘과 planner가 고르는 방식.
-- **(C)** `HAVING` vs `WHERE` — 적용 순서와 술어를 `WHERE`로 옮기면 빨라지는 이유.
-- **(D)** `ROLLUP`, `CUBE`, `GROUPING SETS` — 다차원 집계와 `GROUPING()` indicator 함수.
-
-### A. 집계 state 머신
-
-집계 함수는 함수 하나가 아니라, **세 함수**와 하나의 **state**입니다.
-
-| 구성 요소 | 역할 |
-|----------|------|
-| `initcond` | state의 초기값 (예 — `SUM`은 0, `MAX`은 NULL) |
-| `sfunc` (state transition) | 입력 행마다 호출 — `state := sfunc(state, new_value)` |
-| `finalfunc` (옵션) | 끝에 1번 호출 — `result := finalfunc(state)` |
-| `stype` | running state의 데이터 타입 |
-
-`SUM(x)`의 경우:
-
-- `stype` = `numeric`, `initcond` = 0
-- `sfunc(s, x)` = `s + x`
-- `finalfunc` = identity (생략)
-
-`AVG(x)`의 경우:
-
-- `stype` = `(sum, count)` 쌍, `initcond` = `(0, 0)`
-- `sfunc((sum, count), x)` = `(sum + x, count + 1)`
-- `finalfunc((sum, count))` = `sum / count`
-
-`array_agg(x)`의 경우:
-
-- `stype` = 내부 accumulator
-- `sfunc`은 append, `finalfunc`은 배열 materialize
-
-이 구조가 중요한 이유 — 집계는 병렬 실행과 합성됩니다. PostgreSQL parallel-aggregate는 입력을 worker들에 분산하고, 각 worker가 행별 `sfunc`을 실행하고, coordinator가 worker별 state를 `combinefunc`으로 결합합니다(`SUM`의 combine은 `+`, `AVG`는 element-wise 쌍 합). `combinefunc`을 제공하는 사용자 정의 집계는 병렬화 가능, 아니면 불가능.
-
-### B. HashAggregate vs GroupAggregate
-
-`GROUP BY region`이 주어졌을 때, PostgreSQL은 그룹별 state를 조직하는 두 가지 방법을 가집니다.
-
-#### B.1 HashAggregate
-
-`region`을 키로 한 in-memory hash table 유지. 입력 행마다 `region`을 hash, bucket에서 state lookup, `sfunc` 실행. 마지막에 bucket당 행 1개 emit.
-
-```
-H = {}
-input의 각 행 r에 대해:
-    state = H.get(r.region, initcond)
-    H[r.region] = sfunc(state, r.sales)
-H.items()의 region, state에 대해:
-    (region, finalfunc(state)) emit
-```
-
-- **비용** — O(N) + 그룹 수에 비례하는 hash table 메모리.
-- **유리한 경우** — distinct group 수가 hash table을 `work_mem`에 넣을 만큼 작을 때. 순서 보존 안 됨 — 출력은 hash 순서.
-- **Spill 동작** — PostgreSQL 13+는 `work_mem`을 초과하면 hash partition을 디스크로 spill. 이전 버전은 그 경우 HashAggregate를 거부.
-
-#### B.2 GroupAggregate
-
-GROUP BY 컬럼으로 입력 정렬, 그 다음 정렬된 stream을 walk. 키가 바뀔 때마다 이전 그룹을 emit하고 state reset.
-
-```
-input을 region 기준 정렬
-state, prev = initcond, None
-sorted_input의 각 행 r에 대해:
-    if r.region != prev:
-        if prev is not None: (prev, finalfunc(state)) emit
-        state, prev = initcond, r.region
-    state = sfunc(state, r.sales)
-(prev, finalfunc(state)) emit
-```
-
-- **비용** — sort에 O(N log N), walk에 O(N). state 메모리는 *상수* — 한 번에 한 그룹의 state만.
-- **유리한 경우** — 입력이 이미 정렬됨(예 — `region`에 대한 index scan), 또는 그룹 수가 HashAggregate에 너무 많을 때.
-- **Bonus** — 출력이 GROUP BY 컬럼으로 정렬되어 있어, 하류 `ORDER BY`가 매치되면 유용.
-
-planner는 추정 그룹 수, 사용 가능한 인덱스, `work_mem`을 바탕으로 고릅니다. `EXPLAIN`은 어느 것이 선택되었는지 `HashAggregate` 또는 `GroupAggregate`로 표시.
-
-### C. WHERE는 GROUP BY 전, HAVING은 후
-
-`SELECT` 절 실행의 논리 순서:
-
-```
-1. FROM     → join된 행 집결
-2. WHERE    → 그룹핑 BEFORE 행 필터
-3. GROUP BY → 그룹으로 분할
-4. (그룹별로 집계 함수 평가)
-5. HAVING   → 집계 AFTER 그룹 필터
-6. SELECT   → 컬럼 projection
-7. ORDER BY → 정렬
-8. LIMIT    → truncate
-```
-
-두 필터링 단계는 집계의 양쪽에 살고 있습니다.
-
-```sql
--- 세기 전에 행 필터
-SELECT region, COUNT(*) FROM orders
-WHERE order_date >= '2026-01-01'   -- per-row 술어
-GROUP BY region;
-
--- 센 후에 그룹 필터
-SELECT region, COUNT(*) FROM orders
-GROUP BY region
-HAVING COUNT(*) > 100;             -- per-group 술어
-```
-
-#### C.1 술어를 HAVING에서 WHERE로 옮기는 것이 속도 향상인 이유
-
-술어가 base 컬럼만 참조한다면(집계 아님), `WHERE`에 두세요. WHERE는 hash나 sort *전에* 입력을 줄이므로, 이후 모든 단계의 작업이 줄어듭니다. HAVING은 전체 집계 pass *이후*에 동작하므로, 어차피 버려질 행에 대해 풀 비용을 치른 뒤입니다.
-
-```sql
--- 느림 — non-aggregate에 HAVING
-SELECT region, SUM(sales) FROM orders
-GROUP BY region
-HAVING region <> 'EU';            -- ← WHERE여야 함
-
--- 빠름
-SELECT region, SUM(sales) FROM orders
-WHERE region <> 'EU'
-GROUP BY region;
-```
-
-planner가 가끔 잡아내서 다시 쓰지만, 의존하지는 마세요.
-
-### D. ROLLUP, CUBE, GROUPING SETS — 다차원 집계
-
-이들은 OLAP에서 온 것이며, 한 쿼리에서 여러 `GROUP BY` granularity를 계산하게 해 줍니다.
-
-#### D.1 ROLLUP — 계층적 합계
-
-`GROUP BY ROLLUP (a, b, c)`는 다음을 생성:
-
-- `(a, b, c)`별 그룹
-- `(a, b)`별 소계 (모든 `c`에 걸쳐 합한 `(a, b)`당 행 1개)
-- `(a)`별 소계 (모든 `(b, c)`에 걸쳐 합)
-- 전체 합계 (`a, b, c` 모두 rolled up)
-
-계층 보고서에 유용 — region → country → city, country와 region 소계가 같은 결과 집합에 보임.
-
-#### D.2 CUBE — 모든 차원 조합
-
-`GROUP BY CUBE (a, b, c)`는 2³ = 8 그룹핑 레벨 — `{a, b, c}`의 모든 부분집합 — 을 생성. 가능한 모든 조합으로 slice하고 싶은 cross-tabulation에 유용.
-
-#### D.3 GROUPING SETS — 어떤 조합인지를 정확히 지정
-
-`GROUP BY GROUPING SETS ((a, b), (a, c), ())`은 나열된 조합만 생성. ROLLUP과 CUBE는 GROUPING SETS의 syntactic sugar.
-
-#### D.4 `GROUPING()` indicator 함수
-
-ROLLUP/CUBE/GROUPING SETS 쿼리에서 NULL은 두 가지 다른 의미로 등장합니다 — 데이터의 *실제* NULL 값, 또는 "이 컬럼의 모든 값에 걸쳐 rolled up"의 *placeholder*. `GROUPING(col)` 함수가 이를 구분 — `col`이 rollup 때문에 NULL이면 1, 아니면 0 반환. 여러 컬럼을 bitmap으로 결합 — `GROUPING(a, b)`는 2-bit 정수 반환.
-
-#### D.5 구현
-
-PostgreSQL은 GROUPING SETS를 grouping set당 집계 알고리즘을 1번 실행해서 구현(또는 가능할 때 겹치는 set 사이에 sort/hash 작업을 공유). 비용은 대략 GROUP BY 1개의 비용 × grouping set 수 — 5개 컬럼에 대한 CUBE는 32× 비용.
-
-### 이론에서 아래 SQL로
-
-이어지는 각 절은 위 메커니즘이 구체화된 형태입니다:
-
-- **`COUNT()`, `SUM()`, `AVG()`, `MIN()`, `MAX()`, `STRING_AGG()`, `ARRAY_AGG()`** — `(initcond, sfunc, finalfunc)` 삼중자가 있는 구체 집계 (§A).
-- **`GROUP BY col`** — HashAggregate 또는 GroupAggregate를 트리거 (§B).
-- **`HAVING` 절** — 집계 후 필터링, aggregate에 의존하는 술어만 두어야 함 (§C).
-- **`ROLLUP`, `CUBE`, `GROUPING SETS`** — 다차원 그룹핑 (§D).
-- **집계 내부의 `DISTINCT`** (`COUNT(DISTINCT col)`) — 그룹별 입력에 sort나 hash를 강제, 일반 집계보다 비쌈.
-
 ---
 
 ## 1. 집계 함수 (Aggregate Functions)
@@ -241,6 +66,36 @@ INSERT INTO sales (product, category, amount, quantity, sale_date, region) VALUE
 ---
 
 ## 3. COUNT - 개수 세기
+
+### 이론: 집계 state 머신
+
+집계 함수는 함수 하나가 아니라, **세 함수**와 하나의 **state**입니다.
+
+| 구성 요소 | 역할 |
+|----------|------|
+| `initcond` | state의 초기값 (예 — `SUM`은 0, `MAX`은 NULL) |
+| `sfunc` (state transition) | 입력 행마다 호출 — `state := sfunc(state, new_value)` |
+| `finalfunc` (옵션) | 끝에 1번 호출 — `result := finalfunc(state)` |
+| `stype` | running state의 데이터 타입 |
+
+`SUM(x)`의 경우:
+
+- `stype` = `numeric`, `initcond` = 0
+- `sfunc(s, x)` = `s + x`
+- `finalfunc` = identity (생략)
+
+`AVG(x)`의 경우:
+
+- `stype` = `(sum, count)` 쌍, `initcond` = `(0, 0)`
+- `sfunc((sum, count), x)` = `(sum + x, count + 1)`
+- `finalfunc((sum, count))` = `sum / count`
+
+`array_agg(x)`의 경우:
+
+- `stype` = 내부 accumulator
+- `sfunc`은 append, `finalfunc`은 배열 materialize
+
+이 구조가 중요한 이유 — 집계는 병렬 실행과 합성됩니다. PostgreSQL parallel-aggregate는 입력을 worker들에 분산하고, 각 worker가 행별 `sfunc`을 실행하고, coordinator가 worker별 state를 `combinefunc`으로 결합합니다(`SUM`의 combine은 `+`, `AVG`는 element-wise 쌍 합). `combinefunc`을 제공하는 사용자 정의 집계는 병렬화 가능, 아니면 불가능.
 
 ### 전체 행 수
 
@@ -344,6 +199,48 @@ FROM sales;
 
 데이터를 특정 컬럼 기준으로 그룹화하여 집계합니다.
 
+### 이론: HashAggregate vs GroupAggregate
+
+`GROUP BY region`이 주어졌을 때, PostgreSQL은 그룹별 state를 조직하는 두 가지 방법을 가집니다.
+
+#### B.1 HashAggregate
+
+`region`을 키로 한 in-memory hash table 유지. 입력 행마다 `region`을 hash, bucket에서 state lookup, `sfunc` 실행. 마지막에 bucket당 행 1개 emit.
+
+```
+H = {}
+input의 각 행 r에 대해:
+    state = H.get(r.region, initcond)
+    H[r.region] = sfunc(state, r.sales)
+H.items()의 region, state에 대해:
+    (region, finalfunc(state)) emit
+```
+
+- **비용** — O(N) + 그룹 수에 비례하는 hash table 메모리.
+- **유리한 경우** — distinct group 수가 hash table을 `work_mem`에 넣을 만큼 작을 때. 순서 보존 안 됨 — 출력은 hash 순서.
+- **Spill 동작** — PostgreSQL 13+는 `work_mem`을 초과하면 hash partition을 디스크로 spill. 이전 버전은 그 경우 HashAggregate를 거부.
+
+#### B.2 GroupAggregate
+
+GROUP BY 컬럼으로 입력 정렬, 그 다음 정렬된 stream을 walk. 키가 바뀔 때마다 이전 그룹을 emit하고 state reset.
+
+```
+input을 region 기준 정렬
+state, prev = initcond, None
+sorted_input의 각 행 r에 대해:
+    if r.region != prev:
+        if prev is not None: (prev, finalfunc(state)) emit
+        state, prev = initcond, r.region
+    state = sfunc(state, r.sales)
+(prev, finalfunc(state)) emit
+```
+
+- **비용** — sort에 O(N log N), walk에 O(N). state 메모리는 *상수* — 한 번에 한 그룹의 state만.
+- **유리한 경우** — 입력이 이미 정렬됨(예 — `region`에 대한 index scan), 또는 그룹 수가 HashAggregate에 너무 많을 때.
+- **Bonus** — 출력이 GROUP BY 컬럼으로 정렬되어 있어, 하류 `ORDER BY`가 매치되면 유용.
+
+planner는 추정 그룹 수, 사용 가능한 인덱스, `work_mem`을 바탕으로 고릅니다. `EXPLAIN`은 어느 것이 선택되었는지 `HashAggregate` 또는 `GroupAggregate`로 표시.
+
 ### 기본 GROUP BY
 
 ```sql
@@ -435,6 +332,53 @@ FROM sales
 GROUP BY category
 HAVING SUM(amount) >= 500000;
 ```
+
+### 이론: WHERE는 GROUP BY 전, HAVING은 후
+
+`SELECT` 절 실행의 논리 순서:
+
+```
+1. FROM     → join된 행 집결
+2. WHERE    → 그룹핑 BEFORE 행 필터
+3. GROUP BY → 그룹으로 분할
+4. (그룹별로 집계 함수 평가)
+5. HAVING   → 집계 AFTER 그룹 필터
+6. SELECT   → 컬럼 projection
+7. ORDER BY → 정렬
+8. LIMIT    → truncate
+```
+
+두 필터링 단계는 집계의 양쪽에 살고 있습니다.
+
+```sql
+-- 세기 전에 행 필터
+SELECT region, COUNT(*) FROM orders
+WHERE order_date >= '2026-01-01'   -- per-row 술어
+GROUP BY region;
+
+-- 센 후에 그룹 필터
+SELECT region, COUNT(*) FROM orders
+GROUP BY region
+HAVING COUNT(*) > 100;             -- per-group 술어
+```
+
+#### C.1 술어를 HAVING에서 WHERE로 옮기는 것이 속도 향상인 이유
+
+술어가 base 컬럼만 참조한다면(집계 아님), `WHERE`에 두세요. WHERE는 hash나 sort *전에* 입력을 줄이므로, 이후 모든 단계의 작업이 줄어듭니다. HAVING은 전체 집계 pass *이후*에 동작하므로, 어차피 버려질 행에 대해 풀 비용을 치른 뒤입니다.
+
+```sql
+-- 느림 — non-aggregate에 HAVING
+SELECT region, SUM(sales) FROM orders
+GROUP BY region
+HAVING region <> 'EU';            -- ← WHERE여야 함
+
+-- 빠름
+SELECT region, SUM(sales) FROM orders
+WHERE region <> 'EU'
+GROUP BY region;
+```
+
+planner가 가끔 잡아내서 다시 쓰지만, 의존하지는 마세요.
 
 ### WHERE + HAVING
 
@@ -559,6 +503,37 @@ FROM sales;
 ---
 
 ## 14. ROLLUP과 CUBE
+
+### 이론: ROLLUP, CUBE, GROUPING SETS — 다차원 집계
+
+이들은 OLAP에서 온 것이며, 한 쿼리에서 여러 `GROUP BY` granularity를 계산하게 해 줍니다.
+
+#### D.1 ROLLUP — 계층적 합계
+
+`GROUP BY ROLLUP (a, b, c)`는 다음을 생성:
+
+- `(a, b, c)`별 그룹
+- `(a, b)`별 소계 (모든 `c`에 걸쳐 합한 `(a, b)`당 행 1개)
+- `(a)`별 소계 (모든 `(b, c)`에 걸쳐 합)
+- 전체 합계 (`a, b, c` 모두 rolled up)
+
+계층 보고서에 유용 — region → country → city, country와 region 소계가 같은 결과 집합에 보임.
+
+#### D.2 CUBE — 모든 차원 조합
+
+`GROUP BY CUBE (a, b, c)`는 2³ = 8 그룹핑 레벨 — `{a, b, c}`의 모든 부분집합 — 을 생성. 가능한 모든 조합으로 slice하고 싶은 cross-tabulation에 유용.
+
+#### D.3 GROUPING SETS — 어떤 조합인지를 정확히 지정
+
+`GROUP BY GROUPING SETS ((a, b), (a, c), ())`은 나열된 조합만 생성. ROLLUP과 CUBE는 GROUPING SETS의 syntactic sugar.
+
+#### D.4 `GROUPING()` indicator 함수
+
+ROLLUP/CUBE/GROUPING SETS 쿼리에서 NULL은 두 가지 다른 의미로 등장합니다 — 데이터의 *실제* NULL 값, 또는 "이 컬럼의 모든 값에 걸쳐 rolled up"의 *placeholder*. `GROUPING(col)` 함수가 이를 구분 — `col`이 rollup 때문에 NULL이면 1, 아니면 0 반환. 여러 컬럼을 bitmap으로 결합 — `GROUPING(a, b)`는 2-bit 정수 반환.
+
+#### D.5 구현
+
+PostgreSQL은 GROUPING SETS를 grouping set당 집계 알고리즘을 1번 실행해서 구현(또는 가능할 때 겹치는 set 사이에 sort/hash 작업을 공유). 비용은 대략 GROUP BY 1개의 비용 × grouping set 수 — 5개 컬럼에 대한 CUBE는 32× 비용.
 
 ### ROLLUP - 소계 추가
 

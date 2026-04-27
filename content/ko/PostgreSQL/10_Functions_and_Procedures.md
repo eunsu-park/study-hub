@@ -21,122 +21,6 @@
 
 내장 함수는 가장 일반적인 변환을 처리해 주지만, 모든 애플리케이션은 결국 데이터베이스 내부에 위치해야 하는 커스텀 로직을 필요로 합니다. 사용자 정의 함수와 프로시저를 사용하면 세금 계산, 등급 분류, 입력 유효성 검사 같은 비즈니스 규칙을 데이터 바로 옆에 캡슐화할 수 있습니다. 이를 통해 왕복 통신 횟수를 줄이고, 어떤 클라이언트가 접속하더라도 동일한 로직이 일관되게 적용되도록 보장합니다.
 
-함수를 작성하기 전, [**이론과 원리**](#이론과-원리) 절을 먼저 읽으세요 — PL/pgSQL이 어떻게 parsing되고 캐시되는지, volatility 클래스(`IMMUTABLE`/`STABLE`/`VOLATILE`)가 planner에게 무엇을 말하는지, 그리고 procedure가 *왜* 단순히 "값을 반환하지 않는 함수"가 아닌지를 다룹니다.
-
----
-
-## 이론과 원리
-
-`CREATE FUNCTION` 선언은 단순한 inline SQL의 sugar 그 이상입니다. 함수 body는 parsing되고 캐시되며, 선언한 volatility 클래스는 planner가 호출을 fold할 수 있는 방식을 바꾸고, 언어(SQL vs PL/pgSQL vs C)는 body가 planning 시점에 inline될 수 있는지를 결정합니다. `CREATE PROCEDURE`는 비슷해 보이지만 트랜잭션 의미론이 근본적으로 다릅니다 — body 중간에 `COMMIT`과 `BEGIN`을 할 수 있는 반면, 함수는 그럴 수 없습니다. 이 네 가지 — 언어, volatility, inlining, 트랜잭션 scope — 를 이해하면 "함수를 추가했더니 느려졌다"가 예측 가능한 cost 분석으로 바뀝니다.
-
-이 절에서 다루는 내용:
-
-- **(A)** 함수 언어 — SQL 함수 vs PL/pgSQL, 각각이 inline되는 시점과 자체 scope를 갖는 시점.
-- **(B)** Volatility 클래스 — `IMMUTABLE`, `STABLE`, `VOLATILE`과 각각이 enable하는 planner 최적화.
-- **(C)** PL/pgSQL — parse, plan caching, 그리고 statement당 plan 재사용.
-- **(D)** Function vs procedure — 트랜잭션 통제의 차이.
-
-### A. 함수 언어와 inlining
-
-PostgreSQL 함수는 여러 언어로 작성 가능. 사용자 코드에서 가장 흔한 둘:
-
-#### A.1 SQL 함수
-
-`CREATE FUNCTION add_one(x int) RETURNS int LANGUAGE sql AS 'SELECT x + 1';`
-
-body는 (다중 statement일 수 있는) SQL block. 함수가 **충분히 단순**하면 — 단일 SELECT, IMMUTABLE/STABLE, 복잡한 매개변수 없음 — planner가 **inline**할 수 있음 — view처럼 planning 중에 모든 호출이 body로 치환됨. 그러면 runtime에 함수 호출 overhead가 없음.
-
-SQL 함수가 항상 inlinable한 것은 아님. 다중 statement body, VOLATILE 표시, 비일상적 컨텍스트의 set-returning 함수 — 이들 중 어느 것이라도 inlining을 막고 진짜 per-call 실행을 강제.
-
-#### A.2 PL/pgSQL 함수
-
-`CREATE FUNCTION ... LANGUAGE plpgsql AS $$ DECLARE ... BEGIN ... END $$;`
-
-PL/pgSQL은 SQL 위에 layered된 절차적 언어. body에 변수, 제어 흐름(`IF`, `LOOP`, `FOR`, `WHILE`), 예외 처리, 명시적 `RETURN`이 있음. PL/pgSQL 함수는 **절대 inline되지 않음** — 모든 호출이 자체 변수 scope를 가진 진짜 호출이며, body는 1번 parsing되지만 매번 실행됨.
-
-비용 — 호출당 함수 호출 overhead(마이크로초 단위지만, 행마다 호출되면 누적). 이점 — 순수 SQL로 표현할 수 없는 모든 것.
-
-### B. Volatility 클래스
-
-모든 함수는 세 **volatility** 클래스 중 하나를 선언(또는 기본값). planner에게 어떤 최적화가 안전한지 알리는 메타데이터.
-
-#### B.1 IMMUTABLE — 같은 입력, 같은 출력, 영원히
-
-`abs(x)`, `length(s)`, `pi()`. planner가 자유롭게:
-
-- 모든 인자가 상수이면 호출을 planning 시점에 **constant-fold**. `WHERE x = abs(-5)`가 한 번에 `WHERE x = 5`가 됨.
-- **expression 인덱스에 함수 사용** (`CREATE INDEX ON t (immutable_func(col))`). PostgreSQL은 STABLE이나 VOLATILE 함수에 인덱스를 만들기를 거부 — 인덱스가 조용히 stale해지기 때문.
-
-#### B.2 STABLE — 같은 입력, 같은 출력, 한 statement 내에서
-
-`now()`, `current_user`, `current_setting('foo')`. 한 쿼리 안에서 `now()`를 10번 호출하면 같은 값을 반환(PostgreSQL이 보장). 쿼리 사이에서는 그렇지 않음.
-
-planner가:
-
-- **bound로서 index scan에 함수 사용 가능** (`WHERE x > now()`). 함수는 스캔 시작 시 1번 호출되고, 결과는 스캔 동안 상수로 처리.
-- statement 사이에서는 constant-fold **불가**.
-
-#### B.3 VOLATILE — 무엇이든 가능
-
-`random()`, `nextval('seq')`, `INSERT`나 `UPDATE`를 수행하는 모든 함수. planner는 매번, source 순서대로 호출해야 하며, iteration 경계를 가로질러 옮길 수 없음.
-
-#### B.4 잘못 선언하면 조용히 깨지는 이유
-
-`now()`를 IMMUTABLE로 표시하면 planner가 "오늘"을 prepared statement에서 절대 변하지 않는 값으로 constant-fold할 수 있음 — 같은 쿼리, 연결의 남은 생애 동안 같은 답. `random()`을 STABLE로 표시하면 planner가 한 SELECT 전체에 걸쳐 random 값 하나를 재사용할 수 있음. PostgreSQL은 당신의 선언을 신뢰함 — 잘못된 선언은 에러가 아니라 잘못된 답을 만듦.
-
-기본값은 VOLATILE — 안전하지만 비관적. 사용자 정의 함수를 정의할 때는 항상 올바른 클래스를 생각.
-
-### C. PL/pgSQL — parse, plan, cache
-
-PL/pgSQL 함수 body는 세 단계로 처리됨.
-
-#### C.1 첫 호출 — full parse
-
-세션이 함수를 처음 호출할 때, PL/pgSQL이 body 전체를 내부 트리로 parsing. 모든 embedded SQL statement(`SELECT`, `INSERT`, `EXECUTE`)는 노드가 됨.
-
-#### C.2 각 SQL statement의 첫 실행 — plan과 캐시
-
-각 embedded SQL statement는 처음 실행될 때 planning되고, plan은 **세션 생애 동안 캐시**됨. 함수의 다음 호출은 캐시된 plan을 재사용 — 재-planning 없음.
-
-이로써 PL/pgSQL은 반복 호출에 빠르지만 미묘한 함정을 만듦 — 캐시된 plan은 *첫* 호출의 매개변수 값으로 빌드(PostgreSQL은 부분 generic-plan 로직 사용). 후속 호출의 매개변수 selectivity가 매우 다르면 캐시된 plan이 그것들에 나쁠 수 있음. PostgreSQL은 cost 추정에 따라 몇 번의 호출 후 custom과 generic plan 사이에서 전환하지만, 병리적 사례가 존재.
-
-#### C.3 `EXECUTE` — 명시적 재-planning
-
-PL/pgSQL 안에서, 평범한 SQL statement는 캐시된-plan 메커니즘을 사용. 동적 형태 `EXECUTE 'SELECT ...';`는 매번 다시 parsing하고 다시 plan함. 매개변수 값이 selectivity를 급격히 바꾸는 쿼리에, 또는 쿼리 텍스트 자체가 동적으로 빌드되는 경우에 사용.
-
-### D. Function vs Procedure — 트랜잭션 scope
-
-PostgreSQL 11까지는 함수만 있었음. PG 11이 procedure(`CREATE PROCEDURE`)를 추가했고, 차이는 순전히 트랜잭션 통제에 관한 것:
-
-| 특성 | Function | Procedure |
-|------|----------|-----------|
-| 값 반환 | 예 (`RETURNS type`) | 아니오 (`OUT` 매개변수 사용) |
-| 호출 방법 | `SELECT func()` (expression 안에서) | `CALL proc()` (top-level) |
-| body 안의 `COMMIT` / `ROLLBACK` | **불가** | **가능** |
-| 병렬 쿼리에서 실행 가능 | `PARALLEL SAFE`로 표시되면 | 아니오 |
-
-#### D.1 함수가 COMMIT 불가능한 이유
-
-함수 호출은 SQL statement의 일부. statement는 트랜잭션의 일부. 함수가 호출 중에 commit하게 허용하면 호출 statement가 commit 경계를 가로지르게 됨 — MVCC visibility에 incoherent하고, 트리거에 undefined하고, 에러 시 executor가 정리 불가능.
-
-Procedure는 expression 내부가 아니라 top level에서 호출됨. body 안에서 `COMMIT; ... BEGIN;`을 하고 새 트랜잭션을 시작할 수 있음. 여러 트랜잭션에 걸쳐 작업을 chunk해야 하는 batch job에 사용(예 — "1000행 처리, commit, 반복").
-
-#### D.2 익명 코드 — `DO` block
-
-`DO $$ DECLARE x int; BEGIN ... END $$;`는 익명 PL/pgSQL block을 실행. 일회성 스크립트에 유용. block은 호출하는 트랜잭션에서 실행되며, 함수처럼 commit 불가.
-
-### 이론에서 아래 SQL로
-
-이어지는 각 절은 위 메커니즘이 구체화된 형태입니다:
-
-- **내장 함수** (`UPPER`, `LENGTH`, `NOW`, `RANDOM`) — 대부분 IMMUTABLE 또는 STABLE, planner가 이를 활용 (§B).
-- **`CREATE FUNCTION ... LANGUAGE sql`** — 단순할 때 inlinable (§A.1).
-- **`CREATE FUNCTION ... LANGUAGE plpgsql`** — 변수, 제어 흐름, 절대 inline 안 됨 (§A.2).
-- **`IMMUTABLE` / `STABLE` / `VOLATILE`** — volatility 계약 선언 (§B).
-- **`CREATE PROCEDURE` + `CALL`** — top-level 호출, body 중간에 `COMMIT` 가능 (§D).
-- **`DO $$ ... $$`** — 익명 block, 호출 트랜잭션에서 실행 (§D.2).
-- **PL/pgSQL 안의 `EXECUTE 'sql'`** — 동적 SQL을 위해 plan cache 우회 (§C.3).
-
 ---
 
 ## 1. 내장 함수
@@ -218,6 +102,56 @@ SELECT
 
 ## 2. 사용자 정의 함수 기본
 
+### 이론: 함수 언어와 inlining
+
+PostgreSQL 함수는 여러 언어로 작성 가능. 사용자 코드에서 가장 흔한 둘:
+
+#### A.1 SQL 함수
+
+`CREATE FUNCTION add_one(x int) RETURNS int LANGUAGE sql AS 'SELECT x + 1';`
+
+body는 (다중 statement일 수 있는) SQL block. 함수가 **충분히 단순**하면 — 단일 SELECT, IMMUTABLE/STABLE, 복잡한 매개변수 없음 — planner가 **inline**할 수 있음 — view처럼 planning 중에 모든 호출이 body로 치환됨. 그러면 runtime에 함수 호출 overhead가 없음.
+
+SQL 함수가 항상 inlinable한 것은 아님. 다중 statement body, VOLATILE 표시, 비일상적 컨텍스트의 set-returning 함수 — 이들 중 어느 것이라도 inlining을 막고 진짜 per-call 실행을 강제.
+
+#### A.2 PL/pgSQL 함수
+
+`CREATE FUNCTION ... LANGUAGE plpgsql AS $$ DECLARE ... BEGIN ... END $$;`
+
+PL/pgSQL은 SQL 위에 layered된 절차적 언어. body에 변수, 제어 흐름(`IF`, `LOOP`, `FOR`, `WHILE`), 예외 처리, 명시적 `RETURN`이 있음. PL/pgSQL 함수는 **절대 inline되지 않음** — 모든 호출이 자체 변수 scope를 가진 진짜 호출이며, body는 1번 parsing되지만 매번 실행됨.
+
+비용 — 호출당 함수 호출 overhead(마이크로초 단위지만, 행마다 호출되면 누적). 이점 — 순수 SQL로 표현할 수 없는 모든 것.
+
+### 이론: Volatility 클래스
+
+모든 함수는 세 **volatility** 클래스 중 하나를 선언(또는 기본값). planner에게 어떤 최적화가 안전한지 알리는 메타데이터.
+
+#### B.1 IMMUTABLE — 같은 입력, 같은 출력, 영원히
+
+`abs(x)`, `length(s)`, `pi()`. planner가 자유롭게:
+
+- 모든 인자가 상수이면 호출을 planning 시점에 **constant-fold**. `WHERE x = abs(-5)`가 한 번에 `WHERE x = 5`가 됨.
+- **expression 인덱스에 함수 사용** (`CREATE INDEX ON t (immutable_func(col))`). PostgreSQL은 STABLE이나 VOLATILE 함수에 인덱스를 만들기를 거부 — 인덱스가 조용히 stale해지기 때문.
+
+#### B.2 STABLE — 같은 입력, 같은 출력, 한 statement 내에서
+
+`now()`, `current_user`, `current_setting('foo')`. 한 쿼리 안에서 `now()`를 10번 호출하면 같은 값을 반환(PostgreSQL이 보장). 쿼리 사이에서는 그렇지 않음.
+
+planner가:
+
+- **bound로서 index scan에 함수 사용 가능** (`WHERE x > now()`). 함수는 스캔 시작 시 1번 호출되고, 결과는 스캔 동안 상수로 처리.
+- statement 사이에서는 constant-fold **불가**.
+
+#### B.3 VOLATILE — 무엇이든 가능
+
+`random()`, `nextval('seq')`, `INSERT`나 `UPDATE`를 수행하는 모든 함수. planner는 매번, source 순서대로 호출해야 하며, iteration 경계를 가로질러 옮길 수 없음.
+
+#### B.4 잘못 선언하면 조용히 깨지는 이유
+
+`now()`를 IMMUTABLE로 표시하면 planner가 "오늘"을 prepared statement에서 절대 변하지 않는 값으로 constant-fold할 수 있음 — 같은 쿼리, 연결의 남은 생애 동안 같은 답. `random()`을 STABLE로 표시하면 planner가 한 SELECT 전체에 걸쳐 random 값 하나를 재사용할 수 있음. PostgreSQL은 당신의 선언을 신뢰함 — 잘못된 선언은 에러가 아니라 잘못된 답을 만듦.
+
+기본값은 VOLATILE — 안전하지만 비관적. 사용자 정의 함수를 정의할 때는 항상 올바른 클래스를 생각.
+
 ### SQL 함수
 
 ```sql
@@ -244,6 +178,24 @@ DROP FUNCTION IF EXISTS add_numbers(INTEGER, INTEGER);
 ## 3. PL/pgSQL 함수
 
 PL/pgSQL은 PostgreSQL의 절차적 언어입니다.
+
+### 이론: PL/pgSQL — parse, plan, cache
+
+PL/pgSQL 함수 body는 세 단계로 처리됨.
+
+#### C.1 첫 호출 — full parse
+
+세션이 함수를 처음 호출할 때, PL/pgSQL이 body 전체를 내부 트리로 parsing. 모든 embedded SQL statement(`SELECT`, `INSERT`, `EXECUTE`)는 노드가 됨.
+
+#### C.2 각 SQL statement의 첫 실행 — plan과 캐시
+
+각 embedded SQL statement는 처음 실행될 때 planning되고, plan은 **세션 생애 동안 캐시**됨. 함수의 다음 호출은 캐시된 plan을 재사용 — 재-planning 없음.
+
+이로써 PL/pgSQL은 반복 호출에 빠르지만 미묘한 함정을 만듦 — 캐시된 plan은 *첫* 호출의 매개변수 값으로 빌드(PostgreSQL은 부분 generic-plan 로직 사용). 후속 호출의 매개변수 selectivity가 매우 다르면 캐시된 plan이 그것들에 나쁠 수 있음. PostgreSQL은 cost 추정에 따라 몇 번의 호출 후 custom과 generic plan 사이에서 전환하지만, 병리적 사례가 존재.
+
+#### C.3 `EXECUTE` — 명시적 재-planning
+
+PL/pgSQL 안에서, 평범한 SQL statement는 캐시된-plan 메커니즘을 사용. 동적 형태 `EXECUTE 'SELECT ...';`는 매번 다시 parsing하고 다시 plan함. 매개변수 값이 selectivity를 급격히 바꾸는 쿼리에, 또는 쿼리 텍스트 자체가 동적으로 빌드되는 경우에 사용.
 
 ### 기본 구조
 
@@ -477,6 +429,27 @@ RAISE EXCEPTION 'Error message';   -- 실행 중단
 ## 6. 프로시저 (PROCEDURE)
 
 함수와 달리 값을 반환하지 않고 작업을 수행합니다 (PostgreSQL 11+).
+
+### 이론: Function vs Procedure — 트랜잭션 scope
+
+PostgreSQL 11까지는 함수만 있었음. PG 11이 procedure(`CREATE PROCEDURE`)를 추가했고, 차이는 순전히 트랜잭션 통제에 관한 것:
+
+| 특성 | Function | Procedure |
+|------|----------|-----------|
+| 값 반환 | 예 (`RETURNS type`) | 아니오 (`OUT` 매개변수 사용) |
+| 호출 방법 | `SELECT func()` (expression 안에서) | `CALL proc()` (top-level) |
+| body 안의 `COMMIT` / `ROLLBACK` | **불가** | **가능** |
+| 병렬 쿼리에서 실행 가능 | `PARALLEL SAFE`로 표시되면 | 아니오 |
+
+#### D.1 함수가 COMMIT 불가능한 이유
+
+함수 호출은 SQL statement의 일부. statement는 트랜잭션의 일부. 함수가 호출 중에 commit하게 허용하면 호출 statement가 commit 경계를 가로지르게 됨 — MVCC visibility에 incoherent하고, 트리거에 undefined하고, 에러 시 executor가 정리 불가능.
+
+Procedure는 expression 내부가 아니라 top level에서 호출됨. body 안에서 `COMMIT; ... BEGIN;`을 하고 새 트랜잭션을 시작할 수 있음. 여러 트랜잭션에 걸쳐 작업을 chunk해야 하는 batch job에 사용(예 — "1000행 처리, commit, 반복").
+
+#### D.2 익명 코드 — `DO` block
+
+`DO $$ DECLARE x int; BEGIN ... END $$;`는 익명 PL/pgSQL block을 실행. 일회성 스크립트에 유용. block은 호출하는 트랜잭션에서 실행되며, 함수처럼 commit 불가.
 
 ### 프로시저 생성
 

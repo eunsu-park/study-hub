@@ -20,74 +20,21 @@ After completing this lesson, you will be able to:
 
 Raw data in a table is only useful when you can filter, sort, and page through it efficiently. In practice, almost every query you write will include a WHERE clause to narrow down results and an ORDER BY to present them in a meaningful sequence. These filtering and sorting skills are the bridge between storing data and extracting actionable information from it.
 
-Before the WHERE/ORDER BY syntax, read [**Theory & Principles**](#theory--principles) — how an index transforms a `WHERE` predicate into a B-tree range scan, why `NULL` makes everything three-valued, and how the planner decides between sequential scan and index scan.
+---
+
+## 1. WHERE Clause Basics
+
+The WHERE clause selects only rows that match a condition.
+
+```sql
+SELECT * FROM users WHERE condition;
+UPDATE users SET ... WHERE condition;
+DELETE FROM users WHERE condition;
+```
 
 ---
 
-## Theory & Principles
-
-A `WHERE` clause is not just a filter. It is a *predicate* that the planner tries to convert into a structured access path: a sequential scan, an index scan, an index-only scan, a bitmap heap scan, or some combination. Whether your query takes 3 ms or 3 seconds depends almost entirely on which path the planner picks, which depends on whether the predicate is **sargable** (Search ARGument-able — usable by an index) and on how selective it is. The same logic applies to `ORDER BY`: a sort can disappear entirely if a B-tree index already stores the rows in the requested order.
-
-This section covers:
-
-- **(A)** B-tree internals: ordered pages, range scans, and the equivalence between `=`, `<`, `>`, `BETWEEN`.
-- **(B)** Sargability: which `WHERE` predicates can use an index and which cannot, and why.
-- **(C)** Three-valued logic: how `NULL` interacts with comparison, `AND`, `OR`, `NOT`, and `IN`.
-- **(D)** Sequential vs index vs bitmap scan: the planner's three options and the cost model that picks one.
-
-### A. B-tree — The Default Index Type
-
-`CREATE INDEX idx ON t(col);` (with no `USING` clause) builds a **B-tree** — specifically, a Lehman-Yao concurrent B-tree. The on-disk shape is:
-
-```
-            ┌────────────────┐
-            │  Root page     │   (1 page, points to internal pages)
-            └───┬─────┬──────┘
-                │     │
-        ┌───────┘     └────────┐
-   ┌────┴──────┐         ┌─────┴──────┐
-   │ Internal  │   ...   │  Internal  │     (depth = log₂(N) / log₂(branch_factor))
-   └─┬───┬─────┘         └─────┬──────┘
-     │   │                     │
-   ┌─┴┐ ┌┴───┐              ┌──┴───┐
-   │L │ │ L  │   ...        │  L   │              (Leaf pages — sorted)
-   │  │ │    │              │      │
-   └──┘ └────┘              └──────┘
-   ←───────── linked list of leaves ─────────→
-```
-
-The leaves are in **sorted key order** and are linked left-to-right. So given a key (or range of keys), PostgreSQL navigates from root to the right leaf, then walks the leaf list scanning forward (or backward — also linked).
-
-#### A.1 Why B-tree handles `=`, `<`, `>`, `BETWEEN`, and `ORDER BY` for free
-
-All four operations reduce to "navigate to a leaf, then read sequentially":
-
-- `WHERE x = 5` — descend to the first leaf containing key `5`, read until key changes.
-- `WHERE x > 5` — descend to the first leaf with `x > 5`, read forward to end.
-- `WHERE x BETWEEN 5 AND 10` — descend to first leaf `x ≥ 5`, stop when `x > 10`.
-- `ORDER BY x` — descend to leftmost leaf, walk forward — no separate sort step.
-- `ORDER BY x DESC` — descend to rightmost leaf, walk backward.
-
-This is why one B-tree handles a wide variety of queries. Hash, GIN, GiST, BRIN — covered later — exist for cases B-tree cannot serve.
-
-#### A.2 Multi-column B-tree and the leftmost-prefix rule
-
-`CREATE INDEX idx ON t(a, b, c);` orders rows by `a`, then by `b` within equal `a`, then by `c` within equal `(a, b)`. This means the index is usable for:
-
-- `WHERE a = ?`
-- `WHERE a = ? AND b = ?`
-- `WHERE a = ? AND b = ? AND c = ?`
-- `WHERE a = ? AND b > ?`
-- `WHERE a > ?` (range on first column)
-
-But *not* (or, only inefficiently) usable for:
-
-- `WHERE b = ?` alone — the index is sorted by `a` first, so all `a` values must be scanned.
-- `WHERE c = ?` alone — same reason, deeper.
-
-This is the **leftmost-prefix rule**. Index column order is a design choice that locks in which queries are fast.
-
-### B. Sargability — Predicates an Index Can Use
+### Theory: Sargability — Predicates an Index Can Use
 
 A predicate is **sargable** if it can be rewritten as a key range on an indexed expression. Sargable forms:
 
@@ -116,87 +63,6 @@ A B-tree on `name` stores `name` values, not `LOWER(name)`. The planner has no w
 #### B.2 Why prefix LIKE is sargable but suffix LIKE is not
 
 `WHERE name LIKE 'abc%'` is equivalent to `WHERE name >= 'abc' AND name < 'abd'` — a key range that B-tree handles natively. `WHERE name LIKE '%abc'` cannot be reduced to any range — the matching keys are scattered through the index. For suffix or substring matches, you need a different index type (`pg_trgm` GIN/GiST — covered in lesson 19).
-
-### C. Three-Valued Logic and NULL
-
-SQL is *three-valued*: every boolean expression evaluates to TRUE, FALSE, or NULL ("UNKNOWN"). NULL means "value not known" — and any operation involving an unknown value is itself unknown.
-
-| Expression | Result |
-|------------|--------|
-| `5 = NULL` | NULL (not FALSE!) |
-| `5 <> NULL` | NULL |
-| `NULL = NULL` | NULL |
-| `NULL AND TRUE` | NULL |
-| `NULL AND FALSE` | FALSE (false absorbs) |
-| `NULL OR TRUE` | TRUE (true absorbs) |
-| `NULL OR FALSE` | NULL |
-| `NOT NULL` | NULL |
-
-`WHERE` keeps a row only if the predicate evaluates to TRUE — so NULL results are filtered out. This produces the surprise:
-
-```sql
-SELECT count(*) FROM users WHERE age <> 30;
--- Does NOT include users with age IS NULL!
-```
-
-To handle NULL explicitly, use `IS NULL` and `IS NOT NULL` (which always return TRUE or FALSE — never NULL), or `IS DISTINCT FROM` (a NULL-safe `<>`).
-
-#### C.1 NULL and IN
-
-`WHERE x IN (1, 2, NULL)` is exactly `WHERE x = 1 OR x = 2 OR x = NULL`. The last term is always NULL. So the expression is TRUE if `x = 1` or `x = 2`; otherwise NULL — and rows with NULL are filtered out. This is fine.
-
-But `WHERE x NOT IN (1, 2, NULL)` is `WHERE x <> 1 AND x <> 2 AND x <> NULL` — that last AND can never be TRUE, so the *entire* clause is NULL or FALSE, and *no rows match*. This is the most famous SQL gotcha — always exclude NULLs from `NOT IN` lists, or use `NOT EXISTS` instead.
-
-### D. Sequential, Index, and Bitmap Scans
-
-Given a sargable predicate, the planner picks one of three access methods based on **selectivity** — the fraction of rows the predicate matches.
-
-#### D.1 Sequential scan
-
-Read every page of the heap from start to end, evaluate the predicate per row. Cost is proportional to table size. Wins when selectivity is high (returning > ~10% of rows) because no random I/O is needed and pages can be read in large prefetched chunks.
-
-#### D.2 Index scan
-
-Walk the B-tree to find matching keys, then for each key follow the heap pointer to read the row. Cost is `(matching_rows × random_page_cost) + log B-tree depth`. Wins when selectivity is low (returning < ~1% of rows). Loses badly at high selectivity because random heap reads are 4× the cost of sequential reads (`random_page_cost` defaults to 4.0, `seq_page_cost` to 1.0).
-
-#### D.3 Bitmap scan
-
-For middle selectivities (1%–10%), the planner uses a hybrid:
-
-1. **Index scan** to build a **bitmap** of matching heap page numbers.
-2. **Sort** the bitmap by page number.
-3. **Sequential read** of the heap pages in order, applying the predicate per row.
-
-This converts random reads to sequential reads at the cost of materializing the bitmap. For large result sets, it is dramatically faster than a pure index scan.
-
-#### D.4 Index-only scan
-
-If every column the query needs is in the index (a "covering index"), PostgreSQL can answer from the index alone without ever touching the heap. Requires the **visibility map** to confirm the row is visible without checking heap MVCC headers. Build with `CREATE INDEX ... INCLUDE (col1, col2)` to add non-key columns purely for this purpose.
-
-### From Theory to the SQL Below
-
-Each of the following sections is one of these mechanisms made concrete:
-
-- **`WHERE` with `=`, `<`, `>`** — sargable predicates that benefit from B-tree (§A, §B).
-- **`WHERE LIKE 'abc%'`** — sargable; `WHERE LIKE '%abc'` is not (§B.2).
-- **`AND`, `OR`, `NOT`** — three-valued logic; `NULL` can hide rows you expected to keep or exclude (§C).
-- **`IS NULL`, `IS NOT NULL`** — the only NULL-safe predicates (§C).
-- **`ORDER BY col`, `ORDER BY col DESC`** — free if a matching B-tree exists; otherwise triggers an explicit sort step (§A.1).
-- **`LIMIT n`** — combines with `ORDER BY` to enable a "top-N" optimization that stops scanning early.
-
----
-
-## 1. WHERE Clause Basics
-
-The WHERE clause selects only rows that match a condition.
-
-```sql
-SELECT * FROM users WHERE condition;
-UPDATE users SET ... WHERE condition;
-DELETE FROM users WHERE condition;
-```
-
----
 
 ## 2. Comparison Operators
 
@@ -367,6 +233,36 @@ SELECT * FROM products WHERE name LIKE '%50\%%' ESCAPE '\';  -- Contains 50%
 
 NULL is an "unknown value" and cannot be compared with regular comparison operators.
 
+### Theory: Three-Valued Logic and NULL
+
+SQL is *three-valued*: every boolean expression evaluates to TRUE, FALSE, or NULL ("UNKNOWN"). NULL means "value not known" — and any operation involving an unknown value is itself unknown.
+
+| Expression | Result |
+|------------|--------|
+| `5 = NULL` | NULL (not FALSE!) |
+| `5 <> NULL` | NULL |
+| `NULL = NULL` | NULL |
+| `NULL AND TRUE` | NULL |
+| `NULL AND FALSE` | FALSE (false absorbs) |
+| `NULL OR TRUE` | TRUE (true absorbs) |
+| `NULL OR FALSE` | NULL |
+| `NOT NULL` | NULL |
+
+`WHERE` keeps a row only if the predicate evaluates to TRUE — so NULL results are filtered out. This produces the surprise:
+
+```sql
+SELECT count(*) FROM users WHERE age <> 30;
+-- Does NOT include users with age IS NULL!
+```
+
+To handle NULL explicitly, use `IS NULL` and `IS NOT NULL` (which always return TRUE or FALSE — never NULL), or `IS DISTINCT FROM` (a NULL-safe `<>`).
+
+#### C.1 NULL and IN
+
+`WHERE x IN (1, 2, NULL)` is exactly `WHERE x = 1 OR x = 2 OR x = NULL`. The last term is always NULL. So the expression is TRUE if `x = 1` or `x = 2`; otherwise NULL — and rows with NULL are filtered out. This is fine.
+
+But `WHERE x NOT IN (1, 2, NULL)` is `WHERE x <> 1 AND x <> 2 AND x <> NULL` — that last AND can never be TRUE, so the *entire* clause is NULL or FALSE, and *no rows match*. This is the most famous SQL gotcha — always exclude NULLs from `NOT IN` lists, or use `NOT EXISTS` instead.
+
 ### IS NULL / IS NOT NULL
 
 ```sql
@@ -404,6 +300,58 @@ SELECT total / NULLIF(count, 0) FROM stats;
 ---
 
 ## 8. ORDER BY - Sorting
+
+### Theory: B-tree — The Default Index Type
+
+`CREATE INDEX idx ON t(col);` (with no `USING` clause) builds a **B-tree** — specifically, a Lehman-Yao concurrent B-tree. The on-disk shape is:
+
+```
+            ┌────────────────┐
+            │  Root page     │   (1 page, points to internal pages)
+            └───┬─────┬──────┘
+                │     │
+        ┌───────┘     └────────┐
+   ┌────┴──────┐         ┌─────┴──────┐
+   │ Internal  │   ...   │  Internal  │     (depth = log₂(N) / log₂(branch_factor))
+   └─┬───┬─────┘         └─────┬──────┘
+     │   │                     │
+   ┌─┴┐ ┌┴───┐              ┌──┴───┐
+   │L │ │ L  │   ...        │  L   │              (Leaf pages — sorted)
+   │  │ │    │              │      │
+   └──┘ └────┘              └──────┘
+   ←───────── linked list of leaves ─────────→
+```
+
+The leaves are in **sorted key order** and are linked left-to-right. So given a key (or range of keys), PostgreSQL navigates from root to the right leaf, then walks the leaf list scanning forward (or backward — also linked).
+
+#### A.1 Why B-tree handles `=`, `<`, `>`, `BETWEEN`, and `ORDER BY` for free
+
+All four operations reduce to "navigate to a leaf, then read sequentially":
+
+- `WHERE x = 5` — descend to the first leaf containing key `5`, read until key changes.
+- `WHERE x > 5` — descend to the first leaf with `x > 5`, read forward to end.
+- `WHERE x BETWEEN 5 AND 10` — descend to first leaf `x ≥ 5`, stop when `x > 10`.
+- `ORDER BY x` — descend to leftmost leaf, walk forward — no separate sort step.
+- `ORDER BY x DESC` — descend to rightmost leaf, walk backward.
+
+This is why one B-tree handles a wide variety of queries. Hash, GIN, GiST, BRIN — covered later — exist for cases B-tree cannot serve.
+
+#### A.2 Multi-column B-tree and the leftmost-prefix rule
+
+`CREATE INDEX idx ON t(a, b, c);` orders rows by `a`, then by `b` within equal `a`, then by `c` within equal `(a, b)`. This means the index is usable for:
+
+- `WHERE a = ?`
+- `WHERE a = ? AND b = ?`
+- `WHERE a = ? AND b = ? AND c = ?`
+- `WHERE a = ? AND b > ?`
+- `WHERE a > ?` (range on first column)
+
+But *not* (or, only inefficiently) usable for:
+
+- `WHERE b = ?` alone — the index is sorted by `a` first, so all `a` values must be scanned.
+- `WHERE c = ?` alone — same reason, deeper.
+
+This is the **leftmost-prefix rule**. Index column order is a design choice that locks in which queries are fast.
 
 ### Basic Sorting
 
@@ -637,6 +585,32 @@ SELECT * FROM products ORDER BY stock NULLS LAST;
 ---
 
 ## 12. Performance Tips
+
+### Theory: Sequential, Index, and Bitmap Scans
+
+Given a sargable predicate, the planner picks one of three access methods based on **selectivity** — the fraction of rows the predicate matches.
+
+#### D.1 Sequential scan
+
+Read every page of the heap from start to end, evaluate the predicate per row. Cost is proportional to table size. Wins when selectivity is high (returning > ~10% of rows) because no random I/O is needed and pages can be read in large prefetched chunks.
+
+#### D.2 Index scan
+
+Walk the B-tree to find matching keys, then for each key follow the heap pointer to read the row. Cost is `(matching_rows × random_page_cost) + log B-tree depth`. Wins when selectivity is low (returning < ~1% of rows). Loses badly at high selectivity because random heap reads are 4× the cost of sequential reads (`random_page_cost` defaults to 4.0, `seq_page_cost` to 1.0).
+
+#### D.3 Bitmap scan
+
+For middle selectivities (1%–10%), the planner uses a hybrid:
+
+1. **Index scan** to build a **bitmap** of matching heap page numbers.
+2. **Sort** the bitmap by page number.
+3. **Sequential read** of the heap pages in order, applying the predicate per row.
+
+This converts random reads to sequential reads at the cost of materializing the bitmap. For large result sets, it is dramatically faster than a pure index scan.
+
+#### D.4 Index-only scan
+
+If every column the query needs is in the index (a "covering index"), PostgreSQL can answer from the index alone without ever touching the heap. Requires the **visibility map** to confirm the row is visible without checking heap MVCC headers. Build with `CREATE INDEX ... INCLUDE (col1, col2)` to add non-key columns purely for this purpose.
 
 ### Use Indexes
 

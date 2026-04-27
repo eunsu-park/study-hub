@@ -22,8 +22,6 @@
 
 ## 목차
 
-FTS reference로 들어가기 전, [**이론과 원리**](#이론과-원리) 절을 먼저 읽으세요 — `tsvector`가 실제로 무엇을 저장하는지(inverted-index 친화적 토큰화 형태), GIN의 posting list가 `@@` 쿼리를 어떻게 빠르게 하는지, `ts_rank` 뒤의 수학, 그리고 `pg_trgm`이 FTS를 fuzzy matching으로 어떻게 확장하는지를 다룹니다.
-
 1. [전문 검색 개요](#1-전문-검색-개요)
 2. [tsvector와 tsquery](#2-tsvector와-tsquery)
 3. [검색 구성](#3-검색-구성)
@@ -32,129 +30,6 @@ FTS reference로 들어가기 전, [**이론과 원리**](#이론과-원리) 절
 6. [고급 검색 기법](#6-고급-검색-기법)
 7. [퍼지 매칭을 위한 pg_trgm](#7-퍼지-매칭을-위한-pg_trgm)
 8. [연습 문제](#8-연습-문제)
-
----
-
-## 이론과 원리
-
-전문 검색(Full-text search)은 "id로 행 lookup"과 완전히 다른 종류의 인덱싱 문제입니다. 자연어 토큰을 매칭하고, 어쩌면 stemming하고, 어쩌면 fuzzy 철자를 처리하고, 어떤 relevance 개념으로 ranking합니다. PostgreSQL은 이를 **`tsvector`**(위치를 가진 정렬된 토큰 목록), **`tsquery`**(parsing된 쿼리 표현식), `@@` 매치 연산자, 하부 inverted index로서의 GIN, relevance score로서의 `ts_rank`, 그리고 표준 FTS가 표현할 수 없는 fuzzy/prefix matching을 위한 `pg_trgm` 확장으로 구현합니다.
-
-이 절에서 다루는 내용:
-
-- **(A)** Tokenization — 텍스트가 `tsvector`가 되는 방식(parser → dictionary → stemmed lexeme).
-- **(B)** FTS를 위한 inverted index로서의 GIN — posting list, `@@` 연산자의 평가 알고리즘.
-- **(C)** Ranking — `ts_rank`와 `ts_rank_cd`, cover-density 공식, weight A/B/C/D.
-- **(D)** Trigram — `pg_trgm`, similarity, 그리고 `LIKE '%substring%'`을 어떻게 가속하는지.
-
-### A. Tokenization — 텍스트에서 `tsvector`로
-
-`tsvector`는 위치 메타데이터를 가진 *정렬되고 deduplicate된 정규화 토큰 목록*(**lexeme**이라 부름)입니다. 원시 텍스트로부터 만드는 것은 **text search configuration**(예 — `english`, `simple`, `korean`)이 통제하는 세 단계를 거칩니다.
-
-#### A.1 Parser — 텍스트를 raw 토큰으로
-
-parser는 입력을 타입별 토큰 — `word`, `email`, `url`, `number` 등 — 으로 분리. 영어의 경우 "The quick brown fox"는 네 개의 word 토큰을 만듦.
-
-#### A.2 Dictionary — 토큰을 lexeme으로
-
-각 토큰은 타입에 따라 **dictionary**의 ordered chain으로 처리됨. 흔한 연산:
-
-- **stop-word 제거** — "the", "a", "is" drop (영어 `english_stop`).
-- **Stemming** — "running", "runs", "ran"을 lexeme "run"으로 collapse(영어 snowball stemmer).
-- **synonym / thesaurus** — "USA"를 "united states"로 교체.
-- **simple lowercase** — stemming 없는 `simple` config용.
-
-#### A.3 결과 — 위치를 가진 정렬된 lexeme
-
-```sql
-SELECT to_tsvector('english', 'The quick brown foxes jumped');
--- 'brown':3 'fox':4 'jump':5 'quick':2
-```
-
-"The"는 drop(stop word), "foxes"는 "fox"가 됨(stemmed), "jumped"는 "jump"가 됨. 각 lexeme이 위치 번호를 유지 — phrase 쿼리에 필수.
-
-### B. GIN과 `@@` 매치
-
-#### B.1 저장
-
-`tsvector` 컬럼에 대한 GIN 인덱스는 각 lexeme에 대해 그 lexeme을 포함하는 `tsvector`의 row TID 목록을 저장. 이는 정확히 14번 레슨의 JSONB-GIN 구조, 텍스트에 특화.
-
-#### B.2 `@@` 연산자
-
-`tsvector @@ tsquery`는 쿼리 표현식을 문서에 평가. `'fox & jumped'::tsquery`에 대해 executor는:
-
-1. 쿼리를 표현식 트리로 parsing — `AND(fox, jump)`(stemming 후).
-2. 각 leaf(lexeme)에 대해 GIN posting list lookup.
-3. 연산자에 따라 posting list 결합 — AND = 교집합, OR = 합집합, NOT = 차집합.
-4. matching TID 반환.
-
-`tsquery`는 `&`(AND), `|`(OR), `!`(NOT), `<->`(phrase — 토큰이 인접), `<N>`(N 위치 떨어진 토큰), 괄호 그룹화 지원.
-
-#### B.3 GiST를 대안으로
-
-`USING gin (tsv)`이 전형적 선택 — 빠른 lookup, 느린 insert. `USING gist (tsv)`는 *signature 기반* 인덱스로 insert가 더 빠르지만, 실제 `tsvector`에 대해 recheck를 요하는 *false positive*를 만듦. 인덱스 크기나 insert latency가 lookup 속도보다 중요한 매우 write-heavy 워크로드에 유용.
-
-### C. Ranking — `ts_rank`와 `ts_rank_cd`
-
-매치되는 행 반환은 일의 절반일 뿐, 보통 relevance로 ranking을 원함.
-
-#### C.1 `ts_rank` — 빈도 기반
-
-```sql
-ts_rank(tsv, query, normalization) → float4
-```
-
-TF-IDF 풍의 score 구현 — lexeme이 문서에 여러 번 나오면 score를 boost하고, score는 `normalization` 플래그에 따라 문서 길이로 정규화됨. 기본은 길이 정규화 없음.
-
-#### C.2 `ts_rank_cd` — cover-density
-
-`cd` = cover density. matching lexeme이 *얼마나 가까이* 나오는지를 고려 — 모든 쿼리 용어가 한 문단에 cluster된 문서가 흩어진 문서보다 score가 높음. 계산이 더 비싸지만 다중-단어 쿼리에 일반적으로 더 좋은 ranking을 만듦.
-
-#### C.3 Weight — 문서의 일부에 가중치
-
-문서는 종종 구조(title, summary, body, tag)를 가짐. 이를 하나의 `tsvector`에 **weight**로 저장 가능:
-
-```sql
-setweight(to_tsvector('english', title), 'A') ||
-setweight(to_tsvector('english', body), 'B')
-```
-
-`A`가 가장 높은 weight, `D`가 가장 낮음. `ts_rank`는 `weights` 배열(`{0.1, 0.2, 0.4, 1.0}`은 D, C, B, A)을 받아 lexeme의 기여를 그 weight로 곱함.
-
-### D. Trigram — `pg_trgm`
-
-FTS는 전체-단어 매칭에 좋지만 typo, 부분 단어, substring 검색에는 실패. `pg_trgm`은 이 gap을 채우는 표준 확장.
-
-#### D.1 Trigram 추출
-
-**Trigram**은 3-문자 substring. `pg_trgm`은 문자열의 모든 trigram을 추출:
-
-```
-'apple' → {'  a', ' ap', 'app', 'ppl', 'ple', 'le '}
-```
-
-선두 두 개와 후미 한 개의 공백이 단어 경계를 정규화.
-
-#### D.2 Similarity
-
-`similarity(s1, s2)`는 두 trigram 집합의 Jaccard similarity 반환 — `|교집합| / |합집합|`, [0, 1]. `'apple' % 'apples'`는 similarity가 `pg_trgm.similarity_threshold`(기본 0.3)을 초과하면 true 반환.
-
-#### D.3 Trigram에 대한 GIN/GiST
-
-`CREATE INDEX ON t USING gin (col gin_trgm_ops);`는 trigram inverted index 저장. 이는 `WHERE col LIKE '%substr%'`(일반 B-tree에 non-sargable, 5번 레슨 §B.2)을 sargable로 만듦 — planner가 `'%substr%'`에서 trigram을 추출, GIN에서 lookup, 교집합, 후보 TID 반환.
-
-이것이 임의의 `LIKE '%X%'` 쿼리를 가속하는 표준 해결책.
-
-### 이론에서 아래 SQL로
-
-이어지는 각 절은 위 메커니즘이 구체화된 형태입니다:
-
-- **`to_tsvector('english', text)`** — §A 파이프라인 실행.
-- **`to_tsquery('english', 'fox & jumped')`** — 쿼리 문법 parsing, 같은 stemming 적용.
-- **`tsv @@ tsq`** — 매치 연산자 (§B.2).
-- **`CREATE INDEX ON t USING gin (tsv)`** — `@@` 가속 (§B.1).
-- **`ts_rank`, `ts_rank_cd`** — relevance score (§C).
-- **`setweight(tsv, 'A')`** — 문서 부분에 weight 할당 (§C.3).
-- **`pg_trgm` 확장 + `gin_trgm_ops`** — fuzzy/substring 매칭 (§D).
 
 ---
 
@@ -229,6 +104,32 @@ FTS는 전체-단어 매칭에 좋지만 typo, 부분 단어, substring 검색�
 ---
 
 ## 2. tsvector와 tsquery
+
+### 이론: Tokenization — 텍스트에서 `tsvector`로
+
+`tsvector`는 위치 메타데이터를 가진 *정렬되고 deduplicate된 정규화 토큰 목록*(**lexeme**이라 부름)입니다. 원시 텍스트로부터 만드는 것은 **text search configuration**(예 — `english`, `simple`, `korean`)이 통제하는 세 단계를 거칩니다.
+
+#### A.1 Parser — 텍스트를 raw 토큰으로
+
+parser는 입력을 타입별 토큰 — `word`, `email`, `url`, `number` 등 — 으로 분리. 영어의 경우 "The quick brown fox"는 네 개의 word 토큰을 만듦.
+
+#### A.2 Dictionary — 토큰을 lexeme으로
+
+각 토큰은 타입에 따라 **dictionary**의 ordered chain으로 처리됨. 흔한 연산:
+
+- **stop-word 제거** — "the", "a", "is" drop (영어 `english_stop`).
+- **Stemming** — "running", "runs", "ran"을 lexeme "run"으로 collapse(영어 snowball stemmer).
+- **synonym / thesaurus** — "USA"를 "united states"로 교체.
+- **simple lowercase** — stemming 없는 `simple` config용.
+
+#### A.3 결과 — 위치를 가진 정렬된 lexeme
+
+```sql
+SELECT to_tsvector('english', 'The quick brown foxes jumped');
+-- 'brown':3 'fox':4 'jump':5 'quick':2
+```
+
+"The"는 drop(stop word), "foxes"는 "fox"가 됨(stemmed), "jumped"는 "jump"가 됨. 각 lexeme이 위치 번호를 유지 — phrase 쿼리에 필수.
 
 ### 2.1 tsvector — 문서 표현
 
@@ -394,6 +295,27 @@ ALTER TEXT SEARCH CONFIGURATION my_english
 
 ## 4. GIN과 GiST 인덱스
 
+### 이론: GIN과 `@@` 매치
+
+#### B.1 저장
+
+`tsvector` 컬럼에 대한 GIN 인덱스는 각 lexeme에 대해 그 lexeme을 포함하는 `tsvector`의 row TID 목록을 저장. 이는 정확히 14번 레슨의 JSONB-GIN 구조, 텍스트에 특화.
+
+#### B.2 `@@` 연산자
+
+`tsvector @@ tsquery`는 쿼리 표현식을 문서에 평가. `'fox & jumped'::tsquery`에 대해 executor는:
+
+1. 쿼리를 표현식 트리로 parsing — `AND(fox, jump)`(stemming 후).
+2. 각 leaf(lexeme)에 대해 GIN posting list lookup.
+3. 연산자에 따라 posting list 결합 — AND = 교집합, OR = 합집합, NOT = 차집합.
+4. matching TID 반환.
+
+`tsquery`는 `&`(AND), `|`(OR), `!`(NOT), `<->`(phrase — 토큰이 인접), `<N>`(N 위치 떨어진 토큰), 괄호 그룹화 지원.
+
+#### B.3 GiST를 대안으로
+
+`USING gin (tsv)`이 전형적 선택 — 빠른 lookup, 느린 insert. `USING gist (tsv)`는 *signature 기반* 인덱스로 insert가 더 빠르지만, 실제 `tsvector`에 대해 recheck를 요하는 *false positive*를 만듦. 인덱스 크기나 insert latency가 lookup 속도보다 중요한 매우 write-heavy 워크로드에 유용.
+
 ### 4.1 전문 검색을 위한 GIN 인덱스
 
 ```sql
@@ -456,6 +378,33 @@ ANALYZE articles;
 ---
 
 ## 5. 랭킹과 가중치
+
+### 이론: Ranking — `ts_rank`와 `ts_rank_cd`
+
+매치되는 행 반환은 일의 절반일 뿐, 보통 relevance로 ranking을 원함.
+
+#### C.1 `ts_rank` — 빈도 기반
+
+```sql
+ts_rank(tsv, query, normalization) → float4
+```
+
+TF-IDF 풍의 score 구현 — lexeme이 문서에 여러 번 나오면 score를 boost하고, score는 `normalization` 플래그에 따라 문서 길이로 정규화됨. 기본은 길이 정규화 없음.
+
+#### C.2 `ts_rank_cd` — cover-density
+
+`cd` = cover density. matching lexeme이 *얼마나 가까이* 나오는지를 고려 — 모든 쿼리 용어가 한 문단에 cluster된 문서가 흩어진 문서보다 score가 높음. 계산이 더 비싸지만 다중-단어 쿼리에 일반적으로 더 좋은 ranking을 만듦.
+
+#### C.3 Weight — 문서의 일부에 가중치
+
+문서는 종종 구조(title, summary, body, tag)를 가짐. 이를 하나의 `tsvector`에 **weight**로 저장 가능:
+
+```sql
+setweight(to_tsvector('english', title), 'A') ||
+setweight(to_tsvector('english', body), 'B')
+```
+
+`A`가 가장 높은 weight, `D`가 가장 낮음. `ts_rank`는 `weights` 배열(`{0.1, 0.2, 0.4, 1.0}`은 D, C, B, A)을 받아 lexeme의 기여를 그 weight로 곱함.
 
 ### 5.1 ts_rank
 
@@ -635,6 +584,30 @@ ORDER BY ndoc DESC;
 ---
 
 ## 7. 퍼지 매칭을 위한 pg_trgm
+
+### 이론: Trigram — `pg_trgm`
+
+FTS는 전체-단어 매칭에 좋지만 typo, 부분 단어, substring 검색에는 실패. `pg_trgm`은 이 gap을 채우는 표준 확장.
+
+#### D.1 Trigram 추출
+
+**Trigram**은 3-문자 substring. `pg_trgm`은 문자열의 모든 trigram을 추출:
+
+```
+'apple' → {'  a', ' ap', 'app', 'ppl', 'ple', 'le '}
+```
+
+선두 두 개와 후미 한 개의 공백이 단어 경계를 정규화.
+
+#### D.2 Similarity
+
+`similarity(s1, s2)`는 두 trigram 집합의 Jaccard similarity 반환 — `|교집합| / |합집합|`, [0, 1]. `'apple' % 'apples'`는 similarity가 `pg_trgm.similarity_threshold`(기본 0.3)을 초과하면 true 반환.
+
+#### D.3 Trigram에 대한 GIN/GiST
+
+`CREATE INDEX ON t USING gin (col gin_trgm_ops);`는 trigram inverted index 저장. 이는 `WHERE col LIKE '%substr%'`(일반 B-tree에 non-sargable, 5번 레슨 §B.2)을 sargable로 만듦 — planner가 `'%substr%'`에서 trigram을 추출, GIN에서 lookup, 교집합, 후보 TID 반환.
+
+이것이 임의의 `LIKE '%X%'` 쿼리를 가속하는 표준 해결책.
 
 ### 7.1 트라이그램 기초
 

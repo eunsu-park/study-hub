@@ -21,22 +21,25 @@
 
 트랜잭션(Transaction)은 모든 신뢰할 수 있는 데이터베이스 애플리케이션의 근간입니다. 은행 계좌 간 송금, 이커머스 시스템의 주문 처리, IoT 기기의 센서 데이터 기록 등 어떤 작업이든 트랜잭션은 연산 그룹이 완전히 성공하거나 완전히 실패하도록 보장하여 데이터베이스를 일관된 상태로 유지합니다. 트랜잭션을 마스터하는 것은 동시 접근과 예기치 못한 장애 상황에서도 올바르게 동작하는 애플리케이션을 구축하는 데 필수적입니다.
 
-문법으로 들어가기 전, [**이론과 원리**](#이론과-원리) 절을 먼저 읽으세요 — PostgreSQL의 심장: MVCC의 `xmin`/`xmax` visibility 규칙, 네 가지 SQL isolation level, Serializable Snapshot Isolation이 실제로 무엇을 계산하는지, 그리고 deadlock 검출이 어떻게 동작하는지를 다룹니다.
+---
+
+## 1. 트랜잭션 개념
+
+트랜잭션은 하나의 논리적 작업 단위를 구성하는 연산들의 집합입니다.
+
+```
+┌──────────────────────────────────────────────────────────┐
+│                     계좌 이체 트랜잭션                    │
+├──────────────────────────────────────────────────────────┤
+│  1. A 계좌에서 10만원 차감                               │
+│  2. B 계좌에 10만원 추가                                 │
+│  → 둘 다 성공하거나, 둘 다 실패해야 함                  │
+└──────────────────────────────────────────────────────────┘
+```
 
 ---
 
-## 이론과 원리
-
-PostgreSQL의 모든 메커니즘 중에서, 트랜잭션 시스템은 부하 상황에서 애플리케이션의 동작을 가장 직접적으로 결정합니다. 두 사용자가 같은 순간에 "checkout"을 누름, 재고 갱신 중 분석 쿼리 실행, 온라인 트래픽과 경쟁하는 긴 batch — 이 모든 시나리오는 같은 규칙 집합에 의해 지배됩니다 — **MVCC visibility**, **isolation level**, 그리고 **lock + SSI 충돌 검출**. 같은 `BEGIN`/`COMMIT` 문법이 isolation level과 동시 트랜잭션의 행동에 따라 극적으로 다른 정확성과 성능을 만들어 냅니다. 이 절은 dense — 그 이유는 하부 기계장치가 dense하기 때문이며, 이를 제대로 이해하는 것이 "한 사용자에게 동작하는 데이터베이스"와 "만 명에게 동작하는 데이터베이스"를 가르는 차이입니다.
-
-이 절에서 다루는 내용:
-
-- **(A)** MVCC 핵심 — `xmin`, `xmax`, snapshot, visibility 규칙.
-- **(B)** Isolation level — Read Uncommitted, Read Committed, Repeatable Read, Serializable, 각각이 막는 것과 여전히 허용하는 것.
-- **(C)** Serializable Snapshot Isolation(SSI) — anti-dependency 그래프와 read를 lock하지 않고 진정한 serializability를 제공하는 방식.
-- **(D)** Lock과 deadlock 검출 — row-level vs predicate-level, lock dependency 그래프, deadlock cycle 알고리즘.
-
-### A. MVCC — Multi-Version Concurrency Control
+### 이론: MVCC — Multi-Version Concurrency Control
 
 #### A.1 모든 행은 `xmin`과 `xmax`를 가짐
 
@@ -70,125 +73,6 @@ row version은 다음 두 조건이 모두 성립할 때만 snapshot에 visible�
    - `xmax >= xmax_horizon`
 
 이것이 PostgreSQL의 *중심* 규칙. 모든 `SELECT`, 모든 UPDATE의 "행 먼저 찾기" 단계, 모든 join — 모두 후보 행마다 이 검사를 실행합니다. snapshot은 1번 캡처되고 규칙은 행별이므로, **reader는 writer를 절대 막지 않고 writer는 reader를 절대 막지 않습니다**. 비용은 04번 레슨 §B에서 다룬 dead tuple bloat.
-
-### B. Isolation Level
-
-SQL 표준은 막는 phenomena로 네 isolation level을 정의:
-
-| Level | Dirty Read | Non-Repeatable Read | Phantom Read | Serialization Anomaly |
-|-------|-----------|---------------------|--------------|----------------------|
-| Read Uncommitted | 허용 | 허용 | 허용 | 허용 |
-| Read Committed | 막음 | 허용 | 허용 | 허용 |
-| Repeatable Read | 막음 | 막음 | 허용 (표준) | 허용 |
-| Serializable | 막음 | 막음 | 막음 | 막음 |
-
-PostgreSQL은 세 level만 구현 — Read Uncommitted는 없음(`SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED`은 조용히 Read Committed로 매핑됨, MVCC가 dirty read를 구조적으로 불가능하게 만들기 때문).
-
-#### B.1 Read Committed (기본)
-
-각 *statement*가 자기 새 snapshot을 가짐. 한 트랜잭션 안에서, 같은 행에 대한 두 SELECT는 동시 트랜잭션이 그 사이에 commit했다면 다른 값을 반환할 수 있음. Phantom 가능 — `SELECT count(*)`와 이후 `SELECT count(*)`가 다른 count를 반환할 수 있음.
-
-가장 흔한 level. 빠름. 대부분의 애플리케이션 코드가 이를 위해 작성됨. 흔한 패턴 — `UPDATE`가 영향받은 행 수를 반환한 뒤 가정 재검사.
-
-#### B.2 Repeatable Read (RR)
-
-트랜잭션이 *첫* statement에서 snapshot을 1번 캡처하고 이후 모든 것에 사용. 모든 read가 트랜잭션 전체에서 같은 row version을 봄. write 충돌 검출 — 자기 snapshot 이후 동시-committed 트랜잭션이 UPDATE한 행을 UPDATE하려고 하면, PostgreSQL이 `serialization_failure`(SQLSTATE `40001`)로 트랜잭션을 abort — 코드가 retry해야 함.
-
-표준 SQL에서 RR은 phantom read를 허용. PostgreSQL의 RR(snapshot 위에 빌드)은 phantom을 *보이지 않음* — 그러나 여전히 완전히 serializable은 아님. 구체적으로, **write skew**가 발생 가능 — 두 트랜잭션이 같은 행 집합을 읽고, 각각 상대의 update가 주어졌을 때 invalid한 update를 함, 둘 다 commit, 데이터베이스가 어떤 직렬 실행도 만들 수 없는 상태로 끝남.
-
-#### B.3 Serializable
-
-**predicate-level** 충돌 추적을 추가해 RR 위에 빌드 — §C 참조.
-
-#### B.4 Level 선택
-
-- **Read Committed** — 기본, 특별한 이유가 없으면 이를 선택.
-- **Repeatable Read** — 트랜잭션 동안 여러 관련 행의 안정적인 view가 필요할 때(보고서, write skew가 우려가 아닌 다중-행 일관성 검사).
-- **Serializable** — 정확성이 *어떤* 동시성 anomaly의 부재에 의존하고, 어떤 구체적 anomaly가 발생할지 쉽게 추론할 수 없을 때. 애플리케이션에 retry-on-`40001` 구현.
-
-### C. Serializable Snapshot Isolation (SSI)
-
-PostgreSQL의 `SERIALIZABLE`은 SSI(Cahill 2008)로 구현 — 어떤 production 데이터베이스에서도 가장 정교한 동시성 통제 메커니즘 중 하나.
-
-#### C.1 직관
-
-Repeatable Read를 취하고(write가 여전히 first-writer-wins serialization failure를 일으킴), 추가로 동시 트랜잭션 사이의 **read-write 의존성**을 추적. 트랜잭션 T1이 어떤 행을 읽고 T2가 그 행을 쓰면("anti-dependency" — T1이 논리적으로 T2 이전에 옴), 그리고 T2가 또 다른 트랜잭션과 anti-dependency를 가지면, 엔진은 *직렬화 순서의 cycle*을 검출 — serializability를 보존하려면 그 트랜잭션 중 적어도 하나가 abort되어야 함.
-
-#### C.2 Dependency 그래프
-
-PostgreSQL은 in-memory 그래프를 빌드:
-
-- 노드는 동시 SERIALIZABLE 트랜잭션.
-- T1이 데이터를 읽고 T2가 그 데이터를 쓸 때마다 directed edge `T1 → T2` 추가(read-write dependency, "anti-dependency"라고도 함).
-
-두 연속 anti-dependency가 "위험한 구조"(T1 → T2 → T3, T1과 T3도 충돌)를 형성하면, PostgreSQL은 schedule이 직렬화될 수 없음을 알고 트랜잭션 중 하나를 `serialization_failure`로 abort. 결정적으로, 이는 **read에 어떤 lock도 없이** 일어남 — reader는 writer를 막지 않고, writer는 reader를 막지 않으며, 그럼에도 완전한 serializability가 보존됨. abort는 보수적일 수 있음(false positive — schedule이 실제로는 serializable이었음), 그러나 절대 틀리지 않음(false negative 없음).
-
-#### C.3 이것이 중요한 이유
-
-트랜잭션을 한 번에 하나씩 실행되는 것처럼 작성. `40001`은 retry로 처리. PostgreSQL이 모든 동시성 edge case를 처리. 비용은 bookkeeping(SIREAD lock을 통한 행별 read 추적, 진짜 lock이 아니라 충돌 marker)과 가끔의 false-positive abort.
-
-### D. Lock과 deadlock 검출
-
-MVCC가 행 visibility를 처리하지만, write는 *같은* 행의 동시 update를 직렬화하기 위해 여전히 lock이 필요.
-
-#### D.1 Lock granularity
-
-| Lock | 획득 | 목적 |
-|------|------|------|
-| Row-level (tuple lock) | `UPDATE`, `DELETE`, `SELECT FOR UPDATE` | 이 행에 대한 다른 write 차단 |
-| `FOR SHARE` | `SELECT FOR SHARE` | 이 행의 delete 차단 |
-| Table-level (`ACCESS SHARE`, `ROW EXCLUSIVE`, …, `ACCESS EXCLUSIVE`) | 다양한 DML/DDL | 충돌하는 테이블 연산 차단 |
-| Advisory | `pg_advisory_lock(key)` | 애플리케이션 정의, 데이터에 묶이지 않음 |
-
-Row lock은 별도 lock 테이블이 아니라 *tuple header 안*에(`xmax`와 `t_infomask` 비트 사용) 저장됨. 행이 contested되기 전까지 lock은 무료.
-
-#### D.2 Lock 충돌 매트릭스
-
-같은 행의 두 write는 막힘 — 두 번째가 첫 번째의 commit이나 rollback을 기다림. `SELECT FOR UPDATE`는 후속 write를 막음. 일반 `SELECT`는 절대 막지 않음.
-
-#### D.3 Deadlock — 또 dependency 그래프, 그러나 wait를 위한
-
-**Deadlock**은 트랜잭션 T1이 lock A를 잡고 lock B를 기다리는데, T2가 B를 잡고 A를 기다릴 때 — 어느 쪽도 진전 불가.
-
-PostgreSQL은 shared memory에 **wait-for graph**를 유지해 deadlock을 검출 — 각 lock-wait가 대기 트랜잭션에서 lock holder로 edge를 추가. wait가 시작된 후 매 `deadlock_timeout`(기본 1초)마다 deadlock detector가 이 그래프에 DFS를 실행해 cycle을 찾음. cycle을 찾으면 PostgreSQL이 victim(보통 abort 비용이 가장 적은 것)을 골라 `deadlock_detected`로 abort — lock을 해제하고 cycle을 깸.
-
-1초 기본값은 tradeoff — 너무 짧으면 검출에 CPU 소비, 너무 길면 deadlock이 눈에 띄는 stall을 일으킴. 대부분의 워크로드는 변경 불필요.
-
-#### D.4 Deadlock 회피
-
-- **모든 트랜잭션에서 일관된 순서로 lock 획득**(예 — `A.id < B.id`이면 항상 계좌 A를 B 전에 lock).
-- **암묵적 row lock이 여러 statement 동안 누적되도록 하지 말고 `SELECT FOR UPDATE`를 일찍 사용**.
-- **트랜잭션을 짧게 유지** — 보유 lock이 적을수록 cycle 가능성 적음.
-
-### 이론에서 아래 SQL로
-
-이어지는 각 절은 위 메커니즘이 구체화된 형태입니다:
-
-- **`BEGIN; ... COMMIT;`** — 트랜잭션을 열고 활성 isolation level에 따라 snapshot 획득 (§A).
-- **`ROLLBACK`** — 모든 변경을 폐기, 작성한 row version은 dead tuple로 디스크에 남음 (§A.1, 04번 레슨 §D).
-- **`SAVEPOINT` / `ROLLBACK TO SAVEPOINT`** — 한 트랜잭션 내 부분 rollback, 자체 xid를 가진 nested subtransaction으로 구현.
-- **`SET TRANSACTION ISOLATION LEVEL ...`** — Read Committed / Repeatable Read / Serializable 선택 (§B).
-- **`SELECT FOR UPDATE` / `FOR SHARE`** — 명시적 row-level locking (§D.1).
-- **`SERIALIZATION FAILURE`(SQLSTATE `40001`)** — RR과 Serializable에서 retry 로직이 처리해야 하는 에러 코드 (§B.2, §C.2).
-- **`DEADLOCK DETECTED`(SQLSTATE `40P01`)** — deadlock detector가 cycle을 찾으면 발생하는 에러 코드 (§D.3).
-
----
-
-## 1. 트랜잭션 개념
-
-트랜잭션은 하나의 논리적 작업 단위를 구성하는 연산들의 집합입니다.
-
-```
-┌──────────────────────────────────────────────────────────┐
-│                     계좌 이체 트랜잭션                    │
-├──────────────────────────────────────────────────────────┤
-│  1. A 계좌에서 10만원 차감                               │
-│  2. B 계좌에 10만원 추가                                 │
-│  → 둘 다 성공하거나, 둘 다 실패해야 함                  │
-└──────────────────────────────────────────────────────────┘
-```
-
----
 
 ## 2. ACID 속성
 
@@ -316,6 +200,41 @@ SAVEPOINT mypoint;  -- 새 지점으로 대체
 
 동시에 실행되는 트랜잭션 간의 격리 정도를 결정합니다.
 
+### 이론: Isolation Level
+
+SQL 표준은 막는 phenomena로 네 isolation level을 정의:
+
+| Level | Dirty Read | Non-Repeatable Read | Phantom Read | Serialization Anomaly |
+|-------|-----------|---------------------|--------------|----------------------|
+| Read Uncommitted | 허용 | 허용 | 허용 | 허용 |
+| Read Committed | 막음 | 허용 | 허용 | 허용 |
+| Repeatable Read | 막음 | 막음 | 허용 (표준) | 허용 |
+| Serializable | 막음 | 막음 | 막음 | 막음 |
+
+PostgreSQL은 세 level만 구현 — Read Uncommitted는 없음(`SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED`은 조용히 Read Committed로 매핑됨, MVCC가 dirty read를 구조적으로 불가능하게 만들기 때문).
+
+#### B.1 Read Committed (기본)
+
+각 *statement*가 자기 새 snapshot을 가짐. 한 트랜잭션 안에서, 같은 행에 대한 두 SELECT는 동시 트랜잭션이 그 사이에 commit했다면 다른 값을 반환할 수 있음. Phantom 가능 — `SELECT count(*)`와 이후 `SELECT count(*)`가 다른 count를 반환할 수 있음.
+
+가장 흔한 level. 빠름. 대부분의 애플리케이션 코드가 이를 위해 작성됨. 흔한 패턴 — `UPDATE`가 영향받은 행 수를 반환한 뒤 가정 재검사.
+
+#### B.2 Repeatable Read (RR)
+
+트랜잭션이 *첫* statement에서 snapshot을 1번 캡처하고 이후 모든 것에 사용. 모든 read가 트랜잭션 전체에서 같은 row version을 봄. write 충돌 검출 — 자기 snapshot 이후 동시-committed 트랜잭션이 UPDATE한 행을 UPDATE하려고 하면, PostgreSQL이 `serialization_failure`(SQLSTATE `40001`)로 트랜잭션을 abort — 코드가 retry해야 함.
+
+표준 SQL에서 RR은 phantom read를 허용. PostgreSQL의 RR(snapshot 위에 빌드)은 phantom을 *보이지 않음* — 그러나 여전히 완전히 serializable은 아님. 구체적으로, **write skew**가 발생 가능 — 두 트랜잭션이 같은 행 집합을 읽고, 각각 상대의 update가 주어졌을 때 invalid한 update를 함, 둘 다 commit, 데이터베이스가 어떤 직렬 실행도 만들 수 없는 상태로 끝남.
+
+#### B.3 Serializable
+
+**predicate-level** 충돌 추적을 추가해 RR 위에 빌드 — §C 참조.
+
+#### B.4 Level 선택
+
+- **Read Committed** — 기본, 특별한 이유가 없으면 이를 선택.
+- **Repeatable Read** — 트랜잭션 동안 여러 관련 행의 안정적인 view가 필요할 때(보고서, write skew가 우려가 아닌 다중-행 일관성 검사).
+- **Serializable** — 정확성이 *어떤* 동시성 anomaly의 부재에 의존하고, 어떤 구체적 anomaly가 발생할지 쉽게 추론할 수 없을 때. 애플리케이션에 retry-on-`40001` 구현.
+
 ### 격리 수준 종류
 
 | 수준 | Dirty Read | Non-repeatable Read | Phantom Read |
@@ -391,6 +310,27 @@ COMMIT;
 
 ## 8. 격리 수준별 동작
 
+### 이론: Serializable Snapshot Isolation (SSI)
+
+PostgreSQL의 `SERIALIZABLE`은 SSI(Cahill 2008)로 구현 — 어떤 production 데이터베이스에서도 가장 정교한 동시성 통제 메커니즘 중 하나.
+
+#### C.1 직관
+
+Repeatable Read를 취하고(write가 여전히 first-writer-wins serialization failure를 일으킴), 추가로 동시 트랜잭션 사이의 **read-write 의존성**을 추적. 트랜잭션 T1이 어떤 행을 읽고 T2가 그 행을 쓰면("anti-dependency" — T1이 논리적으로 T2 이전에 옴), 그리고 T2가 또 다른 트랜잭션과 anti-dependency를 가지면, 엔진은 *직렬화 순서의 cycle*을 검출 — serializability를 보존하려면 그 트랜잭션 중 적어도 하나가 abort되어야 함.
+
+#### C.2 Dependency 그래프
+
+PostgreSQL은 in-memory 그래프를 빌드:
+
+- 노드는 동시 SERIALIZABLE 트랜잭션.
+- T1이 데이터를 읽고 T2가 그 데이터를 쓸 때마다 directed edge `T1 → T2` 추가(read-write dependency, "anti-dependency"라고도 함).
+
+두 연속 anti-dependency가 "위험한 구조"(T1 → T2 → T3, T1과 T3도 충돌)를 형성하면, PostgreSQL은 schedule이 직렬화될 수 없음을 알고 트랜잭션 중 하나를 `serialization_failure`로 abort. 결정적으로, 이는 **read에 어떤 lock도 없이** 일어남 — reader는 writer를 막지 않고, writer는 reader를 막지 않으며, 그럼에도 완전한 serializability가 보존됨. abort는 보수적일 수 있음(false positive — schedule이 실제로는 serializable이었음), 그러나 절대 틀리지 않음(false negative 없음).
+
+#### C.3 이것이 중요한 이유
+
+트랜잭션을 한 번에 하나씩 실행되는 것처럼 작성. `40001`은 retry로 처리. PostgreSQL이 모든 동시성 edge case를 처리. 비용은 bookkeeping(SIREAD lock을 통한 행별 read 추적, 진짜 lock이 아니라 충돌 marker)과 가끔의 false-positive abort.
+
 ### READ COMMITTED (기본)
 
 ```sql
@@ -434,6 +374,39 @@ COMMIT;
 ---
 
 ## 9. 잠금 (Locking)
+
+### 이론: Lock과 deadlock 검출
+
+MVCC가 행 visibility를 처리하지만, write는 *같은* 행의 동시 update를 직렬화하기 위해 여전히 lock이 필요.
+
+#### D.1 Lock granularity
+
+| Lock | 획득 | 목적 |
+|------|------|------|
+| Row-level (tuple lock) | `UPDATE`, `DELETE`, `SELECT FOR UPDATE` | 이 행에 대한 다른 write 차단 |
+| `FOR SHARE` | `SELECT FOR SHARE` | 이 행의 delete 차단 |
+| Table-level (`ACCESS SHARE`, `ROW EXCLUSIVE`, …, `ACCESS EXCLUSIVE`) | 다양한 DML/DDL | 충돌하는 테이블 연산 차단 |
+| Advisory | `pg_advisory_lock(key)` | 애플리케이션 정의, 데이터에 묶이지 않음 |
+
+Row lock은 별도 lock 테이블이 아니라 *tuple header 안*에(`xmax`와 `t_infomask` 비트 사용) 저장됨. 행이 contested되기 전까지 lock은 무료.
+
+#### D.2 Lock 충돌 매트릭스
+
+같은 행의 두 write는 막힘 — 두 번째가 첫 번째의 commit이나 rollback을 기다림. `SELECT FOR UPDATE`는 후속 write를 막음. 일반 `SELECT`는 절대 막지 않음.
+
+#### D.3 Deadlock — 또 dependency 그래프, 그러나 wait를 위한
+
+**Deadlock**은 트랜잭션 T1이 lock A를 잡고 lock B를 기다리는데, T2가 B를 잡고 A를 기다릴 때 — 어느 쪽도 진전 불가.
+
+PostgreSQL은 shared memory에 **wait-for graph**를 유지해 deadlock을 검출 — 각 lock-wait가 대기 트랜잭션에서 lock holder로 edge를 추가. wait가 시작된 후 매 `deadlock_timeout`(기본 1초)마다 deadlock detector가 이 그래프에 DFS를 실행해 cycle을 찾음. cycle을 찾으면 PostgreSQL이 victim(보통 abort 비용이 가장 적은 것)을 골라 `deadlock_detected`로 abort — lock을 해제하고 cycle을 깸.
+
+1초 기본값은 tradeoff — 너무 짧으면 검출에 CPU 소비, 너무 길면 deadlock이 눈에 띄는 stall을 일으킴. 대부분의 워크로드는 변경 불필요.
+
+#### D.4 Deadlock 회피
+
+- **모든 트랜잭션에서 일관된 순서로 lock 획득**(예 — `A.id < B.id`이면 항상 계좌 A를 B 전에 lock).
+- **암묵적 row lock이 여러 statement 동안 누적되도록 하지 말고 `SELECT FOR UPDATE`를 일찍 사용**.
+- **트랜잭션을 짧게 유지** — 보유 lock이 적을수록 cycle 가능성 적음.
 
 ### 행 수준 잠금
 

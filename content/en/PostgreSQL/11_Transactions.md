@@ -21,22 +21,25 @@ After completing this lesson, you will be able to:
 
 Transactions are the backbone of every reliable database application. Whether you are transferring money between bank accounts, placing an order in an e-commerce system, or recording sensor data from IoT devices, transactions guarantee that a group of operations either fully succeeds or fully fails -- leaving the database in a consistent state. Mastering transactions is essential for building applications that behave correctly under concurrent access and unexpected failures.
 
-Before the syntax, read [**Theory & Principles**](#theory--principles) — the heart of PostgreSQL: MVCC's `xmin`/`xmax` visibility rules, the four SQL isolation levels, what Serializable Snapshot Isolation actually computes, and how deadlock detection works.
+---
+
+## 1. Transaction Concept
+
+A transaction is a collection of operations that constitute a single logical unit of work.
+
+```
+┌──────────────────────────────────────────────────────────┐
+│                   Account Transfer Transaction           │
+├──────────────────────────────────────────────────────────┤
+│  1. Deduct 100,000 from Account A                        │
+│  2. Add 100,000 to Account B                             │
+│  → Both must succeed or both must fail                   │
+└──────────────────────────────────────────────────────────┘
+```
 
 ---
 
-## Theory & Principles
-
-Of all PostgreSQL's mechanisms, the transaction system is the one that most directly shapes how your application behaves under load. Two users hitting "checkout" at the same moment, an analytics query running while inventory is being updated, a long batch job competing with online traffic — every one of these scenarios is governed by the same set of rules: **MVCC visibility**, **isolation levels**, and **lock + SSI conflict detection**. The same `BEGIN`/`COMMIT` syntax can produce dramatically different correctness and performance depending on the isolation level you pick and what other transactions are doing concurrently. This section is dense because the underlying machinery is dense — and getting it right is what separates a database that "works for one user" from one that "works for ten thousand".
-
-This section covers:
-
-- **(A)** MVCC core: `xmin`, `xmax`, snapshots, and the visibility rule.
-- **(B)** Isolation levels: Read Uncommitted, Read Committed, Repeatable Read, Serializable — what each prevents and what each still allows.
-- **(C)** Serializable Snapshot Isolation (SSI): the anti-dependency graph and how it provides true serializability without locking reads.
-- **(D)** Locks and deadlock detection: row-level vs predicate-level, the lock dependency graph, and the deadlock cycle algorithm.
-
-### A. MVCC — Multi-Version Concurrency Control
+### Theory: MVCC — Multi-Version Concurrency Control
 
 #### A.1 Every row has `xmin` and `xmax`
 
@@ -70,125 +73,6 @@ A row version is visible to a snapshot if and only if **both** of the following 
    - `xmax >= xmax_horizon`
 
 This is *the* central rule of PostgreSQL. Every `SELECT`, every UPDATE's "find the row first" step, every join — they all run this check on every candidate row. Because the snapshot is taken once and the rule is per-row, **readers never block writers and writers never block readers**. The cost is the dead tuple bloat covered in lesson 04 §B.
-
-### B. Isolation Levels
-
-The SQL standard defines four isolation levels in terms of phenomena they prevent:
-
-| Level | Dirty Read | Non-Repeatable Read | Phantom Read | Serialization Anomalies |
-|-------|-----------|---------------------|--------------|------------------------|
-| Read Uncommitted | Allowed | Allowed | Allowed | Allowed |
-| Read Committed | Prevented | Allowed | Allowed | Allowed |
-| Repeatable Read | Prevented | Prevented | Allowed (per std) | Allowed |
-| Serializable | Prevented | Prevented | Prevented | Prevented |
-
-PostgreSQL implements only three levels — there is no Read Uncommitted (`SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED` silently maps to Read Committed because MVCC makes dirty reads structurally impossible).
-
-#### B.1 Read Committed (default)
-
-Each *statement* takes its own fresh snapshot. Within one transaction, two SELECTs of the same row may return different values if a concurrent transaction committed between them. Phantoms are possible: `SELECT count(*)` and a later `SELECT count(*)` can return different counts.
-
-The most common level. Fast. Most application code is written for it. Common pattern: re-check assumptions after `UPDATE` returns rows-affected.
-
-#### B.2 Repeatable Read (RR)
-
-The transaction takes one snapshot at the *first* statement and uses it for everything after. All reads see the same row versions for the entire transaction. Write conflicts are detected: if you try to UPDATE a row that has been UPDATE'd by a concurrently-committed transaction since your snapshot, PostgreSQL aborts your transaction with `serialization_failure` (SQLSTATE `40001`) — your code must retry.
-
-In standard SQL, RR allows phantom reads. PostgreSQL's RR (built on snapshots) does *not* exhibit phantoms — but it is still not fully serializable. Specifically, **write skew** can occur: two transactions read the same set of rows, each makes an update that would be invalid given the other's update, both commit, and the database ends up in a state no serial execution could produce.
-
-#### B.3 Serializable
-
-Built on top of RR by adding **predicate-level** conflict tracking — see §C.
-
-#### B.4 Choosing a level
-
-- **Read Committed**: default; pick this unless you have a specific reason not to.
-- **Repeatable Read**: when you need a stable view of multiple related rows for the duration of a transaction (reports, multi-row consistency checks where write skew is not a concern).
-- **Serializable**: when correctness depends on the absence of *any* concurrency anomaly and you cannot easily reason about which specific anomalies might occur. Implement retry-on-`40001` in your application.
-
-### C. Serializable Snapshot Isolation (SSI)
-
-PostgreSQL's `SERIALIZABLE` is implemented via SSI (Cahill 2008), which is among the most sophisticated concurrency control mechanisms in any production database.
-
-#### C.1 The intuition
-
-Take Repeatable Read (so writes still cause first-writer-wins serialization failures) and additionally track **read–write dependencies** between concurrent transactions. If transaction T1 reads a row that T2 then writes (an "anti-dependency": T1 logically came before T2), and T2 also has an anti-dependency with some other transaction, the engine has detected a *cycle in the serialization order* — at least one of those transactions must abort to preserve serializability.
-
-#### C.2 The dependency graph
-
-PostgreSQL builds an in-memory graph where:
-
-- Nodes are concurrent SERIALIZABLE transactions.
-- A directed edge `T1 → T2` is added whenever T1 reads data that T2 then writes (read-write dependency, also called "anti-dependency").
-
-If two consecutive anti-dependencies form a "dangerous structure" (T1 → T2 → T3 with T1 and T3 also conflicting), PostgreSQL knows the schedule cannot be made serial and aborts one of the transactions with `serialization_failure`. Crucially, this happens **without any locking on reads** — readers do not block writers, writers do not block readers, and yet full serializability is preserved. The abort might be conservative (false positive: the schedule was actually serializable), but it is never wrong (no false negatives).
-
-#### C.3 Why this matters
-
-You write your transactions as if they ran one at a time. You handle `40001` by retrying. PostgreSQL handles every concurrency edge case for you. The cost is the bookkeeping (per-row read tracking via SIREAD locks, which are not real locks but conflict markers) and the occasional false-positive abort.
-
-### D. Locks and Deadlock Detection
-
-MVCC handles row visibility, but writes still need locks to serialize concurrent updates of the *same* row.
-
-#### D.1 Lock granularity
-
-| Lock | Acquired by | Purpose |
-|------|-------------|---------|
-| Row-level (tuple lock) | `UPDATE`, `DELETE`, `SELECT FOR UPDATE` | Block other writes to this row |
-| `FOR SHARE` | `SELECT FOR SHARE` | Block deletes of this row |
-| Table-level (`ACCESS SHARE`, `ROW EXCLUSIVE`, …, `ACCESS EXCLUSIVE`) | Various DML/DDL | Block conflicting table operations |
-| Advisory | `pg_advisory_lock(key)` | Application-defined, not tied to data |
-
-Row locks are stored *inside the tuple header* (using `xmax` and `t_infomask` bits) rather than in a separate lock table. Until a row is contested, the lock is free.
-
-#### D.2 Lock conflict matrix
-
-Two writes to the same row block — the second waits for the first to commit or roll back. A `SELECT FOR UPDATE` blocks subsequent writes. A plain `SELECT` never blocks.
-
-#### D.3 Deadlock — the dependency graph again, but for waits
-
-A **deadlock** occurs when transaction T1 holds lock A and waits for lock B, while T2 holds B and waits for A — neither can make progress.
-
-PostgreSQL detects deadlocks by maintaining a **wait-for graph** in shared memory: each lock-wait adds an edge from waiting transaction to lock holder. Every `deadlock_timeout` (default 1 second) after a wait begins, the deadlock detector runs DFS on this graph looking for a cycle. If a cycle is found, PostgreSQL picks a victim (usually the one whose abort costs the least) and aborts it with `deadlock_detected` — releasing its locks and breaking the cycle.
-
-The 1-second default is a tradeoff: too short means CPU spent on detection, too long means deadlocks cause noticeable stalls. Most workloads do not need to change it.
-
-#### D.4 Avoiding deadlocks
-
-- **Acquire locks in a consistent order** across all transactions (e.g., always lock account A before account B if `A.id < B.id`).
-- **Use `SELECT FOR UPDATE` early** rather than letting the implicit row locks accumulate during many statements.
-- **Keep transactions short** — fewer locks held, less chance of cycle.
-
-### From Theory to the SQL Below
-
-Each of the following sections is one of these mechanisms made concrete:
-
-- **`BEGIN; ... COMMIT;`** — opens a transaction and acquires a snapshot per the active isolation level (§A).
-- **`ROLLBACK`** — discards all changes; the row versions you wrote remain on disk as dead tuples (§A.1, lesson 04 §D).
-- **`SAVEPOINT` / `ROLLBACK TO SAVEPOINT`** — partial rollback within one transaction; implemented as nested subtransactions with their own xids.
-- **`SET TRANSACTION ISOLATION LEVEL ...`** — picks Read Committed / Repeatable Read / Serializable (§B).
-- **`SELECT FOR UPDATE` / `FOR SHARE`** — explicit row-level locking (§D.1).
-- **`SERIALIZATION FAILURE` (SQLSTATE `40001`)** — error code your retry logic must handle for RR and Serializable (§B.2, §C.2).
-- **`DEADLOCK DETECTED` (SQLSTATE `40P01`)** — error code raised when the deadlock detector finds a cycle (§D.3).
-
----
-
-## 1. Transaction Concept
-
-A transaction is a collection of operations that constitute a single logical unit of work.
-
-```
-┌──────────────────────────────────────────────────────────┐
-│                   Account Transfer Transaction           │
-├──────────────────────────────────────────────────────────┤
-│  1. Deduct 100,000 from Account A                        │
-│  2. Add 100,000 to Account B                             │
-│  → Both must succeed or both must fail                   │
-└──────────────────────────────────────────────────────────┘
-```
-
----
 
 ## 2. ACID Properties
 
@@ -316,6 +200,41 @@ SAVEPOINT mypoint;  -- Replace with new point
 
 Determines the degree of isolation between concurrently executing transactions.
 
+### Theory: Isolation Levels
+
+The SQL standard defines four isolation levels in terms of phenomena they prevent:
+
+| Level | Dirty Read | Non-Repeatable Read | Phantom Read | Serialization Anomalies |
+|-------|-----------|---------------------|--------------|------------------------|
+| Read Uncommitted | Allowed | Allowed | Allowed | Allowed |
+| Read Committed | Prevented | Allowed | Allowed | Allowed |
+| Repeatable Read | Prevented | Prevented | Allowed (per std) | Allowed |
+| Serializable | Prevented | Prevented | Prevented | Prevented |
+
+PostgreSQL implements only three levels — there is no Read Uncommitted (`SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED` silently maps to Read Committed because MVCC makes dirty reads structurally impossible).
+
+#### B.1 Read Committed (default)
+
+Each *statement* takes its own fresh snapshot. Within one transaction, two SELECTs of the same row may return different values if a concurrent transaction committed between them. Phantoms are possible: `SELECT count(*)` and a later `SELECT count(*)` can return different counts.
+
+The most common level. Fast. Most application code is written for it. Common pattern: re-check assumptions after `UPDATE` returns rows-affected.
+
+#### B.2 Repeatable Read (RR)
+
+The transaction takes one snapshot at the *first* statement and uses it for everything after. All reads see the same row versions for the entire transaction. Write conflicts are detected: if you try to UPDATE a row that has been UPDATE'd by a concurrently-committed transaction since your snapshot, PostgreSQL aborts your transaction with `serialization_failure` (SQLSTATE `40001`) — your code must retry.
+
+In standard SQL, RR allows phantom reads. PostgreSQL's RR (built on snapshots) does *not* exhibit phantoms — but it is still not fully serializable. Specifically, **write skew** can occur: two transactions read the same set of rows, each makes an update that would be invalid given the other's update, both commit, and the database ends up in a state no serial execution could produce.
+
+#### B.3 Serializable
+
+Built on top of RR by adding **predicate-level** conflict tracking — see §C.
+
+#### B.4 Choosing a level
+
+- **Read Committed**: default; pick this unless you have a specific reason not to.
+- **Repeatable Read**: when you need a stable view of multiple related rows for the duration of a transaction (reports, multi-row consistency checks where write skew is not a concern).
+- **Serializable**: when correctness depends on the absence of *any* concurrency anomaly and you cannot easily reason about which specific anomalies might occur. Implement retry-on-`40001` in your application.
+
 ### Isolation Level Types
 
 | Level | Dirty Read | Non-repeatable Read | Phantom Read |
@@ -391,6 +310,27 @@ COMMIT;
 
 ## 8. Isolation Level Behavior
 
+### Theory: Serializable Snapshot Isolation (SSI)
+
+PostgreSQL's `SERIALIZABLE` is implemented via SSI (Cahill 2008), which is among the most sophisticated concurrency control mechanisms in any production database.
+
+#### C.1 The intuition
+
+Take Repeatable Read (so writes still cause first-writer-wins serialization failures) and additionally track **read–write dependencies** between concurrent transactions. If transaction T1 reads a row that T2 then writes (an "anti-dependency": T1 logically came before T2), and T2 also has an anti-dependency with some other transaction, the engine has detected a *cycle in the serialization order* — at least one of those transactions must abort to preserve serializability.
+
+#### C.2 The dependency graph
+
+PostgreSQL builds an in-memory graph where:
+
+- Nodes are concurrent SERIALIZABLE transactions.
+- A directed edge `T1 → T2` is added whenever T1 reads data that T2 then writes (read-write dependency, also called "anti-dependency").
+
+If two consecutive anti-dependencies form a "dangerous structure" (T1 → T2 → T3 with T1 and T3 also conflicting), PostgreSQL knows the schedule cannot be made serial and aborts one of the transactions with `serialization_failure`. Crucially, this happens **without any locking on reads** — readers do not block writers, writers do not block readers, and yet full serializability is preserved. The abort might be conservative (false positive: the schedule was actually serializable), but it is never wrong (no false negatives).
+
+#### C.3 Why this matters
+
+You write your transactions as if they ran one at a time. You handle `40001` by retrying. PostgreSQL handles every concurrency edge case for you. The cost is the bookkeeping (per-row read tracking via SIREAD locks, which are not real locks but conflict markers) and the occasional false-positive abort.
+
 ### READ COMMITTED (default)
 
 ```sql
@@ -434,6 +374,39 @@ COMMIT;
 ---
 
 ## 9. Locking
+
+### Theory: Locks and Deadlock Detection
+
+MVCC handles row visibility, but writes still need locks to serialize concurrent updates of the *same* row.
+
+#### D.1 Lock granularity
+
+| Lock | Acquired by | Purpose |
+|------|-------------|---------|
+| Row-level (tuple lock) | `UPDATE`, `DELETE`, `SELECT FOR UPDATE` | Block other writes to this row |
+| `FOR SHARE` | `SELECT FOR SHARE` | Block deletes of this row |
+| Table-level (`ACCESS SHARE`, `ROW EXCLUSIVE`, …, `ACCESS EXCLUSIVE`) | Various DML/DDL | Block conflicting table operations |
+| Advisory | `pg_advisory_lock(key)` | Application-defined, not tied to data |
+
+Row locks are stored *inside the tuple header* (using `xmax` and `t_infomask` bits) rather than in a separate lock table. Until a row is contested, the lock is free.
+
+#### D.2 Lock conflict matrix
+
+Two writes to the same row block — the second waits for the first to commit or roll back. A `SELECT FOR UPDATE` blocks subsequent writes. A plain `SELECT` never blocks.
+
+#### D.3 Deadlock — the dependency graph again, but for waits
+
+A **deadlock** occurs when transaction T1 holds lock A and waits for lock B, while T2 holds B and waits for A — neither can make progress.
+
+PostgreSQL detects deadlocks by maintaining a **wait-for graph** in shared memory: each lock-wait adds an edge from waiting transaction to lock holder. Every `deadlock_timeout` (default 1 second) after a wait begins, the deadlock detector runs DFS on this graph looking for a cycle. If a cycle is found, PostgreSQL picks a victim (usually the one whose abort costs the least) and aborts it with `deadlock_detected` — releasing its locks and breaking the cycle.
+
+The 1-second default is a tradeoff: too short means CPU spent on detection, too long means deadlocks cause noticeable stalls. Most workloads do not need to change it.
+
+#### D.4 Avoiding deadlocks
+
+- **Acquire locks in a consistent order** across all transactions (e.g., always lock account A before account B if `A.id < B.id`).
+- **Use `SELECT FOR UPDATE` early** rather than letting the implicit row locks accumulate during many statements.
+- **Keep transactions short** — fewer locks held, less chance of cycle.
 
 ### Row-Level Locks
 
@@ -963,8 +936,6 @@ SELECT
 FROM pg_stat_activity blocked
 JOIN pg_stat_activity blocking ON blocking.pid = ANY(pg_blocking_pids(blocked.pid));
 ```
-
----
 
 ---
 

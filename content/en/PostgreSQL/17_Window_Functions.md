@@ -22,8 +22,6 @@ Business intelligence and data analysis often require calculations that look acr
 
 ## Table of Contents
 
-Before the function reference, read [**Theory & Principles**](#theory--principles) — how PARTITION BY/ORDER BY/frame clause are evaluated, the difference between ROWS and RANGE frames, and the sliding-window algorithm that makes moving aggregates possible in one pass.
-
 1. [Window Function Basics](#1-window-function-basics)
 2. [Ranking Functions](#2-ranking-functions)
 3. [Analytical Functions](#3-analytical-functions)
@@ -34,18 +32,9 @@ Before the function reference, read [**Theory & Principles**](#theory--principle
 
 ---
 
-## Theory & Principles
+## 1. Window Function Basics
 
-A window function looks like an aggregate but behaves differently in one crucial way: it returns one row per *input* row instead of one row per group. That distinction comes from a different execution mechanism — instead of collapsing groups, the executor builds an ordered window of related rows around each input row and computes the function over that window. Once you understand the three pieces of an `OVER` clause (PARTITION BY, ORDER BY, frame) and the difference between ROWS and RANGE framing, every window function — `ROW_NUMBER`, `LAG`, `SUM(...) OVER`, `PERCENT_RANK` — is the same machinery with a different per-window aggregator.
-
-This section covers:
-
-- **(A)** The three parts of `OVER`: PARTITION BY, ORDER BY, and frame clause.
-- **(B)** ROWS vs RANGE vs GROUPS frames and the boundary keywords.
-- **(C)** The sliding-window execution algorithm and why it is single-pass.
-- **(D)** Ranking functions vs analytical functions vs aggregate-as-window — categorizing the function zoo.
-
-### A. The Three Parts of `OVER`
+### Theory: The Three Parts of `OVER`
 
 The general form:
 
@@ -85,53 +74,7 @@ ROWS BETWEEN 1 PRECEDING AND 1 FOLLOWING       -- 3-row centered window
 RANGE BETWEEN INTERVAL '7 days' PRECEDING AND CURRENT ROW  -- 7-day window by date
 ```
 
-### B. ROWS vs RANGE vs GROUPS
-
-The frame clause's first word picks the *unit* of measurement for offsets.
-
-#### B.1 ROWS — count physical rows
-
-`ROWS BETWEEN 2 PRECEDING AND CURRENT ROW` includes the previous 2 rows plus the current row, regardless of the ORDER BY values. If three rows have the same `order_date`, they are treated as three distinct rows.
-
-#### B.2 RANGE — count by ORDER BY value
-
-`RANGE BETWEEN 1 PRECEDING AND CURRENT ROW` (with `ORDER BY x`) includes every row whose `x` value is within `[current.x - 1, current.x]`. If multiple rows have the same `x`, they are *all* in or all out of the window — peer rows always group together.
-
-`RANGE` with offsets requires a single ORDER BY column with a defined `+`/`-` operator (numbers, dates, intervals).
-
-#### B.3 GROUPS — count peer groups
-
-PG 11+. `GROUPS BETWEEN 2 PRECEDING AND CURRENT ROW` includes the current row plus the two preceding *peer groups* (where a peer group is a set of rows with the same ORDER BY value). Useful when ORDER BY has many ties and you want "the previous N tier-equivalent groups".
-
-#### B.4 The default surprise
-
-If you write `OVER (ORDER BY x)` with no explicit frame, PostgreSQL uses **`RANGE BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW`**. For a running `SUM`, this means rows with the *same* `x` get the *same* cumulative sum — they all see each other as peers. To get the typical "row-by-row" running total, write the frame explicitly: `OVER (ORDER BY x ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW)`.
-
-### C. The Sliding-Window Algorithm
-
-PostgreSQL evaluates window functions in a single sequential pass after sorting:
-
-#### C.1 The execution
-
-```
-1. Read all input rows.
-2. Partition: hash or sort by PARTITION BY columns.
-3. For each partition:
-   a. Sort by ORDER BY.
-   b. Walk the sorted rows, maintaining an in-memory frame.
-   c. For each input row:
-      - Update the frame (add new rows, drop old rows per frame clause).
-      - Compute the function over the current frame.
-      - Emit the input row plus the function value.
-```
-
-For aggregate window functions like `SUM(...) OVER`, the engine maintains a running aggregate state that is incrementally updated as the frame slides — adding the entering row, subtracting the leaving row. This makes a 100-element trailing window as cheap as a 3-element one for invertible aggregates (SUM, COUNT, AVG). Non-invertible aggregates (MIN, MAX, MEDIAN) require a more expensive per-frame recomputation.
-
-#### C.2 Why this is single-pass
-
-After the sort, the algorithm makes exactly one pass per partition. There is no recursive evaluation, no per-row subquery. This is the performance advantage over the naive equivalent — `SELECT (SELECT sum(amount) FROM orders WHERE order_date <= o.order_date) FROM orders o` — which is O(N²).
-
-### D. Categorizing the Function Zoo
+### Theory: Categorizing the Function Zoo
 
 #### D.1 Ranking functions
 
@@ -161,22 +104,6 @@ Reference specific positions relative to the current row.
 #### D.3 Aggregates as windows
 
 Any standard aggregate (`SUM`, `COUNT`, `AVG`, `MIN`, `MAX`, `STRING_AGG`, `ARRAY_AGG`, `bool_or`, …) can be used with `OVER` to compute over the frame instead of collapsing.
-
-### From Theory to the SQL Below
-
-Each of the following sections is one of these mechanisms made concrete:
-
-- **`OVER ()`** — empty window: entire input as one partition with default frame (§A).
-- **`OVER (PARTITION BY col)`** — independent per-partition computation (§A.1).
-- **`OVER (ORDER BY col)`** — running window from start of partition (§A.2, §B.4 default frame).
-- **`OVER (ORDER BY col ROWS/RANGE BETWEEN ...)`** — explicit frame (§B).
-- **`ROW_NUMBER`, `RANK`, `DENSE_RANK`, `NTILE`** — ranking (§D.1).
-- **`LAG`, `LEAD`, `FIRST_VALUE`, `LAST_VALUE`, `NTH_VALUE`** — positional (§D.2).
-- **`SUM(...) OVER`, `AVG(...) OVER`, etc.** — aggregate-as-window (§D.3).
-
----
-
-## 1. Window Function Basics
 
 ### 1.1 What are Window Functions?
 
@@ -525,6 +452,52 @@ ORDER BY sale_date;
 ---
 
 ## 5. Frame Details
+
+### Theory: ROWS vs RANGE vs GROUPS
+
+The frame clause's first word picks the *unit* of measurement for offsets.
+
+#### B.1 ROWS — count physical rows
+
+`ROWS BETWEEN 2 PRECEDING AND CURRENT ROW` includes the previous 2 rows plus the current row, regardless of the ORDER BY values. If three rows have the same `order_date`, they are treated as three distinct rows.
+
+#### B.2 RANGE — count by ORDER BY value
+
+`RANGE BETWEEN 1 PRECEDING AND CURRENT ROW` (with `ORDER BY x`) includes every row whose `x` value is within `[current.x - 1, current.x]`. If multiple rows have the same `x`, they are *all* in or all out of the window — peer rows always group together.
+
+`RANGE` with offsets requires a single ORDER BY column with a defined `+`/`-` operator (numbers, dates, intervals).
+
+#### B.3 GROUPS — count peer groups
+
+PG 11+. `GROUPS BETWEEN 2 PRECEDING AND CURRENT ROW` includes the current row plus the two preceding *peer groups* (where a peer group is a set of rows with the same ORDER BY value). Useful when ORDER BY has many ties and you want "the previous N tier-equivalent groups".
+
+#### B.4 The default surprise
+
+If you write `OVER (ORDER BY x)` with no explicit frame, PostgreSQL uses **`RANGE BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW`**. For a running `SUM`, this means rows with the *same* `x` get the *same* cumulative sum — they all see each other as peers. To get the typical "row-by-row" running total, write the frame explicitly: `OVER (ORDER BY x ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW)`.
+
+### Theory: The Sliding-Window Algorithm
+
+PostgreSQL evaluates window functions in a single sequential pass after sorting:
+
+#### C.1 The execution
+
+```
+1. Read all input rows.
+2. Partition: hash or sort by PARTITION BY columns.
+3. For each partition:
+   a. Sort by ORDER BY.
+   b. Walk the sorted rows, maintaining an in-memory frame.
+   c. For each input row:
+      - Update the frame (add new rows, drop old rows per frame clause).
+      - Compute the function over the current frame.
+      - Emit the input row plus the function value.
+```
+
+For aggregate window functions like `SUM(...) OVER`, the engine maintains a running aggregate state that is incrementally updated as the frame slides — adding the entering row, subtracting the leaving row. This makes a 100-element trailing window as cheap as a 3-element one for invertible aggregates (SUM, COUNT, AVG). Non-invertible aggregates (MIN, MAX, MEDIAN) require a more expensive per-frame recomputation.
+
+#### C.2 Why this is single-pass
+
+After the sort, the algorithm makes exactly one pass per partition. There is no recursive evaluation, no per-row subquery. This is the performance advantage over the naive equivalent — `SELECT (SELECT sum(amount) FROM orders WHERE order_date <= o.order_date) FROM orders o` — which is O(N²).
 
 ### 5.1 Frame Syntax
 

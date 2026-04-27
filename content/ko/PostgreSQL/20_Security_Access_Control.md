@@ -22,8 +22,6 @@
 
 ## 목차
 
-보안 설정으로 들어가기 전, [**이론과 원리**](#이론과-원리) 절을 먼저 읽으세요 — role 계층과 `GRANT`가 권한을 검사하는 방식, RLS를 동작하게 만드는 행별 정책 평가, 그리고 MD5 인증을 대체한 SCRAM-SHA-256 challenge-response를 다룹니다.
-
 1. [보안 개요](#1-보안-개요)
 2. [역할과 권한](#2-역할과-권한)
 3. [행 수준 보안(RLS)](#3-행-수준-보안rls)
@@ -32,160 +30,6 @@
 6. [감사 로깅](#6-감사-로깅)
 7. [보안 모범 사례](#7-보안-모범-사례)
 8. [연습 문제](#8-연습-문제)
-
----
-
-## 이론과 원리
-
-PostgreSQL의 보안 모델은 결합되어 하나의 질문에 답하는 세 layered 메커니즘으로 빌드됨 — "이 연결이 이 행에 대해 이 일을 할 수 있는가?". 첫 layer(`pg_hba.conf` + 인증)는 연결 자체가 허용되는지와 어떤 role을 받는지 결정. 둘째(role + GRANT/REVOKE)는 role이 어떤 schema, 테이블, 작업을 만질 수 있는지 결정. 셋째(Row-Level Security)는 허용된 테이블 내에서 role이 어떤 특정 행을 보거나 수정할 수 있는지 결정. 각 layer는 자체 평가 알고리즘과 자체 함정을 가짐 — 보안 구멍은 보통 한 layer가 다른 layer와의 상호작용을 오해할 때 옴.
-
-이 절에서 다루는 내용:
-
-- **(A)** Role 계층과 `GRANT` 권한 검사 알고리즘.
-- **(B)** Row-Level Security(RLS) — 정책이 어떻게 평가되고 결합되는지.
-- **(C)** SCRAM-SHA-256 — 왜 MD5를 대체했는지, challenge-response 흐름.
-- **(D)** `pg_hba.conf` — 인증 방법을 고르는 rule-matching 알고리즘.
-
-### A. Role 계층과 권한 검사
-
-#### A.1 "user"가 아니라 role
-
-PostgreSQL에는 **role**만 있음 — 별개의 "user"나 "group" 개념 없음. `LOGIN` 속성을 가진 role은 로그인에 사용 가능(따라서 user처럼 동작). role을 다른 role에 `GRANT`할 수 있음(membership 생성). 이는 정확히 Unix user + group과 같은 구조, 통일되었을 뿐.
-
-```sql
-CREATE ROLE app_reader;                               -- "group"
-CREATE ROLE alice WITH LOGIN PASSWORD '...';          -- "user"
-GRANT app_reader TO alice;                            -- alice가 app_reader 권한 상속
-```
-
-#### A.2 권한과 GRANT 체인
-
-권한은 객체별 — 테이블의 SELECT/INSERT/UPDATE/DELETE, 함수의 EXECUTE, schema의 USAGE 등.
-
-```sql
-GRANT SELECT ON orders TO app_reader;     -- app_reader(과 멤버)가 SELECT 가능
-GRANT INSERT ON orders TO app_writer;
-GRANT app_reader, app_writer TO alice;    -- alice는 둘 다
-```
-
-#### A.3 권한 검사 알고리즘
-
-alice가 `SELECT * FROM orders;`를 실행할 때:
-
-1. 관련 권한 결정 — SELECT.
-2. 테이블의 ACL이 alice에게 직접 SELECT를 부여하는지 검사.
-3. 아니면 PUBLIC("모두"를 의미하는 가상 role)에 부여하는지 검사.
-4. 아니면 alice가 멤버인 어떤 role에 부여하는지 검사(transitively — `GRANT`는 DAG의 부모 edge이고, PostgreSQL이 walk).
-5. 어떤 path든 yes 반환하면 허용, 아니면 `permission denied`.
-
-walk는 재귀적이지만 cycle-broken(membership cycle 금지). 비용은 보통 사소함 — membership 그래프가 작기 때문.
-
-#### A.4 Owner와 특수 role
-
-객체의 owner는 그 위에 모든 권한을 암묵적으로 가짐 — GRANT 불필요. Superuser는 *모든* 권한 검사를 우회 — 그래서 운영 role은 절대 superuser여서는 안 됨. `BYPASSRLS` 속성은 role이 Row-Level Security를 건너뛰지만 컬럼 권한은 여전히 존중하게 함 — replication user에 유용.
-
-### B. Row-Level Security (RLS)
-
-RLS는 PostgreSQL이 테이블에 대한 모든 쿼리에 조용히 append하는 **행별 WHERE 절**을 추가.
-
-#### B.1 RLS 활성화
-
-```sql
-ALTER TABLE orders ENABLE ROW LEVEL SECURITY;
-CREATE POLICY tenant_isolation ON orders
-    FOR ALL
-    USING (tenant_id = current_setting('app.tenant_id')::int);
-```
-
-이후, bypassing이 아닌 role의 `SELECT * FROM orders;`는 조용히 `SELECT * FROM orders WHERE tenant_id = current_setting('app.tenant_id')::int;`로 다시 쓰임.
-
-#### B.2 USING vs WITH CHECK
-
-- **`USING (predicate)`** — SELECT, UPDATE, DELETE 동안 기존 행에 적용. 술어가 TRUE일 때만 행이 visible/affectable.
-- **`WITH CHECK (predicate)`** — INSERT와 UPDATE 동안 새/수정된 행에 적용. 새 행이 술어를 만족해야 하며, 아니면 연산 실패.
-
-multi-tenant isolation에서는 보통 둘에 같은 술어 — tenant가 다른 tenant의 행을 볼 수 없고 다른 tenant 소유의 행을 만들 수도 없게.
-
-#### B.3 다중 정책
-
-같은 테이블에 여러 정책을 가질 수 있음(종종 role별 또는 명령별 1개). 기본 결합은 **OR** — *어떤* 정책이라도 허용하면 행 허용. PG 10+는 **AND**로 결합되는 `AS RESTRICTIVE` 정책도 지원 — *모든* restrictive 정책이 허용해야만 행 허용. permissive와 restrictive를 신중히 mix.
-
-#### B.4 정책 평가 비용
-
-각 쿼리는 사실상 정책 술어를 추가 `WHERE` 절로 얻음. `tenant_id`에 인덱스가 있는 tenant_id 기반 RLS는 본질적으로 무료 — planner가 인덱스 사용. subquery나 함수 호출이 관여하는 복잡한 정책은 비용이 상당할 수 있음.
-
-### C. SCRAM-SHA-256 인증
-
-PostgreSQL 10이 알려진 약점이 있는 MD5를 대체하기 위해 SCRAM-SHA-256을 도입.
-
-#### C.1 MD5 문제
-
-옛 MD5 인증 — 서버가 `MD5(password + username)`를 저장. client가 같은 hash를 계산해서 보냄. 서버 hash가 credential — 서버에서 훔쳐 가는 누구라도 그 user를 사칭 가능. 또한 MD5 자체가 cryptographically 약함.
-
-#### C.2 SCRAM challenge-response
-
-SCRAM(Salted Challenge Response Authentication Mechanism)은 적절한 challenge-response 프로토콜:
-
-1. client가 "alice로 로그인하고 싶다"고 말함.
-2. server가 random nonce를 생성하고 user별 salt와 iteration count와 함께 보냄.
-3. client가 `SaltedPassword = PBKDF2(password, salt, iterations, SHA-256)`을 계산하고 nonce에 의존하는 `ClientProof`를 구성.
-4. server가 자기 저장된 `StoredKey`(SaltedPassword에서 파생되었지만 같지 않음)를 사용해 proof 검증.
-5. server가 자기 proof를 돌려보내 client가 server가 진짜인지 검증.
-
-속성:
-
-- **훔친 server 데이터로는 사칭 불가** — `StoredKey`는 `SaltedPassword`를 derive할 수 없음.
-- **각 세션은 fresh nonce 사용** — replay 공격 실패.
-- **iteration count tunable** — brute force를 느리게.
-- **상호 인증** — client가 server도 검증, MITM 무력화.
-
-`password_encryption = scram-sha-256`(PG 14+ 기본)을 설정하고 password를 `\password`(올바른 인코딩 사용)로 저장, `CREATE ROLE ... PASSWORD 'plain'`은 사용 안 함.
-
-### D. `pg_hba.conf` — Host-Based Authentication
-
-모든 연결 시도는 `pg_hba.conf`의 rule에 매치됨. 첫 매칭 rule의 인증 방법이 사용됨(또는 매치되는 rule이 없으면 거부).
-
-#### D.1 Rule 컬럼
-
-```
-# TYPE   DATABASE    USER       ADDRESS         METHOD
-local    all         postgres                   peer
-host     mydb        alice      10.0.0.0/8      scram-sha-256
-host     all         all        0.0.0.0/0       reject
-```
-
-각 컬럼은 filter, rule이 적용되려면 모두 매치되어야 함. `TYPE`은 `local`(Unix socket) 또는 `host`/`hostssl`/`hostnossl`(TCP). `ADDRESS`는 CIDR. `METHOD`는 인증 메커니즘.
-
-#### D.2 흔한 method
-
-| Method | 용도 |
-|--------|------|
-| `trust` | 비밀번호 없음 — 로컬 개발에만 |
-| `peer` | OS user를 데이터베이스 user로 사용 — Unix socket 관리자 연결에 |
-| `scram-sha-256` | modern 비밀번호 인증 |
-| `md5` | legacy 비밀번호 인증, backward compat용 허용 |
-| `cert` | TLS client 인증서 |
-| `ldap`, `pam`, `radius`, `gss` | 외부 인증 시스템 |
-| `reject` | 명시적 거부 |
-
-#### D.3 매칭 알고리즘
-
-PostgreSQL은 `pg_hba.conf`를 위에서 아래로 읽음. TYPE+DATABASE+USER+ADDRESS가 모두 매치되는 첫 rule이 사용됨. **Fall-through 없음** — 선택된 method가 실패해도(잘못된 비밀번호) 다른 rule이 시도되지 않음. 이는 rule 순서가 엄청나게 중요하다는 뜻 — `scram-sha-256` rule 위의 `trust` rule은 사실상 비밀번호 검사를 비활성화.
-
-수정 후, 파일은 `pg_ctl reload`로 다시 읽힘(restart 불필요).
-
-### 이론에서 아래 설정으로
-
-이어지는 각 절은 위 메커니즘이 구체화된 형태입니다:
-
-- **`CREATE ROLE`, `GRANT`, `REVOKE`** — role 계층과 객체별 ACL 관리 (§A).
-- **`GRANT role_a TO role_b`** — 권한 그래프를 만드는 role membership.
-- **`ALTER TABLE ... ENABLE ROW LEVEL SECURITY`** — RLS 켜기 (§B).
-- **`CREATE POLICY ... USING (...) WITH CHECK (...)`** — 행 수준 filter 정의 (§B.2).
-- **`pg_hba.conf` rule** — 첫-매치 인증 라우팅 (§D).
-- **`password_encryption = scram-sha-256`** — modern 비밀번호 저장 (§C).
-- **`ssl = on`을 통한 SSL/TLS, client에서 `sslmode=verify-full`** — transport layer에서 연결 암호화 및 인증.
-- **`pgaudit` 확장** — 컴플라이언스를 위해 모든 권한 작업 로그.
 
 ---
 
@@ -235,6 +79,44 @@ PostgreSQL은 `pg_hba.conf`를 위에서 아래로 읽음. TYPE+DATABASE+USER+AD
 ---
 
 ## 2. 역할과 권한
+
+### 이론: Role 계층과 권한 검사
+
+#### A.1 "user"가 아니라 role
+
+PostgreSQL에는 **role**만 있음 — 별개의 "user"나 "group" 개념 없음. `LOGIN` 속성을 가진 role은 로그인에 사용 가능(따라서 user처럼 동작). role을 다른 role에 `GRANT`할 수 있음(membership 생성). 이는 정확히 Unix user + group과 같은 구조, 통일되었을 뿐.
+
+```sql
+CREATE ROLE app_reader;                               -- "group"
+CREATE ROLE alice WITH LOGIN PASSWORD '...';          -- "user"
+GRANT app_reader TO alice;                            -- alice가 app_reader 권한 상속
+```
+
+#### A.2 권한과 GRANT 체인
+
+권한은 객체별 — 테이블의 SELECT/INSERT/UPDATE/DELETE, 함수의 EXECUTE, schema의 USAGE 등.
+
+```sql
+GRANT SELECT ON orders TO app_reader;     -- app_reader(과 멤버)가 SELECT 가능
+GRANT INSERT ON orders TO app_writer;
+GRANT app_reader, app_writer TO alice;    -- alice는 둘 다
+```
+
+#### A.3 권한 검사 알고리즘
+
+alice가 `SELECT * FROM orders;`를 실행할 때:
+
+1. 관련 권한 결정 — SELECT.
+2. 테이블의 ACL이 alice에게 직접 SELECT를 부여하는지 검사.
+3. 아니면 PUBLIC("모두"를 의미하는 가상 role)에 부여하는지 검사.
+4. 아니면 alice가 멤버인 어떤 role에 부여하는지 검사(transitively — `GRANT`는 DAG의 부모 edge이고, PostgreSQL이 walk).
+5. 어떤 path든 yes 반환하면 허용, 아니면 `permission denied`.
+
+walk는 재귀적이지만 cycle-broken(membership cycle 금지). 비용은 보통 사소함 — membership 그래프가 작기 때문.
+
+#### A.4 Owner와 특수 role
+
+객체의 owner는 그 위에 모든 권한을 암묵적으로 가짐 — GRANT 불필요. Superuser는 *모든* 권한 검사를 우회 — 그래서 운영 role은 절대 superuser여서는 안 됨. `BYPASSRLS` 속성은 role이 Row-Level Security를 건너뛰지만 컬럼 권한은 여전히 존중하게 함 — replication user에 유용.
 
 ### 2.1 역할 관리
 
@@ -336,6 +218,36 @@ SELECT has_schema_privilege('app_reader', 'public', 'USAGE');
 ---
 
 ## 3. 행 수준 보안(RLS)
+
+### 이론: Row-Level Security (RLS)
+
+RLS는 PostgreSQL이 테이블에 대한 모든 쿼리에 조용히 append하는 **행별 WHERE 절**을 추가.
+
+#### B.1 RLS 활성화
+
+```sql
+ALTER TABLE orders ENABLE ROW LEVEL SECURITY;
+CREATE POLICY tenant_isolation ON orders
+    FOR ALL
+    USING (tenant_id = current_setting('app.tenant_id')::int);
+```
+
+이후, bypassing이 아닌 role의 `SELECT * FROM orders;`는 조용히 `SELECT * FROM orders WHERE tenant_id = current_setting('app.tenant_id')::int;`로 다시 쓰임.
+
+#### B.2 USING vs WITH CHECK
+
+- **`USING (predicate)`** — SELECT, UPDATE, DELETE 동안 기존 행에 적용. 술어가 TRUE일 때만 행이 visible/affectable.
+- **`WITH CHECK (predicate)`** — INSERT와 UPDATE 동안 새/수정된 행에 적용. 새 행이 술어를 만족해야 하며, 아니면 연산 실패.
+
+multi-tenant isolation에서는 보통 둘에 같은 술어 — tenant가 다른 tenant의 행을 볼 수 없고 다른 tenant 소유의 행을 만들 수도 없게.
+
+#### B.3 다중 정책
+
+같은 테이블에 여러 정책을 가질 수 있음(종종 role별 또는 명령별 1개). 기본 결합은 **OR** — *어떤* 정책이라도 허용하면 행 허용. PG 10+는 **AND**로 결합되는 `AS RESTRICTIVE` 정책도 지원 — *모든* restrictive 정책이 허용해야만 행 허용. permissive와 restrictive를 신중히 mix.
+
+#### B.4 정책 평가 비용
+
+각 쿼리는 사실상 정책 술어를 추가 `WHERE` 절로 얻음. `tenant_id`에 인덱스가 있는 tenant_id 기반 RLS는 본질적으로 무료 — planner가 인덱스 사용. subquery나 함수 호출이 관여하는 복잡한 정책은 비용이 상당할 수 있음.
 
 ### 3.1 RLS 기초
 
@@ -449,6 +361,66 @@ CREATE POLICY dept_access ON documents
 ---
 
 ## 4. 인증(pg_hba.conf)
+
+### 이론: SCRAM-SHA-256 인증
+
+PostgreSQL 10이 알려진 약점이 있는 MD5를 대체하기 위해 SCRAM-SHA-256을 도입.
+
+#### C.1 MD5 문제
+
+옛 MD5 인증 — 서버가 `MD5(password + username)`를 저장. client가 같은 hash를 계산해서 보냄. 서버 hash가 credential — 서버에서 훔쳐 가는 누구라도 그 user를 사칭 가능. 또한 MD5 자체가 cryptographically 약함.
+
+#### C.2 SCRAM challenge-response
+
+SCRAM(Salted Challenge Response Authentication Mechanism)은 적절한 challenge-response 프로토콜:
+
+1. client가 "alice로 로그인하고 싶다"고 말함.
+2. server가 random nonce를 생성하고 user별 salt와 iteration count와 함께 보냄.
+3. client가 `SaltedPassword = PBKDF2(password, salt, iterations, SHA-256)`을 계산하고 nonce에 의존하는 `ClientProof`를 구성.
+4. server가 자기 저장된 `StoredKey`(SaltedPassword에서 파생되었지만 같지 않음)를 사용해 proof 검증.
+5. server가 자기 proof를 돌려보내 client가 server가 진짜인지 검증.
+
+속성:
+
+- **훔친 server 데이터로는 사칭 불가** — `StoredKey`는 `SaltedPassword`를 derive할 수 없음.
+- **각 세션은 fresh nonce 사용** — replay 공격 실패.
+- **iteration count tunable** — brute force를 느리게.
+- **상호 인증** — client가 server도 검증, MITM 무력화.
+
+`password_encryption = scram-sha-256`(PG 14+ 기본)을 설정하고 password를 `\password`(올바른 인코딩 사용)로 저장, `CREATE ROLE ... PASSWORD 'plain'`은 사용 안 함.
+
+### 이론: `pg_hba.conf` — Host-Based Authentication
+
+모든 연결 시도는 `pg_hba.conf`의 rule에 매치됨. 첫 매칭 rule의 인증 방법이 사용됨(또는 매치되는 rule이 없으면 거부).
+
+#### D.1 Rule 컬럼
+
+```
+# TYPE   DATABASE    USER       ADDRESS         METHOD
+local    all         postgres                   peer
+host     mydb        alice      10.0.0.0/8      scram-sha-256
+host     all         all        0.0.0.0/0       reject
+```
+
+각 컬럼은 filter, rule이 적용되려면 모두 매치되어야 함. `TYPE`은 `local`(Unix socket) 또는 `host`/`hostssl`/`hostnossl`(TCP). `ADDRESS`는 CIDR. `METHOD`는 인증 메커니즘.
+
+#### D.2 흔한 method
+
+| Method | 용도 |
+|--------|------|
+| `trust` | 비밀번호 없음 — 로컬 개발에만 |
+| `peer` | OS user를 데이터베이스 user로 사용 — Unix socket 관리자 연결에 |
+| `scram-sha-256` | modern 비밀번호 인증 |
+| `md5` | legacy 비밀번호 인증, backward compat용 허용 |
+| `cert` | TLS client 인증서 |
+| `ldap`, `pam`, `radius`, `gss` | 외부 인증 시스템 |
+| `reject` | 명시적 거부 |
+
+#### D.3 매칭 알고리즘
+
+PostgreSQL은 `pg_hba.conf`를 위에서 아래로 읽음. TYPE+DATABASE+USER+ADDRESS가 모두 매치되는 첫 rule이 사용됨. **Fall-through 없음** — 선택된 method가 실패해도(잘못된 비밀번호) 다른 rule이 시도되지 않음. 이는 rule 순서가 엄청나게 중요하다는 뜻 — `scram-sha-256` rule 위의 `trust` rule은 사실상 비밀번호 검사를 비활성화.
+
+수정 후, 파일은 `pg_ctl reload`로 다시 읽힘(restart 불필요).
 
 ### 4.1 pg_hba.conf 구조
 

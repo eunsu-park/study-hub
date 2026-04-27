@@ -22,8 +22,6 @@
 
 ## 목차
 
-함수 reference로 들어가기 전, [**이론과 원리**](#이론과-원리) 절을 먼저 읽으세요 — PARTITION BY/ORDER BY/frame clause가 어떻게 평가되는지, ROWS와 RANGE frame의 차이, 그리고 한 pass로 moving aggregate를 가능하게 하는 sliding-window 알고리즘을 다룹니다.
-
 1. [윈도우 함수 기초](#1-윈도우-함수-기초)
 2. [순위 함수](#2-순위-함수)
 3. [분석 함수](#3-분석-함수)
@@ -34,18 +32,9 @@
 
 ---
 
-## 이론과 원리
+## 1. 윈도우 함수 기초
 
-윈도우 함수는 aggregate처럼 보이지만 결정적인 한 가지에서 다르게 동작합니다 — 그룹당 한 행이 아니라 *입력* 행당 한 행을 반환합니다. 그 차이는 다른 실행 메커니즘에서 옵니다 — 그룹을 collapse하지 않고, executor가 각 입력 행 주변의 관련 행으로 정렬된 윈도우를 빌드하고 그 윈도우에 대해 함수를 계산합니다. `OVER` 절의 세 부분(PARTITION BY, ORDER BY, frame)과 ROWS와 RANGE framing의 차이를 이해하면, 모든 윈도우 함수 — `ROW_NUMBER`, `LAG`, `SUM(...) OVER`, `PERCENT_RANK` — 는 윈도우별 aggregator만 다른 같은 기계장치입니다.
-
-이 절에서 다루는 내용:
-
-- **(A)** `OVER`의 세 부분 — PARTITION BY, ORDER BY, frame clause.
-- **(B)** ROWS vs RANGE vs GROUPS frame과 boundary keyword.
-- **(C)** Sliding-window 실행 알고리즘과 그것이 single-pass인 이유.
-- **(D)** Ranking function vs analytical function vs aggregate-as-window — 함수 동물원 분류.
-
-### A. `OVER`의 세 부분
+### 이론: `OVER`의 세 부분
 
 일반 형태:
 
@@ -85,53 +74,7 @@ ROWS BETWEEN 1 PRECEDING AND 1 FOLLOWING       -- 3-행 centered 윈도우
 RANGE BETWEEN INTERVAL '7 days' PRECEDING AND CURRENT ROW  -- 날짜 기준 7일 윈도우
 ```
 
-### B. ROWS vs RANGE vs GROUPS
-
-frame clause의 첫 단어가 offset의 *측정 단위*를 고름.
-
-#### B.1 ROWS — 물리 행 카운트
-
-`ROWS BETWEEN 2 PRECEDING AND CURRENT ROW`는 ORDER BY 값과 무관하게 이전 2행과 현재 행을 포함. 세 행이 같은 `order_date`를 가져도 세 개의 다른 행으로 처리.
-
-#### B.2 RANGE — ORDER BY 값으로 카운트
-
-`RANGE BETWEEN 1 PRECEDING AND CURRENT ROW`(ORDER BY x와 함께)는 `x` 값이 `[current.x - 1, current.x]` 안인 모든 행 포함. 여러 행이 같은 `x`를 가지면, *모두* 윈도우 안에 있거나 모두 밖에 있음 — peer 행은 항상 함께 그룹화됨.
-
-offset이 있는 `RANGE`는 `+`/`-` 연산자가 정의된 단일 ORDER BY 컬럼(숫자, 날짜, interval) 필요.
-
-#### B.3 GROUPS — peer 그룹 카운트
-
-PG 11+. `GROUPS BETWEEN 2 PRECEDING AND CURRENT ROW`는 현재 행 + 이전 두 *peer 그룹*(같은 ORDER BY 값을 가진 행 집합)을 포함. ORDER BY에 tie가 많고 "이전 N개의 동등 tier 그룹"을 원할 때 유용.
-
-#### B.4 기본값의 놀라움
-
-`OVER (ORDER BY x)`를 명시적 frame 없이 쓰면, PostgreSQL은 **`RANGE BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW`**를 사용. running `SUM`에서, 이는 *같은* `x`를 가진 행이 *같은* 누적 합계를 받는다는 뜻 — 모두 서로를 peer로 봄. 전형적인 "행마다" running total을 얻으려면 frame을 명시 — `OVER (ORDER BY x ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW)`.
-
-### C. Sliding-Window 알고리즘
-
-PostgreSQL은 정렬 후 단일 순차 pass로 윈도우 함수를 평가:
-
-#### C.1 실행
-
-```
-1. 모든 입력 행 읽기.
-2. Partition — PARTITION BY 컬럼으로 hash 또는 sort.
-3. 각 partition에 대해:
-   a. ORDER BY로 정렬.
-   b. 정렬된 행을 walk하며 in-memory frame 유지.
-   c. 각 입력 행에 대해:
-      - frame 갱신(frame clause에 따라 새 행 추가, 옛 행 drop).
-      - 현재 frame에 대해 함수 계산.
-      - 입력 행 + 함수 값 emit.
-```
-
-`SUM(...) OVER` 같은 aggregate 윈도우 함수의 경우, 엔진은 frame이 슬라이드함에 따라 incrementally 갱신되는 running aggregate state를 유지 — 들어오는 행 추가, 나가는 행 빼기. 이로써 invertible aggregate(SUM, COUNT, AVG)에 대해 100-element trailing 윈도우가 3-element만큼 저렴. Non-invertible aggregate(MIN, MAX, MEDIAN)는 더 비싼 frame당 재계산이 필요.
-
-#### C.2 Single-pass인 이유
-
-정렬 후, 알고리즘은 partition당 정확히 1 pass. 재귀적 평가 없음, per-row subquery 없음. 이것이 순진한 등가 — `SELECT (SELECT sum(amount) FROM orders WHERE order_date <= o.order_date) FROM orders o` — 의 O(N²)에 대한 성능 우위.
-
-### D. 함수 동물원 분류
+### 이론: 함수 동물원 분류
 
 #### D.1 Ranking function
 
@@ -161,22 +104,6 @@ PostgreSQL은 정렬 후 단일 순차 pass로 윈도우 함수를 평가:
 #### D.3 Aggregate as window
 
 모든 표준 aggregate(`SUM`, `COUNT`, `AVG`, `MIN`, `MAX`, `STRING_AGG`, `ARRAY_AGG`, `bool_or`, …)는 `OVER`와 함께 사용해서 collapse 대신 frame에 대해 계산 가능.
-
-### 이론에서 아래 SQL로
-
-이어지는 각 절은 위 메커니즘이 구체화된 형태입니다:
-
-- **`OVER ()`** — 빈 윈도우 — 전체 입력을 하나의 partition으로, 기본 frame (§A).
-- **`OVER (PARTITION BY col)`** — partition별 독립 계산 (§A.1).
-- **`OVER (ORDER BY col)`** — partition 시작부터의 running 윈도우 (§A.2, §B.4 기본 frame).
-- **`OVER (ORDER BY col ROWS/RANGE BETWEEN ...)`** — 명시적 frame (§B).
-- **`ROW_NUMBER`, `RANK`, `DENSE_RANK`, `NTILE`** — ranking (§D.1).
-- **`LAG`, `LEAD`, `FIRST_VALUE`, `LAST_VALUE`, `NTH_VALUE`** — 위치 (§D.2).
-- **`SUM(...) OVER`, `AVG(...) OVER` 등** — aggregate-as-window (§D.3).
-
----
-
-## 1. 윈도우 함수 기초
 
 ### 1.1 윈도우 함수란?
 
@@ -525,6 +452,52 @@ ORDER BY sale_date;
 ---
 
 ## 5. 프레임 상세
+
+### 이론: ROWS vs RANGE vs GROUPS
+
+frame clause의 첫 단어가 offset의 *측정 단위*를 고름.
+
+#### B.1 ROWS — 물리 행 카운트
+
+`ROWS BETWEEN 2 PRECEDING AND CURRENT ROW`는 ORDER BY 값과 무관하게 이전 2행과 현재 행을 포함. 세 행이 같은 `order_date`를 가져도 세 개의 다른 행으로 처리.
+
+#### B.2 RANGE — ORDER BY 값으로 카운트
+
+`RANGE BETWEEN 1 PRECEDING AND CURRENT ROW`(ORDER BY x와 함께)는 `x` 값이 `[current.x - 1, current.x]` 안인 모든 행 포함. 여러 행이 같은 `x`를 가지면, *모두* 윈도우 안에 있거나 모두 밖에 있음 — peer 행은 항상 함께 그룹화됨.
+
+offset이 있는 `RANGE`는 `+`/`-` 연산자가 정의된 단일 ORDER BY 컬럼(숫자, 날짜, interval) 필요.
+
+#### B.3 GROUPS — peer 그룹 카운트
+
+PG 11+. `GROUPS BETWEEN 2 PRECEDING AND CURRENT ROW`는 현재 행 + 이전 두 *peer 그룹*(같은 ORDER BY 값을 가진 행 집합)을 포함. ORDER BY에 tie가 많고 "이전 N개의 동등 tier 그룹"을 원할 때 유용.
+
+#### B.4 기본값의 놀라움
+
+`OVER (ORDER BY x)`를 명시적 frame 없이 쓰면, PostgreSQL은 **`RANGE BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW`**를 사용. running `SUM`에서, 이는 *같은* `x`를 가진 행이 *같은* 누적 합계를 받는다는 뜻 — 모두 서로를 peer로 봄. 전형적인 "행마다" running total을 얻으려면 frame을 명시 — `OVER (ORDER BY x ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW)`.
+
+### 이론: Sliding-Window 알고리즘
+
+PostgreSQL은 정렬 후 단일 순차 pass로 윈도우 함수를 평가:
+
+#### C.1 실행
+
+```
+1. 모든 입력 행 읽기.
+2. Partition — PARTITION BY 컬럼으로 hash 또는 sort.
+3. 각 partition에 대해:
+   a. ORDER BY로 정렬.
+   b. 정렬된 행을 walk하며 in-memory frame 유지.
+   c. 각 입력 행에 대해:
+      - frame 갱신(frame clause에 따라 새 행 추가, 옛 행 drop).
+      - 현재 frame에 대해 함수 계산.
+      - 입력 행 + 함수 값 emit.
+```
+
+`SUM(...) OVER` 같은 aggregate 윈도우 함수의 경우, 엔진은 frame이 슬라이드함에 따라 incrementally 갱신되는 running aggregate state를 유지 — 들어오는 행 추가, 나가는 행 빼기. 이로써 invertible aggregate(SUM, COUNT, AVG)에 대해 100-element trailing 윈도우가 3-element만큼 저렴. Non-invertible aggregate(MIN, MAX, MEDIAN)는 더 비싼 frame당 재계산이 필요.
+
+#### C.2 Single-pass인 이유
+
+정렬 후, 알고리즘은 partition당 정확히 1 pass. 재귀적 평가 없음, per-row subquery 없음. 이것이 순진한 등가 — `SELECT (SELECT sum(amount) FROM orders WHERE order_date <= o.order_date) FROM orders o` — 의 O(N²)에 대한 성능 우위.
 
 ### 5.1 프레임 구문
 

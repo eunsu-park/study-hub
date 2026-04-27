@@ -21,152 +21,6 @@
 
 SQL 질문이 복잡해질수록, 다음 질문을 하기 전에 먼저 하나의 질문에 대한 답을 구해야 하는 경우가 자주 생깁니다. 서브쿼리는 한 쿼리 안에 다른 쿼리를 내장할 수 있게 해주고, 공통 테이블 표현식(CTE)은 중간 결과에 이름을 붙여 재사용할 수 있게 해줍니다. 이 두 가지를 함께 사용하면 단일 SQL 구문을 구조화된 다단계 추론 과정으로 변환할 수 있습니다.
 
-문법으로 들어가기 전, [**이론과 원리**](#이론과-원리) 절을 먼저 읽으세요 — correlated와 non-correlated subquery의 차이, CTE가 한때 optimization fence였다가 PostgreSQL 12에서 무엇이 바뀌었는지, 그리고 recursive CTE가 그래프 순회를 어떻게 구현하는지를 다룹니다.
-
----
-
-## 이론과 원리
-
-서브쿼리는 단지 괄호 안에 쓴 또 다른 `SELECT`이지만, planner는 매우 다른 네 가지 것 — projection 안의 scalar subquery, `WHERE` 안의 subquery(correlated와 non-correlated), `FROM` 안의 subquery(derived table), `WITH` 안의 CTE — 를 완전히 다른 규칙으로 처리합니다. 같은 데이터와 같은 답이 다섯 가지 방식으로 표현될 수 있고, 그 다섯 가지의 runtime은 극단적으로 다를 수 있습니다. 어떤 형태가 "그저 sugar"(planner가 동등한 형태로 다시 쓰는)이고 어떤 형태가 optimization fence로 작동하는지 이해하는 것이, "읽기 좋아서 CTE를 썼다"와 "CTE를 썼더니 우연히 100배 느려졌다"를 가르는 차이입니다.
-
-이 절에서 다루는 내용:
-
-- **(A)** correlated vs non-correlated subquery — 하나는 join이 되고 다른 하나는 상수가 되는 이유.
-- **(B)** `FROM` 안의 subquery — derived table, planning, inlining.
-- **(C)** CTE(`WITH`) — PG12 이전의 optimization fence 규칙과 새로운 `MATERIALIZED` / `NOT MATERIALIZED` 키워드.
-- **(D)** Recursive CTE(`WITH RECURSIVE`) — 반복 알고리즘과 그래프 walk 의미론.
-
-### A. Correlated vs Non-Correlated Subquery
-
-#### A.1 Non-correlated — 1번만 실행
-
-서브쿼리가 enclosing 쿼리의 어떤 컬럼도 참조하지 않으면 **non-correlated**입니다.
-
-```sql
-SELECT * FROM orders
-WHERE customer_id IN (SELECT id FROM customers WHERE country = 'KR');
-```
-
-내부 `SELECT id FROM customers WHERE country = 'KR'`은 필터링되는 행에 의존하지 않습니다. planner는 이를 상수 집합으로 처리 — 1번 실행해서 결과를 materialize한 뒤, 각 `orders` 행에 대해 membership 검사. `customers(country)`에 인덱스가 있으면 inner가 빠르게 실행되고, `orders(customer_id)`에 또 인덱스가 있으면 outer membership 검사는 indexed semi-join이 됩니다.
-
-#### A.2 Correlated — outer 행마다 (잠재적으로) 실행
-
-서브쿼리가 enclosing 쿼리의 컬럼을 참조하면 **correlated**입니다.
-
-```sql
-SELECT o.* FROM orders o
-WHERE o.amount > (SELECT AVG(amount) FROM orders WHERE customer_id = o.customer_id);
---                                                                   ^^^^^^^^^^^^^
-```
-
-순진한 실행 plan은 — `orders`의 각 `o`에 대해 inner aggregate 실행. O(N²)이고 큰 `orders`에선 재앙.
-
-planner는 *거의 항상* correlated subquery를 다시 씁니다 — 위 예를 `customer_id` group-by가 있는 join으로 변환 — 그러나 `LATERAL` 의미론, 이상한 타입, volatile 함수 등으로 인해 다시 쓰기가 막힐 때가 있습니다. 막히면 per-row 실행으로 돌아갑니다. correlation이 join으로 평탄화되었는지 항상 `EXPLAIN`으로 확인.
-
-#### A.3 Scalar subquery
-
-projection 안의 subquery(`SELECT (subquery), ...`)는 최대 1행 1컬럼을 반환해야 합니다. PostgreSQL은 correlated일 때 outer 행마다 1번 실행, 아닐 때 총 1번 실행. scalar subquery는 "각 Y에 대해 X를 lookup"에 편하지만, per-row 비용을 주의 — `LEFT JOIN`이 보통 더 빠릅니다.
-
-### B. FROM 안의 Subquery — Derived Table
-
-```sql
-SELECT t.region, t.total
-FROM (SELECT region, SUM(sales) AS total FROM orders GROUP BY region) t
-WHERE t.total > 100000;
-```
-
-`FROM` 안의 subquery를 **derived table** 또는 **inline view**라고 부릅니다. planner는 이를 outer 쿼리에 **inline**할 자유가 있습니다 — 중간 결과를 materialize할 필요 없이, 전체를 단일 plan으로 다시 쓰며, `total > 100000` 술어를 가능한 한 깊이(보통 inner aggregate의 HAVING으로) 밀어 넣습니다.
-
-이 inlining이 derived table을 성능 좋게 만드는 것 — outer `WHERE`이 실행 중이 아니라 planning 중에 inner 쿼리에 도달합니다.
-
-### C. CTE(`WITH`) — Optimization Fence, 그때와 지금
-
-```sql
-WITH big_orders AS (
-    SELECT * FROM orders WHERE amount > 1000
-)
-SELECT * FROM big_orders WHERE region = 'KR';
-```
-
-derived-table 버전과 동일하게 보입니다. *예전에는* 매우 다르게 동작했습니다.
-
-#### C.1 PG12 이전의 optimization fence
-
-PostgreSQL 12 이전, 모든 CTE는 **optimization fence**였습니다 — planner가 CTE를 먼저 materialize하고, 그 다음 outer 쿼리를 materialize된 결과에 대해 실행. outer `WHERE region = 'KR'`은 CTE *안으로 push down되지 않았습니다*. 그래서 위 예는 `amount > 1000`인 모든 `orders` 행을 스캔하고, 모두 materialize한 뒤 `region = 'KR'`로 필터. 등가 derived-table 형태보다 100× 느릴 때도 있었습니다.
-
-fence가 의도적일 때도 있었지만 — 실행 순서를 통제할 수 있게 해 줌 — 더 흔히는 성능 함정이었습니다.
-
-#### C.2 PG12+ — `MATERIALIZED` 키워드
-
-PostgreSQL 12에서 기본값이 바뀌었습니다. CTE는 이제 derived table처럼 inline되는 것이 *기본*입니다. *단*, CTE가 한 번 이상 참조되거나 `RECURSIVE` 또는 volatile 호출을 포함하면 예외. 두 새 키워드가 명시적 통제 제공:
-
-- `WITH big_orders AS MATERIALIZED (...)` — 옛 fence 동작을 강제. CTE가 부수 효과(예 — CTE 안의 `INSERT ... RETURNING`)를 가지거나 planner가 잘못된 선택을 한다고 알 때 정확히 1번 실행시키고 싶다면 유용.
-- `WITH big_orders AS NOT MATERIALIZED (...)` — CTE가 여러 번 참조되어도 inlining을 명시적으로 요청.
-
-#### C.3 Writable CTE
-
-CTE는 `RETURNING`이 있는 `INSERT`, `UPDATE`, `DELETE`를 포함할 수 있습니다. 이로써 "A 한 뒤 그 결과를 B에 사용"을 한 statement로 할 수 있습니다.
-
-```sql
-WITH deleted AS (
-    DELETE FROM orders WHERE created_at < '2025-01-01' RETURNING *
-)
-INSERT INTO orders_archive SELECT * FROM deleted;
-```
-
-Writable CTE는 항상 materialize됩니다 — 부수 효과가 있고 inline될 수 없습니다.
-
-### D. Recursive CTE — SQL 안의 반복
-
-```sql
-WITH RECURSIVE descendants AS (
-    -- Base case
-    SELECT id, parent_id, name FROM employees WHERE id = 5
-    UNION ALL
-    -- Recursive case — 이전 결과를 employees와 join
-    SELECT e.id, e.parent_id, e.name
-    FROM employees e
-    JOIN descendants d ON e.parent_id = d.id
-)
-SELECT * FROM descendants;
-```
-
-#### D.1 실행 알고리즘
-
-`WITH RECURSIVE`는 실제로는 재귀가 아니라 반복입니다.
-
-```
-working_set = base_case 실행      # non-recursive term의 행
-result      = working_set
-while working_set이 비어 있지 않으면:
-    working_set = recursive_term 실행, working_set을 CTE 참조로 사용
-    result.append(working_set)
-return result
-```
-
-각 iteration은 *직전 iteration의 출력*을 CTE 입력으로 받아 recursive term을 실행하고, 새 행을 append. iteration이 0행을 만들면 루프 종료. (cycle 검출이 필요하면 `UNION ALL` 대신 `UNION` 사용 — cycle로 인한 중복이 dedup됨.)
-
-#### D.2 표현 가능한 것들
-
-- **트리 순회** — 조직도, 카테고리 트리, 댓글 스레드의 descendant/ancestor.
-- **그래프 walk** — 최단 경로(cycle 회피 주의), 한 노드로부터의 reachability.
-- **숫자 생성** — `WITH RECURSIVE n AS (SELECT 1 UNION ALL SELECT n+1 FROM n WHERE n < 100) SELECT * FROM n;`
-
-#### D.3 비용 모양
-
-비용은 recursive term의 비용 × 재귀 깊이. 깊은 트리나 넓은 그래프에서는 비쌀 수 있고 — 대부분의 쿼리와 달리 planner는 실행 없이는 비용을 추정할 수 없습니다(iteration 수에 통계가 없음). 사용자 제공 그래프를 순회할 때는 항상 `WHERE level < N` 술어로 재귀 깊이를 제한.
-
-### 이론에서 아래 SQL로
-
-이어지는 각 절은 위 메커니즘이 구체화된 형태입니다:
-
-- **`WHERE` 안의 subquery (`IN`, `EXISTS`, `=`)** — non-correlated는 1번 실행, correlated는 가능할 때 join으로 다시 쓰임 (§A).
-- **`SELECT` 안의 scalar subquery** — 1행 1컬럼, correlated일 때 outer 행마다 실행 (§A.3).
-- **`FROM` 안의 subquery** — derived table, planner가 inline하고 술어 push (§B).
-- **`WITH name AS (...)`** — PG12+에선 기본 inline, fence 동작은 `MATERIALIZED`로 (§C).
-- **`WITH RECURSIVE`** — base case + recursive case + 종료, 반복적으로 실행 (§D).
-- **`LATERAL`** — derived table의 명시적 per-row 실행, correlated subquery를 보완.
-
 ---
 
 ## 1. 서브쿼리란?
@@ -296,6 +150,18 @@ WHERE avg_price > 100000;
 -- 서브쿼리에 별칭 필수 (AS category_avg)
 ```
 
+### 이론: FROM 안의 Subquery — Derived Table
+
+```sql
+SELECT t.region, t.total
+FROM (SELECT region, SUM(sales) AS total FROM orders GROUP BY region) t
+WHERE t.total > 100000;
+```
+
+`FROM` 안의 subquery를 **derived table** 또는 **inline view**라고 부릅니다. planner는 이를 outer 쿼리에 **inline**할 자유가 있습니다 — 중간 결과를 materialize할 필요 없이, 전체를 단일 plan으로 다시 쓰며, `total > 100000` 술어를 가능한 한 깊이(보통 inner aggregate의 HAVING으로) 밀어 넣습니다.
+
+이 inlining이 derived table을 성능 좋게 만드는 것 — outer `WHERE`이 실행 중이 아니라 planning 중에 inner 쿼리에 도달합니다.
+
 ### 복잡한 집계 후 JOIN
 
 ```sql
@@ -360,9 +226,77 @@ WHERE price = (
 
 > **비유 -- SQL은 집합으로 사고한다(SQL Thinks in Sets)**: 서브쿼리는 질문 안의 질문과 같습니다: "직원이 10명 이상인 부서에 속한 직원들의 평균 급여는 얼마인가?" 먼저 내부 질문(어떤 부서인가?)에 답한 뒤, 그 답을 외부 질문에 활용합니다. 공통 테이블 표현식(CTE)은 그 내부 답에 이름을 붙여 여러 번 참조할 수 있게 해줍니다 -- 마치 최종 계산에 사용하기 전에 중간 결과를 화이트보드에 적어두는 것과 같습니다.
 
+### 이론: Correlated vs Non-Correlated Subquery
+
+#### A.1 Non-correlated — 1번만 실행
+
+서브쿼리가 enclosing 쿼리의 어떤 컬럼도 참조하지 않으면 **non-correlated**입니다.
+
+```sql
+SELECT * FROM orders
+WHERE customer_id IN (SELECT id FROM customers WHERE country = 'KR');
+```
+
+내부 `SELECT id FROM customers WHERE country = 'KR'`은 필터링되는 행에 의존하지 않습니다. planner는 이를 상수 집합으로 처리 — 1번 실행해서 결과를 materialize한 뒤, 각 `orders` 행에 대해 membership 검사. `customers(country)`에 인덱스가 있으면 inner가 빠르게 실행되고, `orders(customer_id)`에 또 인덱스가 있으면 outer membership 검사는 indexed semi-join이 됩니다.
+
+#### A.2 Correlated — outer 행마다 (잠재적으로) 실행
+
+서브쿼리가 enclosing 쿼리의 컬럼을 참조하면 **correlated**입니다.
+
+```sql
+SELECT o.* FROM orders o
+WHERE o.amount > (SELECT AVG(amount) FROM orders WHERE customer_id = o.customer_id);
+--                                                                   ^^^^^^^^^^^^^
+```
+
+순진한 실행 plan은 — `orders`의 각 `o`에 대해 inner aggregate 실행. O(N²)이고 큰 `orders`에선 재앙.
+
+planner는 *거의 항상* correlated subquery를 다시 씁니다 — 위 예를 `customer_id` group-by가 있는 join으로 변환 — 그러나 `LATERAL` 의미론, 이상한 타입, volatile 함수 등으로 인해 다시 쓰기가 막힐 때가 있습니다. 막히면 per-row 실행으로 돌아갑니다. correlation이 join으로 평탄화되었는지 항상 `EXPLAIN`으로 확인.
+
+#### A.3 Scalar subquery
+
+projection 안의 subquery(`SELECT (subquery), ...`)는 최대 1행 1컬럼을 반환해야 합니다. PostgreSQL은 correlated일 때 outer 행마다 1번 실행, 아닐 때 총 1번 실행. scalar subquery는 "각 Y에 대해 X를 lookup"에 편하지만, per-row 비용을 주의 — `LEFT JOIN`이 보통 더 빠릅니다.
+
 ## 7. CTE (Common Table Expression)
 
 WITH 절을 사용하여 임시 결과 집합에 이름을 붙입니다.
+
+### 이론: CTE(`WITH`) — Optimization Fence, 그때와 지금
+
+```sql
+WITH big_orders AS (
+    SELECT * FROM orders WHERE amount > 1000
+)
+SELECT * FROM big_orders WHERE region = 'KR';
+```
+
+derived-table 버전과 동일하게 보입니다. *예전에는* 매우 다르게 동작했습니다.
+
+#### C.1 PG12 이전의 optimization fence
+
+PostgreSQL 12 이전, 모든 CTE는 **optimization fence**였습니다 — planner가 CTE를 먼저 materialize하고, 그 다음 outer 쿼리를 materialize된 결과에 대해 실행. outer `WHERE region = 'KR'`은 CTE *안으로 push down되지 않았습니다*. 그래서 위 예는 `amount > 1000`인 모든 `orders` 행을 스캔하고, 모두 materialize한 뒤 `region = 'KR'`로 필터. 등가 derived-table 형태보다 100× 느릴 때도 있었습니다.
+
+fence가 의도적일 때도 있었지만 — 실행 순서를 통제할 수 있게 해 줌 — 더 흔히는 성능 함정이었습니다.
+
+#### C.2 PG12+ — `MATERIALIZED` 키워드
+
+PostgreSQL 12에서 기본값이 바뀌었습니다. CTE는 이제 derived table처럼 inline되는 것이 *기본*입니다. *단*, CTE가 한 번 이상 참조되거나 `RECURSIVE` 또는 volatile 호출을 포함하면 예외. 두 새 키워드가 명시적 통제 제공:
+
+- `WITH big_orders AS MATERIALIZED (...)` — 옛 fence 동작을 강제. CTE가 부수 효과(예 — CTE 안의 `INSERT ... RETURNING`)를 가지거나 planner가 잘못된 선택을 한다고 알 때 정확히 1번 실행시키고 싶다면 유용.
+- `WITH big_orders AS NOT MATERIALIZED (...)` — CTE가 여러 번 참조되어도 inlining을 명시적으로 요청.
+
+#### C.3 Writable CTE
+
+CTE는 `RETURNING`이 있는 `INSERT`, `UPDATE`, `DELETE`를 포함할 수 있습니다. 이로써 "A 한 뒤 그 결과를 B에 사용"을 한 statement로 할 수 있습니다.
+
+```sql
+WITH deleted AS (
+    DELETE FROM orders WHERE created_at < '2025-01-01' RETURNING *
+)
+INSERT INTO orders_archive SELECT * FROM deleted;
+```
+
+Writable CTE는 항상 materialize됩니다 — 부수 효과가 있고 inline될 수 없습니다.
 
 ### 기본 CTE
 
@@ -436,6 +370,46 @@ ORDER BY month;
 ## 8. 재귀 CTE (WITH RECURSIVE)
 
 자기 자신을 참조하는 CTE입니다.
+
+### 이론: Recursive CTE — SQL 안의 반복
+
+```sql
+WITH RECURSIVE descendants AS (
+    -- Base case
+    SELECT id, parent_id, name FROM employees WHERE id = 5
+    UNION ALL
+    -- Recursive case — 이전 결과를 employees와 join
+    SELECT e.id, e.parent_id, e.name
+    FROM employees e
+    JOIN descendants d ON e.parent_id = d.id
+)
+SELECT * FROM descendants;
+```
+
+#### D.1 실행 알고리즘
+
+`WITH RECURSIVE`는 실제로는 재귀가 아니라 반복입니다.
+
+```
+working_set = base_case 실행      # non-recursive term의 행
+result      = working_set
+while working_set이 비어 있지 않으면:
+    working_set = recursive_term 실행, working_set을 CTE 참조로 사용
+    result.append(working_set)
+return result
+```
+
+각 iteration은 *직전 iteration의 출력*을 CTE 입력으로 받아 recursive term을 실행하고, 새 행을 append. iteration이 0행을 만들면 루프 종료. (cycle 검출이 필요하면 `UNION ALL` 대신 `UNION` 사용 — cycle로 인한 중복이 dedup됨.)
+
+#### D.2 표현 가능한 것들
+
+- **트리 순회** — 조직도, 카테고리 트리, 댓글 스레드의 descendant/ancestor.
+- **그래프 walk** — 최단 경로(cycle 회피 주의), 한 노드로부터의 reachability.
+- **숫자 생성** — `WITH RECURSIVE n AS (SELECT 1 UNION ALL SELECT n+1 FROM n WHERE n < 100) SELECT * FROM n;`
+
+#### D.3 비용 모양
+
+비용은 recursive term의 비용 × 재귀 깊이. 깊은 트리나 넓은 그래프에서는 비쌀 수 있고 — 대부분의 쿼리와 달리 planner는 실행 없이는 비용을 추정할 수 없습니다(iteration 수에 통계가 없음). 사용자 제공 그래프를 순회할 때는 항상 `WHERE level < N` 술어로 재귀 깊이를 제한.
 
 ### 조직도 탐색
 

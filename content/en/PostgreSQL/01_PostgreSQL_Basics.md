@@ -21,110 +21,6 @@ After completing this lesson, you will be able to:
 
 PostgreSQL is one of the most advanced open-source relational databases available today. Whether you are building a small web application or designing a large-scale analytics platform, PostgreSQL provides the reliability, extensibility, and standards compliance that professional developers and data engineers rely on. This lesson walks you through installation, first connection, and the essential commands that form the starting point of your PostgreSQL journey.
 
-Before the installation steps, read [**Theory & Principles**](#theory--principles) — what ACID actually guarantees, the client/server process model behind a `psql` connection, and the OID system that names every object inside the database.
-
----
-
-## Theory & Principles
-
-A SQL command typed into `psql` does not just execute somewhere abstract. It travels through a specific operating-system architecture, lands in a specific process, modifies pages governed by specific durability rules, and references objects identified by specific internal numbers. The four ideas below — ACID, the postmaster/backend process model, system catalogs, and OIDs — are the invariants every later lesson rests on.
-
-This section covers:
-
-- **(A)** What the four ACID letters actually promise, and how PostgreSQL implements each one.
-- **(B)** The client/server process model: postmaster, backends, background workers.
-- **(C)** The system catalog (`pg_catalog`) as PostgreSQL's metadata-as-tables design.
-- **(D)** The OID (Object Identifier) system that gives every object a stable internal name.
-
-### A. ACID, Spelled Out
-
-ACID is a contract about what survives concurrency, crashes, and partial failure. Each letter has a specific PostgreSQL mechanism behind it.
-
-#### A.1 Atomicity — all-or-nothing
-
-A transaction either commits in full or has no observable effect at all. Internally, every modification first lands in the **Write-Ahead Log (WAL)** with a transaction id (`xid`). On `COMMIT`, a single WAL record marks the `xid` as committed; on `ROLLBACK` or crash, that record is never written and the changes are invisible to everyone forever (eventually reclaimed by `VACUUM`). There is no "halfway" state — visibility flips on a single byte.
-
-#### A.2 Consistency — invariants hold across the boundary
-
-If the database satisfies all integrity constraints (`NOT NULL`, `CHECK`, foreign keys, unique indexes, deferred constraints) before the transaction starts, it satisfies them after the transaction commits. PostgreSQL enforces this by checking constraints at row insertion time (or, for `DEFERRABLE` constraints, at commit time). If any check fails, the whole transaction aborts — see Atomicity.
-
-#### A.3 Isolation — concurrent transactions do not see each other's mid-flight state
-
-PostgreSQL uses **MVCC** (Multi-Version Concurrency Control): every row version carries `xmin` (the `xid` that created it) and `xmax` (the `xid` that deleted/superseded it). A reader sees a row only if `xmin` is committed and visible *to its snapshot* and `xmax` is not. Readers therefore never block writers and writers never block readers — a property no lock-based system can match. Lesson 11 unpacks this in depth.
-
-#### A.4 Durability — committed data survives crash
-
-`COMMIT` does not return until the WAL record has been `fsync`'d to disk (configurable, but this is the default). Even if the server loses power one millisecond later, restart will replay the WAL and reconstruct every committed change. Heap files themselves are written lazily — durability comes from the log, not the table file.
-
-### B. Client/Server Process Model
-
-A PostgreSQL "server" is not a single process. It is a tree.
-
-```
-postmaster (parent)
-├── backend for client #1   (1 process per connection)
-├── backend for client #2
-├── background writer       (flushes dirty buffers)
-├── WAL writer              (flushes WAL)
-├── checkpointer            (writes consistent points)
-├── autovacuum launcher     (spawns autovacuum workers)
-└── stats collector / logical replication launcher / ...
-```
-
-#### B.1 The postmaster
-
-The first process started by `pg_ctl start`. It listens on the configured TCP port (default 5432) and on the Unix-domain socket. It does **not** execute SQL itself — it `fork()`s a new backend process for each accepted connection and hands the socket to the child. This means:
-
-- Connection cost is high (one full process per connection). This is why **connection poolers** like PgBouncer exist.
-- The postmaster crashing does not necessarily kill running queries — but no new connections can be accepted until it restarts.
-
-#### B.2 Backends
-
-One OS process per client. Inside the backend lives the parser, planner, executor, MVCC visibility checks, and the connection-local catalog cache. Memory like `work_mem` and `temp_buffers` is allocated per backend, which is why a high `max_connections` × high `work_mem` combination can exhaust system RAM.
-
-#### B.3 Background workers
-
-Separate processes that handle work that would block backends if done inline: writing dirty buffers to disk, flushing WAL, running autovacuum, building indexes in parallel, replicating to standbys. They share the same shared memory segment as backends — that is what `shared_buffers` is.
-
-### C. System Catalogs: Metadata as Tables
-
-PostgreSQL stores its own schema *in* PostgreSQL tables, in a schema named `pg_catalog`. Every database, table, column, index, function, role, and tablespace is a row in some catalog table.
-
-| Catalog | Holds |
-|---------|-------|
-| `pg_database` | one row per database in the cluster |
-| `pg_namespace` | one row per schema |
-| `pg_class` | one row per "relation" (table, index, view, sequence, materialized view) |
-| `pg_attribute` | one row per column of every relation |
-| `pg_type` | one row per data type |
-| `pg_proc` | one row per function/procedure |
-| `pg_authid` | one row per role |
-
-This design has two practical consequences:
-
-1. **Anything `psql` shows you (`\l`, `\dt`, `\d`) is just a SQL query against `pg_catalog`.** Run `\d+` in `psql` with `\set ECHO_HIDDEN on` and you will see the actual `SELECT` it issues.
-2. **The catalogs themselves obey ACID and MVCC.** A `CREATE TABLE` is a transaction that inserts rows into `pg_class` and `pg_attribute`. Wrap DDL in `BEGIN; ... ROLLBACK;` and the table never existed.
-
-The system uses a separate schema (`information_schema`) for the SQL-standard cross-vendor view of the same metadata. Use `pg_catalog` for PostgreSQL-specific introspection; use `information_schema` for portable tools.
-
-### D. OIDs — Object Identifiers
-
-Every object in `pg_catalog` has a 4-byte unsigned integer primary key called an **OID** (Object Identifier). When you write `SELECT * FROM users`, the parser does not pass the *string* `"users"` to the executor — it resolves the name to the OID of the row in `pg_class` and uses that OID everywhere downstream.
-
-OIDs are why renaming a table is cheap (only one row in `pg_class` changes; every dependent index, view, and foreign key keeps the same `relid`) and why cross-database object references are not allowed (OIDs are unique per database, not per cluster).
-
-User tables stopped having an `OID` system column by default in PostgreSQL 12 (`WITH OIDS` was deprecated). System catalog rows still have one, accessible as the pseudo-column `oid` — `SELECT oid, datname FROM pg_database;` is the canonical way to read it.
-
-### From Theory to the Commands Below
-
-Each of the following sections is one of these ideas made concrete:
-
-- **Installation** — starts a postmaster process listening on port 5432 (§B.1).
-- **`psql` connection** — opens a TCP/Unix socket to the postmaster, which forks a backend (§B.2).
-- **`\l`, `\dt`, `\d`** — shorthand SQL queries against `pg_database`, `pg_class`, `pg_attribute` (§C).
-- **`SELECT`, `CREATE DATABASE`** — every statement runs inside an implicit or explicit transaction with full ACID guarantees (§A).
-- **Object naming rules** — every named thing you create gets an OID assigned by the catalog (§D).
-
 ---
 
 ## 1. What is PostgreSQL?
@@ -267,6 +163,57 @@ psql (PostgreSQL) 16.1
 
 psql is PostgreSQL's interactive terminal client.
 
+### Theory: Client/Server Process Model
+
+A PostgreSQL "server" is not a single process. It is a tree.
+
+```
+postmaster (parent)
+├── backend for client #1   (1 process per connection)
+├── backend for client #2
+├── background writer       (flushes dirty buffers)
+├── WAL writer              (flushes WAL)
+├── checkpointer            (writes consistent points)
+├── autovacuum launcher     (spawns autovacuum workers)
+└── stats collector / logical replication launcher / ...
+```
+
+#### B.1 The postmaster
+
+The first process started by `pg_ctl start`. It listens on the configured TCP port (default 5432) and on the Unix-domain socket. It does **not** execute SQL itself — it `fork()`s a new backend process for each accepted connection and hands the socket to the child. This means:
+
+- Connection cost is high (one full process per connection). This is why **connection poolers** like PgBouncer exist.
+- The postmaster crashing does not necessarily kill running queries — but no new connections can be accepted until it restarts.
+
+#### B.2 Backends
+
+One OS process per client. Inside the backend lives the parser, planner, executor, MVCC visibility checks, and the connection-local catalog cache. Memory like `work_mem` and `temp_buffers` is allocated per backend, which is why a high `max_connections` × high `work_mem` combination can exhaust system RAM.
+
+#### B.3 Background workers
+
+Separate processes that handle work that would block backends if done inline: writing dirty buffers to disk, flushing WAL, running autovacuum, building indexes in parallel, replicating to standbys. They share the same shared memory segment as backends — that is what `shared_buffers` is.
+
+### Theory: System Catalogs: Metadata as Tables
+
+PostgreSQL stores its own schema *in* PostgreSQL tables, in a schema named `pg_catalog`. Every database, table, column, index, function, role, and tablespace is a row in some catalog table.
+
+| Catalog | Holds |
+|---------|-------|
+| `pg_database` | one row per database in the cluster |
+| `pg_namespace` | one row per schema |
+| `pg_class` | one row per "relation" (table, index, view, sequence, materialized view) |
+| `pg_attribute` | one row per column of every relation |
+| `pg_type` | one row per data type |
+| `pg_proc` | one row per function/procedure |
+| `pg_authid` | one row per role |
+
+This design has two practical consequences:
+
+1. **Anything `psql` shows you (`\l`, `\dt`, `\d`) is just a SQL query against `pg_catalog`.** Run `\d+` in `psql` with `\set ECHO_HIDDEN on` and you will see the actual `SELECT` it issues.
+2. **The catalogs themselves obey ACID and MVCC.** A `CREATE TABLE` is a transaction that inserts rows into `pg_class` and `pg_attribute`. Wrap DDL in `BEGIN; ... ROLLBACK;` and the table never existed.
+
+The system uses a separate schema (`information_schema`) for the SQL-standard cross-vendor view of the same metadata. Use `pg_catalog` for PostgreSQL-specific introspection; use `information_schema` for portable tools.
+
 ### Connection Methods
 
 ```bash
@@ -332,6 +279,26 @@ Commands in psql that start with `\`.
 ---
 
 ## 6. Execute First Query
+
+### Theory: ACID, Spelled Out
+
+ACID is a contract about what survives concurrency, crashes, and partial failure. Each letter has a specific PostgreSQL mechanism behind it.
+
+#### A.1 Atomicity — all-or-nothing
+
+A transaction either commits in full or has no observable effect at all. Internally, every modification first lands in the **Write-Ahead Log (WAL)** with a transaction id (`xid`). On `COMMIT`, a single WAL record marks the `xid` as committed; on `ROLLBACK` or crash, that record is never written and the changes are invisible to everyone forever (eventually reclaimed by `VACUUM`). There is no "halfway" state — visibility flips on a single byte.
+
+#### A.2 Consistency — invariants hold across the boundary
+
+If the database satisfies all integrity constraints (`NOT NULL`, `CHECK`, foreign keys, unique indexes, deferred constraints) before the transaction starts, it satisfies them after the transaction commits. PostgreSQL enforces this by checking constraints at row insertion time (or, for `DEFERRABLE` constraints, at commit time). If any check fails, the whole transaction aborts — see Atomicity.
+
+#### A.3 Isolation — concurrent transactions do not see each other's mid-flight state
+
+PostgreSQL uses **MVCC** (Multi-Version Concurrency Control): every row version carries `xmin` (the `xid` that created it) and `xmax` (the `xid` that deleted/superseded it). A reader sees a row only if `xmin` is committed and visible *to its snapshot* and `xmax` is not. Readers therefore never block writers and writers never block readers — a property no lock-based system can match. Lesson 11 unpacks this in depth.
+
+#### A.4 Durability — committed data survives crash
+
+`COMMIT` does not return until the WAL record has been `fsync`'d to disk (configurable, but this is the default). Even if the server loses power one millisecond later, restart will replay the WAL and reconstruct every committed change. Heap files themselves are written lazily — durability comes from the log, not the table file.
 
 ### Simple Calculation
 
@@ -427,6 +394,14 @@ WHERE active = true;
 ---
 
 ## 8. Database Creation and Deletion
+
+### Theory: OIDs — Object Identifiers
+
+Every object in `pg_catalog` has a 4-byte unsigned integer primary key called an **OID** (Object Identifier). When you write `SELECT * FROM users`, the parser does not pass the *string* `"users"` to the executor — it resolves the name to the OID of the row in `pg_class` and uses that OID everywhere downstream.
+
+OIDs are why renaming a table is cheap (only one row in `pg_class` changes; every dependent index, view, and foreign key keeps the same `relid`) and why cross-database object references are not allowed (OIDs are unique per database, not per cluster).
+
+User tables stopped having an `OID` system column by default in PostgreSQL 12 (`WITH OIDS` was deprecated). System catalog rows still have one, accessible as the pseudo-column `oid` — `SELECT oid, datname FROM pg_database;` is the canonical way to read it.
 
 ### Create Database
 

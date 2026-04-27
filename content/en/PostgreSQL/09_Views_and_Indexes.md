@@ -21,125 +21,6 @@ After completing this lesson, you will be able to:
 
 As your database grows, two challenges emerge: complex queries become tedious to repeat, and full-table scans become unacceptably slow. Views solve the first problem by encapsulating a query behind a simple name, while indexes solve the second by giving PostgreSQL a fast lookup path to the rows you need. Together, they are essential tools for building maintainable and performant database applications.
 
-Before the syntax, read [**Theory & Principles**](#theory--principles) — the difference between a view and a materialized view, the four index types PostgreSQL ships with (B-tree, Hash, GIN, GiST, BRIN), and the role of `fillfactor` in B-tree page splits.
-
----
-
-## Theory & Principles
-
-A `CREATE VIEW` is rule-based query rewriting: the view name is replaced by its definition during planning. A `CREATE MATERIALIZED VIEW` is the opposite — it stores actual rows that are refreshed on demand. An index is yet another physical structure that lets the planner skip scanning the heap. None of these are conceptually "the same kind of thing", and the differences in *when* they are computed (planning vs query vs refresh) and *what* they store (nothing vs result set vs lookup structure) are what determines whether using one is a win or a trap.
-
-This section covers:
-
-- **(A)** Views as query rewriting; updatable views; materialized views and the refresh model.
-- **(B)** B-tree index internals: nodes, page splits, fillfactor, and bloat.
-- **(C)** GIN, GiST, BRIN, Hash — when each beats B-tree.
-- **(D)** Partial, expression, and covering indexes — three orthogonal modifiers.
-
-### A. Views and Materialized Views
-
-#### A.1 Plain views — pure rewriting
-
-`CREATE VIEW v AS SELECT ...;` stores the SQL text of the query in `pg_rewrite`. When you later write `SELECT * FROM v WHERE x > 5;`, the rewriter substitutes the view's definition into the query before planning. The result is a single combined query that the planner optimizes as a whole — predicate push-down works through the view boundary.
-
-This makes views essentially free at runtime: there is no "view evaluation" step. The cost equals the cost of the equivalent un-viewed query.
-
-#### A.2 Updatable views
-
-A simple view (one base table, no aggregates, no DISTINCT, no GROUP BY) is automatically updatable — `INSERT`, `UPDATE`, `DELETE` against it work as if you were modifying the base table. PostgreSQL also supports `INSTEAD OF` triggers and `WITH CHECK OPTION` for views that need controlled write semantics.
-
-#### A.3 Materialized views — frozen results
-
-`CREATE MATERIALIZED VIEW mv AS SELECT ...;` runs the query *once*, stores the result rows in a real heap file, and remembers the SQL. Subsequent `SELECT * FROM mv` reads the stored rows — no recomputation. The downside: the rows go stale.
-
-`REFRESH MATERIALIZED VIEW mv;` reruns the query and replaces the stored rows. By default this takes an `ACCESS EXCLUSIVE` lock; `REFRESH MATERIALIZED VIEW CONCURRENTLY mv;` instead computes the new rows in a temp table and atomically swaps, allowing concurrent reads (requires a unique index on the MV).
-
-When materialized views shine: expensive aggregates over relatively static data (analytics dashboards, monthly summaries). When they hurt: the moment the source data changes faster than you can refresh.
-
-### B. B-tree Index Internals — Beyond the Basic Picture
-
-Lesson 5 introduced B-tree as ordered pages with leaves linked left-to-right. The full story:
-
-#### B.1 Page splits
-
-When a leaf page fills up and a new key needs to be inserted, the page splits. PostgreSQL reads the full leaf, allocates a new page, distributes keys roughly half-half, updates the parent page to point at both, and rewrites both leaves. If the parent is also full, the split cascades upward — and the root may itself split, in which case the tree gains a level.
-
-Page splits are expensive (3+ page writes, WAL records for each). On a heavily-inserted table with random keys (e.g. UUIDs), splits happen everywhere. With sequential keys (e.g. SERIAL), inserts always go to the rightmost leaf — almost no splits.
-
-#### B.2 Fillfactor and split avoidance
-
-`CREATE INDEX ... WITH (fillfactor = 70);` tells PostgreSQL to leave 30% of each page empty when the index is built. Future inserts can fit into that gap without splitting. The default fillfactor for B-tree is 90 — already conservative for randomly-keyed indexes.
-
-For monotonically increasing keys, raise fillfactor toward 100 — the empty space is wasted because no inserts target the middle of pages.
-
-#### B.3 Index bloat
-
-When rows are deleted, their index entries are not immediately removed — they are marked as "killed" and skipped by index scans. Eventually a leaf can have all entries killed, but the page is not freed until VACUUM (or autovacuum) runs. A heavy-update + heavy-delete workload can leave an index much larger than its live entries justify — that is **index bloat**.
-
-The fix: `REINDEX` rebuilds the index from scratch. PostgreSQL 12+ supports `REINDEX CONCURRENTLY` which avoids the long lock.
-
-### C. GIN, GiST, BRIN, Hash — When Not to Use B-tree
-
-| Index | Best for | Cost shape |
-|-------|----------|-----------|
-| **B-tree** | Equality + range on scalar/orderable types | O(log N) lookup, O(log N) insert |
-| **Hash** | Equality only on any type | O(1) lookup, no range support |
-| **GIN** | Containment on multi-valued types: arrays, JSONB, tsvector | Slow inserts, very fast lookups |
-| **GiST** | Geometric/spatial, full-text, custom domains | Generic framework — exact cost depends on operator class |
-| **BRIN** | Very large tables with physical-order correlation | Tiny size, low precision |
-| **SP-GiST** | Non-balanced trees: tries, quadtrees, k-d trees | Specialized data structures |
-
-#### C.1 GIN — inverted index
-
-A GIN (Generalized Inverted Index) flips the usual structure. Instead of "for each row, list its columns", GIN stores "for each *value*, list the rows containing it". For a JSONB column with documents like `{"tags": ["red", "fast"]}`, GIN stores entries like `red → [row1, row5]`, `fast → [row1, row3, row7]`.
-
-This makes containment queries (`@>`, `?`, `?|`, `?&`) extremely fast. The cost: inserts are slow (one entry per element of the value), and the index can be larger than the table itself for high-cardinality elements.
-
-The `fastupdate` option defers index updates to a "pending list" that is flushed in batches by VACUUM — a tradeoff that speeds inserts at the cost of slightly slower lookups (because pending entries are scanned linearly).
-
-#### C.2 GiST — generalized search tree
-
-GiST is a *framework* — it provides the tree shape, locking, and concurrency, while the operator class supplies the type-specific predicates. PostGIS spatial indexes are GiST. The `pg_trgm` extension's trigram index for `LIKE '%substring%'` is GiST. The `btree_gist` extension lets you GiST-index ordinary types so they can compose with non-B-tree-indexable types in multi-column indexes.
-
-#### C.3 BRIN — block-range index
-
-BRIN stores a tiny summary (min/max, or null bitmap) per range of N pages (default 128). For a 1 GB table, the BRIN index might be 16 KB. Lookups consult the summaries to identify candidate page ranges, then scan those ranges fully.
-
-BRIN only wins when there is **physical-order correlation** — the indexed column's values are roughly sorted on disk (e.g. timestamp on an append-only log table). Without correlation, the min/max ranges overlap heavily and BRIN cannot prune.
-
-#### C.4 Hash — equality only
-
-Hash indexes were unlogged (not crash-safe) before PG 10 and were essentially unusable. Now they are WAL-logged and faster than B-tree for pure equality on long string keys. They do not support range, ORDER BY, or multi-column.
-
-### D. Three Orthogonal Index Modifiers
-
-#### D.1 Partial index
-
-`CREATE INDEX ... WHERE active = true;` indexes only rows matching the predicate. Used when most queries care about a small subset (e.g. unprocessed orders). Smaller, faster, and only used by queries whose predicate logically implies the partial index's predicate.
-
-#### D.2 Expression index
-
-`CREATE INDEX ... ON t (LOWER(email));` indexes the result of an expression instead of a raw column. Required to make `WHERE LOWER(email) = ?` sargable (lesson 5 §B.1). Cost: the expression is recomputed on every insert and update.
-
-#### D.3 Covering index — `INCLUDE`
-
-`CREATE INDEX ... ON t (a, b) INCLUDE (c, d);` adds `c` and `d` to the leaf entries without making them part of the search key. Enables index-only scans for queries that need `c` or `d` but only filter on `a, b`. Less expensive than a 4-column index because the included columns do not affect tree balance.
-
-These three modifiers compose: a partial expression covering index is perfectly legal.
-
-### From Theory to the SQL Below
-
-Each of the following sections is one of these mechanisms made concrete:
-
-- **`CREATE VIEW`** — query rewriting, no extra runtime cost (§A.1).
-- **`CREATE MATERIALIZED VIEW` + `REFRESH`** — stored result, manual refresh (§A.3).
-- **`CREATE INDEX` (default)** — B-tree (§B).
-- **`CREATE INDEX ... USING gin / gist / brin / hash`** — pick by data type and query shape (§C).
-- **`CREATE INDEX ... WHERE pred`** — partial (§D.1).
-- **`CREATE INDEX ... ON t (LOWER(col))`** — expression index (§D.2).
-- **`CREATE INDEX ... INCLUDE (cols)`** — covering index for index-only scans (§D.3).
-- **`REINDEX [CONCURRENTLY]`** — rebuilds a bloated index (§B.3).
-
 ---
 
 ## 1. VIEW Concept
@@ -161,6 +42,26 @@ A view is a stored query that can be used like a virtual table.
 ```
 
 ---
+
+### Theory: Views and Materialized Views
+
+#### A.1 Plain views — pure rewriting
+
+`CREATE VIEW v AS SELECT ...;` stores the SQL text of the query in `pg_rewrite`. When you later write `SELECT * FROM v WHERE x > 5;`, the rewriter substitutes the view's definition into the query before planning. The result is a single combined query that the planner optimizes as a whole — predicate push-down works through the view boundary.
+
+This makes views essentially free at runtime: there is no "view evaluation" step. The cost equals the cost of the equivalent un-viewed query.
+
+#### A.2 Updatable views
+
+A simple view (one base table, no aggregates, no DISTINCT, no GROUP BY) is automatically updatable — `INSERT`, `UPDATE`, `DELETE` against it work as if you were modifying the base table. PostgreSQL also supports `INSTEAD OF` triggers and `WITH CHECK OPTION` for views that need controlled write semantics.
+
+#### A.3 Materialized views — frozen results
+
+`CREATE MATERIALIZED VIEW mv AS SELECT ...;` runs the query *once*, stores the result rows in a real heap file, and remembers the SQL. Subsequent `SELECT * FROM mv` reads the stored rows — no recomputation. The downside: the rows go stale.
+
+`REFRESH MATERIALIZED VIEW mv;` reruns the query and replaces the stored rows. By default this takes an `ACCESS EXCLUSIVE` lock; `REFRESH MATERIALIZED VIEW CONCURRENTLY mv;` instead computes the new rows in a temp table and atomically swaps, allowing concurrent reads (requires a unique index on the MV).
+
+When materialized views shine: expensive aggregates over relatively static data (analytics dashboards, monthly summaries). When they hurt: the moment the source data changes faster than you can refresh.
 
 ## 2. Create View
 
@@ -351,6 +252,28 @@ Index (B-tree):
 
 ---
 
+### Theory: B-tree Index Internals — Beyond the Basic Picture
+
+Lesson 5 introduced B-tree as ordered pages with leaves linked left-to-right. The full story:
+
+#### B.1 Page splits
+
+When a leaf page fills up and a new key needs to be inserted, the page splits. PostgreSQL reads the full leaf, allocates a new page, distributes keys roughly half-half, updates the parent page to point at both, and rewrites both leaves. If the parent is also full, the split cascades upward — and the root may itself split, in which case the tree gains a level.
+
+Page splits are expensive (3+ page writes, WAL records for each). On a heavily-inserted table with random keys (e.g. UUIDs), splits happen everywhere. With sequential keys (e.g. SERIAL), inserts always go to the rightmost leaf — almost no splits.
+
+#### B.2 Fillfactor and split avoidance
+
+`CREATE INDEX ... WITH (fillfactor = 70);` tells PostgreSQL to leave 30% of each page empty when the index is built. Future inserts can fit into that gap without splitting. The default fillfactor for B-tree is 90 — already conservative for randomly-keyed indexes.
+
+For monotonically increasing keys, raise fillfactor toward 100 — the empty space is wasted because no inserts target the middle of pages.
+
+#### B.3 Index bloat
+
+When rows are deleted, their index entries are not immediately removed — they are marked as "killed" and skipped by index scans. Eventually a leaf can have all entries killed, but the page is not freed until VACUUM (or autovacuum) runs. A heavy-update + heavy-delete workload can leave an index much larger than its live entries justify — that is **index bloat**.
+
+The fix: `REINDEX` rebuilds the index from scratch. PostgreSQL 12+ supports `REINDEX CONCURRENTLY` which avoids the long lock.
+
 ## 8. Create Index
 
 ### Basic Index
@@ -393,6 +316,39 @@ SELECT * FROM users WHERE LOWER(email) = 'kim@email.com';
 ---
 
 ## 9. Index Types
+
+### Theory: GIN, GiST, BRIN, Hash — When Not to Use B-tree
+
+| Index | Best for | Cost shape |
+|-------|----------|-----------|
+| **B-tree** | Equality + range on scalar/orderable types | O(log N) lookup, O(log N) insert |
+| **Hash** | Equality only on any type | O(1) lookup, no range support |
+| **GIN** | Containment on multi-valued types: arrays, JSONB, tsvector | Slow inserts, very fast lookups |
+| **GiST** | Geometric/spatial, full-text, custom domains | Generic framework — exact cost depends on operator class |
+| **BRIN** | Very large tables with physical-order correlation | Tiny size, low precision |
+| **SP-GiST** | Non-balanced trees: tries, quadtrees, k-d trees | Specialized data structures |
+
+#### C.1 GIN — inverted index
+
+A GIN (Generalized Inverted Index) flips the usual structure. Instead of "for each row, list its columns", GIN stores "for each *value*, list the rows containing it". For a JSONB column with documents like `{"tags": ["red", "fast"]}`, GIN stores entries like `red → [row1, row5]`, `fast → [row1, row3, row7]`.
+
+This makes containment queries (`@>`, `?`, `?|`, `?&`) extremely fast. The cost: inserts are slow (one entry per element of the value), and the index can be larger than the table itself for high-cardinality elements.
+
+The `fastupdate` option defers index updates to a "pending list" that is flushed in batches by VACUUM — a tradeoff that speeds inserts at the cost of slightly slower lookups (because pending entries are scanned linearly).
+
+#### C.2 GiST — generalized search tree
+
+GiST is a *framework* — it provides the tree shape, locking, and concurrency, while the operator class supplies the type-specific predicates. PostGIS spatial indexes are GiST. The `pg_trgm` extension's trigram index for `LIKE '%substring%'` is GiST. The `btree_gist` extension lets you GiST-index ordinary types so they can compose with non-B-tree-indexable types in multi-column indexes.
+
+#### C.3 BRIN — block-range index
+
+BRIN stores a tiny summary (min/max, or null bitmap) per range of N pages (default 128). For a 1 GB table, the BRIN index might be 16 KB. Lookups consult the summaries to identify candidate page ranges, then scan those ranges fully.
+
+BRIN only wins when there is **physical-order correlation** — the indexed column's values are roughly sorted on disk (e.g. timestamp on an append-only log table). Without correlation, the min/max ranges overlap heavily and BRIN cannot prune.
+
+#### C.4 Hash — equality only
+
+Hash indexes were unlogged (not crash-safe) before PG 10 and were essentially unusable. Now they are WAL-logged and faster than B-tree for pure equality on long string keys. They do not support range, ORDER BY, or multi-column.
 
 ### B-tree (Default)
 
@@ -534,6 +490,22 @@ EXPLAIN SELECT * FROM orders WHERE user_id = 1;
 ---
 
 ## 12. Index Design Guide
+
+### Theory: Three Orthogonal Index Modifiers
+
+#### D.1 Partial index
+
+`CREATE INDEX ... WHERE active = true;` indexes only rows matching the predicate. Used when most queries care about a small subset (e.g. unprocessed orders). Smaller, faster, and only used by queries whose predicate logically implies the partial index's predicate.
+
+#### D.2 Expression index
+
+`CREATE INDEX ... ON t (LOWER(email));` indexes the result of an expression instead of a raw column. Required to make `WHERE LOWER(email) = ?` sargable (lesson 5 §B.1). Cost: the expression is recomputed on every insert and update.
+
+#### D.3 Covering index — `INCLUDE`
+
+`CREATE INDEX ... ON t (a, b) INCLUDE (c, d);` adds `c` and `d` to the leaf entries without making them part of the search key. Enables index-only scans for queries that need `c` or `d` but only filter on `a, b`. Less expensive than a 4-column index because the included columns do not affect tree balance.
+
+These three modifiers compose: a partial expression covering index is perfectly legal.
 
 ### When to Create Indexes
 
