@@ -18,8 +18,6 @@ Django REST Framework (DRF) is the standard for building RESTful APIs with Djang
 
 ## Table of Contents
 
-Before the framework reference, read [**Theory & Principles**](#theory--principles) — the serializer's two-direction validation/serialization pipeline, the ViewSet → URL mapping that turns a class into a RESTful resource, and the permission/authentication backend protocol.
-
 1. [DRF Setup](#1-drf-setup)
 2. [Serializers](#2-serializers)
 3. [Views: APIView to ViewSets](#3-views-apiview-to-viewsets)
@@ -32,15 +30,43 @@ Before the framework reference, read [**Theory & Principles**](#theory--principl
 
 ---
 
-## Theory & Principles
+## 1. DRF Setup
 
-DRF is what you get if you take Django's MTV (Lesson 10 §B) and replace the *T* (template) with a JSON serializer, then bolt on REST conventions. Three independent mechanisms drive everything else.
+```bash
+pip install djangorestframework~=3.15 django-filter~=24.3 djangorestframework-simplejwt~=5.3
+```
 
-- **(A) The serializer as a two-way validator/serializer** — same class handles "input → instance" and "instance → output", with explicit phases.
-- **(B) ViewSet + Router: convention-based resource mapping** — a class with `list/retrieve/create/update/destroy` methods becomes a full REST resource via auto-generated URLs.
-- **(C) The pluggable backend protocol** — authentication, permission, throttle, pagination, filter all share the same shape: a class with one well-defined method that DRF calls at the right moment.
+```python
+# settings.py
+INSTALLED_APPS = [... "rest_framework", "django_filters"]
 
-### A. The Serializer: Two Directions, One Class
+REST_FRAMEWORK = {
+    "DEFAULT_AUTHENTICATION_CLASSES": [
+        "rest_framework.authentication.SessionAuthentication",
+        "rest_framework_simplejwt.authentication.JWTAuthentication",
+    ],
+    "DEFAULT_PERMISSION_CLASSES": [
+        "rest_framework.permissions.IsAuthenticatedOrReadOnly",
+    ],
+    "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
+    "PAGE_SIZE": 20,
+    "DEFAULT_FILTER_BACKENDS": [
+        "django_filters.rest_framework.DjangoFilterBackend",
+        "rest_framework.filters.SearchFilter",
+        "rest_framework.filters.OrderingFilter",
+    ],
+}
+```
+
+DRF provides a browsable HTML API out of the box -- visit any endpoint in a browser.
+
+---
+
+## 2. Serializers
+
+Serializers convert model instances to JSON and validate incoming data (like Pydantic in FastAPI).
+
+### Theory: The Serializer: Two Directions, One Class
 
 A DRF serializer is a class that knows both the *external* representation (JSON shape) and the *internal* representation (Python objects, usually Django model instances). It runs two pipelines depending on direction.
 
@@ -97,155 +123,6 @@ The fields are derived from the model's column metadata; the validators are deri
 
 The same parallel as Lesson 02 §B: same Pydantic models drive validation, serialization, and OpenAPI docs in FastAPI; same ModelSerializer drives validation, serialization, and API schema in DRF.
 
-### B. ViewSet + Router: Convention-Based Resource Mapping
-
-In plain Django (Lesson 10 §C.4), every URL is mapped explicitly. DRF adds a layer of convention: define a class with method names that map to HTTP actions, register it with a Router, and the URL patterns are generated.
-
-#### B.1 The action mapping
-
-A `ModelViewSet` exposes six standard methods, each tied to an HTTP method/path:
-
-| Action | HTTP method | URL pattern |
-|--------|-------------|-------------|
-| `list` | GET | `/posts/` |
-| `create` | POST | `/posts/` |
-| `retrieve` | GET | `/posts/{pk}/` |
-| `update` | PUT | `/posts/{pk}/` |
-| `partial_update` | PATCH | `/posts/{pk}/` |
-| `destroy` | DELETE | `/posts/{pk}/` |
-
-Five lines of code give you a complete CRUD endpoint set:
-
-```python
-class PostViewSet(viewsets.ModelViewSet):
-    queryset = Post.objects.all()
-    serializer_class = PostSerializer
-```
-
-The default implementations of all six methods are inherited from `ModelViewSet`. Override only the ones you need to customize.
-
-#### B.2 The Router does the URL wiring
-
-```python
-router = DefaultRouter()
-router.register(r"posts", PostViewSet)
-urlpatterns = router.urls
-```
-
-`router.urls` is a list of `path(...)` entries equivalent to writing six explicit `path()` lines yourself. You wrote zero URL patterns; you got the full REST resource shape from Lesson 01 §B.3.
-
-#### B.3 Custom actions: `@action` decorator
-
-For non-standard endpoints (e.g., `POST /posts/{pk}/publish/`), the `@action` decorator declares an extra method:
-
-```python
-class PostViewSet(viewsets.ModelViewSet):
-    ...
-    @action(detail=True, methods=["post"])
-    def publish(self, request, pk=None):
-        post = self.get_object()
-        post.publish()
-        return Response({"status": "published"})
-```
-
-`detail=True` binds to `/posts/{pk}/publish/`; `detail=False` binds to `/posts/publish/`. The router picks these up automatically.
-
-#### B.4 Why this matters: the REST shape becomes the default
-
-Without DRF, every Django REST API is one developer's interpretation of "what should the URL be for that?". With DRF + ViewSet + Router, the answer is fixed by the framework: the standard six actions map to standard HTTP methods on standard URLs. A new developer joining your team can predict 90% of your URL surface from the model list.
-
-### C. The Pluggable Backend Protocol
-
-Every cross-cutting concern in DRF — authentication, permission, throttle, pagination, filter — follows the same plugin pattern: a class with one well-known method, registered in a list, called by the view at the right moment.
-
-#### C.1 The shape
-
-```python
-class MyAuthentication(BaseAuthentication):
-    def authenticate(self, request):
-        # return (user, auth_token) on success, None on no credentials, raise on bad credentials
-        ...
-
-class MyPermission(BasePermission):
-    def has_permission(self, request, view):
-        return True or False  # global to the view
-    def has_object_permission(self, request, view, obj):
-        return True or False  # per-object check
-
-class MyThrottle(BaseThrottle):
-    def allow_request(self, request, view):
-        return True or False
-```
-
-Each backend is a *protocol* (in the structural-typing sense): implement the right methods and DRF treats it as a valid implementation.
-
-#### C.2 The execution order
-
-For one request, DRF's `APIView.initial(request)` runs:
-
-1. **Authentication.** Walks the `authentication_classes` list. The first that returns `(user, auth)` wins and sets `request.user` and `request.auth`. None matched → `request.user = AnonymousUser`.
-2. **Permission.** Walks `permission_classes` and calls `has_permission(request, view)` on each. Any False → `403 Forbidden` (or `401` if anonymous).
-3. **Throttle.** Walks `throttle_classes` and calls `allow_request`. Any False → `429 Too Many Requests`.
-
-Then the view's action method (`list`, `retrieve`, etc.) runs. For object-level views, `get_object()` additionally checks `has_object_permission` after fetching the instance.
-
-#### C.3 The same pattern for output: pagination, filtering
-
-The output side mirrors the input. `pagination_class` provides `paginate_queryset(queryset, request, view)` and `get_paginated_response(data)`. `filter_backends` provides `filter_queryset(request, queryset, view)`. Each is a class with a known method called at a known point in the pipeline.
-
-The benefit of this uniformity: writing a custom auth, permission, throttle, paginator, or filter is the same exercise — implement the protocol, register the class, done. The cognitive load of "how do I extend DRF?" reduces to "what's the method name for that backend?".
-
-### From Theory to the Code Below
-
-Each section that follows operationalizes one piece of this framework:
-
-- §1 (DRF setup) configures the global defaults that the §C backend protocol reads.
-- §2 (Serializers) is the §A two-direction pipeline, including ModelSerializer (§A.3) and validation hooks.
-- §3 (Views: APIView to ViewSets) walks the abstraction ladder — `APIView` is the raw §B class; ViewSet is the convention-driven extension.
-- §4 (Routers) is §B.2 in concrete code: `register()` produces URL patterns automatically.
-- §5 (Authentication) is the first §C backend slot — token, JWT, session implementations of the §C.1 protocol.
-- §6 (Permissions) is the second §C backend slot — `IsAuthenticated`, `IsAdminUser`, custom object-level checks.
-- §7 (Pagination) is the §C.3 output backend that wraps querysets in page-size-aware responses.
-- §8 (Filtering and Search) is another §C.3 backend that adds query-parameter filtering on top of the queryset.
-
----
-
-## 1. DRF Setup
-
-```bash
-pip install djangorestframework~=3.15 django-filter~=24.3 djangorestframework-simplejwt~=5.3
-```
-
-```python
-# settings.py
-INSTALLED_APPS = [... "rest_framework", "django_filters"]
-
-REST_FRAMEWORK = {
-    "DEFAULT_AUTHENTICATION_CLASSES": [
-        "rest_framework.authentication.SessionAuthentication",
-        "rest_framework_simplejwt.authentication.JWTAuthentication",
-    ],
-    "DEFAULT_PERMISSION_CLASSES": [
-        "rest_framework.permissions.IsAuthenticatedOrReadOnly",
-    ],
-    "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
-    "PAGE_SIZE": 20,
-    "DEFAULT_FILTER_BACKENDS": [
-        "django_filters.rest_framework.DjangoFilterBackend",
-        "rest_framework.filters.SearchFilter",
-        "rest_framework.filters.OrderingFilter",
-    ],
-}
-```
-
-DRF provides a browsable HTML API out of the box -- visit any endpoint in a browser.
-
----
-
-## 2. Serializers
-
-Serializers convert model instances to JSON and validate incoming data (like Pydantic in FastAPI).
-
 ### ModelSerializer
 
 ```python
@@ -301,6 +178,63 @@ class PostSerializer(serializers.ModelSerializer):
 ## 3. Views: APIView to ViewSets
 
 DRF provides a spectrum from low-level to high-level:
+
+### Theory: ViewSet + Router: Convention-Based Resource Mapping
+
+In plain Django (Lesson 10 §C.4), every URL is mapped explicitly. DRF adds a layer of convention: define a class with method names that map to HTTP actions, register it with a Router, and the URL patterns are generated.
+
+#### B.1 The action mapping
+
+A `ModelViewSet` exposes six standard methods, each tied to an HTTP method/path:
+
+| Action | HTTP method | URL pattern |
+|--------|-------------|-------------|
+| `list` | GET | `/posts/` |
+| `create` | POST | `/posts/` |
+| `retrieve` | GET | `/posts/{pk}/` |
+| `update` | PUT | `/posts/{pk}/` |
+| `partial_update` | PATCH | `/posts/{pk}/` |
+| `destroy` | DELETE | `/posts/{pk}/` |
+
+Five lines of code give you a complete CRUD endpoint set:
+
+```python
+class PostViewSet(viewsets.ModelViewSet):
+    queryset = Post.objects.all()
+    serializer_class = PostSerializer
+```
+
+The default implementations of all six methods are inherited from `ModelViewSet`. Override only the ones you need to customize.
+
+#### B.2 The Router does the URL wiring
+
+```python
+router = DefaultRouter()
+router.register(r"posts", PostViewSet)
+urlpatterns = router.urls
+```
+
+`router.urls` is a list of `path(...)` entries equivalent to writing six explicit `path()` lines yourself. You wrote zero URL patterns; you got the full REST resource shape from Lesson 01 §B.3.
+
+#### B.3 Custom actions: `@action` decorator
+
+For non-standard endpoints (e.g., `POST /posts/{pk}/publish/`), the `@action` decorator declares an extra method:
+
+```python
+class PostViewSet(viewsets.ModelViewSet):
+    ...
+    @action(detail=True, methods=["post"])
+    def publish(self, request, pk=None):
+        post = self.get_object()
+        post.publish()
+        return Response({"status": "published"})
+```
+
+`detail=True` binds to `/posts/{pk}/publish/`; `detail=False` binds to `/posts/publish/`. The router picks these up automatically.
+
+#### B.4 Why this matters: the REST shape becomes the default
+
+Without DRF, every Django REST API is one developer's interpretation of "what should the URL be for that?". With DRF + ViewSet + Router, the answer is fixed by the framework: the standard six actions map to standard HTTP methods on standard URLs. A new developer joining your team can predict 90% of your URL surface from the model list.
 
 ### APIView (Full Control)
 
@@ -385,6 +319,47 @@ This generates: `GET/POST /api/posts/`, `GET/PUT/PATCH/DELETE /api/posts/{pk}/`,
 ---
 
 ## 5. Authentication
+
+### Theory: The Pluggable Backend Protocol
+
+Every cross-cutting concern in DRF — authentication, permission, throttle, pagination, filter — follows the same plugin pattern: a class with one well-known method, registered in a list, called by the view at the right moment.
+
+#### C.1 The shape
+
+```python
+class MyAuthentication(BaseAuthentication):
+    def authenticate(self, request):
+        # return (user, auth_token) on success, None on no credentials, raise on bad credentials
+        ...
+
+class MyPermission(BasePermission):
+    def has_permission(self, request, view):
+        return True or False  # global to the view
+    def has_object_permission(self, request, view, obj):
+        return True or False  # per-object check
+
+class MyThrottle(BaseThrottle):
+    def allow_request(self, request, view):
+        return True or False
+```
+
+Each backend is a *protocol* (in the structural-typing sense): implement the right methods and DRF treats it as a valid implementation.
+
+#### C.2 The execution order
+
+For one request, DRF's `APIView.initial(request)` runs:
+
+1. **Authentication.** Walks the `authentication_classes` list. The first that returns `(user, auth)` wins and sets `request.user` and `request.auth`. None matched → `request.user = AnonymousUser`.
+2. **Permission.** Walks `permission_classes` and calls `has_permission(request, view)` on each. Any False → `403 Forbidden` (or `401` if anonymous).
+3. **Throttle.** Walks `throttle_classes` and calls `allow_request`. Any False → `429 Too Many Requests`.
+
+Then the view's action method (`list`, `retrieve`, etc.) runs. For object-level views, `get_object()` additionally checks `has_object_permission` after fetching the instance.
+
+#### C.3 The same pattern for output: pagination, filtering
+
+The output side mirrors the input. `pagination_class` provides `paginate_queryset(queryset, request, view)` and `get_paginated_response(data)`. `filter_backends` provides `filter_queryset(request, queryset, view)`. Each is a class with a known method called at a known point in the pipeline.
+
+The benefit of this uniformity: writing a custom auth, permission, throttle, paginator, or filter is the same exercise — implement the protocol, register the class, done. The cognitive load of "how do I extend DRF?" reduces to "what's the method name for that backend?".
 
 ### JWT (SimpleJWT)
 

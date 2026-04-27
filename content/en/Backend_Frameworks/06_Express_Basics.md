@@ -18,8 +18,6 @@ Express is the most widely used web framework for Node.js. While Node.js provide
 
 ## Table of Contents
 
-Before the framework reference, read [**Theory & Principles**](#theory--principles) — what the Node.js event loop actually is (libuv phases, microtasks), how Express middleware chains express continuation-passing style, and why Request/Response are Node streams under the hood.
-
 1. [Node.js and Express Overview](#1-nodejs-and-express-overview)
 2. [Creating an Express Application](#2-creating-an-express-application)
 3. [Routing](#3-routing)
@@ -31,15 +29,9 @@ Before the framework reference, read [**Theory & Principles**](#theory--principl
 
 ---
 
-## Theory & Principles
+## 1. Node.js and Express Overview
 
-Express is a thin layer over `node:http`. Almost everything that "Express does" is actually a Node.js primitive that Express composes ergonomically. Three concepts separate the framework from the runtime, and understanding them in isolation makes Express's API feel inevitable rather than arbitrary.
-
-- **(A) The Node.js event loop** — the libuv-powered scheduler that runs every callback in your app.
-- **(B) Middleware as continuation-passing style** — `(req, res, next)` is not a Express invention; it is a generic CPS pattern.
-- **(C) Request and Response as streams** — both are EventEmitters wrapped in stream interfaces, with consequences for memory and timing.
-
-### A. The Node.js Event Loop
+### Theory: The Node.js Event Loop
 
 Node.js runs on a single main thread that executes JavaScript in a loop. The loop has six well-defined phases (libuv terminology), and every async callback your code queues runs in one of them. Knowing which phase your code lives in explains every "why did this run in that order?" question.
 
@@ -99,106 +91,6 @@ Express handlers are just callbacks scheduled into one of these queues:
 - A handler that throws synchronously crashes the process *unless* an error-handling middleware catches it. A handler that throws inside an `async` function rejects a Promise — and unless you catch it, Node logs `UnhandledPromiseRejection` (and in newer Node versions, exits).
 
 Every Express performance issue can be traced back to "what is blocking the loop?" or "what queue is this callback sitting in?"
-
-### B. Middleware as Continuation-Passing Style
-
-The Express middleware signature is:
-
-```javascript
-function middleware(req, res, next) {
-    // do something
-    next();           // hand off to the next middleware
-    // or: next(err); // jump to the error-handling middleware
-}
-```
-
-This is *continuation-passing style* (CPS), a control-flow pattern where each function takes a callback (`next`) representing "what to do next". The chain composes implicitly: the registration order in `app.use(...)` defines a linked list, and `next()` advances the pointer.
-
-#### B.1 The chain is linear, not nested
-
-Unlike FastAPI's onion-shaped middleware (Lesson 03 §C), Express middleware is linear by default. Each middleware runs once on the way in. To run code *after* the response, you wrap `res.end` or use `res.on('finish', ...)` — there is no "after middleware" baked in. (Express 5 / Koa-style frameworks add this with async middleware that can `await next()`.)
-
-```
-[mw1] → [mw2] → [mw3 = handler] → res.send()
-```
-
-If `mw1` does work after `next()`, that work runs *before* mw2 finishes — synchronously interleaved, not after the response. This is a frequent source of confusion for FastAPI/Koa migrators.
-
-#### B.2 Error-handling middleware: a four-arg variant
-
-Any middleware with arity 4 — `(err, req, res, next)` — is recognized by Express as an *error handler*. When `next(err)` is called, Express skips every regular middleware until it finds the next 4-arg one. This is how a single error handler at the bottom of your stack catches all upstream errors.
-
-```javascript
-app.use(routes);
-app.use((err, req, res, next) => {
-    res.status(500).json({ error: err.message });
-});
-```
-
-The catch: synchronous `throw` inside an async handler is *not* automatically routed to `next(err)` in Express 4 — you must `try/catch` or wrap with a helper like `express-async-errors`. Express 5 fixes this.
-
-#### B.3 Mounting: middleware as path-prefixed sub-apps
-
-`app.use('/api', router)` mounts a sub-router under a prefix. Inside that router, `req.url` is rewritten to be relative to the mount point (`req.baseUrl` keeps the prefix). This is composition: you can build small focused routers (users, posts, auth) and combine them, with middleware applied per-sub-app.
-
-### C. Request and Response: Stream Interfaces
-
-`req` is an `IncomingMessage`, a *Readable stream* of the request body. `res` is a `ServerResponse`, a *Writable stream* of the response body. Both inherit from `EventEmitter`. The implications go deep.
-
-#### C.1 The body is a stream, not a buffer
-
-When the handler runs, the request body has *not yet been received*. Only the headers are known. The body arrives as `data` events:
-
-```javascript
-req.on('data', (chunk) => { ... });
-req.on('end', () => { ... });
-```
-
-`express.json()` is exactly this: a middleware that listens for `data` chunks, accumulates them into a `Buffer`, parses the buffer as JSON when `end` fires, and assigns the result to `req.body`. After `express.json()`, `req.body` is the parsed object — but the underlying stream has been consumed and cannot be re-read.
-
-#### C.2 Why this matters: large uploads
-
-A 1 GB file upload that goes through `express.json()` allocates a 1 GB Buffer in memory before the handler ever runs. The right pattern for large payloads is to *not* use the body-parser middleware and consume the stream directly — pipe `req` into a file or an upload SDK chunk by chunk. Memory stays flat regardless of upload size.
-
-#### C.3 Response streaming and back-pressure
-
-`res.write(chunk)` returns `true` if the kernel write buffer accepted the chunk, `false` if it is full. Ignoring that return value and writing as fast as your code can produce data fills the buffer and burns memory. The correct pattern:
-
-```javascript
-if (!res.write(chunk)) {
-    res.once('drain', writeNext);
-} else {
-    writeNext();
-}
-```
-
-Or use `pipe()`, which handles back-pressure automatically: `readableSource.pipe(res)`. This is the idiomatic streaming response in Node — no chunked encoding to think about, no buffer accounting.
-
-#### C.4 The lifecycle events
-
-Both `req` and `res` emit events you can hook:
-
-- `req.on('close', ...)` — the client disconnected mid-request. Cancel any in-flight work.
-- `res.on('finish', ...)` — the response was fully flushed to the kernel. Good place for "request done" logging.
-- `res.on('close', ...)` — the underlying connection closed (may be before `finish` if the client hung up).
-
-A long-running handler should listen for `req.close` and abort its work — otherwise it ties up event-loop time computing a response no one will read.
-
-### From Theory to the Code Below
-
-Each section that follows operationalizes one piece of this framework:
-
-- §1 (Node.js and Express overview) introduces the event loop from §A as the runtime substrate.
-- §2 (Creating an app) is `http.createServer(app)` under the hood — registering Express as the request callback.
-- §3 (Routing) is the §B middleware chain selecting which handler runs based on method + path.
-- §4 (Middleware concept and chain) is §B.1 in concrete code, plus the §B.2 error-handler variant.
-- §5 (Built-in middleware) is `express.json()` / `express.urlencoded()` — body parsers that consume the §C.1 request stream.
-- §6 (Request and Response) walks the §C stream interface and its convenience helpers (`res.json`, `res.status`).
-- §7 (Router for modular routes) is the §B.3 mounting pattern: composing sub-routers under prefixes.
-
----
-
-## 1. Node.js and Express Overview
 
 ### What is Node.js?
 
@@ -430,6 +322,47 @@ Request → [Middleware 1] → [Middleware 2] → [Route Handler] → Response
               └──────────────────┘────────────────┘
 ```
 
+### Theory: Middleware as Continuation-Passing Style
+
+The Express middleware signature is:
+
+```javascript
+function middleware(req, res, next) {
+    // do something
+    next();           // hand off to the next middleware
+    // or: next(err); // jump to the error-handling middleware
+}
+```
+
+This is *continuation-passing style* (CPS), a control-flow pattern where each function takes a callback (`next`) representing "what to do next". The chain composes implicitly: the registration order in `app.use(...)` defines a linked list, and `next()` advances the pointer.
+
+#### B.1 The chain is linear, not nested
+
+Unlike FastAPI's onion-shaped middleware (Lesson 03 §C), Express middleware is linear by default. Each middleware runs once on the way in. To run code *after* the response, you wrap `res.end` or use `res.on('finish', ...)` — there is no "after middleware" baked in. (Express 5 / Koa-style frameworks add this with async middleware that can `await next()`.)
+
+```
+[mw1] → [mw2] → [mw3 = handler] → res.send()
+```
+
+If `mw1` does work after `next()`, that work runs *before* mw2 finishes — synchronously interleaved, not after the response. This is a frequent source of confusion for FastAPI/Koa migrators.
+
+#### B.2 Error-handling middleware: a four-arg variant
+
+Any middleware with arity 4 — `(err, req, res, next)` — is recognized by Express as an *error handler*. When `next(err)` is called, Express skips every regular middleware until it finds the next 4-arg one. This is how a single error handler at the bottom of your stack catches all upstream errors.
+
+```javascript
+app.use(routes);
+app.use((err, req, res, next) => {
+    res.status(500).json({ error: err.message });
+});
+```
+
+The catch: synchronous `throw` inside an async handler is *not* automatically routed to `next(err)` in Express 4 — you must `try/catch` or wrap with a helper like `express-async-errors`. Express 5 fixes this.
+
+#### B.3 Mounting: middleware as path-prefixed sub-apps
+
+`app.use('/api', router)` mounts a sub-router under a prefix. Inside that router, `req.url` is rewritten to be relative to the mount point (`req.baseUrl` keeps the prefix). This is composition: you can build small focused routers (users, posts, auth) and combine them, with middleware applied per-sub-app.
+
 ### Writing Custom Middleware
 
 ```javascript
@@ -553,6 +486,49 @@ app.use(express.json({ limit: '10mb' }));
 ---
 
 ## 6. Request and Response Objects
+
+### Theory: Request and Response: Stream Interfaces
+
+`req` is an `IncomingMessage`, a *Readable stream* of the request body. `res` is a `ServerResponse`, a *Writable stream* of the response body. Both inherit from `EventEmitter`. The implications go deep.
+
+#### C.1 The body is a stream, not a buffer
+
+When the handler runs, the request body has *not yet been received*. Only the headers are known. The body arrives as `data` events:
+
+```javascript
+req.on('data', (chunk) => { ... });
+req.on('end', () => { ... });
+```
+
+`express.json()` is exactly this: a middleware that listens for `data` chunks, accumulates them into a `Buffer`, parses the buffer as JSON when `end` fires, and assigns the result to `req.body`. After `express.json()`, `req.body` is the parsed object — but the underlying stream has been consumed and cannot be re-read.
+
+#### C.2 Why this matters: large uploads
+
+A 1 GB file upload that goes through `express.json()` allocates a 1 GB Buffer in memory before the handler ever runs. The right pattern for large payloads is to *not* use the body-parser middleware and consume the stream directly — pipe `req` into a file or an upload SDK chunk by chunk. Memory stays flat regardless of upload size.
+
+#### C.3 Response streaming and back-pressure
+
+`res.write(chunk)` returns `true` if the kernel write buffer accepted the chunk, `false` if it is full. Ignoring that return value and writing as fast as your code can produce data fills the buffer and burns memory. The correct pattern:
+
+```javascript
+if (!res.write(chunk)) {
+    res.once('drain', writeNext);
+} else {
+    writeNext();
+}
+```
+
+Or use `pipe()`, which handles back-pressure automatically: `readableSource.pipe(res)`. This is the idiomatic streaming response in Node — no chunked encoding to think about, no buffer accounting.
+
+#### C.4 The lifecycle events
+
+Both `req` and `res` emit events you can hook:
+
+- `req.on('close', ...)` — the client disconnected mid-request. Cancel any in-flight work.
+- `res.on('finish', ...)` — the response was fully flushed to the kernel. Good place for "request done" logging.
+- `res.on('close', ...)` — the underlying connection closed (may be before `finish` if the client hung up).
+
+A long-running handler should listen for `req.close` and abort its work — otherwise it ties up event-loop time computing a response no one will read.
 
 ### Request Object (req)
 

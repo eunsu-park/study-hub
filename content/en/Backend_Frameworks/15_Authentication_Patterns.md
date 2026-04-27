@@ -14,8 +14,6 @@
 
 ## Table of Contents
 
-Before the patterns reference, read [**Theory & Principles**](#theory--principles) — what authentication actually proves, the JWT structure (header/payload/signature) and HMAC vs RSA signing, the OAuth 2.0 authorization-code flow with PKCE, and SAML/OIDC compared.
-
 1. [Session-Based Authentication](#1-session-based-authentication)
 2. [JWT Authentication](#2-jwt-authentication)
 3. [API Keys](#3-api-keys)
@@ -27,15 +25,11 @@ Before the patterns reference, read [**Theory & Principles**](#theory--principle
 
 ---
 
-## Theory & Principles
+## 1. Session-Based Authentication
 
-Authentication patterns can look like a zoo of acronyms (JWT, OAuth2, OIDC, SAML, PKCE), but they all answer one question — *who is making this request?* — through three building blocks that combine in different ways.
+Session-based authentication stores user state on the server. After login, the server creates a session record and sends the client a session ID via a cookie. Every subsequent request includes this cookie, and the server looks up the session to identify the user.
 
-- **(A) Authentication vs authorization, and the credential life cycle** — what each token actually proves and for how long.
-- **(B) JWT structure and signing** — the three-part `header.payload.signature` format, with HMAC vs RSA tradeoffs.
-- **(C) OAuth 2.0 flows + OIDC + SAML compared** — five flows, three protocols, picking the right one.
-
-### A. Authentication vs Authorization, and the Credential Lifecycle
+### Theory: Authentication vs Authorization, and the Credential Lifecycle
 
 The two words sound interchangeable but mean different things, and conflating them produces real security bugs.
 
@@ -67,141 +61,6 @@ The standard modern pattern:
 - **Refresh token** — opaque random string stored server-side, lifetime 7 d – 90 d. Used only at `/auth/refresh` to get a new access token.
 
 When the access token expires, the client uses the refresh token to get a new one. If the refresh token is revoked (delete the row), the user effectively logs out within at most one access-token lifetime. Best of both worlds: stateless requests for the API, stateful revocation for security.
-
-### B. JWT Structure and Signing
-
-JSON Web Tokens (RFC 7519) are the dominant token format for stateless auth. The structure looks intimidating but is mechanical.
-
-#### B.1 The three parts
-
-A JWT is `base64(header).base64(payload).base64(signature)`:
-
-```
-eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI0MiIsImV4cCI6MTcwMDAwMDAwMH0.k1qV...
-└────────── header ──────────┘.└──────── payload ────────┘.└── signature ──┘
-```
-
-**Header** declares the signing algorithm and token type:
-
-```json
-{ "alg": "HS256", "typ": "JWT" }
-```
-
-**Payload** is a set of claims about the subject. Some claims are standard (`iss`, `sub`, `aud`, `exp`, `iat`, `nbf`); others are application-specific:
-
-```json
-{ "sub": "42", "name": "Alice", "role": "admin", "exp": 1700000000 }
-```
-
-**Signature** is computed over `base64(header) + "." + base64(payload)` using the algorithm in the header and the server's signing key:
-
-```
-signature = HMAC-SHA256(base64(header) + "." + base64(payload), secret)
-```
-
-#### B.2 The verification rule (and a famous bug class)
-
-To verify a JWT, the server:
-
-1. Splits on `.` into three parts.
-2. Re-computes the signature using the algorithm from the header and the server's key.
-3. Compares to the supplied signature.
-4. Validates the claims (mainly `exp`, sometimes `nbf`, `iss`, `aud`).
-
-The bug class: trusting the `alg` field in the header. An attacker can set `"alg": "none"` (no signature) and many naive libraries accept the unsigned token. The fix is to *hardcode* the expected algorithm in the verifier — never trust the header to tell you what algorithm to use.
-
-The related bug: an attacker with an HMAC-signing service that publishes the secret as a public RSA key swaps `alg: RS256` for `alg: HS256`, signs with the public key as if it were an HMAC secret, and the server (which expected RS256 but auto-detects HS256 from the header) accepts it. Same fix: hardcode the algorithm.
-
-#### B.3 HMAC vs RSA: symmetric vs asymmetric
-
-| Algorithm | Signing key | Verifying key | Use when |
-|-----------|-------------|---------------|----------|
-| HS256 (HMAC-SHA256) | shared secret | same shared secret | one service signs and verifies its own tokens |
-| RS256 (RSA-SHA256) | private key | public key | issuer and verifier are different services; many verifiers |
-
-HMAC is simpler and faster but requires every verifier to hold the signing key — meaning a verifier compromise lets the attacker forge new tokens. RSA lets the issuer keep the private key and publish the public key (often via a JWKS endpoint at `/.well-known/jwks.json`). A compromised verifier can read tokens but cannot forge them.
-
-The rule: **monolith → HS256 is fine; microservices or external auth provider → RS256**.
-
-### C. OAuth 2.0 Flows + OIDC + SAML
-
-OAuth 2.0 is *not* an authentication protocol. It is an authorization framework — "the user grants Application X the right to call Service Y on their behalf". Authentication on top of OAuth 2.0 is provided by OpenID Connect (OIDC).
-
-#### C.1 The four roles
-
-- **Resource Owner** — the user, who owns the data.
-- **Client** — the application requesting access.
-- **Authorization Server** — the issuer of tokens (Google, Auth0, Okta).
-- **Resource Server** — the API the client wants to call.
-
-#### C.2 The authorization code flow with PKCE (the modern default)
-
-PKCE = Proof Key for Code Exchange. It prevents a class of code-interception attacks for public clients (mobile apps, single-page apps).
-
-```
-1. Client generates code_verifier (random) and code_challenge = SHA256(code_verifier)
-2. Client redirects user to Authorization Server with code_challenge
-3. User logs in; AS redirects back with an auth code
-4. Client exchanges (auth code + code_verifier) at /token endpoint
-5. AS verifies SHA256(code_verifier) == code_challenge it stored
-6. AS returns access_token (and refresh_token, and id_token if OIDC)
-```
-
-Why PKCE: in a mobile app, the redirect can be intercepted by another malicious app on the device. Without PKCE, the malicious app could exchange the intercepted code for a token. With PKCE, only the original client (which has `code_verifier`) can complete the exchange.
-
-The `code_verifier` is generated and held by the client; the `code_challenge` is the public commitment. Classic cryptographic commitment scheme.
-
-#### C.3 The other flows (and why most are deprecated)
-
-| Flow | Use case | Status |
-|------|----------|--------|
-| Authorization code + PKCE | All interactive apps | Recommended |
-| Authorization code (no PKCE) | Server-side web apps with a client secret | Acceptable |
-| Implicit | SPA without backend | Deprecated (use code+PKCE) |
-| Resource Owner Password Credentials | First-party apps with extreme trust | Deprecated |
-| Client Credentials | Service-to-service (no user) | Recommended for that case |
-| Device Code | Devices with limited input (TVs, CLIs) | Recommended for that case |
-
-The trend over the last decade: deprecate flows that need fewer round-trips at the cost of weaker security (Implicit, ROPC), keep the secure flows.
-
-#### C.4 OIDC: authentication on top of OAuth 2.0
-
-OIDC adds an `id_token` to the OAuth 2.0 response. The `id_token` is a JWT containing user identity claims (`sub`, `email`, `name`). Now you have:
-
-- **Access token** — for calling APIs (OAuth 2.0).
-- **ID token** — for knowing who the user is (OIDC).
-- **Refresh token** — for getting new access tokens (both).
-
-Most "Sign in with Google/Apple/GitHub" flows are OIDC. The `id_token` proves identity; the `access_token` lets you call Google APIs.
-
-#### C.5 SAML: the older XML-based alternative
-
-SAML 2.0 is the pre-OIDC enterprise SSO standard. XML-based, more verbose, but well-entrenched in corporate environments (Okta, Ping, ADFS). The conceptual model is similar: an Identity Provider (IdP) authenticates the user and signs an assertion that the Service Provider (SP) verifies.
-
-When to use which:
-
-- **Greenfield, modern app, consumer SSO** → OIDC.
-- **Enterprise SSO with legacy IdPs** → SAML.
-
-Both are alive in 2026. Most enterprise auth platforms support both.
-
-### From Theory to the Patterns Below
-
-Each section that follows operationalizes one piece of this framework:
-
-- §1 (Session-based) is the simplest §A.2 lifecycle: server-side state, trivial revocation.
-- §2 (JWT) implements §B in concrete code, including the §A.3 access + refresh pattern.
-- §3 (API keys) is the simplest credential — one long-lived secret, no expiry, often per-service.
-- §4 (OAuth2 flows) walks the §C.2 authorization-code-with-PKCE flow, the §C.3 alternatives, and the §C.4 OIDC layer.
-- §5 (Comparison) places sessions/JWT/API keys on the §A.2 lifecycle axes (revocation, statelessness, scalability).
-- §6 (Password hashing) is bcrypt/argon2 — the only acceptable shape for the credential issuance step in §A.2.
-- §7 (Multi-factor authentication) adds a second §A.1 factor (TOTP, WebAuthn) on top of any of the above.
-
----
-
-## 1. Session-Based Authentication
-
-Session-based authentication stores user state on the server. After login, the server creates a session record and sends the client a session ID via a cookie. Every subsequent request includes this cookie, and the server looks up the session to identify the user.
 
 ### How It Works
 
@@ -296,6 +155,61 @@ async def logout(request: Request, response: Response):
 
 JSON Web Tokens (JWT) are self-contained tokens that carry user claims. Unlike sessions, the server does not need to store state --- the token itself contains all necessary information, verified through a cryptographic signature.
 
+### Theory: JWT Structure and Signing
+
+JSON Web Tokens (RFC 7519) are the dominant token format for stateless auth. The structure looks intimidating but is mechanical.
+
+#### B.1 The three parts
+
+A JWT is `base64(header).base64(payload).base64(signature)`:
+
+```
+eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI0MiIsImV4cCI6MTcwMDAwMDAwMH0.k1qV...
+└────────── header ──────────┘.└──────── payload ────────┘.└── signature ──┘
+```
+
+**Header** declares the signing algorithm and token type:
+
+```json
+{ "alg": "HS256", "typ": "JWT" }
+```
+
+**Payload** is a set of claims about the subject. Some claims are standard (`iss`, `sub`, `aud`, `exp`, `iat`, `nbf`); others are application-specific:
+
+```json
+{ "sub": "42", "name": "Alice", "role": "admin", "exp": 1700000000 }
+```
+
+**Signature** is computed over `base64(header) + "." + base64(payload)` using the algorithm in the header and the server's signing key:
+
+```
+signature = HMAC-SHA256(base64(header) + "." + base64(payload), secret)
+```
+
+#### B.2 The verification rule (and a famous bug class)
+
+To verify a JWT, the server:
+
+1. Splits on `.` into three parts.
+2. Re-computes the signature using the algorithm from the header and the server's key.
+3. Compares to the supplied signature.
+4. Validates the claims (mainly `exp`, sometimes `nbf`, `iss`, `aud`).
+
+The bug class: trusting the `alg` field in the header. An attacker can set `"alg": "none"` (no signature) and many naive libraries accept the unsigned token. The fix is to *hardcode* the expected algorithm in the verifier — never trust the header to tell you what algorithm to use.
+
+The related bug: an attacker with an HMAC-signing service that publishes the secret as a public RSA key swaps `alg: RS256` for `alg: HS256`, signs with the public key as if it were an HMAC secret, and the server (which expected RS256 but auto-detects HS256 from the header) accepts it. Same fix: hardcode the algorithm.
+
+#### B.3 HMAC vs RSA: symmetric vs asymmetric
+
+| Algorithm | Signing key | Verifying key | Use when |
+|-----------|-------------|---------------|----------|
+| HS256 (HMAC-SHA256) | shared secret | same shared secret | one service signs and verifies its own tokens |
+| RS256 (RSA-SHA256) | private key | public key | issuer and verifier are different services; many verifiers |
+
+HMAC is simpler and faster but requires every verifier to hold the signing key — meaning a verifier compromise lets the attacker forge new tokens. RSA lets the issuer keep the private key and publish the public key (often via a JWKS endpoint at `/.well-known/jwks.json`). A compromised verifier can read tokens but cannot forge them.
+
+The rule: **monolith → HS256 is fine; microservices or external auth provider → RS256**.
+
 ### JWT Structure
 
 A JWT consists of three base64url-encoded parts separated by dots:
@@ -342,13 +256,11 @@ REFRESH_TOKEN_EXPIRE_DAYS = 7
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 
-
 def create_token(data: dict, expires_delta: timedelta) -> str:
     to_encode = data.copy()
     expire = datetime.now(timezone.utc) + expires_delta
     to_encode.update({"exp": expire})
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
-
 
 def create_access_token(user_id: int, username: str) -> str:
     return create_token(
@@ -356,13 +268,11 @@ def create_access_token(user_id: int, username: str) -> str:
         timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES),
     )
 
-
 def create_refresh_token(user_id: int) -> str:
     return create_token(
         {"sub": str(user_id), "type": "refresh"},
         timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS),
     )
-
 
 async def get_current_user(token: str = Depends(oauth2_scheme)):
     """Dependency that extracts and validates the current user from JWT."""
@@ -385,7 +295,6 @@ async def get_current_user(token: str = Depends(oauth2_scheme)):
         raise credentials_exception
     return user
 
-
 @app.post("/token")
 async def login(form_data: OAuth2PasswordRequestForm = Depends()):
     user = await authenticate(form_data.username, form_data.password)
@@ -397,7 +306,6 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends()):
         "refresh_token": create_refresh_token(user.id),
         "token_type": "bearer",
     }
-
 
 @app.post("/token/refresh")
 async def refresh(refresh_token: str):
@@ -417,7 +325,6 @@ async def refresh(refresh_token: str):
         "access_token": create_access_token(user.id, user.username),
         "token_type": "bearer",
     }
-
 
 @app.get("/profile")
 async def get_profile(current_user=Depends(get_current_user)):
@@ -489,6 +396,68 @@ async def get_data(key_data: dict = Security(verify_api_key)):
 ## 4. OAuth2 Flows
 
 OAuth2 is an **authorization** framework (not authentication) that enables third-party applications to access user resources without exposing credentials. Different flows suit different client types.
+
+### Theory: OAuth 2.0 Flows + OIDC + SAML
+
+OAuth 2.0 is *not* an authentication protocol. It is an authorization framework — "the user grants Application X the right to call Service Y on their behalf". Authentication on top of OAuth 2.0 is provided by OpenID Connect (OIDC).
+
+#### C.1 The four roles
+
+- **Resource Owner** — the user, who owns the data.
+- **Client** — the application requesting access.
+- **Authorization Server** — the issuer of tokens (Google, Auth0, Okta).
+- **Resource Server** — the API the client wants to call.
+
+#### C.2 The authorization code flow with PKCE (the modern default)
+
+PKCE = Proof Key for Code Exchange. It prevents a class of code-interception attacks for public clients (mobile apps, single-page apps).
+
+```
+1. Client generates code_verifier (random) and code_challenge = SHA256(code_verifier)
+2. Client redirects user to Authorization Server with code_challenge
+3. User logs in; AS redirects back with an auth code
+4. Client exchanges (auth code + code_verifier) at /token endpoint
+5. AS verifies SHA256(code_verifier) == code_challenge it stored
+6. AS returns access_token (and refresh_token, and id_token if OIDC)
+```
+
+Why PKCE: in a mobile app, the redirect can be intercepted by another malicious app on the device. Without PKCE, the malicious app could exchange the intercepted code for a token. With PKCE, only the original client (which has `code_verifier`) can complete the exchange.
+
+The `code_verifier` is generated and held by the client; the `code_challenge` is the public commitment. Classic cryptographic commitment scheme.
+
+#### C.3 The other flows (and why most are deprecated)
+
+| Flow | Use case | Status |
+|------|----------|--------|
+| Authorization code + PKCE | All interactive apps | Recommended |
+| Authorization code (no PKCE) | Server-side web apps with a client secret | Acceptable |
+| Implicit | SPA without backend | Deprecated (use code+PKCE) |
+| Resource Owner Password Credentials | First-party apps with extreme trust | Deprecated |
+| Client Credentials | Service-to-service (no user) | Recommended for that case |
+| Device Code | Devices with limited input (TVs, CLIs) | Recommended for that case |
+
+The trend over the last decade: deprecate flows that need fewer round-trips at the cost of weaker security (Implicit, ROPC), keep the secure flows.
+
+#### C.4 OIDC: authentication on top of OAuth 2.0
+
+OIDC adds an `id_token` to the OAuth 2.0 response. The `id_token` is a JWT containing user identity claims (`sub`, `email`, `name`). Now you have:
+
+- **Access token** — for calling APIs (OAuth 2.0).
+- **ID token** — for knowing who the user is (OIDC).
+- **Refresh token** — for getting new access tokens (both).
+
+Most "Sign in with Google/Apple/GitHub" flows are OIDC. The `id_token` proves identity; the `access_token` lets you call Google APIs.
+
+#### C.5 SAML: the older XML-based alternative
+
+SAML 2.0 is the pre-OIDC enterprise SSO standard. XML-based, more verbose, but well-entrenched in corporate environments (Okta, Ping, ADFS). The conceptual model is similar: an Identity Provider (IdP) authenticates the user and signs an assertion that the Service Provider (SP) verifies.
+
+When to use which:
+
+- **Greenfield, modern app, consumer SSO** → OIDC.
+- **Enterprise SSO with legacy IdPs** → SAML.
+
+Both are alive in 2026. Most enterprise auth platforms support both.
 
 ### Authorization Code Flow (with PKCE)
 

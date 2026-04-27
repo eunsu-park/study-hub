@@ -18,8 +18,6 @@ Tests are the safety net that lets you refactor, add features, and fix bugs with
 
 ## Table of Contents
 
-Before the framework reference, read [**Theory & Principles**](#theory--principles) — how Supertest mounts an Express app on an ephemeral port (and why that beats real servers), what makes Jest and Mocha philosophically different, and the test-double taxonomy (mocks vs stubs vs spies vs fakes) that explains every mocking decision.
-
 1. [Testing with Jest and Supertest](#1-testing-with-jest-and-supertest)
 2. [Setting Up the Test Environment](#2-setting-up-the-test-environment)
 3. [Testing Routes](#3-testing-routes)
@@ -32,15 +30,9 @@ Before the framework reference, read [**Theory & Principles**](#theory--principl
 
 ---
 
-## Theory & Principles
+## 1. Testing with Jest and Supertest
 
-A test suite for an Express application is built from three independent pieces, each with a deeper mechanism than its API suggests.
-
-- **(A) HTTP test transports** — what Supertest does at the socket level, and the alternative of skipping the network entirely.
-- **(B) Jest vs Mocha — different philosophies** — Jest's built-in batteries vs Mocha's à la carte composition, and why the choice colors every other testing decision.
-- **(C) Test doubles taxonomy** — mocks, stubs, spies, fakes are not synonyms; each addresses a specific design question.
-
-### A. HTTP Test Transports
+### Theory: HTTP Test Transports
 
 Lesson 05 §A established that FastAPI's `TestClient` skips the network entirely by speaking ASGI in-process. Express has no equivalent of ASGI — Node's `http` module is intrinsically socket-based. Supertest works around this in a clever way.
 
@@ -72,100 +64,6 @@ app(req, res);
 ```
 
 Faster and synchronous, but `req`/`res` are mocks — they do not parse headers from raw bytes, do not stream, do not back-pressure. Acceptable for unit-testing a single middleware in isolation; not acceptable for integration tests of the full request pipeline. Supertest is the right default.
-
-### B. Jest vs Mocha: Two Philosophies
-
-The two dominant Node test frameworks differ in foundational design. Picking one shapes every other testing decision.
-
-#### B.1 Jest: batteries included
-
-Jest is a Meta project that bundles the test runner, assertion library, mocking utilities, snapshot testing, code coverage, and parallel test execution. One install, one config, one CLI. Defaults are opinionated:
-
-- Tests run in *isolated worker processes* — each test file gets its own Node process, so module state cannot leak between files.
-- Mocking is built in: `jest.mock(...)` rewires module imports, `jest.fn()` creates spies.
-- Coverage is one CLI flag away: `jest --coverage` produces a full report.
-- Snapshot testing — capture an output once, fail if it ever changes.
-
-The opinionated defaults are also Jest's downsides: the worker-isolation strategy doubles startup cost, the module mocking happens at *module-load* time (not call time), which can confuse intuition.
-
-#### B.2 Mocha: bring your own
-
-Mocha is just a test runner: `describe/it`, lifecycle hooks, parallel mode. Everything else — assertions (`chai`, `expect`, native `assert`), mocking (`sinon`), coverage (`c8`, `nyc`) — is a separate library you bolt on. The cost is more setup; the benefit is exact control over each piece.
-
-Mocha tests share a process by default, which is faster for small suites but means modules with side effects can leak across files unless you clean up.
-
-#### B.3 The native alternative
-
-Modern Node 20+ ships a built-in test runner (`node --test`) and assertion module (`node:test`). It is API-compatible with neither Jest nor Mocha but is fast and zero-dependency. For greenfield projects without complex mocking needs, it is increasingly viable.
-
-The decision matrix: **Jest** for most apps (Express included), **Mocha** when you need fine-grained control or a smaller dependency footprint, **node:test** for libraries and small services.
-
-### C. The Test Doubles Taxonomy
-
-"Mock the database" is shorthand for several different patterns. Gerard Meszaros's classification (xUnit Test Patterns) names them precisely:
-
-| Double | Used to | Verifies |
-|--------|---------|----------|
-| **Dummy** | Fill a parameter that won't be used | Nothing |
-| **Stub** | Return canned data when called | Nothing |
-| **Spy** | Record calls so you can inspect them later | Calls (after the fact) |
-| **Mock** | Pre-program expected calls; fail if calls deviate | Calls (during the test) |
-| **Fake** | Lightweight working implementation | Behavior |
-
-Each addresses a different design question: a stub answers "what does the code under test do when X returns Y?"; a mock answers "does the code under test call X with Z?".
-
-#### C.1 Stubs are usually what you want
-
-Most database tests are stubs in disguise:
-
-```javascript
-prisma.user.findUnique = jest.fn().mockResolvedValue({ id: 42, name: "Alice" });
-```
-
-This is a stub: it returns canned data, no expectations on whether or how often it is called. The test focuses on the handler's behavior given that data. Simple, robust, mostly immune to internal refactors.
-
-#### C.2 Mocks are coupling
-
-A mock asserts the exact API contract:
-
-```javascript
-expect(prisma.user.findUnique).toHaveBeenCalledWith({ where: { id: 42 } });
-```
-
-That assertion fails if the handler is refactored to call `findFirst` or to use a different `where` shape — even if the *behavior* is identical. Mocks couple your tests to implementation details. Use them sparingly, mostly for cross-boundary calls (analytics events, queued jobs, external API calls) where the call is itself the side effect under test.
-
-#### C.3 Fakes are the gold standard for databases
-
-The richest substitute is a fake: a real working implementation, just lighter. For databases, this means a real SQLite/PostgreSQL instance with the test schema — populated with deterministic seed data. Tests run against real SQL, real transactions, real constraints. The bug-finding power of fakes far exceeds stubs.
-
-The tradeoff is setup cost. The pattern from Lesson 05 §C.1 — transactional rollback per test against a session-scoped database — is the modern compromise: real database fidelity with stub-tier per-test cost.
-
-#### C.4 The right combination
-
-Most production test suites blend levels:
-
-- **Unit tests** — stubs for everything not under test. Fast, focused.
-- **Integration tests** — real database (fake-style), real HTTP via Supertest, mocks only for genuinely external services (Stripe, S3, third-party APIs).
-- **End-to-end** — a real running stack, no doubles. Slow and rare.
-
-The classification matters because each layer answers a different question: unit answers "does this function compute the right thing?", integration answers "does this endpoint talk to its dependencies correctly?", end-to-end answers "does the whole system work?"
-
-### From Theory to the Code Below
-
-Each section that follows operationalizes one piece of this framework:
-
-- §1 (Jest and Supertest) introduces the §B.1 batteries-included runner and the §A.1 ephemeral-port HTTP transport.
-- §2 (Setting up) configures Jest's worker isolation (§B.1) and the database from Lesson 08 for the test environment.
-- §3 (Testing routes) is integration testing via Supertest — §A.1 in concrete code.
-- §4 (Testing middleware) often uses the §A.3 direct-invoke pattern with mocked `req`/`res` for unit isolation.
-- §5 (Mocking database calls) is mostly §C.1 stubs (sometimes §C.2 mocks) on Prisma methods.
-- §6 (Integration tests with test database) is the §C.3 fake pattern: a real database with the §C.3 transactional-rollback isolation from Lesson 05 §C.1.
-- §7 (Testing authentication) chains "login → use token" via Supertest — pure §A flow.
-- §8 (Coverage) is the §B.1 built-in coverage report measuring which code the §A–§C suite actually exercises.
-
----
-
-## 1. Testing with Jest and Supertest
 
 ### Why Jest?
 
@@ -205,6 +103,33 @@ npm install -D jest @jest/globals supertest
 ---
 
 ## 2. Setting Up the Test Environment
+
+### Theory: Jest vs Mocha: Two Philosophies
+
+The two dominant Node test frameworks differ in foundational design. Picking one shapes every other testing decision.
+
+#### B.1 Jest: batteries included
+
+Jest is a Meta project that bundles the test runner, assertion library, mocking utilities, snapshot testing, code coverage, and parallel test execution. One install, one config, one CLI. Defaults are opinionated:
+
+- Tests run in *isolated worker processes* — each test file gets its own Node process, so module state cannot leak between files.
+- Mocking is built in: `jest.mock(...)` rewires module imports, `jest.fn()` creates spies.
+- Coverage is one CLI flag away: `jest --coverage` produces a full report.
+- Snapshot testing — capture an output once, fail if it ever changes.
+
+The opinionated defaults are also Jest's downsides: the worker-isolation strategy doubles startup cost, the module mocking happens at *module-load* time (not call time), which can confuse intuition.
+
+#### B.2 Mocha: bring your own
+
+Mocha is just a test runner: `describe/it`, lifecycle hooks, parallel mode. Everything else — assertions (`chai`, `expect`, native `assert`), mocking (`sinon`), coverage (`c8`, `nyc`) — is a separate library you bolt on. The cost is more setup; the benefit is exact control over each piece.
+
+Mocha tests share a process by default, which is faster for small suites but means modules with side effects can leak across files unless you clean up.
+
+#### B.3 The native alternative
+
+Modern Node 20+ ships a built-in test runner (`node --test`) and assertion module (`node:test`). It is API-compatible with neither Jest nor Mocha but is fast and zero-dependency. For greenfield projects without complex mocking needs, it is increasingly viable.
+
+The decision matrix: **Jest** for most apps (Express included), **Mocha** when you need fine-grained control or a smaller dependency footprint, **node:test** for libraries and small services.
 
 ### Jest Configuration
 
@@ -450,6 +375,56 @@ describe('Rate limiting middleware', () => {
 ## 5. Mocking Database Calls
 
 Mocking the database lets you test route logic without a running database. This makes tests faster, more deterministic, and independent of external state.
+
+### Theory: The Test Doubles Taxonomy
+
+"Mock the database" is shorthand for several different patterns. Gerard Meszaros's classification (xUnit Test Patterns) names them precisely:
+
+| Double | Used to | Verifies |
+|--------|---------|----------|
+| **Dummy** | Fill a parameter that won't be used | Nothing |
+| **Stub** | Return canned data when called | Nothing |
+| **Spy** | Record calls so you can inspect them later | Calls (after the fact) |
+| **Mock** | Pre-program expected calls; fail if calls deviate | Calls (during the test) |
+| **Fake** | Lightweight working implementation | Behavior |
+
+Each addresses a different design question: a stub answers "what does the code under test do when X returns Y?"; a mock answers "does the code under test call X with Z?".
+
+#### C.1 Stubs are usually what you want
+
+Most database tests are stubs in disguise:
+
+```javascript
+prisma.user.findUnique = jest.fn().mockResolvedValue({ id: 42, name: "Alice" });
+```
+
+This is a stub: it returns canned data, no expectations on whether or how often it is called. The test focuses on the handler's behavior given that data. Simple, robust, mostly immune to internal refactors.
+
+#### C.2 Mocks are coupling
+
+A mock asserts the exact API contract:
+
+```javascript
+expect(prisma.user.findUnique).toHaveBeenCalledWith({ where: { id: 42 } });
+```
+
+That assertion fails if the handler is refactored to call `findFirst` or to use a different `where` shape — even if the *behavior* is identical. Mocks couple your tests to implementation details. Use them sparingly, mostly for cross-boundary calls (analytics events, queued jobs, external API calls) where the call is itself the side effect under test.
+
+#### C.3 Fakes are the gold standard for databases
+
+The richest substitute is a fake: a real working implementation, just lighter. For databases, this means a real SQLite/PostgreSQL instance with the test schema — populated with deterministic seed data. Tests run against real SQL, real transactions, real constraints. The bug-finding power of fakes far exceeds stubs.
+
+The tradeoff is setup cost. The pattern from Lesson 05 §C.1 — transactional rollback per test against a session-scoped database — is the modern compromise: real database fidelity with stub-tier per-test cost.
+
+#### C.4 The right combination
+
+Most production test suites blend levels:
+
+- **Unit tests** — stubs for everything not under test. Fast, focused.
+- **Integration tests** — real database (fake-style), real HTTP via Supertest, mocks only for genuinely external services (Stripe, S3, third-party APIs).
+- **End-to-end** — a real running stack, no doubles. Slow and rare.
+
+The classification matters because each layer answers a different question: unit answers "does this function compute the right thing?", integration answers "does this endpoint talk to its dependencies correctly?", end-to-end answers "does the whole system work?"
 
 ### Mocking Prisma Client
 

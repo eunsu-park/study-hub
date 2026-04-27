@@ -14,8 +14,6 @@
 
 ## 목차
 
-프로젝트 안내에 들어가기 전에, [**이론과 원리**](#이론과-원리) 섹션을 먼저 읽어보세요. 어떤 백엔드든 내려야 하는 아키텍처 결정, 계층 아키텍처 패턴(router → service → repository), 그리고 작동하는 프로토타입을 유지보수 가능한 시스템으로 바꾸는 트레이드오프를 다룹니다.
-
 1. [프로젝트 개요](#1-프로젝트-개요)
 2. [프로젝트 설정](#2-프로젝트-설정)
 3. [데이터 모델](#3-데이터-모델)
@@ -28,15 +26,11 @@
 
 ---
 
-## 이론과 원리
+## 1. 프로젝트 개요
 
-캡스톤 프로젝트는 이전 레슨들의 조각(FastAPI 패턴, SQLAlchemy 쿼리, JWT 인증, Docker)이 하나의 일관된 시스템이 되는 곳입니다. 흥미로운 부분은 개별 조각이 아닙니다 — 그것들은 레슨 02–17에서 다뤘습니다 — 그것들을 묶는 *아키텍처 결정*입니다. 세 가지 렌즈가 그 결정을 논의 가능하게 만듭니다.
+이 캡스톤(capstone) 프로젝트에서는 강좌 전반에 걸쳐 다룬 패턴들을 통합한 **블로그 API**를 구축한다. API는 사용자 등록 및 인증, 블로그 게시물 관리, 댓글 기능을 지원하며, 적절한 페이지네이션, 필터링, 오류 처리를 갖춘다.
 
-- **(A) 모든 백엔드 프로젝트가 내리는 아키텍처 결정** — 그 대안과 함께 명시적으로 명명됨.
-- **(B) 계층 아키텍처: router / service / repository** — 정전적 관심사 분리와 각 계층이 소유하는 것.
-- **(C) Build vs buy vs use-managed 트레이드오프** — 대부분의 프로덕션 결정이 이것으로 환원됩니다.
-
-### A. 모든 백엔드가 내리는 아키텍처 결정
+### 이론: 모든 백엔드가 내리는 아키텍처 결정
 
 백엔드 프로젝트를 시작할 때 이 질문들에 암묵적으로 답합니다. 그것들을 명시적으로 만들면 템플릿을 복사하는 대신 각 선택을 변호할 수 있게 됩니다.
 
@@ -64,7 +58,68 @@
 
 어느 것도 보편적으로 옳지 않습니다. 레슨의 프로젝트가 FastAPI인 이유는 커리큘럼이 비동기 패턴에 초점을 맞추기 때문입니다. 같은 프로젝트의 Django 버전도 똑같이 유효할 것입니다.
 
-### B. 계층 아키텍처: Router / Service / Repository
+### 기능
+
+- 사용자 등록과 JWT 인증 (액세스 + 리프레시 토큰)
+- 소유권 강제를 포함한 블로그 게시물 CRUD (생성, 조회, 수정, 삭제)
+- 게시물 댓글
+- 페이지네이션(커서 기반), 필터링(작성자, 상태, 태그별), 정렬
+- Pydantic을 이용한 입력 검증
+- Alembic을 이용한 데이터베이스 마이그레이션
+- 포괄적인 테스트 스위트
+- Docker 컨테이너화
+
+### 최종 프로젝트 구조
+
+```
+blog-api/
+├── app/
+│   ├── __init__.py
+│   ├── main.py            # FastAPI application entry point
+│   ├── config.py           # Settings (Pydantic BaseSettings)
+│   ├── database.py         # SQLAlchemy engine and session
+│   ├── models/
+│   │   ├── __init__.py
+│   │   ├── user.py
+│   │   ├── post.py
+│   │   └── comment.py
+│   ├── schemas/
+│   │   ├── __init__.py
+│   │   ├── user.py
+│   │   ├── post.py
+│   │   ├── comment.py
+│   │   └── pagination.py
+│   ├── routers/
+│   │   ├── __init__.py
+│   │   ├── auth.py
+│   │   ├── users.py
+│   │   ├── posts.py
+│   │   └── comments.py
+│   ├── services/
+│   │   ├── __init__.py
+│   │   ├── auth.py
+│   │   └── post.py
+│   └── dependencies.py     # Shared FastAPI dependencies
+├── alembic/
+│   ├── env.py
+│   └── versions/
+├── tests/
+│   ├── conftest.py
+│   ├── test_auth.py
+│   ├── test_posts.py
+│   └── test_comments.py
+├── alembic.ini
+├── requirements.txt
+├── Dockerfile
+├── docker-compose.yml
+└── .env
+```
+
+---
+
+## 2. 프로젝트 설정
+
+### 이론: 계층 아키텍처: Router / Service / Repository
 
 모든 코드베이스가 결국 저지르는 실수: 모든 로직을 라우트 핸들러에 넣기.
 
@@ -143,117 +198,6 @@ def create_post(db, data, author):
 
 의존성 화살표가 뒤집히면(모델이 HTTP를 알거나, repository가 HTTPException을 던지면) 계층이 서로 접히고 아키텍처가 보상을 멈춥니다.
 
-### C. Build vs Buy vs Managed Service
-
-백엔드의 모든 컴포넌트는 셋 중 하나입니다.
-
-- **Build** — 코드베이스에서 직접 작성.
-- **Buy / 라이브러리 사용** — 오픈 소스 패키지 설치.
-- **Managed 서비스** — AWS/GCP/등에 돈을 내고 운영.
-
-#### C.1 선택을 위한 틀
-
-| 질문 | Build | Buy | Managed |
-|----------|-------|-----|---------|
-| 비용 (엔지니어링 시간 + 인프라) | 엔지 시간 높음, 인프라 낮음 | 둘 다 중간 | 엔지 낮음, 인프라 높음 |
-| 실행까지의 시간 | 가장 느림 | 중간 | 가장 빠름 |
-| 커스터마이즈 | 전체 | 제한 | 한정 |
-| 운영 부담 | 모두 당신 | 대부분 당신 | 대부분 벤더 |
-| Lock-in | 없음 | 낮음 | 높음 |
-
-#### C.2 각각이 어디에 맞는가
-
-- **Build**할 것: 비즈니스 규칙을 인코딩하는 인증 관련 로직(누가 무엇을 할 수 있는가), 도메인의 고유한 부분.
-- **Buy**할 것: 일반 인프라 — 웹 프레임워크, ORM, JSON 라이브러리, JWT 서명 라이브러리. 이것들은 상품화되었고 잘 테스트되었습니다.
-- **Managed**할 것: 진짜 어려운 것들 — 데이터베이스(RDS, Cloud SQL), 객체 저장소(S3, GCS), 메시지 큐(SQS, Pub/Sub), 이메일(SES, SendGrid). 이것들을 잘 운영하는 비용은 막대합니다. 다른 사람에게 돈을 내세요.
-
-#### C.3 "아직 필요 없다" 규칙
-
-초기 프로젝트의 가장 큰 낭비는 아직 필요 없는 것을 만들거나 운영하는 것입니다. 단일 PostgreSQL 인스턴스, 메시지 큐 없음, Redis 캐시 없음, Elasticsearch 없음 — 대부분의 앱은 트래픽이 실제로 더 많은 것을 요구할 때까지 잘 작동합니다. 인프라를 선제적으로 추가하는 것은 가치 추가 없이 운영 복잡성을 곱합니다.
-
-규율: 측정(p99 지연시간, 요청당 비용, 오류율)이 필요하다고 말할 때 각 새 인프라 조각을 도입하세요. 그 전이 아니라.
-
-### 이론에서 아래 프로젝트로
-
-뒤에 나오는 각 절은 이 틀의 한 조각을 구체화합니다.
-
-- §1 (프로젝트 개요)는 이 프로젝트의 §A.1 아키텍처 선택을 선언합니다.
-- §2 (프로젝트 설정)은 §A.2를 따릅니다 — 지금 필요한 것만 설정(FastAPI + SQLAlchemy + Alembic).
-- §3 (데이터 모델)은 §B repository 계층의 데이터 모양과 router가 사용하는 Pydantic 스키마입니다.
-- §4 (CRUD 엔드포인트)는 §B 세 계층 모두를 거칩니다 — router가 service를 호출, service가 repository를 호출.
-- §5 (JWT 인증)은 레슨 15 §A.3의 access + refresh 패턴을 service 계층 관심사로 구현합니다.
-- §6 (페이지네이션과 필터링)은 레슨 14 §4–§5를 §B router/service 경계의 구체적인 코드로.
-- §7 (pytest를 이용한 테스트)는 레슨 05 §C를 따릅니다 — 픽스처 주도, 트랜잭션 롤백, §B service 계층을 위한 의존성 override.
-- §8 (Docker 배포)는 레슨 16 §5를 구체화합니다: 단일 이미지를 통한 §A.10 dev/prod parity.
-- §9 (확장 아이디어)는 "다음은 무엇?"입니다 — §C.3에 따라 측정이 정당화할 때 캐싱(레슨 20), 백그라운드 작업(레슨 21), 관측성(레슨 17)을 추가하기.
-
----
-
-## 1. 프로젝트 개요
-
-이 캡스톤(capstone) 프로젝트에서는 강좌 전반에 걸쳐 다룬 패턴들을 통합한 **블로그 API**를 구축한다. API는 사용자 등록 및 인증, 블로그 게시물 관리, 댓글 기능을 지원하며, 적절한 페이지네이션, 필터링, 오류 처리를 갖춘다.
-
-### 기능
-
-- 사용자 등록과 JWT 인증 (액세스 + 리프레시 토큰)
-- 소유권 강제를 포함한 블로그 게시물 CRUD (생성, 조회, 수정, 삭제)
-- 게시물 댓글
-- 페이지네이션(커서 기반), 필터링(작성자, 상태, 태그별), 정렬
-- Pydantic을 이용한 입력 검증
-- Alembic을 이용한 데이터베이스 마이그레이션
-- 포괄적인 테스트 스위트
-- Docker 컨테이너화
-
-### 최종 프로젝트 구조
-
-```
-blog-api/
-├── app/
-│   ├── __init__.py
-│   ├── main.py            # FastAPI application entry point
-│   ├── config.py           # Settings (Pydantic BaseSettings)
-│   ├── database.py         # SQLAlchemy engine and session
-│   ├── models/
-│   │   ├── __init__.py
-│   │   ├── user.py
-│   │   ├── post.py
-│   │   └── comment.py
-│   ├── schemas/
-│   │   ├── __init__.py
-│   │   ├── user.py
-│   │   ├── post.py
-│   │   ├── comment.py
-│   │   └── pagination.py
-│   ├── routers/
-│   │   ├── __init__.py
-│   │   ├── auth.py
-│   │   ├── users.py
-│   │   ├── posts.py
-│   │   └── comments.py
-│   ├── services/
-│   │   ├── __init__.py
-│   │   ├── auth.py
-│   │   └── post.py
-│   └── dependencies.py     # Shared FastAPI dependencies
-├── alembic/
-│   ├── env.py
-│   └── versions/
-├── tests/
-│   ├── conftest.py
-│   ├── test_auth.py
-│   ├── test_posts.py
-│   └── test_comments.py
-├── alembic.ini
-├── requirements.txt
-├── Dockerfile
-├── docker-compose.yml
-└── .env
-```
-
----
-
-## 2. 프로젝트 설정
-
 ### 요구 사항
 
 ```
@@ -279,7 +223,6 @@ pytest-asyncio==0.24.0
 from pydantic_settings import BaseSettings
 from functools import lru_cache
 
-
 class Settings(BaseSettings):
     app_name: str = "Blog API"
     debug: bool = False
@@ -298,7 +241,6 @@ class Settings(BaseSettings):
     max_page_size: int = 100
 
     model_config = {"env_file": ".env"}
-
 
 @lru_cache
 def get_settings() -> Settings:
@@ -329,10 +271,8 @@ AsyncSessionLocal = async_sessionmaker(
     expire_on_commit=False,
 )
 
-
 class Base(DeclarativeBase):
     pass
-
 
 async def get_db() -> AsyncSession:
     """요청당 데이터베이스 세션을 제공하는 의존성(Dependency)."""
@@ -359,7 +299,6 @@ from app.routers import auth, users, posts, comments
 
 settings = get_settings()
 
-
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup
@@ -368,7 +307,6 @@ async def lifespan(app: FastAPI):
     yield
     # Shutdown
     await engine.dispose()
-
 
 app = FastAPI(
     title=settings.app_name,
@@ -388,7 +326,6 @@ app.include_router(auth.router, prefix="/auth", tags=["Authentication"])
 app.include_router(users.router, prefix="/users", tags=["Users"])
 app.include_router(posts.router, prefix="/posts", tags=["Posts"])
 app.include_router(comments.router, prefix="/posts", tags=["Comments"])
-
 
 @app.get("/health")
 async def health_check():
@@ -432,7 +369,6 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
 
-
 class User(Base):
     __tablename__ = "users"
 
@@ -462,12 +398,10 @@ import enum
 
 from app.database import Base
 
-
 class PostStatus(str, enum.Enum):
     DRAFT = "draft"
     PUBLISHED = "published"
     ARCHIVED = "archived"
-
 
 class Post(Base):
     __tablename__ = "posts"
@@ -507,7 +441,6 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
 
-
 class Comment(Base):
     __tablename__ = "comments"
 
@@ -532,12 +465,10 @@ class Comment(Base):
 from pydantic import BaseModel, EmailStr, Field
 from datetime import datetime
 
-
 class UserCreate(BaseModel):
     username: str = Field(..., min_length=3, max_length=50)
     email: EmailStr
     password: str = Field(..., min_length=8, max_length=128)
-
 
 class UserResponse(BaseModel):
     id: int
@@ -548,25 +479,21 @@ class UserResponse(BaseModel):
 
     model_config = {"from_attributes": True}
 
-
 # app/schemas/post.py
 from pydantic import BaseModel, Field
 from datetime import datetime
 from typing import Optional
 from app.models.post import PostStatus
 
-
 class PostCreate(BaseModel):
     title: str = Field(..., min_length=1, max_length=200)
     content: str = Field(..., min_length=1)
     status: PostStatus = PostStatus.DRAFT
 
-
 class PostUpdate(BaseModel):
     title: Optional[str] = Field(None, min_length=1, max_length=200)
     content: Optional[str] = Field(None, min_length=1)
     status: Optional[PostStatus] = None
-
 
 class PostResponse(BaseModel):
     id: int
@@ -581,11 +508,9 @@ class PostResponse(BaseModel):
 
     model_config = {"from_attributes": True}
 
-
 # app/schemas/comment.py
 class CommentCreate(BaseModel):
     content: str = Field(..., min_length=1, max_length=5000)
-
 
 class CommentResponse(BaseModel):
     id: int
@@ -619,14 +544,12 @@ from app.dependencies import get_current_user
 
 router = APIRouter()
 
-
 def generate_slug(title: str) -> str:
     """제목을 URL 친화적인 슬러그(slug)로 변환한다."""
     slug = title.lower().strip()
     slug = re.sub(r"[^\w\s-]", "", slug)
     slug = re.sub(r"[\s_]+", "-", slug)
     return slug.strip("-")
-
 
 @router.post("/", status_code=status.HTTP_201_CREATED, response_model=PostResponse)
 async def create_post(
@@ -653,7 +576,6 @@ async def create_post(
     await db.refresh(post, attribute_names=["author", "comments"])
     return post
 
-
 @router.get("/{post_id}", response_model=PostResponse)
 async def get_post(post_id: int, db: AsyncSession = Depends(get_db)):
     result = await db.execute(
@@ -668,7 +590,6 @@ async def get_post(post_id: int, db: AsyncSession = Depends(get_db)):
             detail=f"Post with id {post_id} not found",
         )
     return post
-
 
 @router.put("/{post_id}", response_model=PostResponse)
 async def update_post(
@@ -700,7 +621,6 @@ async def update_post(
     await db.flush()
     await db.refresh(post)
     return post
-
 
 @router.delete("/{post_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_post(
@@ -736,7 +656,6 @@ from app.dependencies import get_current_user
 
 router = APIRouter()
 
-
 @router.post(
     "/{post_id}/comments",
     status_code=status.HTTP_201_CREATED,
@@ -763,7 +682,6 @@ async def create_comment(
     await db.refresh(comment, attribute_names=["author"])
     return comment
 
-
 @router.get("/{post_id}/comments", response_model=list[CommentResponse])
 async def list_comments(
     post_id: int,
@@ -776,7 +694,6 @@ async def list_comments(
         .order_by(Comment.created_at.desc())
     )
     return result.scalars().all()
-
 
 @router.delete(
     "/{post_id}/comments/{comment_id}",
@@ -818,14 +735,11 @@ from app.config import get_settings
 settings = get_settings()
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
-
 def hash_password(password: str) -> str:
     return pwd_context.hash(password)
 
-
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     return pwd_context.verify(plain_password, hashed_password)
-
 
 def create_access_token(user_id: int) -> str:
     expire = datetime.now(timezone.utc) + timedelta(
@@ -834,14 +748,12 @@ def create_access_token(user_id: int) -> str:
     payload = {"sub": str(user_id), "exp": expire, "type": "access"}
     return jwt.encode(payload, settings.secret_key, algorithm=settings.algorithm)
 
-
 def create_refresh_token(user_id: int) -> str:
     expire = datetime.now(timezone.utc) + timedelta(
         days=settings.refresh_token_expire_days
     )
     payload = {"sub": str(user_id), "exp": expire, "type": "refresh"}
     return jwt.encode(payload, settings.secret_key, algorithm=settings.algorithm)
-
 
 def decode_token(token: str) -> dict:
     """JWT 토큰을 디코딩하고 검증한다. 실패 시 JWTError를 발생시킨다."""
@@ -863,7 +775,6 @@ from app.models.user import User
 from app.services.auth import decode_token
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
-
 
 async def get_current_user(
     token: str = Depends(oauth2_scheme),
@@ -914,7 +825,6 @@ from app.services.auth import (
 
 router = APIRouter()
 
-
 @router.post("/register", status_code=status.HTTP_201_CREATED, response_model=UserResponse)
 async def register(user_data: UserCreate, db: AsyncSession = Depends(get_db)):
     # Check for existing username or email
@@ -939,7 +849,6 @@ async def register(user_data: UserCreate, db: AsyncSession = Depends(get_db)):
     await db.refresh(user)
     return user
 
-
 @router.post("/login")
 async def login(
     form_data: OAuth2PasswordRequestForm = Depends(),
@@ -963,7 +872,6 @@ async def login(
         "refresh_token": create_refresh_token(user.id),
         "token_type": "bearer",
     }
-
 
 @router.post("/refresh")
 async def refresh_token(refresh_token: str, db: AsyncSession = Depends(get_db)):
@@ -1001,7 +909,6 @@ import json
 
 T = TypeVar("T")
 
-
 class CursorPage(BaseModel, Generic[T]):
     """커서 기반 페이지네이션(cursor-based pagination)을 사용하는 제네릭 페이지 응답."""
     items: list[T]
@@ -1009,12 +916,10 @@ class CursorPage(BaseModel, Generic[T]):
     has_more: bool = False
     total: int = 0
 
-
 def encode_cursor(post_id: int, created_at: str) -> str:
     """페이지네이션 커서를 base64 JSON으로 인코딩한다."""
     data = {"id": post_id, "created_at": created_at}
     return base64.urlsafe_b64encode(json.dumps(data).encode()).decode()
-
 
 def decode_cursor(cursor: str) -> dict:
     """페이지네이션 커서를 base64 JSON에서 디코딩한다."""
@@ -1141,7 +1046,6 @@ TestSessionLocal = async_sessionmaker(
     test_engine, class_=AsyncSession, expire_on_commit=False
 )
 
-
 @pytest_asyncio.fixture
 async def db_session():
     """테이블을 생성하고 각 테스트에 대해 깨끗한 세션을 제공한다."""
@@ -1154,7 +1058,6 @@ async def db_session():
     async with test_engine.begin() as conn:
         await conn.run_sync(Base.metadata.drop_all)
 
-
 @pytest_asyncio.fixture
 async def client(db_session):
     """테스트 데이터베이스가 주입된 HTTP 클라이언트."""
@@ -1166,7 +1069,6 @@ async def client(db_session):
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
         yield ac
     app.dependency_overrides.clear()
-
 
 @pytest_asyncio.fixture
 async def test_user(db_session):
@@ -1190,7 +1092,6 @@ async def test_user(db_session):
 # tests/test_auth.py
 import pytest
 
-
 @pytest.mark.asyncio
 async def test_register_user(client):
     response = await client.post("/auth/register", json={
@@ -1203,7 +1104,6 @@ async def test_register_user(client):
     assert data["username"] == "newuser"
     assert data["email"] == "new@example.com"
     assert "hashed_password" not in data  # Ensure password is not exposed
-
 
 @pytest.mark.asyncio
 async def test_register_duplicate_username(client):
@@ -1221,7 +1121,6 @@ async def test_register_duplicate_username(client):
     })
     assert response.status_code == 409
 
-
 @pytest.mark.asyncio
 async def test_login_success(client, test_user):
     response = await client.post("/auth/login", data={
@@ -1233,7 +1132,6 @@ async def test_login_success(client, test_user):
     assert "access_token" in data
     assert "refresh_token" in data
     assert data["token_type"] == "bearer"
-
 
 @pytest.mark.asyncio
 async def test_login_wrong_password(client, test_user):
@@ -1249,7 +1147,6 @@ async def test_login_wrong_password(client, test_user):
 ```python
 # tests/test_posts.py
 import pytest
-
 
 @pytest.mark.asyncio
 async def test_create_post(client, test_user):
@@ -1269,7 +1166,6 @@ async def test_create_post(client, test_user):
     assert data["slug"] == "my-first-post"
     assert data["status"] == "published"
 
-
 @pytest.mark.asyncio
 async def test_create_post_unauthorized(client):
     response = await client.post("/posts/", json={
@@ -1277,7 +1173,6 @@ async def test_create_post_unauthorized(client):
         "content": "Should fail.",
     })
     assert response.status_code == 401
-
 
 @pytest.mark.asyncio
 async def test_get_post(client, test_user):
@@ -1299,7 +1194,6 @@ async def test_get_post(client, test_user):
     assert response.status_code == 200
     assert response.json()["title"] == "Readable Post"
 
-
 @pytest.mark.asyncio
 async def test_update_post_by_owner(client, test_user):
     token = test_user["token"]
@@ -1317,7 +1211,6 @@ async def test_update_post_by_owner(client, test_user):
     )
     assert response.status_code == 200
     assert response.json()["title"] == "Updated Title"
-
 
 @pytest.mark.asyncio
 async def test_delete_post(client, test_user):
@@ -1338,7 +1231,6 @@ async def test_delete_post(client, test_user):
     # Verify it is gone
     get_response = await client.get(f"/posts/{post_id}")
     assert get_response.status_code == 404
-
 
 @pytest.mark.asyncio
 async def test_list_posts_pagination(client, test_user):
@@ -1373,6 +1265,36 @@ async def test_list_posts_pagination(client, test_user):
 ---
 
 ## 8. Docker 배포
+
+### 이론: Build vs Buy vs Managed Service
+
+백엔드의 모든 컴포넌트는 셋 중 하나입니다.
+
+- **Build** — 코드베이스에서 직접 작성.
+- **Buy / 라이브러리 사용** — 오픈 소스 패키지 설치.
+- **Managed 서비스** — AWS/GCP/등에 돈을 내고 운영.
+
+#### C.1 선택을 위한 틀
+
+| 질문 | Build | Buy | Managed |
+|----------|-------|-----|---------|
+| 비용 (엔지니어링 시간 + 인프라) | 엔지 시간 높음, 인프라 낮음 | 둘 다 중간 | 엔지 낮음, 인프라 높음 |
+| 실행까지의 시간 | 가장 느림 | 중간 | 가장 빠름 |
+| 커스터마이즈 | 전체 | 제한 | 한정 |
+| 운영 부담 | 모두 당신 | 대부분 당신 | 대부분 벤더 |
+| Lock-in | 없음 | 낮음 | 높음 |
+
+#### C.2 각각이 어디에 맞는가
+
+- **Build**할 것: 비즈니스 규칙을 인코딩하는 인증 관련 로직(누가 무엇을 할 수 있는가), 도메인의 고유한 부분.
+- **Buy**할 것: 일반 인프라 — 웹 프레임워크, ORM, JSON 라이브러리, JWT 서명 라이브러리. 이것들은 상품화되었고 잘 테스트되었습니다.
+- **Managed**할 것: 진짜 어려운 것들 — 데이터베이스(RDS, Cloud SQL), 객체 저장소(S3, GCS), 메시지 큐(SQS, Pub/Sub), 이메일(SES, SendGrid). 이것들을 잘 운영하는 비용은 막대합니다. 다른 사람에게 돈을 내세요.
+
+#### C.3 "아직 필요 없다" 규칙
+
+초기 프로젝트의 가장 큰 낭비는 아직 필요 없는 것을 만들거나 운영하는 것입니다. 단일 PostgreSQL 인스턴스, 메시지 큐 없음, Redis 캐시 없음, Elasticsearch 없음 — 대부분의 앱은 트래픽이 실제로 더 많은 것을 요구할 때까지 잘 작동합니다. 인프라를 선제적으로 추가하는 것은 가치 추가 없이 운영 복잡성을 곱합니다.
+
+규율: 측정(p99 지연시간, 요청당 비용, 오류율)이 필요하다고 말할 때 각 새 인프라 조각을 도입하세요. 그 전이 아니라.
 
 ### Dockerfile
 

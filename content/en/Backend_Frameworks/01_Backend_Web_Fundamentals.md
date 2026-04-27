@@ -18,8 +18,6 @@
 
 ## Table of Contents
 
-Before the framework reference, read [**Theory & Principles**](#theory--principles) — the HTTP wire protocol, REST's six architectural constraints, and the synchronous vs asynchronous server models that frameworks specialize.
-
 1. [The HTTP Request/Response Cycle](#1-the-http-requestresponse-cycle)
 2. [REST Principles](#2-rest-principles)
 3. [WSGI vs ASGI](#3-wsgi-vs-asgi)
@@ -31,17 +29,11 @@ Before the framework reference, read [**Theory & Principles**](#theory--principl
 
 ---
 
-## Theory & Principles
+## 1. The HTTP Request/Response Cycle
 
-A backend web framework is a thin layer that translates a wire-level **HTTP message** into a function call in your language of choice and translates the function's return value back into an HTTP message. To use any framework intentionally — rather than by copy-paste — you need a clear separation of three things that the framework conflates for ergonomic reasons:
+Every interaction between a client (browser, mobile app, CLI tool) and a backend server follows the **HTTP request/response** model. The client sends a request; the server processes it and returns a response.
 
-- **(A) The transport protocol** — what bytes flow across the socket and what they mean.
-- **(B) The architectural style** — REST, RPC, or GraphQL: how those bytes are organized into an API contract.
-- **(C) The server execution model** — how a single process handles thousands of concurrent connections.
-
-Every concrete decision later in this lesson — choose `200` vs `204`, choose path versioning vs header versioning, choose WSGI vs ASGI — collapses out of one of these three axes.
-
-### A. HTTP: The Wire Protocol
+### Theory: HTTP: The Wire Protocol
 
 HTTP is a request/response protocol layered on top of a reliable byte stream (TCP, or in HTTP/3 over QUIC). Every request and every response has the same three-part shape: **start line**, **headers**, **body**. The whole contract between client and server is encoded in those three regions.
 
@@ -76,90 +68,6 @@ Headers carry every cross-cutting concern that does not belong in the body: auth
 
 1. **The body is opaque to intermediaries; headers are not.** Proxies, CDNs, and load balancers route, cache, and rewrite based on headers. Anything that needs to influence the network path must live in a header.
 2. **Custom headers should not start with `X-`.** RFC 6648 deprecated that convention because once a header becomes useful it gets standardized — and the rename breaks every client.
-
-### B. REST: The Architectural Style
-
-REST is not "JSON over HTTP". It is the set of six architectural constraints Roy Fielding extracted from the design of HTTP itself in his 2000 dissertation. A system that violates them can still work — but it is not REST, and Fielding's analysis predicts where it will be hard to evolve.
-
-#### B.1 The six constraints
-
-1. **Client-server.** Separate concerns: clients own user interaction, servers own data and rules. Either side can evolve independently.
-2. **Stateless.** Every request from client to server contains all information needed to understand it. No session state on the server. This is what makes horizontal scaling trivial — any worker can handle any request.
-3. **Cacheable.** Responses must explicitly mark themselves cacheable or not. The cache may live in the client, in an intermediary CDN, or in a reverse proxy. `Cache-Control` and `ETag` are the machinery.
-4. **Layered system.** A client cannot tell whether it is talking to the origin server, a CDN, a load balancer, or a service mesh sidecar. Each layer can add cross-cutting policy (auth, rate limit, observability) without modifying the next.
-5. **Uniform interface.** Resources are identified by URIs, manipulated via a small fixed verb vocabulary, and self-describing through `Content-Type`. Clients learn one interface and reuse it across services.
-6. **Code-on-demand (optional).** Servers may extend client functionality by sending executable code (JavaScript). This is the only optional constraint and the one most APIs ignore.
-
-The constraint with the deepest consequences is **statelessness**. Once a server keeps no per-client state, deployments become rolling, scaling becomes adding workers, and crashes become transient — a request that fails on worker A succeeds on worker B because both are interchangeable.
-
-#### B.2 The idempotency hierarchy
-
-A method is **safe** if it does not modify resources. It is **idempotent** if repeating the call has the same effect as a single call. Both are mathematical properties — and both are *contracts the framework cannot enforce*. Your handler must obey them.
-
-| Method | Safe | Idempotent | Why it matters |
-|--------|------|-----------|---------------|
-| GET, HEAD, OPTIONS | yes | yes | Caches and proxies pre-fetch them freely |
-| PUT, DELETE | no | yes | Retries on network failure are safe |
-| POST | no | no | Retries may double-create; needs an `Idempotency-Key` header |
-| PATCH | no | depends | Replace-shaped PATCH is idempotent; "increment counter" is not |
-
-When a mobile client times out waiting for a `POST /payments`, the only safe options are: (1) retry with an idempotency key the server uses to dedupe, or (2) ask the server "did you already process my request?". Both are concrete consequences of POST being non-idempotent.
-
-#### B.3 Resource modeling: nouns over verbs
-
-REST URIs name *resources* (nouns), not *actions* (verbs). The verb is the HTTP method. Compare:
-
-```
-RPC-shaped:    POST /createUser, POST /deleteUser, POST /promoteUser
-REST-shaped:   POST /users, DELETE /users/42, PATCH /users/42  (with body {"role": "admin"})
-```
-
-The REST shape collapses the API surface from N endpoints per resource to a single endpoint family per resource. Clients learn one mental model — "every resource speaks the standard verbs" — instead of memorizing endpoint names.
-
-### C. The Server Execution Model
-
-The third axis is orthogonal to the first two: how does a single process serve thousands of concurrent HTTP requests? Three concurrency models dominate, and every Python/Node/Go web framework is built on one of them.
-
-#### C.1 Synchronous, thread-per-request (Django classic, Flask)
-
-The simplest model. Each request gets a worker thread (or process). The handler runs to completion, blocks the thread on I/O (database, downstream HTTP), then frees it. Throughput is bounded by `worker_count`, which is bounded by RAM (each Python thread keeps its own stack, and Python's GIL prevents two threads from running Python bytecode simultaneously anyway, so workers are usually OS processes).
-
-A WSGI deployment with 4 Gunicorn workers can handle 4 *simultaneously in-flight* requests. A 100ms downstream call ties up a worker for 100ms. The arithmetic is unforgiving: if every request waits 200ms on the database, peak throughput is `4 × (1000ms / 200ms) = 20 RPS`. The cure is more workers (more RAM) or moving to an async model.
-
-#### C.2 Event-loop, single-threaded async (Node.js, FastAPI/Starlette, asyncio)
-
-Instead of one thread per request, one thread runs an **event loop** that multiplexes thousands of in-flight requests. When a handler awaits I/O, the loop suspends that coroutine and runs another. When the I/O completes, the loop resumes the original coroutine. The thread is never blocked — it is always running *something*.
-
-This model wins exactly when handlers are **I/O-bound**: most web APIs that wait on databases, caches, or downstream services. It loses when handlers are **CPU-bound**: a single CPU-heavy coroutine starves the entire loop because there is nothing else to schedule. The mitigation is to offload CPU work to a thread pool (`asyncio.run_in_executor`, Node `worker_threads`).
-
-The interface contract for Python is **ASGI** — the async-aware successor to WSGI. Starlette, FastAPI, and Quart all implement it.
-
-#### C.3 Lightweight "green" threads (Go goroutines, JVM virtual threads, Erlang)
-
-Goroutines are user-space threads multiplexed onto OS threads by the runtime. Each goroutine costs ~2 KB of stack at start, growing on demand. A Go server can have a million goroutines blocked on I/O without breaking a sweat. The runtime *does* the event-loop work transparently — your code looks synchronous but executes asynchronously.
-
-This is the best of both worlds for many workloads: synchronous-looking code with async-tier scalability, plus true parallelism across cores (no GIL). The cost is language-level — you cannot bolt this onto Python without changing the runtime.
-
-#### C.4 Back-pressure: the property all three models share
-
-A server that accepts requests faster than it can process them eventually exhausts memory, file descriptors, or the request queue. The defense is **back-pressure**: at some load level, the server must refuse new work (return `503` or close the connection) so callers slow down. Concretely: cap the connection accept queue, cap the in-flight request count, cap the database connection pool. The three models differ in *where* they apply back-pressure but not in *whether* they need it.
-
-### From Theory to the Code Below
-
-Each section that follows operationalizes one slice of this framework:
-
-- §1 (HTTP cycle) is the wire format from §A made concrete with examples.
-- §2 (REST principles) walks through Fielding's six constraints from §B with API design examples.
-- §3 (WSGI vs ASGI) is the Python interface that selects between the synchronous and event-loop models from §C.
-- §4 (JSON) is the body format that fills the "body" region of every request and response in §A.
-- §5 (API versioning) is how you evolve a `uniform interface` (§B.1) without breaking existing clients.
-- §6 (request lifecycle) traces a single HTTP request through routing, middleware, and serialization — the framework's internal implementation of all of the above.
-
----
-
-## 1. The HTTP Request/Response Cycle
-
-Every interaction between a client (browser, mobile app, CLI tool) and a backend server follows the **HTTP request/response** model. The client sends a request; the server processes it and returns a response.
 
 ### Anatomy of an HTTP Request
 
@@ -238,6 +146,45 @@ A helpful rule: if the client sent a bad request, return `4xx`. If the server fa
 
 **REST** (Representational State Transfer) is an architectural style, not a protocol. It provides guidelines for designing web APIs that are predictable, scalable, and easy to consume.
 
+### Theory: REST: The Architectural Style
+
+REST is not "JSON over HTTP". It is the set of six architectural constraints Roy Fielding extracted from the design of HTTP itself in his 2000 dissertation. A system that violates them can still work — but it is not REST, and Fielding's analysis predicts where it will be hard to evolve.
+
+#### B.1 The six constraints
+
+1. **Client-server.** Separate concerns: clients own user interaction, servers own data and rules. Either side can evolve independently.
+2. **Stateless.** Every request from client to server contains all information needed to understand it. No session state on the server. This is what makes horizontal scaling trivial — any worker can handle any request.
+3. **Cacheable.** Responses must explicitly mark themselves cacheable or not. The cache may live in the client, in an intermediary CDN, or in a reverse proxy. `Cache-Control` and `ETag` are the machinery.
+4. **Layered system.** A client cannot tell whether it is talking to the origin server, a CDN, a load balancer, or a service mesh sidecar. Each layer can add cross-cutting policy (auth, rate limit, observability) without modifying the next.
+5. **Uniform interface.** Resources are identified by URIs, manipulated via a small fixed verb vocabulary, and self-describing through `Content-Type`. Clients learn one interface and reuse it across services.
+6. **Code-on-demand (optional).** Servers may extend client functionality by sending executable code (JavaScript). This is the only optional constraint and the one most APIs ignore.
+
+The constraint with the deepest consequences is **statelessness**. Once a server keeps no per-client state, deployments become rolling, scaling becomes adding workers, and crashes become transient — a request that fails on worker A succeeds on worker B because both are interchangeable.
+
+#### B.2 The idempotency hierarchy
+
+A method is **safe** if it does not modify resources. It is **idempotent** if repeating the call has the same effect as a single call. Both are mathematical properties — and both are *contracts the framework cannot enforce*. Your handler must obey them.
+
+| Method | Safe | Idempotent | Why it matters |
+|--------|------|-----------|---------------|
+| GET, HEAD, OPTIONS | yes | yes | Caches and proxies pre-fetch them freely |
+| PUT, DELETE | no | yes | Retries on network failure are safe |
+| POST | no | no | Retries may double-create; needs an `Idempotency-Key` header |
+| PATCH | no | depends | Replace-shaped PATCH is idempotent; "increment counter" is not |
+
+When a mobile client times out waiting for a `POST /payments`, the only safe options are: (1) retry with an idempotency key the server uses to dedupe, or (2) ask the server "did you already process my request?". Both are concrete consequences of POST being non-idempotent.
+
+#### B.3 Resource modeling: nouns over verbs
+
+REST URIs name *resources* (nouns), not *actions* (verbs). The verb is the HTTP method. Compare:
+
+```
+RPC-shaped:    POST /createUser, POST /deleteUser, POST /promoteUser
+REST-shaped:   POST /users, DELETE /users/42, PATCH /users/42  (with body {"role": "admin"})
+```
+
+The REST shape collapses the API surface from N endpoints per resource to a single endpoint family per resource. Clients learn one mental model — "every resource speaks the standard verbs" — instead of memorizing endpoint names.
+
 ### Core Principles
 
 1. **Resources, not actions**: URLs identify nouns (`/users/42`), not verbs (`/getUser?id=42`)
@@ -290,6 +237,34 @@ GET /api/users?cursor=eyJpZCI6NDJ9&limit=25
 ## 3. WSGI vs ASGI
 
 Python web servers need a standard interface between the web server and the application. Two standards exist: **WSGI** (synchronous) and **ASGI** (asynchronous).
+
+### Theory: The Server Execution Model
+
+The third axis is orthogonal to the first two: how does a single process serve thousands of concurrent HTTP requests? Three concurrency models dominate, and every Python/Node/Go web framework is built on one of them.
+
+#### C.1 Synchronous, thread-per-request (Django classic, Flask)
+
+The simplest model. Each request gets a worker thread (or process). The handler runs to completion, blocks the thread on I/O (database, downstream HTTP), then frees it. Throughput is bounded by `worker_count`, which is bounded by RAM (each Python thread keeps its own stack, and Python's GIL prevents two threads from running Python bytecode simultaneously anyway, so workers are usually OS processes).
+
+A WSGI deployment with 4 Gunicorn workers can handle 4 *simultaneously in-flight* requests. A 100ms downstream call ties up a worker for 100ms. The arithmetic is unforgiving: if every request waits 200ms on the database, peak throughput is `4 × (1000ms / 200ms) = 20 RPS`. The cure is more workers (more RAM) or moving to an async model.
+
+#### C.2 Event-loop, single-threaded async (Node.js, FastAPI/Starlette, asyncio)
+
+Instead of one thread per request, one thread runs an **event loop** that multiplexes thousands of in-flight requests. When a handler awaits I/O, the loop suspends that coroutine and runs another. When the I/O completes, the loop resumes the original coroutine. The thread is never blocked — it is always running *something*.
+
+This model wins exactly when handlers are **I/O-bound**: most web APIs that wait on databases, caches, or downstream services. It loses when handlers are **CPU-bound**: a single CPU-heavy coroutine starves the entire loop because there is nothing else to schedule. The mitigation is to offload CPU work to a thread pool (`asyncio.run_in_executor`, Node `worker_threads`).
+
+The interface contract for Python is **ASGI** — the async-aware successor to WSGI. Starlette, FastAPI, and Quart all implement it.
+
+#### C.3 Lightweight "green" threads (Go goroutines, JVM virtual threads, Erlang)
+
+Goroutines are user-space threads multiplexed onto OS threads by the runtime. Each goroutine costs ~2 KB of stack at start, growing on demand. A Go server can have a million goroutines blocked on I/O without breaking a sweat. The runtime *does* the event-loop work transparently — your code looks synchronous but executes asynchronously.
+
+This is the best of both worlds for many workloads: synchronous-looking code with async-tier scalability, plus true parallelism across cores (no GIL). The cost is language-level — you cannot bolt this onto Python without changing the runtime.
+
+#### C.4 Back-pressure: the property all three models share
+
+A server that accepts requests faster than it can process them eventually exhausts memory, file descriptors, or the request queue. The defense is **back-pressure**: at some load level, the server must refuse new work (return `503` or close the connection) so callers slow down. Concretely: cap the connection accept queue, cap the in-flight request count, cap the database connection pool. The three models differ in *where* they apply back-pressure but not in *whether* they need it.
 
 ### WSGI (Web Server Gateway Interface)
 

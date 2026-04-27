@@ -18,8 +18,6 @@
 
 ## 목차
 
-프레임워크 참조에 들어가기 전에, [**이론과 원리**](#이론과-원리) 섹션을 먼저 읽어보세요. ASGI가 무엇인지, FastAPI가 왜 Starlette(HTTP 계층)와 Pydantic(데이터 계층)을 분리하는지, 그리고 타입 힌트가 어떻게 스키마 인트로스펙션을 통해 런타임 검증으로 바뀌는지를 다룹니다.
-
 1. [FastAPI란 무엇인가](#1-fastapi란-무엇인가)
 2. [설치 및 첫 번째 앱](#2-설치-및-첫-번째-앱)
 3. [경로 파라미터와 쿼리 파라미터](#3-경로-파라미터와-쿼리-파라미터)
@@ -32,15 +30,34 @@
 
 ---
 
-## 이론과 원리
+## 1. FastAPI란 무엇인가
 
-FastAPI는 *단일* 프레임워크가 아닙니다. 세 개의 독립된 계층 — **ASGI**(와이어 전송), **Starlette**(HTTP 라우팅과 미들웨어), **Pydantic v2**(데이터 검증과 직렬화) — 의 의도된 합성입니다. 각 계층이 무엇을 책임지고, 계층 사이의 경계를 무엇이 가로지르는지 이해하는 것이, FastAPI를 마법으로 다루느냐 확장 가능한 글루로 다루느냐의 차이를 만듭니다.
+FastAPI는 세 가지 기반 위에 구축된 현대적인 Python 웹 프레임워크입니다:
 
-- **(A) ASGI** — WSGI를 대체하는 비동기 인지 Python 웹 서버 인터페이스.
-- **(B) Starlette와 Pydantic의 분리** — HTTP와 데이터 검증이 다른 관심사인 이유.
-- **(C) 스키마 원천으로서의 타입 힌트** — Python 어노테이션이 어떻게 JSON Schema, OpenAPI, 런타임 검증기로 바뀌는가.
+1. **타입 힌트(Type hints)** (Python 3.7+): 파라미터에 타입이 지정되어 자동 유효성 검사와 문서화가 가능합니다
+2. **Starlette**: 아래에서 HTTP와 WebSocket 연결을 처리하는 ASGI 프레임워크
+3. **Pydantic v2**: Python 타입 어노테이션을 사용한 데이터 유효성 검사와 직렬화
 
-### A. ASGI: 비동기 서버 인터페이스
+```
+┌─────────────────────────────────┐
+│         사용자 애플리케이션        │
+│   (엔드포인트, 비즈니스 로직)     │
+├─────────────────────────────────┤
+│           FastAPI                │
+│   (라우팅, DI, OpenAPI 생성)     │
+├─────────────────────────────────┤
+│          Starlette               │
+│   (ASGI, 미들웨어, 응답)         │
+├─────────────────────────────────┤
+│      Pydantic v2                 │
+│   (유효성 검사, 직렬화)          │
+├─────────────────────────────────┤
+│    Uvicorn (ASGI 서버)           │
+│   (이벤트 루프, HTTP 파싱)        │
+└─────────────────────────────────┘
+```
+
+### 이론: ASGI: 비동기 서버 인터페이스
 
 ASGI(Asynchronous Server Gateway Interface)는 서버(Uvicorn, Hypercorn, Daphne)와 애플리케이션(FastAPI, Starlette, Django Channels)이 대화하는 계약입니다. WSGI의 정신적 후속이며, 중요한 구조적 변화 세 가지가 있습니다.
 
@@ -95,140 +112,6 @@ ASGI는 애플리케이션 자체를 코루틴으로 만들고 메시지 교환�
 ```
 
 헤더는 첫 본문 청크 이전에 보내야 합니다. 본문은 스트리밍을 위해 여러 청크로 나눌 수 있습니다. 이것이 별도의 서버 협력 없이 `StreamingResponse`와 Server-Sent Events를 가능하게 하는 메커니즘입니다 — 그것들은 루프 안에서 방출되는 평범한 ASGI 바이트 청크일 뿐입니다.
-
-### B. Starlette와 Pydantic의 분리
-
-FastAPI의 가장 중요한 아키텍처 결정은 *직접 하지 않는 것*이 무엇인가입니다. 웹 프레임워크의 두 큰 일 — HTTP 처리와 데이터 검증 — 은 두 개의 다른 라이브러리가 소유합니다. FastAPI는 그들을 엮어 타입 힌트로 노출하는 계층입니다.
-
-#### B.1 Starlette가 책임지는 것
-
-Starlette는 FastAPI 아래의 ASGI 앱입니다. HTTP 모양의 모든 것을 책임집니다.
-
-- **라우팅** — `request.path`를 등록된 URL 패턴과 매칭.
-- **미들웨어** — 양파 모양의 요청/응답 변환(CORS, GZip, 세션, 인증).
-- **Request와 Response 객체** — 원시 ASGI 메시지에 대한 타입 래퍼.
-- **WebSocket 지원** — 양방향 메시지 프로토콜.
-- **백그라운드 태스크** — 응답 송신 후 실행되도록 스케줄된 작업.
-- **TestClient** — 네트워크를 완전히 건너뛰는 in-process HTTP 클라이언트.
-
-FastAPI 없이 Starlette를 직접 사용할 수도 있습니다. FastAPI는 그 위에 타입 계층을 더할 뿐입니다. 반대로, 모든 FastAPI 앱은 *동시에* Starlette 앱입니다 — `from fastapi import FastAPI; app = FastAPI()`는 `Starlette` 서브클래스를 반환하므로 모든 Starlette 미들웨어와 프리미티브가 그대로 동작합니다.
-
-#### B.2 Pydantic이 책임지는 것
-
-Pydantic v2는 Rust로 작성된 데이터 검증·직렬화 라이브러리입니다(v2 코어 `pydantic-core`가 Rust 크레이트입니다). 다음을 책임집니다.
-
-- **스키마 정의** — 타입 힌트가 있는 Python 클래스 문법으로 데이터 모양 선언.
-- **파싱** — 임의 입력(dict, JSON 바이트, query string)을 받아 타입이 있는 Python 객체로 변환.
-- **검증** — 스키마와 일치하지 않는 입력을 구조화된 오류 보고와 함께 거부.
-- **직렬화** — 타입이 있는 Python 객체를 다시 dict, JSON 등으로 변환.
-- **JSON Schema 생성** — 모델을 기술하는 JSON Schema 문서 방출.
-
-Pydantic은 HTTP에 대해 아무것도 모릅니다. 설정 파일, 메시지 큐 페이로드, ML 파이프라인 I/O 등 검증이 필요한 타입 데이터가 있는 어디서나 사용할 수 있습니다.
-
-#### B.3 FastAPI 자체가 책임지는 것
-
-FastAPI는 *글루*입니다. 다음을 받아서
-
-```python
-@app.post("/items/")
-async def create_item(item: Item, q: int | None = None) -> Item:
-    ...
-```
-
-시작 시점에 이 함수의 타입 힌트를 `inspect.signature`와 `typing.get_type_hints`로 검사합니다. 그 힌트로부터 다음을 구축합니다.
-
-1. 생성된 래퍼를 호출하는 **Starlette 라우트**.
-2. 요청 본문을 파싱하는 `Item`용 **Pydantic 검증기**.
-3. 문자열을 `int`로 변환하고 `Optional` 의미를 적용하는 `q`용 **쿼리 파라미터 파서**.
-4. 반환된 `Item`을 Pydantic을 통해 다시 JSON으로 변환하는 **응답 직렬화기**.
-5. 같은 Pydantic 모델로부터 파생된 요청 본문 스키마와 응답 스키마를 포함하는, 이 라우트용 **OpenAPI 스키마 조각**.
-
-핸들러 자신은 완전히 타입이 있는 `item: Item` 인자만 봅니다. 수동 `request.json()`도, 수동 `dict.get("title")`도, 누락 필드에 대한 수동 오류 처리도 없습니다. 검증, 직렬화, 문서화 모두가 IDE 자동 완성에 쓰이는 *같은* 타입 어노테이션에서 파생됩니다.
-
-### C. 스키마 원천으로서의 타입 힌트
-
-FastAPI의 가장 깊은 설계 아이디어는, 함수의 타입 시그니처가 *실행 가능한 명세*라는 것입니다. 원래 정적 분석 보조(mypy, pyright)였던 Python 타입 힌트가, 검증·문서·의존성 주입을 구동하는 런타임 메타데이터가 됩니다.
-
-#### C.1 인트로스펙션 파이프라인
-
-핸들러를 데코레이트하면
-
-```python
-async def get_item(item_id: int, q: str | None = Query(None, max_length=50)) -> ItemOut:
-    ...
-```
-
-FastAPI는 앱 시작 시 다음 파이프라인을 돌립니다.
-
-1. `inspect.signature(get_item)`이 인자별 `Parameter`를 가진 `Signature` 객체를 가져옵니다.
-2. `typing.get_type_hints(get_item, include_extras=True)`가 문자열 어노테이션과 PEP 593 `Annotated` 부가 정보를 해석합니다.
-3. 각 파라미터에 대해 FastAPI는 그 타입과 `Param` 마커(`Path`, `Query`, `Header`, `Body`, `Depends`)를 살핍니다.
-   - `int`, `str` 같은 원시 스칼라 → 타입 강제 변환이 있는 쿼리/경로 파라미터.
-   - Pydantic `BaseModel` → 요청 본문, Pydantic으로 파싱.
-   - `Depends(callable)` → 의존성 주입 노드(레슨 03 참조).
-4. 반환 어노테이션 `-> ItemOut`은 응답 모델이 됩니다 — 직렬화에 사용되고, OpenAPI에서는 `responses` 스키마로 사용됩니다.
-5. 이 모든 것이 라우트에 캐시되므로, 요청당 작업은 그저 "캐시된 검증기와 캐시된 직렬화기를 호출"하는 것뿐입니다.
-
-비용은 시작 시 한 번 치릅니다. 요청당 오버헤드는 Pydantic v2의 Rust 검증기가 지배하며, 손으로 쓴 `if isinstance(...)` 검사와 한 자리수 차이 안에 있습니다.
-
-#### C.2 "컴파일 타임" 보장 — 그리고 그 한계
-
-타입 힌트는 Python에서 진짜로 컴파일 타임이 아닙니다. 런타임 메타데이터입니다. 하지만 FastAPI가 시작 시점에 이를 검사하므로, 잘못된 시그니처는 첫 요청이 아니라 *애플리케이션 부팅* 시점에 실패합니다. 존재하지 않는 의존성을 참조하거나 순환 import가 있는 Pydantic 모델을 사용하면, 앱은 시작을 거부합니다. 이는 한 부류의 오류를 프로덕션에서 CI로 옮기는 효과가 있습니다.
-
-타입 힌트가 잡지 못하는 것:
-
-- **필드 간 검증.** "`end_date`는 `start_date` 이후여야 한다"는 타입이 아니라 Pydantic `@model_validator`가 필요합니다.
-- **비즈니스 규칙 위반.** "사용자는 10개 이상의 아이템을 만들 수 없다"는 핸들러 안의 런타임 검사입니다.
-- **외부 시스템 계약.** Pydantic은 모양을 검증할 뿐, 데이터베이스에 그 ID의 행이 있는지는 모릅니다.
-
-올바른 멘탈 모델: 타입 힌트는 *구조적* 정확성을 자동으로 다루고, 의미적 정확성은 여전히 여러분의 일입니다.
-
-#### C.3 OpenAPI: 같은 스키마, 두 출력
-
-OpenAPI(예전 Swagger)는 모든 엔드포인트, 파라미터, 응답 모양을 기술하는 JSON 문서입니다. FastAPI는 이를 검증을 구동하는 같은 타입 힌트로부터 즉석에서 생성합니다. 이로써 단일 진실 원천(single source of truth)이 생깁니다. Pydantic 모델을 바꾸는 그 순간, 검증기, 직렬화기, `/docs`의 문서, 생성된 클라이언트 SDK가 모두 함께 갱신됩니다.
-
-이는 Django REST Framework나 Express와 구조적으로 다릅니다. 거기서는 API와 그 문서가 별도의 산출물이며 서로 어긋나기 마련입니다. 어긋남은 절차의 실패가 아니라, 같은 사실에 대한 진실 원천이 둘이라는 자연스러운 결과입니다.
-
-### 이론에서 아래 코드로
-
-뒤에 나오는 각 절은 이 틀의 한 조각을 구체화합니다.
-
-- §1 (FastAPI란 무엇인가)은 §B의 세 계층을 명명합니다.
-- §2 (첫 앱)은 §A.1의 ASGI callable에 `@app.get` 데코레이터를 입힌 것입니다.
-- §3 (경로/쿼리 파라미터)는 §C.1의 타입 힌트 인트로스펙션을 스칼라 인자에 적용한 것입니다.
-- §4 (요청 본문)은 §B.2의 `BaseModel`을 §C.1의 Pydantic 검증기에 끼운 것입니다.
-- §5 (응답 모델과 상태 코드)는 §C.1의 반환 어노테이션 절반에, 레슨 01의 §A.2 상태 코드 의미를 더한 것입니다.
-- §6 (OpenAPI 문서)은 §C.3에서 기술한 스키마 방출 출력입니다.
-- §7 (CORS)는 §B.1의 Starlette 미들웨어 하나를 FastAPI 표면을 통해 구성한 것입니다.
-
----
-
-## 1. FastAPI란 무엇인가
-
-FastAPI는 세 가지 기반 위에 구축된 현대적인 Python 웹 프레임워크입니다:
-
-1. **타입 힌트(Type hints)** (Python 3.7+): 파라미터에 타입이 지정되어 자동 유효성 검사와 문서화가 가능합니다
-2. **Starlette**: 아래에서 HTTP와 WebSocket 연결을 처리하는 ASGI 프레임워크
-3. **Pydantic v2**: Python 타입 어노테이션을 사용한 데이터 유효성 검사와 직렬화
-
-```
-┌─────────────────────────────────┐
-│         사용자 애플리케이션        │
-│   (엔드포인트, 비즈니스 로직)     │
-├─────────────────────────────────┤
-│           FastAPI                │
-│   (라우팅, DI, OpenAPI 생성)     │
-├─────────────────────────────────┤
-│          Starlette               │
-│   (ASGI, 미들웨어, 응답)         │
-├─────────────────────────────────┤
-│      Pydantic v2                 │
-│   (유효성 검사, 직렬화)          │
-├─────────────────────────────────┤
-│    Uvicorn (ASGI 서버)           │
-│   (이벤트 루프, HTTP 파싱)        │
-└─────────────────────────────────┘
-```
 
 ### FastAPI를 선택하는 이유
 
@@ -301,6 +184,50 @@ uvicorn main:app --reload --port 8000
 
 ## 3. 경로 파라미터와 쿼리 파라미터
 
+### 이론: 스키마 원천으로서의 타입 힌트
+
+FastAPI의 가장 깊은 설계 아이디어는, 함수의 타입 시그니처가 *실행 가능한 명세*라는 것입니다. 원래 정적 분석 보조(mypy, pyright)였던 Python 타입 힌트가, 검증·문서·의존성 주입을 구동하는 런타임 메타데이터가 됩니다.
+
+#### C.1 인트로스펙션 파이프라인
+
+핸들러를 데코레이트하면
+
+```python
+async def get_item(item_id: int, q: str | None = Query(None, max_length=50)) -> ItemOut:
+    ...
+```
+
+FastAPI는 앱 시작 시 다음 파이프라인을 돌립니다.
+
+1. `inspect.signature(get_item)`이 인자별 `Parameter`를 가진 `Signature` 객체를 가져옵니다.
+2. `typing.get_type_hints(get_item, include_extras=True)`가 문자열 어노테이션과 PEP 593 `Annotated` 부가 정보를 해석합니다.
+3. 각 파라미터에 대해 FastAPI는 그 타입과 `Param` 마커(`Path`, `Query`, `Header`, `Body`, `Depends`)를 살핍니다.
+   - `int`, `str` 같은 원시 스칼라 → 타입 강제 변환이 있는 쿼리/경로 파라미터.
+   - Pydantic `BaseModel` → 요청 본문, Pydantic으로 파싱.
+   - `Depends(callable)` → 의존성 주입 노드(레슨 03 참조).
+4. 반환 어노테이션 `-> ItemOut`은 응답 모델이 됩니다 — 직렬화에 사용되고, OpenAPI에서는 `responses` 스키마로 사용됩니다.
+5. 이 모든 것이 라우트에 캐시되므로, 요청당 작업은 그저 "캐시된 검증기와 캐시된 직렬화기를 호출"하는 것뿐입니다.
+
+비용은 시작 시 한 번 치릅니다. 요청당 오버헤드는 Pydantic v2의 Rust 검증기가 지배하며, 손으로 쓴 `if isinstance(...)` 검사와 한 자리수 차이 안에 있습니다.
+
+#### C.2 "컴파일 타임" 보장 — 그리고 그 한계
+
+타입 힌트는 Python에서 진짜로 컴파일 타임이 아닙니다. 런타임 메타데이터입니다. 하지만 FastAPI가 시작 시점에 이를 검사하므로, 잘못된 시그니처는 첫 요청이 아니라 *애플리케이션 부팅* 시점에 실패합니다. 존재하지 않는 의존성을 참조하거나 순환 import가 있는 Pydantic 모델을 사용하면, 앱은 시작을 거부합니다. 이는 한 부류의 오류를 프로덕션에서 CI로 옮기는 효과가 있습니다.
+
+타입 힌트가 잡지 못하는 것:
+
+- **필드 간 검증.** "`end_date`는 `start_date` 이후여야 한다"는 타입이 아니라 Pydantic `@model_validator`가 필요합니다.
+- **비즈니스 규칙 위반.** "사용자는 10개 이상의 아이템을 만들 수 없다"는 핸들러 안의 런타임 검사입니다.
+- **외부 시스템 계약.** Pydantic은 모양을 검증할 뿐, 데이터베이스에 그 ID의 행이 있는지는 모릅니다.
+
+올바른 멘탈 모델: 타입 힌트는 *구조적* 정확성을 자동으로 다루고, 의미적 정확성은 여전히 여러분의 일입니다.
+
+#### C.3 OpenAPI: 같은 스키마, 두 출력
+
+OpenAPI(예전 Swagger)는 모든 엔드포인트, 파라미터, 응답 모양을 기술하는 JSON 문서입니다. FastAPI는 이를 검증을 구동하는 같은 타입 힌트로부터 즉석에서 생성합니다. 이로써 단일 진실 원천(single source of truth)이 생깁니다. Pydantic 모델을 바꾸는 그 순간, 검증기, 직렬화기, `/docs`의 문서, 생성된 클라이언트 SDK가 모두 함께 갱신됩니다.
+
+이는 Django REST Framework나 Express와 구조적으로 다릅니다. 거기서는 API와 그 문서가 별도의 산출물이며 서로 어긋나기 마련입니다. 어긋남은 절차의 실패가 아니라, 같은 사실에 대한 진실 원천이 둘이라는 자연스러운 결과입니다.
+
 ### 경로 파라미터(Path Parameters)
 
 경로 파라미터는 URL의 일부로 **필수**입니다. FastAPI는 이를 선언된 타입으로 자동 변환합니다.
@@ -324,7 +251,6 @@ async def get_user(
     """ID로 사용자를 조회합니다.
     user_id가 유효한 int가 아니면 FastAPI가 자동으로 422를 반환합니다."""
     return {"user_id": user_id, "name": f"User {user_id}"}
-
 
 # 타입 강제 적용이 있는 다중 경로 파라미터
 @app.get("/users/{user_id}/posts/{post_id}")
@@ -410,6 +336,55 @@ GET /users/42/posts?page=2&sort=date
 
 `POST`, `PUT`, `PATCH` 요청에서 클라이언트는 요청 본문에 데이터를 전송합니다. FastAPI는 Pydantic 모델을 사용하여 이 데이터를 검증하고 파싱합니다.
 
+### 이론: Starlette와 Pydantic의 분리
+
+FastAPI의 가장 중요한 아키텍처 결정은 *직접 하지 않는 것*이 무엇인가입니다. 웹 프레임워크의 두 큰 일 — HTTP 처리와 데이터 검증 — 은 두 개의 다른 라이브러리가 소유합니다. FastAPI는 그들을 엮어 타입 힌트로 노출하는 계층입니다.
+
+#### B.1 Starlette가 책임지는 것
+
+Starlette는 FastAPI 아래의 ASGI 앱입니다. HTTP 모양의 모든 것을 책임집니다.
+
+- **라우팅** — `request.path`를 등록된 URL 패턴과 매칭.
+- **미들웨어** — 양파 모양의 요청/응답 변환(CORS, GZip, 세션, 인증).
+- **Request와 Response 객체** — 원시 ASGI 메시지에 대한 타입 래퍼.
+- **WebSocket 지원** — 양방향 메시지 프로토콜.
+- **백그라운드 태스크** — 응답 송신 후 실행되도록 스케줄된 작업.
+- **TestClient** — 네트워크를 완전히 건너뛰는 in-process HTTP 클라이언트.
+
+FastAPI 없이 Starlette를 직접 사용할 수도 있습니다. FastAPI는 그 위에 타입 계층을 더할 뿐입니다. 반대로, 모든 FastAPI 앱은 *동시에* Starlette 앱입니다 — `from fastapi import FastAPI; app = FastAPI()`는 `Starlette` 서브클래스를 반환하므로 모든 Starlette 미들웨어와 프리미티브가 그대로 동작합니다.
+
+#### B.2 Pydantic이 책임지는 것
+
+Pydantic v2는 Rust로 작성된 데이터 검증·직렬화 라이브러리입니다(v2 코어 `pydantic-core`가 Rust 크레이트입니다). 다음을 책임집니다.
+
+- **스키마 정의** — 타입 힌트가 있는 Python 클래스 문법으로 데이터 모양 선언.
+- **파싱** — 임의 입력(dict, JSON 바이트, query string)을 받아 타입이 있는 Python 객체로 변환.
+- **검증** — 스키마와 일치하지 않는 입력을 구조화된 오류 보고와 함께 거부.
+- **직렬화** — 타입이 있는 Python 객체를 다시 dict, JSON 등으로 변환.
+- **JSON Schema 생성** — 모델을 기술하는 JSON Schema 문서 방출.
+
+Pydantic은 HTTP에 대해 아무것도 모릅니다. 설정 파일, 메시지 큐 페이로드, ML 파이프라인 I/O 등 검증이 필요한 타입 데이터가 있는 어디서나 사용할 수 있습니다.
+
+#### B.3 FastAPI 자체가 책임지는 것
+
+FastAPI는 *글루*입니다. 다음을 받아서
+
+```python
+@app.post("/items/")
+async def create_item(item: Item, q: int | None = None) -> Item:
+    ...
+```
+
+시작 시점에 이 함수의 타입 힌트를 `inspect.signature`와 `typing.get_type_hints`로 검사합니다. 그 힌트로부터 다음을 구축합니다.
+
+1. 생성된 래퍼를 호출하는 **Starlette 라우트**.
+2. 요청 본문을 파싱하는 `Item`용 **Pydantic 검증기**.
+3. 문자열을 `int`로 변환하고 `Optional` 의미를 적용하는 `q`용 **쿼리 파라미터 파서**.
+4. 반환된 `Item`을 Pydantic을 통해 다시 JSON으로 변환하는 **응답 직렬화기**.
+5. 같은 Pydantic 모델로부터 파생된 요청 본문 스키마와 응답 스키마를 포함하는, 이 라우트용 **OpenAPI 스키마 조각**.
+
+핸들러 자신은 완전히 타입이 있는 `item: Item` 인자만 봅니다. 수동 `request.json()`도, 수동 `dict.get("title")`도, 누락 필드에 대한 수동 오류 처리도 없습니다. 검증, 직렬화, 문서화 모두가 IDE 자동 완성에 쓰이는 *같은* 타입 어노테이션에서 파생됩니다.
+
 ### 기본 Pydantic 모델
 
 ```python
@@ -450,7 +425,6 @@ class UserCreate(BaseModel):
         if not stripped:
             raise ValueError("Name cannot be empty or whitespace-only")
         return stripped
-
 
 class UserResponse(BaseModel):
     """클라이언트에 사용자 데이터를 반환하기 위한 스키마.

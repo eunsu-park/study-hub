@@ -14,8 +14,6 @@
 
 ## Table of Contents
 
-Before the deployment reference, read [**Theory & Principles**](#theory--principles) — the 12-Factor App methodology that drives modern deployment, the deployment strategies (blue/green, canary, rolling) compared by their tradeoffs, and the health-check + graceful-shutdown contracts that make zero-downtime deploys possible.
-
 1. [ASGI Servers: Uvicorn and Hypercorn](#1-asgi-servers-uvicorn-and-hypercorn)
 2. [WSGI Servers: Gunicorn](#2-wsgi-servers-gunicorn)
 3. [PM2 for Node.js](#3-pm2-for-nodejs)
@@ -26,182 +24,6 @@ Before the deployment reference, read [**Theory & Principles**](#theory--princip
 8. [Environment Configuration (12-Factor App)](#8-environment-configuration-12-factor-app)
 9. [SSL/TLS Termination](#9-ssltls-termination)
 10. [Practice Problems](#10-practice-problems)
-
----
-
-## Theory & Principles
-
-Production deployment looks like a long checklist of unrelated tools (Gunicorn, nginx, Docker, Kubernetes), but each tool answers one of three foundational questions. Knowing the questions reduces the surface area dramatically.
-
-- **(A) The 12-Factor App methodology** — twelve principles that make apps deployable, scalable, and observable on any modern platform.
-- **(B) Deployment strategies compared** — blue/green vs canary vs rolling, picked by risk tolerance and rollback speed.
-- **(C) Health checks + graceful shutdown** — the contract that lets the orchestrator route traffic safely.
-
-### A. The 12-Factor App Methodology
-
-Originally written by Heroku in 2011, the 12 factors are still the de-facto standard for "deployable backend service". They are not a Heroku trick — Kubernetes, Cloud Run, ECS, and every modern PaaS expect apps to follow them.
-
-#### A.1 The twelve factors at a glance
-
-| # | Factor | Concrete meaning |
-|---|--------|------------------|
-| 1 | Codebase | One codebase per app, tracked in version control. |
-| 2 | Dependencies | Explicit declaration (`requirements.txt`, `package.json`), no system packages. |
-| 3 | Config | Environment variables, never in code. |
-| 4 | Backing services | Database, cache, queue all attached as URLs from env. |
-| 5 | Build, release, run | Three strict stages, never combined. |
-| 6 | Processes | App is one or more *stateless* processes; share state via backing services. |
-| 7 | Port binding | App exports HTTP itself by binding to a port (no Apache modules). |
-| 8 | Concurrency | Scale by adding processes, not by making one process bigger. |
-| 9 | Disposability | Fast startup, graceful shutdown on SIGTERM. |
-| 10 | Dev/prod parity | Same OS, same dependencies, same backing services in dev and prod. |
-| 11 | Logs | Stream to stdout; the platform handles aggregation. |
-| 12 | Admin processes | One-off scripts run with the same code/config. |
-
-#### A.2 The three load-bearing factors
-
-Factors 3, 6, and 11 do most of the work for modern deployments:
-
-- **3 (config in env).** No `if production: ...` branches in code. The same Docker image runs in dev, staging, prod — only the env vars change. This is what makes container-based deployment work.
-- **6 (stateless processes).** The app keeps no in-memory state that must survive a restart. State lives in the database, the cache, the object store. This is what makes horizontal scaling and zero-downtime deploys work.
-- **11 (logs to stdout).** The app writes logs as a stream of events to stdout. The platform (Docker, Kubernetes, systemd-journald) collects, routes, indexes them. The app does not know whether logs end up in stdout-only or in Elasticsearch.
-
-#### A.3 The factor most apps still violate
-
-Factor 6 (stateless processes) is the most commonly violated. Sticky sessions, in-memory caches that "are fine because we only run one instance", file uploads stored on local disk — all break the moment you scale to two replicas. The discipline: **assume your app runs as N replicas, even when you currently run 1**. That assumption forces the right design.
-
-### B. Deployment Strategies
-
-When you push new code to production, the strategy you use determines:
-
-- How fast the change reaches all users.
-- What happens if the change is broken.
-- How fast you can roll back.
-
-Three strategies dominate.
-
-#### B.1 Rolling deployment (the default)
-
-Replace replicas one at a time:
-
-```
-Time:  ──────────►
-v1: [v1] [v1] [v1] [v1] [v1]
-       ↓ replace one at a time
-v2: [v2] [v1] [v1] [v1] [v1]
-v2: [v2] [v2] [v1] [v1] [v1]
-...
-v2: [v2] [v2] [v2] [v2] [v2]
-```
-
-Pros: simple, no extra capacity needed, smooth traffic transition.
-
-Cons: while rolling, both versions serve traffic — schema migrations and API contract changes must be backward compatible. Rollback is "deploy v1 again", which takes the same time as the original deployment.
-
-This is what Kubernetes' default `Deployment` does.
-
-#### B.2 Blue/green deployment
-
-Stand up a complete second environment (green) running the new version, while the current environment (blue) keeps serving traffic. Switch the load balancer to green when ready.
-
-```
-Blue (v1): [v1] [v1] [v1]  ← all traffic
-Green (v2): [v2] [v2] [v2]  ← idle, healthy
-                ↓ flip load balancer
-Blue (v1): [v1] [v1] [v1]  ← idle (kept for rollback)
-Green (v2): [v2] [v2] [v2]  ← all traffic
-```
-
-Pros: instant rollback (flip the load balancer back), no mixed-version state during transition.
-
-Cons: 2× capacity required, complex if there are stateful backing services to coordinate.
-
-#### B.3 Canary deployment
-
-Route a small fraction of traffic to the new version first; if metrics look good, increase the fraction; otherwise roll back.
-
-```
-Time:    ──────────►
-v1: 100%  → 95%  → 50%  → 0%
-v2:   0%  →  5%  → 50%  → 100%
-              ↑ check metrics at each step
-```
-
-Pros: blast radius of a bad deploy is limited to the canary fraction. You catch real-world failures before they affect everyone.
-
-Cons: needs traffic-splitting infrastructure (service mesh, smart load balancer, ingress controller). Needs reliable per-version metrics to make the rollout decision.
-
-#### B.4 Picking a strategy
-
-| Risk tolerance | Strategy |
-|----------------|----------|
-| Low (consumer-facing, large user base) | Canary |
-| Medium (internal app) | Blue/green |
-| Low cost / fast iteration | Rolling |
-| Stateful systems with hard cutover | Blue/green with maintenance window |
-
-The unsexy truth: most teams use rolling because it is the platform default and it works. The decision matters most for the top 1% of risky deploys.
-
-### C. Health Checks and Graceful Shutdown
-
-Zero-downtime deployment depends on two contracts between the app and the orchestrator. Both are simple HTTP/signal protocols, but getting them right is the difference between "deploys are scary" and "deploys are routine".
-
-#### C.1 Liveness vs readiness
-
-Two distinct health checks, often confused:
-
-- **Liveness probe** — "Are you alive?" If this fails, the orchestrator restarts the container. Fail when the process is in an unrecoverable state (deadlock, OOM, internal corruption).
-- **Readiness probe** — "Are you ready to serve traffic?" If this fails, the orchestrator stops sending traffic but does NOT restart. Fail during startup before dependencies are connected, during shutdown after SIGTERM, or when a dependency (DB, cache) is temporarily unreachable.
-
-The mistake to avoid: using one probe for both. A liveness check that fails when the database is down causes the orchestrator to restart the container — which does not fix the database, but does kick off a thundering herd of restarts.
-
-```python
-@app.get("/healthz/live")  # liveness — minimal
-async def liveness():
-    return {"status": "ok"}
-
-@app.get("/healthz/ready")  # readiness — depend on real deps
-async def readiness():
-    if not db_pool.is_healthy(): raise HTTPException(503)
-    return {"status": "ok"}
-```
-
-#### C.2 Graceful shutdown on SIGTERM
-
-When the orchestrator wants to stop a container, it sends SIGTERM. The app should:
-
-1. Mark itself "not ready" (readiness probe starts failing).
-2. Stop accepting new connections (close the listening socket).
-3. Wait for in-flight requests to finish (with a timeout).
-4. Release backing-service connections (DB pool drain, cache disconnect).
-5. Exit cleanly.
-
-If the app does not exit within `terminationGracePeriodSeconds` (default 30s in Kubernetes), the orchestrator sends SIGKILL — every in-flight request dies mid-flight.
-
-The framework hooks for this:
-
-- **FastAPI / Starlette**: lifespan context manager (`@asynccontextmanager`) — code after `yield` is the shutdown phase.
-- **Express**: `process.on('SIGTERM', ...)` plus closing `server` and `pool`.
-- **Django**: signal handlers at the WSGI/ASGI handler level.
-
-#### C.3 Why the readiness flip matters first
-
-Step 1 (readiness flip) is critical and often skipped. Without it, the load balancer keeps sending new requests *during* shutdown. Those requests get half-processed, then SIGKILLed. Marking yourself "not ready" tells the load balancer to stop routing — by the time you start declining connections in step 2, the load balancer has already drained you from rotation.
-
-The full sequence prevents the dropped-request race condition. With it, deploys are invisible to users; without it, every deploy breaks a few unlucky requests.
-
-### From Theory to the Code Below
-
-Each section that follows operationalizes one piece of this framework:
-
-- §1 (ASGI servers) and §2 (WSGI servers) are the §A.7 port-binding factor: app exports HTTP via Uvicorn / Gunicorn directly.
-- §3 (PM2) is the Node equivalent of §A.8 (concurrency) — process manager that runs N workers per host.
-- §4 (Reverse proxy with nginx) is the §A.7 boundary that does TLS termination, compression, and load balancing.
-- §5 (Docker containerization) bundles the app per §A.10 (dev/prod parity) — same image everywhere.
-- §6 (Docker Compose) wires §A.4 backing services into the local dev environment.
-- §7 (Health checks and graceful shutdown) is §C.1 and §C.2 in concrete code.
-- §8 (12-Factor app) walks the §A factors with examples per language/framework.
-- §9 (SSL/TLS termination) is the §C reverse-proxy responsibility plus HTTPS-everywhere security baseline.
 
 ---
 
@@ -493,6 +315,78 @@ server {
 
 ## 5. Docker Containerization
 
+### Theory: Deployment Strategies
+
+When you push new code to production, the strategy you use determines:
+
+- How fast the change reaches all users.
+- What happens if the change is broken.
+- How fast you can roll back.
+
+Three strategies dominate.
+
+#### B.1 Rolling deployment (the default)
+
+Replace replicas one at a time:
+
+```
+Time:  ──────────►
+v1: [v1] [v1] [v1] [v1] [v1]
+       ↓ replace one at a time
+v2: [v2] [v1] [v1] [v1] [v1]
+v2: [v2] [v2] [v1] [v1] [v1]
+...
+v2: [v2] [v2] [v2] [v2] [v2]
+```
+
+Pros: simple, no extra capacity needed, smooth traffic transition.
+
+Cons: while rolling, both versions serve traffic — schema migrations and API contract changes must be backward compatible. Rollback is "deploy v1 again", which takes the same time as the original deployment.
+
+This is what Kubernetes' default `Deployment` does.
+
+#### B.2 Blue/green deployment
+
+Stand up a complete second environment (green) running the new version, while the current environment (blue) keeps serving traffic. Switch the load balancer to green when ready.
+
+```
+Blue (v1): [v1] [v1] [v1]  ← all traffic
+Green (v2): [v2] [v2] [v2]  ← idle, healthy
+                ↓ flip load balancer
+Blue (v1): [v1] [v1] [v1]  ← idle (kept for rollback)
+Green (v2): [v2] [v2] [v2]  ← all traffic
+```
+
+Pros: instant rollback (flip the load balancer back), no mixed-version state during transition.
+
+Cons: 2× capacity required, complex if there are stateful backing services to coordinate.
+
+#### B.3 Canary deployment
+
+Route a small fraction of traffic to the new version first; if metrics look good, increase the fraction; otherwise roll back.
+
+```
+Time:    ──────────►
+v1: 100%  → 95%  → 50%  → 0%
+v2:   0%  →  5%  → 50%  → 100%
+              ↑ check metrics at each step
+```
+
+Pros: blast radius of a bad deploy is limited to the canary fraction. You catch real-world failures before they affect everyone.
+
+Cons: needs traffic-splitting infrastructure (service mesh, smart load balancer, ingress controller). Needs reliable per-version metrics to make the rollout decision.
+
+#### B.4 Picking a strategy
+
+| Risk tolerance | Strategy |
+|----------------|----------|
+| Low (consumer-facing, large user base) | Canary |
+| Medium (internal app) | Blue/green |
+| Low cost / fast iteration | Rolling |
+| Stateful systems with hard cutover | Blue/green with maintenance window |
+
+The unsexy truth: most teams use rolling because it is the platform default and it works. The decision matters most for the top 1% of risky deploys.
+
 ### Multi-Stage Build for Python (FastAPI)
 
 Multi-stage builds separate the build environment from the runtime environment, producing smaller and more secure images.
@@ -708,6 +602,54 @@ docker compose down -v
 
 ## 7. Health Checks and Graceful Shutdown
 
+### Theory: Health Checks and Graceful Shutdown
+
+Zero-downtime deployment depends on two contracts between the app and the orchestrator. Both are simple HTTP/signal protocols, but getting them right is the difference between "deploys are scary" and "deploys are routine".
+
+#### C.1 Liveness vs readiness
+
+Two distinct health checks, often confused:
+
+- **Liveness probe** — "Are you alive?" If this fails, the orchestrator restarts the container. Fail when the process is in an unrecoverable state (deadlock, OOM, internal corruption).
+- **Readiness probe** — "Are you ready to serve traffic?" If this fails, the orchestrator stops sending traffic but does NOT restart. Fail during startup before dependencies are connected, during shutdown after SIGTERM, or when a dependency (DB, cache) is temporarily unreachable.
+
+The mistake to avoid: using one probe for both. A liveness check that fails when the database is down causes the orchestrator to restart the container — which does not fix the database, but does kick off a thundering herd of restarts.
+
+```python
+@app.get("/healthz/live")  # liveness — minimal
+async def liveness():
+    return {"status": "ok"}
+
+@app.get("/healthz/ready")  # readiness — depend on real deps
+async def readiness():
+    if not db_pool.is_healthy(): raise HTTPException(503)
+    return {"status": "ok"}
+```
+
+#### C.2 Graceful shutdown on SIGTERM
+
+When the orchestrator wants to stop a container, it sends SIGTERM. The app should:
+
+1. Mark itself "not ready" (readiness probe starts failing).
+2. Stop accepting new connections (close the listening socket).
+3. Wait for in-flight requests to finish (with a timeout).
+4. Release backing-service connections (DB pool drain, cache disconnect).
+5. Exit cleanly.
+
+If the app does not exit within `terminationGracePeriodSeconds` (default 30s in Kubernetes), the orchestrator sends SIGKILL — every in-flight request dies mid-flight.
+
+The framework hooks for this:
+
+- **FastAPI / Starlette**: lifespan context manager (`@asynccontextmanager`) — code after `yield` is the shutdown phase.
+- **Express**: `process.on('SIGTERM', ...)` plus closing `server` and `pool`.
+- **Django**: signal handlers at the WSGI/ASGI handler level.
+
+#### C.3 Why the readiness flip matters first
+
+Step 1 (readiness flip) is critical and often skipped. Without it, the load balancer keeps sending new requests *during* shutdown. Those requests get half-processed, then SIGKILLed. Marking yourself "not ready" tells the load balancer to stop routing — by the time you start declining connections in step 2, the load balancer has already drained you from rotation.
+
+The full sequence prevents the dropped-request race condition. With it, deploys are invisible to users; without it, every deploy breaks a few unlucky requests.
+
 ### Health Check Endpoints
 
 Production deployments need health checks for load balancers, container orchestrators, and monitoring systems.
@@ -805,6 +747,39 @@ readinessProbe:
 ## 8. Environment Configuration (12-Factor App)
 
 The [12-Factor App](https://12factor.net/) methodology defines best practices for building cloud-native applications. Factor III --- **Config** --- states that configuration should be stored in the environment, not in code.
+
+### Theory: The 12-Factor App Methodology
+
+Originally written by Heroku in 2011, the 12 factors are still the de-facto standard for "deployable backend service". They are not a Heroku trick — Kubernetes, Cloud Run, ECS, and every modern PaaS expect apps to follow them.
+
+#### A.1 The twelve factors at a glance
+
+| # | Factor | Concrete meaning |
+|---|--------|------------------|
+| 1 | Codebase | One codebase per app, tracked in version control. |
+| 2 | Dependencies | Explicit declaration (`requirements.txt`, `package.json`), no system packages. |
+| 3 | Config | Environment variables, never in code. |
+| 4 | Backing services | Database, cache, queue all attached as URLs from env. |
+| 5 | Build, release, run | Three strict stages, never combined. |
+| 6 | Processes | App is one or more *stateless* processes; share state via backing services. |
+| 7 | Port binding | App exports HTTP itself by binding to a port (no Apache modules). |
+| 8 | Concurrency | Scale by adding processes, not by making one process bigger. |
+| 9 | Disposability | Fast startup, graceful shutdown on SIGTERM. |
+| 10 | Dev/prod parity | Same OS, same dependencies, same backing services in dev and prod. |
+| 11 | Logs | Stream to stdout; the platform handles aggregation. |
+| 12 | Admin processes | One-off scripts run with the same code/config. |
+
+#### A.2 The three load-bearing factors
+
+Factors 3, 6, and 11 do most of the work for modern deployments:
+
+- **3 (config in env).** No `if production: ...` branches in code. The same Docker image runs in dev, staging, prod — only the env vars change. This is what makes container-based deployment work.
+- **6 (stateless processes).** The app keeps no in-memory state that must survive a restart. State lives in the database, the cache, the object store. This is what makes horizontal scaling and zero-downtime deploys work.
+- **11 (logs to stdout).** The app writes logs as a stream of events to stdout. The platform (Docker, Kubernetes, systemd-journald) collects, routes, indexes them. The app does not know whether logs end up in stdout-only or in Elasticsearch.
+
+#### A.3 The factor most apps still violate
+
+Factor 6 (stateless processes) is the most commonly violated. Sticky sessions, in-memory caches that "are fine because we only run one instance", file uploads stored on local disk — all break the moment you scale to two replicas. The discipline: **assume your app runs as N replicas, even when you currently run 1**. That assumption forces the right design.
 
 ### Configuration Management with Pydantic Settings
 

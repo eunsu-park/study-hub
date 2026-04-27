@@ -18,8 +18,6 @@
 
 ## 목차
 
-프레임워크 참조에 들어가기 전에, [**이론과 원리**](#이론과-원리) 섹션을 먼저 읽어보세요. 모든 큐의 핵심에 있는 producer-consumer 패턴, 세 가지 전달 의미(at-most-once, at-least-once, exactly-once)와 두 번째를 실용적으로 만드는 idempotency key, 그리고 Kafka vs RabbitMQ 분산 큐 비교를 다룹니다.
-
 1. [작업 큐가 필요한 이유](#1-작업-큐가-필요한-이유)
 2. [Redis/RabbitMQ를 이용한 Celery](#2-redisrabbitmq를-이용한-celery)
 3. [Redis를 이용한 Bull/BullMQ](#3-redis를-이용한-bullbullmq)
@@ -34,15 +32,11 @@
 
 ---
 
-## 이론과 원리
+## 1. 작업 큐가 필요한 이유
 
-작업 큐는 지속성과 재시도를 가진 producer-consumer 패턴의 정전적 구현입니다. 이 레슨의 모든 흥미로운 결정 — at-most-once vs at-least-once, idempotency key, dead-letter queue, 우선순위 — 은 세 가지 기초 아이디어의 하류입니다.
+작업 큐(job queue)는 시간이 오래 걸리거나 신뢰할 수 없는 작업을 요청-응답 주기에서 분리한다. 사용자를 기다리게 하는 대신, 작업을 백그라운드 큐로 푸시하여 비동기적으로 처리한다.
 
-- **(A) 지속성 큐 위의 producer-consumer** — 기본 모양과 큐가 보호하는 실패 모드.
-- **(B) 전달 의미** — at-most-once, at-least-once, exactly-once, 그리고 "exactly-once"를 실용적으로 만드는 idempotency-key 패턴.
-- **(C) 비교된 분산 큐** — Redis(Celery, BullMQ), RabbitMQ, Kafka, 그리고 각각이 어디에 맞는지.
-
-### A. 지속성 큐 위의 Producer-Consumer
+### 이론: 지속성 큐 위의 Producer-Consumer
 
 패턴: producer가 작업을 큐에 넣고, consumer가 작업을 빼서 처리하고 acknowledge합니다. 그 사이의 큐는 *지속성*이 있습니다 — 양쪽의 충돌에서 살아남습니다.
 
@@ -93,130 +87,6 @@
 ```
 
 각 전이는 지속성 있습니다. 운영자가 "running" 작업(stuck 워커 찾기), "failed" 작업(재시도 카운터), "dead letter" 큐(재시도를 소진한 작업)를 검사할 수 있습니다. 셋 다 관측성에 결정적입니다 — 레슨 17 §7 참조.
-
-### B. 전달 의미
-
-큐가 작업을 재전달하면 consumer가 두 번 처리할 수 있습니다. 이는 충돌 복구의 결과입니다. 작업 도중에 사라진 워커가 실제로 작업을 완료했는지 *알* 방법이 없습니다. 세 가지 전달 계약.
-
-#### B.1 At-most-once
-
-Producer가 던지고 잊습니다. 큐가 재시도 보장을 하지 않습니다. 워커가 충돌하면 작업이 사라집니다.
-
-```
-producer → queue → consumer (충돌) → 아무것도 없음
-```
-
-작업을 잃어도 받아들일 수 있을 때 사용: 텔레메트리 샘플, "best-effort" 알림, 가치가 낮은 이벤트. 결제, 주문, 사용자가 보는 어떤 것에도 절대 사용하지 마세요.
-
-#### B.2 At-least-once
-
-기본값. 큐가 ACK될 때까지 재전달합니다. 작업은 *반드시* 성공합니다 — 그러나 한 번 이상 전달(그리고 처리)될 수 있습니다.
-
-```
-producer → queue → consumer (충돌) → queue 재전달 → consumer (성공, ACK)
-```
-
-이것이 거의 모든 워크로드에 올바른 기본값입니다. 또한 **consumer가 멱등이어야 한다**는 뜻입니다 — 같은 입력으로 두 번 실행해도 같은 결과를 만들어야 합니다. 그렇지 않으면 사용자가 이메일 두 개, 청구 두 번, 기록 두 개를 받습니다.
-
-#### B.3 Exactly-once: 정말로는 아니지만 — 실용적으로는 그렇다
-
-진정한 "exactly-once" 전달은 무한한 조정 없이는 분산 시스템에서 불가능합니다. 달성 가능한 것: **at-least-once 전달 + 멱등 consumer + idempotency key**, 사용자 관점에서 exactly-once처럼 동작합니다.
-
-Idempotency key 패턴:
-
-```python
-def send_email_job(idempotency_key, to, subject, body):
-    if processed_keys.exists(idempotency_key):
-        return  # 이미 완료; 건너뛰기
-    send_email(to, subject, body)
-    processed_keys.add(idempotency_key)
-```
-
-Producer가 논리적 작업당 고유 키(UUID)를 붙입니다. Consumer가 그 키가 처리되었는지 확인합니다. 그렇다면 no-op. 큐가 재전달하면 두 번째 워커가 `processed_keys`에서 키를 보고 건너뜁니다. 순 결과: 큐가 몇 번 전달했든 이메일이 한 번 보내집니다.
-
-Idempotency-key 패턴이 큐 기반 시스템에서 가장 중요한 단일 설계 규율입니다. 모든 consumer는 at-least-once 전달 아래에서 멱등이도록 설계되어야 합니다.
-
-#### B.4 재시도 전략
-
-작업이 실패하면 큐가 백오프와 함께 재시도합니다.
-
-```
-시도 1: 실패, 1s 후 재시도
-시도 2: 실패, 2s 후 재시도
-시도 3: 실패, 4s 후 재시도
-...
-시도 N: 실패 → dead-letter queue로 이동
-```
-
-지수 백오프는 어려움을 겪는 다운스트림 서비스에 대한 재시도 홍수를 막습니다. N번 시도(보통 5-10) 후 작업은 *dead-letter queue*(DLQ) — 사람의 검사를 위한 별도 큐 — 로 이동합니다. DLQ는 운영적으로 결정적입니다. 어떤 작업이 체계적으로 실패하는지를 잃지 않고 보여줍니다.
-
-### C. 비교된 분산 큐
-
-세 가지 큐 카테고리가 백엔드 생태계를 지배합니다. 각각이 다른 설계 중심을 갖습니다.
-
-#### C.1 Redis 기반 큐 (Celery, BullMQ, Sidekiq)
-
-Redis 리스트나 stream을 큐로 사용. 성질:
-
-- **장점:** 운영이 단순, 낮은 지연시간, 이미 캐싱을 위해 배포된 경우가 많음.
-- **단점:** Redis 지속성이 제한적(RDB 스냅샷, AOF append-only file). 충돌한 Redis가 최근에 ACK된 작업을 잃을 수 있음. 단일 노드 처리량 한계 ~100K 작업/s.
-- **최적:** Redis가 이미 스택에 있는 중소 앱.
-
-#### C.2 RabbitMQ (AMQP 기반)
-
-목적 빌트 메시지 브로커. 성질:
-
-- **장점:** 강한 전달 보장, 정교한 라우팅(exchange, binding), 메시지별 ACK, 내장 dead-letter exchange. 성숙한 운영 도구.
-- **단점:** 운영해야 할 또 다른 인프라 조각. 클러스터 설정이 사소하지 않음.
-- **최적:** 엔터프라이즈 메시징 기능, 복잡한 라우팅, 엄격한 전달 보장이 필요한 앱.
-
-Exchange/binding 모델은 fan-out(하나의 메시지를 여러 큐에), topic 기반 라우팅(regex 매칭), 또는 단순 direct 큐 — 모두 같은 브로커에서 — 를 구현하게 해줍니다.
-
-#### C.3 Kafka (로그 기반)
-
-전통적 큐가 *아닙니다* — *분산 commit log*입니다. Producer가 *topic*에 메시지를 append합니다. Consumer가 원하는 offset에서 읽습니다. 성질:
-
-- **장점:** 거대한 처리량(클러스터에서 초당 수백만 메시지), 지속성 있는 보유(메시지를 며칠/몇 주간 보관), reprocessing(어떤 offset으로든 되감기), partition 안에서 엄격한 순서.
-- **단점:** Redis나 RabbitMQ보다 더 높은 지연시간. 운영적으로 복잡(ZooKeeper나 KRaft, partitioning, consumer group). 낮은 양의 워크로드에는 과합니다.
-- **최적:** 이벤트 스트리밍, audit log, analytics 파이프라인, 보유와 replay가 중요한 어떤 것이든.
-
-#### C.4 Partitioning vs exchange
-
-Kafka와 RabbitMQ 사이의 가장 깊은 아키텍처 차이는 *메시지가 consumer에 어떻게 분배되는가*입니다.
-
-- **RabbitMQ exchange + queue.** 메시지가 라우팅 규칙에 따라 하나 이상의 큐로 갑니다. 각 큐가 자체 consumer를 가집니다. 순서는 큐별입니다.
-- **Kafka partition.** Topic이 partition으로 나뉩니다. 각 partition은 consumer group의 정확히 한 consumer가 소비합니다. 순서는 partition별입니다. 확장 = partition 추가 + consumer 추가.
-
-Kafka의 partitioning은 within-key 순서가 co-located 처리를 필요로 한다는 비용으로 자연스러운 수평 확장을 줍니다. RabbitMQ의 exchange 모델은 유연한 라우팅을 주지만 내장 partition 개념이 없습니다 — 여러 큐로 직접 만들어야 합니다.
-
-#### C.5 큐 고르기
-
-| 워크로드 | 큐 |
-|----------|-------|
-| 기존 Redis 사용 앱의 백그라운드 작업 | Redis 위 Celery / BullMQ |
-| 풍부한 라우팅이 있는 팀 간 메시징 | RabbitMQ |
-| 고볼륨 이벤트 스트림, 보유 중요 | Kafka |
-| AWS/GCP 네이티브 | SQS / Pub/Sub (위의 관리형 등가물) |
-
-### 이론에서 아래 패턴으로
-
-뒤에 나오는 각 절은 이 틀의 한 조각을 구체화합니다.
-
-- §1 (작업 큐가 필요한 이유)는 §A.1 producer-consumer 이야기를 판매합니다.
-- §2 (Celery + Redis/RabbitMQ)와 §3 (BullMQ)는 §C.1과 §C.2입니다 — 구체적인 프레임워크 + 브로커 짝.
-- §4 (작업 수명 주기)는 §A.3 enqueue → running → completed/dead-letter 전이를 따라갑니다.
-- §5 (우선순위 큐와 지연 작업)는 §A를 우선순위(heap 데이터 구조)와 시간(정렬된 set 데이터 구조)으로 확장합니다.
-- §6 (워커 확장)은 §C 분산 큐 처리량 이야기를 구체화합니다.
-- §7 (모니터링)은 §A.3 in-flight/dead-letter 검사에 워커에 적용된 레슨 17의 세 기둥을 더한 것입니다.
-- §8 (일반적인 패턴)은 §A 위에서 실행되는 애플리케이션 수준 모양(이메일, 이미지 처리, 리포트)입니다.
-- §9 (오류 처리와 재시도)는 §B.4 백오프 + DLQ를 구체적인 코드로.
-- §10 (신뢰성 패턴)은 §B.3의 idempotency-key 규율에 서비스 간 정확성을 위한 saga / outbox 패턴을 더한 것입니다.
-
----
-
-## 1. 작업 큐가 필요한 이유
-
-작업 큐(job queue)는 시간이 오래 걸리거나 신뢰할 수 없는 작업을 요청-응답 주기에서 분리한다. 사용자를 기다리게 하는 대신, 작업을 백그라운드 큐로 푸시하여 비동기적으로 처리한다.
 
 ### 작업 큐가 해결하는 문제
 
@@ -269,6 +139,54 @@ Kafka의 partitioning은 within-key 순서가 co-located 처리를 필요로 한
 ## 2. Redis/RabbitMQ를 이용한 Celery
 
 [Celery](https://docs.celeryq.dev/)는 Python에서 태스크 큐의 사실상 표준이다. Redis와 RabbitMQ를 메시지 브로커로 지원한다.
+
+### 이론: 비교된 분산 큐
+
+세 가지 큐 카테고리가 백엔드 생태계를 지배합니다. 각각이 다른 설계 중심을 갖습니다.
+
+#### C.1 Redis 기반 큐 (Celery, BullMQ, Sidekiq)
+
+Redis 리스트나 stream을 큐로 사용. 성질:
+
+- **장점:** 운영이 단순, 낮은 지연시간, 이미 캐싱을 위해 배포된 경우가 많음.
+- **단점:** Redis 지속성이 제한적(RDB 스냅샷, AOF append-only file). 충돌한 Redis가 최근에 ACK된 작업을 잃을 수 있음. 단일 노드 처리량 한계 ~100K 작업/s.
+- **최적:** Redis가 이미 스택에 있는 중소 앱.
+
+#### C.2 RabbitMQ (AMQP 기반)
+
+목적 빌트 메시지 브로커. 성질:
+
+- **장점:** 강한 전달 보장, 정교한 라우팅(exchange, binding), 메시지별 ACK, 내장 dead-letter exchange. 성숙한 운영 도구.
+- **단점:** 운영해야 할 또 다른 인프라 조각. 클러스터 설정이 사소하지 않음.
+- **최적:** 엔터프라이즈 메시징 기능, 복잡한 라우팅, 엄격한 전달 보장이 필요한 앱.
+
+Exchange/binding 모델은 fan-out(하나의 메시지를 여러 큐에), topic 기반 라우팅(regex 매칭), 또는 단순 direct 큐 — 모두 같은 브로커에서 — 를 구현하게 해줍니다.
+
+#### C.3 Kafka (로그 기반)
+
+전통적 큐가 *아닙니다* — *분산 commit log*입니다. Producer가 *topic*에 메시지를 append합니다. Consumer가 원하는 offset에서 읽습니다. 성질:
+
+- **장점:** 거대한 처리량(클러스터에서 초당 수백만 메시지), 지속성 있는 보유(메시지를 며칠/몇 주간 보관), reprocessing(어떤 offset으로든 되감기), partition 안에서 엄격한 순서.
+- **단점:** Redis나 RabbitMQ보다 더 높은 지연시간. 운영적으로 복잡(ZooKeeper나 KRaft, partitioning, consumer group). 낮은 양의 워크로드에는 과합니다.
+- **최적:** 이벤트 스트리밍, audit log, analytics 파이프라인, 보유와 replay가 중요한 어떤 것이든.
+
+#### C.4 Partitioning vs exchange
+
+Kafka와 RabbitMQ 사이의 가장 깊은 아키텍처 차이는 *메시지가 consumer에 어떻게 분배되는가*입니다.
+
+- **RabbitMQ exchange + queue.** 메시지가 라우팅 규칙에 따라 하나 이상의 큐로 갑니다. 각 큐가 자체 consumer를 가집니다. 순서는 큐별입니다.
+- **Kafka partition.** Topic이 partition으로 나뉩니다. 각 partition은 consumer group의 정확히 한 consumer가 소비합니다. 순서는 partition별입니다. 확장 = partition 추가 + consumer 추가.
+
+Kafka의 partitioning은 within-key 순서가 co-located 처리를 필요로 한다는 비용으로 자연스러운 수평 확장을 줍니다. RabbitMQ의 exchange 모델은 유연한 라우팅을 주지만 내장 partition 개념이 없습니다 — 여러 큐로 직접 만들어야 합니다.
+
+#### C.5 큐 고르기
+
+| 워크로드 | 큐 |
+|----------|-------|
+| 기존 Redis 사용 앱의 백그라운드 작업 | Redis 위 Celery / BullMQ |
+| 풍부한 라우팅이 있는 팀 간 메시징 | RabbitMQ |
+| 고볼륨 이벤트 스트림, 보유 중요 | Kafka |
+| AWS/GCP 네이티브 | SQS / Pub/Sub (위의 관리형 등가물) |
 
 ### 설정
 
@@ -548,6 +466,62 @@ const flow = await flowProducer.add({
 ## 4. 작업 수명 주기
 
 신뢰할 수 있는 시스템을 구축하기 위해 작업 수명 주기를 이해하는 것이 중요하다.
+
+### 이론: 전달 의미
+
+큐가 작업을 재전달하면 consumer가 두 번 처리할 수 있습니다. 이는 충돌 복구의 결과입니다. 작업 도중에 사라진 워커가 실제로 작업을 완료했는지 *알* 방법이 없습니다. 세 가지 전달 계약.
+
+#### B.1 At-most-once
+
+Producer가 던지고 잊습니다. 큐가 재시도 보장을 하지 않습니다. 워커가 충돌하면 작업이 사라집니다.
+
+```
+producer → queue → consumer (충돌) → 아무것도 없음
+```
+
+작업을 잃어도 받아들일 수 있을 때 사용: 텔레메트리 샘플, "best-effort" 알림, 가치가 낮은 이벤트. 결제, 주문, 사용자가 보는 어떤 것에도 절대 사용하지 마세요.
+
+#### B.2 At-least-once
+
+기본값. 큐가 ACK될 때까지 재전달합니다. 작업은 *반드시* 성공합니다 — 그러나 한 번 이상 전달(그리고 처리)될 수 있습니다.
+
+```
+producer → queue → consumer (충돌) → queue 재전달 → consumer (성공, ACK)
+```
+
+이것이 거의 모든 워크로드에 올바른 기본값입니다. 또한 **consumer가 멱등이어야 한다**는 뜻입니다 — 같은 입력으로 두 번 실행해도 같은 결과를 만들어야 합니다. 그렇지 않으면 사용자가 이메일 두 개, 청구 두 번, 기록 두 개를 받습니다.
+
+#### B.3 Exactly-once: 정말로는 아니지만 — 실용적으로는 그렇다
+
+진정한 "exactly-once" 전달은 무한한 조정 없이는 분산 시스템에서 불가능합니다. 달성 가능한 것: **at-least-once 전달 + 멱등 consumer + idempotency key**, 사용자 관점에서 exactly-once처럼 동작합니다.
+
+Idempotency key 패턴:
+
+```python
+def send_email_job(idempotency_key, to, subject, body):
+    if processed_keys.exists(idempotency_key):
+        return  # 이미 완료; 건너뛰기
+    send_email(to, subject, body)
+    processed_keys.add(idempotency_key)
+```
+
+Producer가 논리적 작업당 고유 키(UUID)를 붙입니다. Consumer가 그 키가 처리되었는지 확인합니다. 그렇다면 no-op. 큐가 재전달하면 두 번째 워커가 `processed_keys`에서 키를 보고 건너뜁니다. 순 결과: 큐가 몇 번 전달했든 이메일이 한 번 보내집니다.
+
+Idempotency-key 패턴이 큐 기반 시스템에서 가장 중요한 단일 설계 규율입니다. 모든 consumer는 at-least-once 전달 아래에서 멱등이도록 설계되어야 합니다.
+
+#### B.4 재시도 전략
+
+작업이 실패하면 큐가 백오프와 함께 재시도합니다.
+
+```
+시도 1: 실패, 1s 후 재시도
+시도 2: 실패, 2s 후 재시도
+시도 3: 실패, 4s 후 재시도
+...
+시도 N: 실패 → dead-letter queue로 이동
+```
+
+지수 백오프는 어려움을 겪는 다운스트림 서비스에 대한 재시도 홍수를 막습니다. N번 시도(보통 5-10) 후 작업은 *dead-letter queue*(DLQ) — 사람의 검사를 위한 별도 큐 — 로 이동합니다. DLQ는 운영적으로 결정적입니다. 어떤 작업이 체계적으로 실패하는지를 잃지 않고 보여줍니다.
 
 ### 상태 전환
 

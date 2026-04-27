@@ -14,8 +14,6 @@
 
 ## 목차
 
-배포 참조에 들어가기 전에, [**이론과 원리**](#이론과-원리) 섹션을 먼저 읽어보세요. 현대 배포를 구동하는 12-Factor App 방법론, 트레이드오프로 비교한 배포 전략(blue/green, canary, rolling), 그리고 무중단 배포를 가능하게 하는 헬스 체크 + graceful shutdown 계약을 다룹니다.
-
 1. [ASGI 서버: Uvicorn과 Hypercorn](#1-asgi-서버-uvicorn과-hypercorn)
 2. [WSGI 서버: Gunicorn](#2-wsgi-서버-gunicorn)
 3. [Node.js를 위한 PM2](#3-nodejs를-위한-pm2)
@@ -26,182 +24,6 @@
 8. [환경 설정 (12-팩터 앱)](#8-환경-설정-12-팩터-앱)
 9. [SSL/TLS 종료](#9-ssltls-종료)
 10. [연습 문제](#10-연습-문제)
-
----
-
-## 이론과 원리
-
-프로덕션 배포는 무관한 도구들(Gunicorn, nginx, Docker, Kubernetes)의 긴 체크리스트처럼 보이지만, 각 도구는 세 가지 기초 질문 중 하나에 답합니다. 질문을 알면 표면적이 극적으로 줄어듭니다.
-
-- **(A) 12-Factor App 방법론** — 모든 현대 플랫폼에서 앱을 배포·확장·관측 가능하게 만드는 12가지 원칙.
-- **(B) 비교된 배포 전략** — blue/green vs canary vs rolling, 위험 허용도와 롤백 속도로 선택.
-- **(C) 헬스 체크 + graceful shutdown** — 오케스트레이터가 트래픽을 안전하게 라우팅하게 해주는 계약.
-
-### A. 12-Factor App 방법론
-
-원래 Heroku가 2011년에 작성한 12 factors는 여전히 "배포 가능한 백엔드 서비스"의 사실상 표준입니다. Heroku 트릭이 아닙니다 — Kubernetes, Cloud Run, ECS, 모든 현대 PaaS가 앱이 이를 따르기를 기대합니다.
-
-#### A.1 12개 factor 한눈에
-
-| # | Factor | 구체적 의미 |
-|---|--------|------------------|
-| 1 | Codebase | 앱당 코드베이스 1개, 버전 관리에서 추적. |
-| 2 | Dependencies | 명시적 선언(`requirements.txt`, `package.json`), 시스템 패키지 사용 안 함. |
-| 3 | Config | 환경 변수, 코드 안에 절대 두지 않음. |
-| 4 | Backing services | 데이터베이스, 캐시, 큐 모두 env의 URL로 연결. |
-| 5 | Build, release, run | 세 개의 엄격한 단계, 절대 결합하지 않음. |
-| 6 | Processes | 앱은 하나 이상의 *무상태* 프로세스; 상태는 backing service로 공유. |
-| 7 | Port binding | 앱이 포트에 바인딩해 HTTP를 직접 export(Apache 모듈 없음). |
-| 8 | Concurrency | 한 프로세스를 더 크게 만들지 말고 프로세스를 추가해 확장. |
-| 9 | Disposability | 빠른 시작, SIGTERM 시 graceful shutdown. |
-| 10 | Dev/prod parity | dev와 prod에서 같은 OS, 같은 의존성, 같은 backing service. |
-| 11 | Logs | stdout으로 스트림; 플랫폼이 집계 처리. |
-| 12 | Admin processes | 일회성 스크립트도 같은 코드/config로 실행. |
-
-#### A.2 가장 큰 짐을 지는 세 가지 factor
-
-Factor 3, 6, 11이 현대 배포에서 가장 많은 일을 합니다.
-
-- **3 (env의 config).** 코드에 `if production: ...` 분기 없음. 같은 Docker 이미지가 dev, staging, prod에서 실행됩니다 — env 변수만 바뀝니다. 컨테이너 기반 배포가 작동하게 만드는 것.
-- **6 (무상태 프로세스).** 앱은 재시작에서 살아남아야 하는 메모리 내 상태를 보관하지 않습니다. 상태는 데이터베이스, 캐시, 객체 저장소에 삽니다. 수평 확장과 무중단 배포가 작동하게 만드는 것.
-- **11 (stdout으로 로그).** 앱은 로그를 이벤트 스트림으로 stdout에 씁니다. 플랫폼(Docker, Kubernetes, systemd-journald)이 수집·라우팅·인덱싱합니다. 앱은 로그가 stdout-only로 끝날지 Elasticsearch로 갈지 모릅니다.
-
-#### A.3 대부분의 앱이 여전히 위반하는 factor
-
-Factor 6(무상태 프로세스)이 가장 흔하게 위반됩니다. 스티키 세션, "한 인스턴스만 돌리니 괜찮다"는 메모리 내 캐시, 로컬 디스크에 저장된 파일 업로드 — 모두 두 replica로 확장하는 순간 깨집니다. 규율: **현재 1개를 돌릴지라도 앱이 N개 replica로 돌아간다고 가정하라**. 그 가정이 올바른 설계를 강제합니다.
-
-### B. 배포 전략
-
-새 코드를 프로덕션에 푸시할 때 사용하는 전략이 결정합니다.
-
-- 변경이 모든 사용자에게 얼마나 빨리 도달하는가.
-- 변경이 망가졌을 때 무슨 일이 일어나는가.
-- 얼마나 빨리 롤백할 수 있는가.
-
-세 가지 전략이 지배합니다.
-
-#### B.1 Rolling 배포 (기본값)
-
-Replica를 한 번에 하나씩 교체:
-
-```
-시간: ──────────►
-v1: [v1] [v1] [v1] [v1] [v1]
-       ↓ 한 번에 하나씩 교체
-v2: [v2] [v1] [v1] [v1] [v1]
-v2: [v2] [v2] [v1] [v1] [v1]
-...
-v2: [v2] [v2] [v2] [v2] [v2]
-```
-
-장점: 단순, 추가 용량 불필요, 부드러운 트래픽 전환.
-
-단점: rolling 중 두 버전이 트래픽을 처리합니다 — 스키마 마이그레이션과 API 계약 변경은 하위 호환되어야 합니다. 롤백은 "v1을 다시 배포"이며, 원래 배포와 같은 시간이 걸립니다.
-
-이것이 Kubernetes의 기본 `Deployment`가 하는 것입니다.
-
-#### B.2 Blue/green 배포
-
-새 버전을 실행하는 완전한 두 번째 환경(green)을 세우고, 현재 환경(blue)이 트래픽을 계속 처리하게 합니다. 준비가 되면 로드 밸런서를 green으로 전환합니다.
-
-```
-Blue (v1): [v1] [v1] [v1]  ← 모든 트래픽
-Green (v2): [v2] [v2] [v2]  ← idle, healthy
-                ↓ 로드 밸런서 flip
-Blue (v1): [v1] [v1] [v1]  ← idle (롤백을 위해 보존)
-Green (v2): [v2] [v2] [v2]  ← 모든 트래픽
-```
-
-장점: 즉각적 롤백(로드 밸런서를 다시 flip), 전환 중 혼합 버전 상태 없음.
-
-단점: 2배 용량 필요, 조정해야 할 stateful backing service가 있으면 복잡.
-
-#### B.3 Canary 배포
-
-먼저 작은 트래픽 비율을 새 버전으로 라우팅합니다. 메트릭이 좋아 보이면 비율을 늘리고, 그렇지 않으면 롤백합니다.
-
-```
-시간: ──────────►
-v1: 100%  → 95%  → 50%  → 0%
-v2:   0%  →  5%  → 50%  → 100%
-              ↑ 각 단계에서 메트릭 검사
-```
-
-장점: 나쁜 배포의 폭발 반경이 canary 비율로 제한됩니다. 모두에게 영향을 주기 전에 실세계 실패를 잡습니다.
-
-단점: 트래픽 분할 인프라(service mesh, 똑똑한 로드 밸런서, ingress controller)가 필요합니다. 롤아웃 결정을 위한 신뢰할 만한 버전별 메트릭이 필요합니다.
-
-#### B.4 전략 고르기
-
-| 위험 허용도 | 전략 |
-|----------------|----------|
-| 낮음(소비자 대상, 큰 사용자 기반) | Canary |
-| 중간(내부 앱) | Blue/green |
-| 낮은 비용 / 빠른 반복 | Rolling |
-| 하드 컷오버가 있는 stateful 시스템 | 유지보수 창과 함께 Blue/green |
-
-매력 없는 진실: 대부분의 팀이 rolling을 사용합니다. 플랫폼 기본값이고 동작하기 때문입니다. 결정은 위험한 배포의 상위 1%에서 가장 중요합니다.
-
-### C. 헬스 체크와 graceful shutdown
-
-무중단 배포는 앱과 오케스트레이터 사이의 두 계약에 의존합니다. 둘 다 단순한 HTTP/시그널 프로토콜이지만, 이를 제대로 하는 것이 "배포는 무섭다"와 "배포는 일상이다"의 차이입니다.
-
-#### C.1 Liveness vs readiness
-
-종종 혼동되는 두 가지 다른 헬스 체크:
-
-- **Liveness probe** — "살아 있는가?" 실패하면 오케스트레이터가 컨테이너를 재시작합니다. 프로세스가 회복 불가능한 상태(데드락, OOM, 내부 손상)에 있을 때 실패시키세요.
-- **Readiness probe** — "트래픽을 처리할 준비가 되었는가?" 실패하면 오케스트레이터가 트래픽 송신을 멈추지만 재시작은 하지 않습니다. 시작 동안 의존성이 연결되기 전, SIGTERM 후 종료 동안, 또는 의존성(DB, 캐시)이 일시적으로 도달 불가능할 때 실패시키세요.
-
-피해야 할 실수: 둘에 같은 probe 사용. 데이터베이스가 다운됐을 때 실패하는 liveness 검사는 오케스트레이터가 컨테이너를 재시작하게 만듭니다 — 데이터베이스를 고치지는 못하지만, 재시작의 떼거리(thundering herd)는 시작합니다.
-
-```python
-@app.get("/healthz/live")  # liveness — 최소
-async def liveness():
-    return {"status": "ok"}
-
-@app.get("/healthz/ready")  # readiness — 진짜 의존성에 의존
-async def readiness():
-    if not db_pool.is_healthy(): raise HTTPException(503)
-    return {"status": "ok"}
-```
-
-#### C.2 SIGTERM의 graceful shutdown
-
-오케스트레이터가 컨테이너를 멈추고 싶으면 SIGTERM을 보냅니다. 앱은
-
-1. 자신을 "not ready"로 표시(readiness probe가 실패하기 시작).
-2. 새 연결 수락 중단(리스닝 소켓 닫기).
-3. 진행 중 요청이 끝나기를 대기(타임아웃과 함께).
-4. Backing-service 연결 해제(DB 풀 drain, 캐시 disconnect).
-5. 깨끗하게 종료.
-
-앱이 `terminationGracePeriodSeconds`(Kubernetes에서 기본 30s) 안에 종료하지 않으면 오케스트레이터가 SIGKILL을 보냅니다 — 진행 중 모든 요청이 도중에 죽습니다.
-
-이를 위한 프레임워크 hook:
-
-- **FastAPI / Starlette**: lifespan context manager(`@asynccontextmanager`) — `yield` 이후 코드가 종료 단계.
-- **Express**: `process.on('SIGTERM', ...)`과 `server`, `pool` 닫기.
-- **Django**: WSGI/ASGI 핸들러 수준의 시그널 핸들러.
-
-#### C.3 Readiness flip이 먼저 중요한 이유
-
-1단계(readiness flip)가 결정적이며 종종 건너뜁니다. 이것 없이는 로드 밸런서가 종료 *동안* 새 요청을 계속 보냅니다. 그 요청들은 절반쯤 처리되다가 SIGKILL됩니다. 자신을 "not ready"로 표시하는 것은 로드 밸런서에 라우팅을 멈추라고 말합니다 — 2단계에서 연결 거부를 시작할 때쯤이면 로드 밸런서가 이미 회전(rotation)에서 빼냈습니다.
-
-전체 시퀀스는 dropped-request 경쟁 조건을 막습니다. 그것과 함께라면 배포가 사용자에게 보이지 않고, 그것 없이는 모든 배포가 몇 개의 운 나쁜 요청을 깨뜨립니다.
-
-### 이론에서 아래 코드로
-
-뒤에 나오는 각 절은 이 틀의 한 조각을 구체화합니다.
-
-- §1 (ASGI 서버)와 §2 (WSGI 서버)는 §A.7 port-binding factor입니다: 앱이 Uvicorn / Gunicorn을 통해 직접 HTTP를 export.
-- §3 (PM2)은 §A.8(concurrency)의 Node 등가물입니다 — 호스트당 N개 워커를 돌리는 프로세스 매니저.
-- §4 (nginx 역방향 프록시)는 TLS 종료, 압축, 로드 밸런싱을 하는 §A.7 경계입니다.
-- §5 (Docker 컨테이너화)는 §A.10(dev/prod parity)에 따라 앱을 묶습니다 — 어디서나 같은 이미지.
-- §6 (Docker Compose)는 §A.4 backing service를 로컬 개발 환경에 배선합니다.
-- §7 (헬스 체크와 graceful shutdown)은 §C.1과 §C.2를 구체적인 코드로.
-- §8 (12-Factor 앱)은 §A factor를 언어/프레임워크별 예제와 함께 따라갑니다.
-- §9 (SSL/TLS 종료)는 §C 역방향 프록시 책임에 HTTPS-everywhere 보안 기준선을 더한 것입니다.
 
 ---
 
@@ -493,6 +315,78 @@ server {
 
 ## 5. Docker 컨테이너화
 
+### 이론: 배포 전략
+
+새 코드를 프로덕션에 푸시할 때 사용하는 전략이 결정합니다.
+
+- 변경이 모든 사용자에게 얼마나 빨리 도달하는가.
+- 변경이 망가졌을 때 무슨 일이 일어나는가.
+- 얼마나 빨리 롤백할 수 있는가.
+
+세 가지 전략이 지배합니다.
+
+#### B.1 Rolling 배포 (기본값)
+
+Replica를 한 번에 하나씩 교체:
+
+```
+시간: ──────────►
+v1: [v1] [v1] [v1] [v1] [v1]
+       ↓ 한 번에 하나씩 교체
+v2: [v2] [v1] [v1] [v1] [v1]
+v2: [v2] [v2] [v1] [v1] [v1]
+...
+v2: [v2] [v2] [v2] [v2] [v2]
+```
+
+장점: 단순, 추가 용량 불필요, 부드러운 트래픽 전환.
+
+단점: rolling 중 두 버전이 트래픽을 처리합니다 — 스키마 마이그레이션과 API 계약 변경은 하위 호환되어야 합니다. 롤백은 "v1을 다시 배포"이며, 원래 배포와 같은 시간이 걸립니다.
+
+이것이 Kubernetes의 기본 `Deployment`가 하는 것입니다.
+
+#### B.2 Blue/green 배포
+
+새 버전을 실행하는 완전한 두 번째 환경(green)을 세우고, 현재 환경(blue)이 트래픽을 계속 처리하게 합니다. 준비가 되면 로드 밸런서를 green으로 전환합니다.
+
+```
+Blue (v1): [v1] [v1] [v1]  ← 모든 트래픽
+Green (v2): [v2] [v2] [v2]  ← idle, healthy
+                ↓ 로드 밸런서 flip
+Blue (v1): [v1] [v1] [v1]  ← idle (롤백을 위해 보존)
+Green (v2): [v2] [v2] [v2]  ← 모든 트래픽
+```
+
+장점: 즉각적 롤백(로드 밸런서를 다시 flip), 전환 중 혼합 버전 상태 없음.
+
+단점: 2배 용량 필요, 조정해야 할 stateful backing service가 있으면 복잡.
+
+#### B.3 Canary 배포
+
+먼저 작은 트래픽 비율을 새 버전으로 라우팅합니다. 메트릭이 좋아 보이면 비율을 늘리고, 그렇지 않으면 롤백합니다.
+
+```
+시간: ──────────►
+v1: 100%  → 95%  → 50%  → 0%
+v2:   0%  →  5%  → 50%  → 100%
+              ↑ 각 단계에서 메트릭 검사
+```
+
+장점: 나쁜 배포의 폭발 반경이 canary 비율로 제한됩니다. 모두에게 영향을 주기 전에 실세계 실패를 잡습니다.
+
+단점: 트래픽 분할 인프라(service mesh, 똑똑한 로드 밸런서, ingress controller)가 필요합니다. 롤아웃 결정을 위한 신뢰할 만한 버전별 메트릭이 필요합니다.
+
+#### B.4 전략 고르기
+
+| 위험 허용도 | 전략 |
+|----------------|----------|
+| 낮음(소비자 대상, 큰 사용자 기반) | Canary |
+| 중간(내부 앱) | Blue/green |
+| 낮은 비용 / 빠른 반복 | Rolling |
+| 하드 컷오버가 있는 stateful 시스템 | 유지보수 창과 함께 Blue/green |
+
+매력 없는 진실: 대부분의 팀이 rolling을 사용합니다. 플랫폼 기본값이고 동작하기 때문입니다. 결정은 위험한 배포의 상위 1%에서 가장 중요합니다.
+
 ### Python(FastAPI)을 위한 다단계 빌드
 
 다단계 빌드(multi-stage build)는 빌드 환경과 런타임 환경을 분리하여 더 작고 안전한 이미지를 생성한다.
@@ -708,6 +602,54 @@ docker compose down -v
 
 ## 7. 헬스 체크와 그레이스풀 셧다운
 
+### 이론: 헬스 체크와 graceful shutdown
+
+무중단 배포는 앱과 오케스트레이터 사이의 두 계약에 의존합니다. 둘 다 단순한 HTTP/시그널 프로토콜이지만, 이를 제대로 하는 것이 "배포는 무섭다"와 "배포는 일상이다"의 차이입니다.
+
+#### C.1 Liveness vs readiness
+
+종종 혼동되는 두 가지 다른 헬스 체크:
+
+- **Liveness probe** — "살아 있는가?" 실패하면 오케스트레이터가 컨테이너를 재시작합니다. 프로세스가 회복 불가능한 상태(데드락, OOM, 내부 손상)에 있을 때 실패시키세요.
+- **Readiness probe** — "트래픽을 처리할 준비가 되었는가?" 실패하면 오케스트레이터가 트래픽 송신을 멈추지만 재시작은 하지 않습니다. 시작 동안 의존성이 연결되기 전, SIGTERM 후 종료 동안, 또는 의존성(DB, 캐시)이 일시적으로 도달 불가능할 때 실패시키세요.
+
+피해야 할 실수: 둘에 같은 probe 사용. 데이터베이스가 다운됐을 때 실패하는 liveness 검사는 오케스트레이터가 컨테이너를 재시작하게 만듭니다 — 데이터베이스를 고치지는 못하지만, 재시작의 떼거리(thundering herd)는 시작합니다.
+
+```python
+@app.get("/healthz/live")  # liveness — 최소
+async def liveness():
+    return {"status": "ok"}
+
+@app.get("/healthz/ready")  # readiness — 진짜 의존성에 의존
+async def readiness():
+    if not db_pool.is_healthy(): raise HTTPException(503)
+    return {"status": "ok"}
+```
+
+#### C.2 SIGTERM의 graceful shutdown
+
+오케스트레이터가 컨테이너를 멈추고 싶으면 SIGTERM을 보냅니다. 앱은
+
+1. 자신을 "not ready"로 표시(readiness probe가 실패하기 시작).
+2. 새 연결 수락 중단(리스닝 소켓 닫기).
+3. 진행 중 요청이 끝나기를 대기(타임아웃과 함께).
+4. Backing-service 연결 해제(DB 풀 drain, 캐시 disconnect).
+5. 깨끗하게 종료.
+
+앱이 `terminationGracePeriodSeconds`(Kubernetes에서 기본 30s) 안에 종료하지 않으면 오케스트레이터가 SIGKILL을 보냅니다 — 진행 중 모든 요청이 도중에 죽습니다.
+
+이를 위한 프레임워크 hook:
+
+- **FastAPI / Starlette**: lifespan context manager(`@asynccontextmanager`) — `yield` 이후 코드가 종료 단계.
+- **Express**: `process.on('SIGTERM', ...)`과 `server`, `pool` 닫기.
+- **Django**: WSGI/ASGI 핸들러 수준의 시그널 핸들러.
+
+#### C.3 Readiness flip이 먼저 중요한 이유
+
+1단계(readiness flip)가 결정적이며 종종 건너뜁니다. 이것 없이는 로드 밸런서가 종료 *동안* 새 요청을 계속 보냅니다. 그 요청들은 절반쯤 처리되다가 SIGKILL됩니다. 자신을 "not ready"로 표시하는 것은 로드 밸런서에 라우팅을 멈추라고 말합니다 — 2단계에서 연결 거부를 시작할 때쯤이면 로드 밸런서가 이미 회전(rotation)에서 빼냈습니다.
+
+전체 시퀀스는 dropped-request 경쟁 조건을 막습니다. 그것과 함께라면 배포가 사용자에게 보이지 않고, 그것 없이는 모든 배포가 몇 개의 운 나쁜 요청을 깨뜨립니다.
+
 ### 헬스 체크 엔드포인트
 
 프로덕션 배포에는 로드 밸런서, 컨테이너 오케스트레이터, 모니터링 시스템을 위한 헬스 체크가 필요하다.
@@ -805,6 +747,39 @@ readinessProbe:
 ## 8. 환경 설정 (12-팩터 앱)
 
 [12-팩터 앱(12-Factor App)](https://12factor.net/) 방법론은 클라우드 네이티브 애플리케이션 구축을 위한 모범 사례를 정의한다. 세 번째 팩터인 **설정(Config)**은 설정을 코드가 아닌 환경에 저장해야 한다고 명시한다.
+
+### 이론: 12-Factor App 방법론
+
+원래 Heroku가 2011년에 작성한 12 factors는 여전히 "배포 가능한 백엔드 서비스"의 사실상 표준입니다. Heroku 트릭이 아닙니다 — Kubernetes, Cloud Run, ECS, 모든 현대 PaaS가 앱이 이를 따르기를 기대합니다.
+
+#### A.1 12개 factor 한눈에
+
+| # | Factor | 구체적 의미 |
+|---|--------|------------------|
+| 1 | Codebase | 앱당 코드베이스 1개, 버전 관리에서 추적. |
+| 2 | Dependencies | 명시적 선언(`requirements.txt`, `package.json`), 시스템 패키지 사용 안 함. |
+| 3 | Config | 환경 변수, 코드 안에 절대 두지 않음. |
+| 4 | Backing services | 데이터베이스, 캐시, 큐 모두 env의 URL로 연결. |
+| 5 | Build, release, run | 세 개의 엄격한 단계, 절대 결합하지 않음. |
+| 6 | Processes | 앱은 하나 이상의 *무상태* 프로세스; 상태는 backing service로 공유. |
+| 7 | Port binding | 앱이 포트에 바인딩해 HTTP를 직접 export(Apache 모듈 없음). |
+| 8 | Concurrency | 한 프로세스를 더 크게 만들지 말고 프로세스를 추가해 확장. |
+| 9 | Disposability | 빠른 시작, SIGTERM 시 graceful shutdown. |
+| 10 | Dev/prod parity | dev와 prod에서 같은 OS, 같은 의존성, 같은 backing service. |
+| 11 | Logs | stdout으로 스트림; 플랫폼이 집계 처리. |
+| 12 | Admin processes | 일회성 스크립트도 같은 코드/config로 실행. |
+
+#### A.2 가장 큰 짐을 지는 세 가지 factor
+
+Factor 3, 6, 11이 현대 배포에서 가장 많은 일을 합니다.
+
+- **3 (env의 config).** 코드에 `if production: ...` 분기 없음. 같은 Docker 이미지가 dev, staging, prod에서 실행됩니다 — env 변수만 바뀝니다. 컨테이너 기반 배포가 작동하게 만드는 것.
+- **6 (무상태 프로세스).** 앱은 재시작에서 살아남아야 하는 메모리 내 상태를 보관하지 않습니다. 상태는 데이터베이스, 캐시, 객체 저장소에 삽니다. 수평 확장과 무중단 배포가 작동하게 만드는 것.
+- **11 (stdout으로 로그).** 앱은 로그를 이벤트 스트림으로 stdout에 씁니다. 플랫폼(Docker, Kubernetes, systemd-journald)이 수집·라우팅·인덱싱합니다. 앱은 로그가 stdout-only로 끝날지 Elasticsearch로 갈지 모릅니다.
+
+#### A.3 대부분의 앱이 여전히 위반하는 factor
+
+Factor 6(무상태 프로세스)이 가장 흔하게 위반됩니다. 스티키 세션, "한 인스턴스만 돌리니 괜찮다"는 메모리 내 캐시, 로컬 디스크에 저장된 파일 업로드 — 모두 두 replica로 확장하는 순간 깨집니다. 규율: **현재 1개를 돌릴지라도 앱이 N개 replica로 돌아간다고 가정하라**. 그 가정이 올바른 설계를 강제합니다.
 
 ### Pydantic Settings를 이용한 설정 관리
 

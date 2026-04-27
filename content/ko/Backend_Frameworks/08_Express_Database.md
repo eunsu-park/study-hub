@@ -20,8 +20,6 @@
 
 ## 목차
 
-프레임워크 참조에 들어가기 전에, [**이론과 원리**](#이론과-원리) 섹션을 먼저 읽어보세요. ORM이 query builder와 비교해 실제로 무엇을 하는지, 왜 prepared statement가 SQL 인젝션의 유일한 진정한 방어인지, 그리고 트랜잭션·격리 수준·연결 풀이 어떻게 맞물리는지를 다룹니다.
-
 1. [Prisma ORM 개요](#1-prisma-orm-개요)
 2. [프로젝트 설정](#2-프로젝트-설정)
 3. [스키마 정의](#3-스키마-정의)
@@ -35,15 +33,36 @@
 
 ---
 
-## 이론과 원리
+## 1. Prisma ORM 개요
 
-Node 앱의 데이터베이스 계층은 세 가지 직교 메커니즘 위에 있습니다. Prisma의 API는 이를 유려한 타입 안전 표면 뒤에 숨기지만, 모든 프로덕션 디버깅 세션은 결국 표면 아래를 들여다보게 만듭니다.
+Prisma는 세 가지 핵심 컴포넌트로 구성됩니다:
 
-- **(A) ORM vs query builder vs raw SQL** — 다른 트레이드오프를 가진 세 가지 추상화 수준.
-- **(B) 인젝션 방어로서의 prepared statement** — 왜 `${userInput}` 보간이 안전하지 않은지, 플레이스홀더가 프로토콜 수준에서 무엇을 하는지.
-- **(C) 트랜잭션과 격리** — `BEGIN`/`COMMIT`이 실제로 사 주는 것, 그리고 ANSI 4가지 격리 수준이 어떤 특정 이상 현상을 막는지.
+```
+┌──────────────────────────────────────────────────────┐
+│                  Prisma Ecosystem                    │
+│                                                      │
+│  ┌──────────────┐  ┌──────────────┐  ┌────────────┐ │
+│  │ Prisma Schema│  │ Prisma Client│  │  Prisma    │ │
+│  │ (.prisma)    │  │ (Generated)  │  │  Migrate   │ │
+│  │              │  │              │  │            │ │
+│  │ Defines your │  │ Type-safe    │  │ Version-   │ │
+│  │ data model   │  │ query API    │  │ controlled │ │
+│  │              │  │              │  │ schema     │ │
+│  │              │  │              │  │ changes    │ │
+│  └──────────────┘  └──────────────┘  └────────────┘ │
+└──────────────────────────────────────────────────────┘
+```
 
-### A. ORM, query builder, raw SQL: 스펙트럼
+| 컴포넌트 | 목적 |
+|-----------|---------|
+| **Prisma Schema** | 데이터베이스 구조의 단일 진실 공급원(Single Source of Truth) |
+| **Prisma Client** | 자동 생성된 타입 안전 쿼리 빌더 |
+| **Prisma Migrate** | 스키마 diff를 기반으로 한 선언적 마이그레이션 시스템 |
+| **Prisma Studio** | 데이터 조회 및 편집을 위한 GUI (개발 도구) |
+
+---
+
+### 이론: ORM, query builder, raw SQL: 스펙트럼
 
 데이터베이스 접근의 세 계층이 추상화 vs 제어 축의 다른 지점에 있습니다. 실제 앱은 보통 이들을 섞어 씁니다.
 
@@ -86,136 +105,6 @@ const users = await prisma.user.findMany({ include: { posts: true } });
 ```
 
 Prisma는 `WHERE userId IN (...)`이라는 단일 후속 쿼리를 발행하고 그래프를 조립합니다. N과 무관하게 총 두 라운드트립.
-
-### B. Prepared statement와 SQL 인젝션
-
-데이터베이스 계층의 가장 큰 결과를 가진 보안 성질은 **사용자 입력이 SQL 문법이 될 수 있는가**입니다. 방어책 — 모든 평판 좋은 데이터베이스 드라이버가 사용 — 은 *prepared statement*입니다.
-
-#### B.1 취약점 모양
-
-어느 언어든 안전하지 않은 패턴:
-
-```javascript
-const query = `SELECT * FROM users WHERE name = '${req.body.name}'`;
-db.query(query);
-```
-
-`req.body.name`이 `' OR '1'='1`이라면, 결과 SQL은 `... WHERE name = '' OR '1'='1'`이 됩니다 — 모든 사용자를 선택합니다. `'; DROP TABLE users; --`라면 테이블을 잃습니다. 근본 원인은 사용자 입력이 SQL 문법으로 연결되었다는 것입니다. 데이터베이스 파서는 어떤 문자가 "데이터"이고 어떤 문자가 "코드"인지 구분할 수 없습니다.
-
-#### B.2 Prepared statement가 하는 일
-
-Prepared statement는 와이어 프로토콜 수준에서 SQL 템플릿과 그 파라미터를 분리합니다.
-
-```
-1. 드라이버 송신: "SELECT * FROM users WHERE name = $1"   (PARSE)
-2. 데이터베이스가 파싱하고 plan id 반환                    (PARSE COMPLETE)
-3. 드라이버 송신: ["alice"]                                (BIND)
-4. 데이터베이스가 캐시된 플랜을 bind 값으로 실행            (EXECUTE)
-```
-
-데이터베이스는 파라미터를 보기 *전에* 템플릿을 파싱합니다. 파라미터는 플레이스홀더 슬롯에 바인딩됩니다 — SQL이 될 수 있는 문법적 컨텍스트가 없습니다. `' OR '1'='1`은 코드 조각이 아니라 `name`의 리터럴 문자열 값입니다.
-
-이것이 방어입니다. 모든 매개변수화된 쿼리 — `pg.query(sql, params)`, `mysql2`의 `?` 플레이스홀더, Prisma의 `where: { name }` — 가 내부적으로 prepared statement를 사용합니다.
-
-#### B.3 ORM이 "기본적으로 안전"한 이유
-
-Prisma의 API에 사용자 입력을 우연히 보간할 수 없습니다. `prisma.user.findMany({ where: { name } })`은 항상 매개변수화된 쿼리를 만듭니다. 탈출구 `$queryRawUnsafe`가 존재하며, 그 이름이 정확히 그렇게 되어 있어 움찔하게 만듭니다 — 안전한 형제 `$queryRaw`는 매개변수화를 강제하는 tagged-template literal 문법을 사용합니다.
-
-레슨은 일반화됩니다: **문자열만 노출하는 쿼리 인터페이스는 모두 위험하고, 템플릿과 값을 구분하는 인터페이스는 모두 안전합니다**. 후자를 선호하세요.
-
-### C. 트랜잭션과 격리
-
-트랜잭션은 여러 SQL 문을 하나의 원자 단위로 묶습니다. 모두 성공해 함께 보이게 되거나(`COMMIT`), 아무것도 보이지 않습니다(`ROLLBACK`). 원자성 위에는 격리 문제가 있습니다 — 두 트랜잭션이 같은 데이터를 동시에 건드릴 때 무엇이 일어나야 하는가?
-
-#### C.1 ACID, 짧게
-
-- **원자성(Atomicity)** — 모두 아니면 무.
-- **일관성(Consistency)** — 제약(`UNIQUE`, `FOREIGN KEY`, `CHECK`)이 모든 commit 경계에서 유지됨.
-- **격리(Isolation)** — 동시 트랜잭션이 어떤 직렬 순서로 실행되는 것처럼 보임(선택한 수준에 따라).
-- **지속성(Durability)** — commit된 트랜잭션이 충돌에서 살아남음.
-
-원자성은 래퍼 관심사입니다: `BEGIN`, 문 실행, `COMMIT` 또는 `ROLLBACK`. 격리가 깊은 문제입니다.
-
-#### C.2 ANSI 4가지 격리 수준
-
-각 수준은 그 다음 약한 수준이 허용하는 특정 부류의 이상 현상을 막습니다.
-
-| 수준 | Dirty read | Non-repeatable read | Phantom read |
-|-------|------------|---------------------|--------------|
-| READ UNCOMMITTED | 가능 | 가능 | 가능 |
-| READ COMMITTED (PostgreSQL 기본) | 방지 | 가능 | 가능 |
-| REPEATABLE READ (MySQL 기본) | 방지 | 방지 | 가능 (PG: 또한 방지) |
-| SERIALIZABLE | 방지 | 방지 | 방지 |
-
-- **Dirty read.** 트랜잭션 A가 B의 commit되지 않은 쓰기를 봅니다. B가 롤백하면 A가 쓰레기를 읽은 것이 됩니다.
-- **Non-repeatable read.** A가 같은 행을 두 번 읽었는데 그 사이에 B가 commit해서 다른 값을 얻습니다.
-- **Phantom read.** A가 같은 쿼리를 다시 돌렸는데 B가 INSERT해서 새 행이 보입니다.
-
-높은 격리는 더 안전하지만 더 느립니다(잠금 증가, 낙관적 동시성 제어에서 abort 증가). 대부분의 앱은 READ COMMITTED에서 돌리고 남은 이상 현상은 명시적으로 처리합니다. 행 잠금을 위한 `SELECT FOR UPDATE`, 낙관적 버전 검사(`UPDATE ... WHERE version = ?`), 또는 알려진 임계 경로에 대해 SERIALIZABLE로 격상.
-
-#### C.3 Prisma의 트랜잭션
-
-```javascript
-await prisma.$transaction(async (tx) => {
-    const order = await tx.order.create({ data: { ... } });
-    await tx.inventory.update({ where: { sku }, data: { qty: { decrement: 1 } } });
-});
-```
-
-콜백이 단일 트랜잭션에서 실행됩니다. 무엇이든 throw하면 전체가 롤백됩니다. `tx` 파라미터는 그 트랜잭션에 한정된 Prisma 클라이언트입니다 — 콜백 안에서 바깥의 `prisma`를 쓰면 트랜잭션 *바깥*에서 실행되어 의미가 사라집니다.
-
-Prisma는 또한 콜백 없이 모든 쿼리를 한 트랜잭션에서 실행하는 "interactive batch" 형태(`prisma.$transaction([query1, query2])`)도 지원합니다. 쿼리들이 서로의 결과에 의존하지 않을 때 유용합니다.
-
-#### C.4 연결 풀이 중요한 이유
-
-트랜잭션은 commit이나 롤백까지 연결을 잡고 있습니다. `pool_size`가 10이면 동시에 10개의 열린 트랜잭션을 가질 수 있습니다. 그 이상이면 호출자가 기다립니다. 오래 걸리는 트랜잭션은 다른 모든 요청을 굶깁니다 — 레슨 04 §A.1과 같은 풀 고갈 패턴이지만, 긴 트랜잭션은 행 잠금까지 잡고 있어 더 위험합니다.
-
-규율: 트랜잭션을 짧게 유지하세요. 트랜잭션 안에서 외부 HTTP 서비스를 호출하거나 사용자 입력을 기다리지 마세요. 꼭 그래야 한다면, 트랜잭션이 데이터베이스 작업만 감싸도록 재설계하세요.
-
-### 이론에서 아래 코드로
-
-뒤에 나오는 각 절은 이 틀의 한 조각을 구체화합니다.
-
-- §1 (Prisma 개요)는 §A.2의 진실 원천으로서의 스키마 모델을 도입합니다.
-- §2 (설정)은 Prisma를 §A 연결 모델에 배선하고 타입 안전 클라이언트를 부트스트랩합니다.
-- §3 (스키마 정의)는 §A.2 생성을 구동하는 선언적 원천입니다: 타입, 마이그레이션, 검증.
-- §4 (CRUD 작업)은 §B.2 prepared statement를 자동으로 만들어 내는 타입 안전 API입니다.
-- §5 (관계)는 §A.3을 구체화합니다 — `include`로 N+1 함정을 무찌릅니다.
-- §6 (마이그레이션)은 스키마 진화 도구입니다. 각 스키마 변경이 버전 관리된 마이그레이션 스크립트가 됩니다.
-- §7 (쿼리 최적화)는 §A.3을 정련합니다: 필요한 컬럼만 가져오는 `select`와 인덱싱 전략.
-- §8 (트랜잭션)은 §C 원자성 래퍼이며, §C.4의 풀 고갈 주의사항이 따라옵니다.
-- §9 (PostgreSQL 연결)은 레슨 04 §A.1에서 자세히 논의된 §A 연결 풀 구성입니다.
-
----
-
-## 1. Prisma ORM 개요
-
-Prisma는 세 가지 핵심 컴포넌트로 구성됩니다:
-
-```
-┌──────────────────────────────────────────────────────┐
-│                  Prisma Ecosystem                    │
-│                                                      │
-│  ┌──────────────┐  ┌──────────────┐  ┌────────────┐ │
-│  │ Prisma Schema│  │ Prisma Client│  │  Prisma    │ │
-│  │ (.prisma)    │  │ (Generated)  │  │  Migrate   │ │
-│  │              │  │              │  │            │ │
-│  │ Defines your │  │ Type-safe    │  │ Version-   │ │
-│  │ data model   │  │ query API    │  │ controlled │ │
-│  │              │  │              │  │ schema     │ │
-│  │              │  │              │  │ changes    │ │
-│  └──────────────┘  └──────────────┘  └────────────┘ │
-└──────────────────────────────────────────────────────┘
-```
-
-| 컴포넌트 | 목적 |
-|-----------|---------|
-| **Prisma Schema** | 데이터베이스 구조의 단일 진실 공급원(Single Source of Truth) |
-| **Prisma Client** | 자동 생성된 타입 안전 쿼리 빌더 |
-| **Prisma Migrate** | 스키마 diff를 기반으로 한 선언적 마이그레이션 시스템 |
-| **Prisma Studio** | 데이터 조회 및 편집을 위한 GUI (개발 도구) |
-
----
 
 ## 2. 프로젝트 설정
 
@@ -363,6 +252,42 @@ enum Role {
 # Prisma Client 생성 — 스키마 변경 후 반드시 실행해야 합니다
 npx prisma generate
 ```
+
+### 이론: Prepared statement와 SQL 인젝션
+
+데이터베이스 계층의 가장 큰 결과를 가진 보안 성질은 **사용자 입력이 SQL 문법이 될 수 있는가**입니다. 방어책 — 모든 평판 좋은 데이터베이스 드라이버가 사용 — 은 *prepared statement*입니다.
+
+#### B.1 취약점 모양
+
+어느 언어든 안전하지 않은 패턴:
+
+```javascript
+const query = `SELECT * FROM users WHERE name = '${req.body.name}'`;
+db.query(query);
+```
+
+`req.body.name`이 `' OR '1'='1`이라면, 결과 SQL은 `... WHERE name = '' OR '1'='1'`이 됩니다 — 모든 사용자를 선택합니다. `'; DROP TABLE users; --`라면 테이블을 잃습니다. 근본 원인은 사용자 입력이 SQL 문법으로 연결되었다는 것입니다. 데이터베이스 파서는 어떤 문자가 "데이터"이고 어떤 문자가 "코드"인지 구분할 수 없습니다.
+
+#### B.2 Prepared statement가 하는 일
+
+Prepared statement는 와이어 프로토콜 수준에서 SQL 템플릿과 그 파라미터를 분리합니다.
+
+```
+1. 드라이버 송신: "SELECT * FROM users WHERE name = $1"   (PARSE)
+2. 데이터베이스가 파싱하고 plan id 반환                    (PARSE COMPLETE)
+3. 드라이버 송신: ["alice"]                                (BIND)
+4. 데이터베이스가 캐시된 플랜을 bind 값으로 실행            (EXECUTE)
+```
+
+데이터베이스는 파라미터를 보기 *전에* 템플릿을 파싱합니다. 파라미터는 플레이스홀더 슬롯에 바인딩됩니다 — SQL이 될 수 있는 문법적 컨텍스트가 없습니다. `' OR '1'='1`은 코드 조각이 아니라 `name`의 리터럴 문자열 값입니다.
+
+이것이 방어입니다. 모든 매개변수화된 쿼리 — `pg.query(sql, params)`, `mysql2`의 `?` 플레이스홀더, Prisma의 `where: { name }` — 가 내부적으로 prepared statement를 사용합니다.
+
+#### B.3 ORM이 "기본적으로 안전"한 이유
+
+Prisma의 API에 사용자 입력을 우연히 보간할 수 없습니다. `prisma.user.findMany({ where: { name } })`은 항상 매개변수화된 쿼리를 만듭니다. 탈출구 `$queryRawUnsafe`가 존재하며, 그 이름이 정확히 그렇게 되어 있어 움찔하게 만듭니다 — 안전한 형제 `$queryRaw`는 매개변수화를 강제하는 tagged-template literal 문법을 사용합니다.
+
+레슨은 일반화됩니다: **문자열만 노출하는 쿼리 인터페이스는 모두 위험하고, 템플릿과 값을 구분하는 인터페이스는 모두 안전합니다**. 후자를 선호하세요.
 
 ### 생성 (Create)
 
@@ -816,6 +741,55 @@ const result = await prisma.$queryRaw`
 ## 8. 트랜잭션 처리
 
 트랜잭션(transaction)은 연산 그룹이 모두 성공하거나 모두 실패하도록 보장합니다. 데이터 일관성 유지에 필수적입니다.
+
+### 이론: 트랜잭션과 격리
+
+트랜잭션은 여러 SQL 문을 하나의 원자 단위로 묶습니다. 모두 성공해 함께 보이게 되거나(`COMMIT`), 아무것도 보이지 않습니다(`ROLLBACK`). 원자성 위에는 격리 문제가 있습니다 — 두 트랜잭션이 같은 데이터를 동시에 건드릴 때 무엇이 일어나야 하는가?
+
+#### C.1 ACID, 짧게
+
+- **원자성(Atomicity)** — 모두 아니면 무.
+- **일관성(Consistency)** — 제약(`UNIQUE`, `FOREIGN KEY`, `CHECK`)이 모든 commit 경계에서 유지됨.
+- **격리(Isolation)** — 동시 트랜잭션이 어떤 직렬 순서로 실행되는 것처럼 보임(선택한 수준에 따라).
+- **지속성(Durability)** — commit된 트랜잭션이 충돌에서 살아남음.
+
+원자성은 래퍼 관심사입니다: `BEGIN`, 문 실행, `COMMIT` 또는 `ROLLBACK`. 격리가 깊은 문제입니다.
+
+#### C.2 ANSI 4가지 격리 수준
+
+각 수준은 그 다음 약한 수준이 허용하는 특정 부류의 이상 현상을 막습니다.
+
+| 수준 | Dirty read | Non-repeatable read | Phantom read |
+|-------|------------|---------------------|--------------|
+| READ UNCOMMITTED | 가능 | 가능 | 가능 |
+| READ COMMITTED (PostgreSQL 기본) | 방지 | 가능 | 가능 |
+| REPEATABLE READ (MySQL 기본) | 방지 | 방지 | 가능 (PG: 또한 방지) |
+| SERIALIZABLE | 방지 | 방지 | 방지 |
+
+- **Dirty read.** 트랜잭션 A가 B의 commit되지 않은 쓰기를 봅니다. B가 롤백하면 A가 쓰레기를 읽은 것이 됩니다.
+- **Non-repeatable read.** A가 같은 행을 두 번 읽었는데 그 사이에 B가 commit해서 다른 값을 얻습니다.
+- **Phantom read.** A가 같은 쿼리를 다시 돌렸는데 B가 INSERT해서 새 행이 보입니다.
+
+높은 격리는 더 안전하지만 더 느립니다(잠금 증가, 낙관적 동시성 제어에서 abort 증가). 대부분의 앱은 READ COMMITTED에서 돌리고 남은 이상 현상은 명시적으로 처리합니다. 행 잠금을 위한 `SELECT FOR UPDATE`, 낙관적 버전 검사(`UPDATE ... WHERE version = ?`), 또는 알려진 임계 경로에 대해 SERIALIZABLE로 격상.
+
+#### C.3 Prisma의 트랜잭션
+
+```javascript
+await prisma.$transaction(async (tx) => {
+    const order = await tx.order.create({ data: { ... } });
+    await tx.inventory.update({ where: { sku }, data: { qty: { decrement: 1 } } });
+});
+```
+
+콜백이 단일 트랜잭션에서 실행됩니다. 무엇이든 throw하면 전체가 롤백됩니다. `tx` 파라미터는 그 트랜잭션에 한정된 Prisma 클라이언트입니다 — 콜백 안에서 바깥의 `prisma`를 쓰면 트랜잭션 *바깥*에서 실행되어 의미가 사라집니다.
+
+Prisma는 또한 콜백 없이 모든 쿼리를 한 트랜잭션에서 실행하는 "interactive batch" 형태(`prisma.$transaction([query1, query2])`)도 지원합니다. 쿼리들이 서로의 결과에 의존하지 않을 때 유용합니다.
+
+#### C.4 연결 풀이 중요한 이유
+
+트랜잭션은 commit이나 롤백까지 연결을 잡고 있습니다. `pool_size`가 10이면 동시에 10개의 열린 트랜잭션을 가질 수 있습니다. 그 이상이면 호출자가 기다립니다. 오래 걸리는 트랜잭션은 다른 모든 요청을 굶깁니다 — 레슨 04 §A.1과 같은 풀 고갈 패턴이지만, 긴 트랜잭션은 행 잠금까지 잡고 있어 더 위험합니다.
+
+규율: 트랜잭션을 짧게 유지하세요. 트랜잭션 안에서 외부 HTTP 서비스를 호출하거나 사용자 입력을 기다리지 마세요. 꼭 그래야 한다면, 트랜잭션이 데이터베이스 작업만 감싸도록 재설계하세요.
 
 ### 순차적 트랜잭션
 

@@ -18,8 +18,6 @@ Django REST Framework(DRF)는 Django로 RESTful API를 구축하는 표준 라�
 
 ## 목차
 
-프레임워크 참조에 들어가기 전에, [**이론과 원리**](#이론과-원리) 섹션을 먼저 읽어보세요. 직렬화기의 양방향 검증/직렬화 파이프라인, 클래스를 RESTful 리소스로 바꾸는 ViewSet → URL 매핑, 그리고 권한/인증 백엔드 프로토콜을 다룹니다.
-
 1. [DRF 설정](#1-drf-설정)
 2. [직렬화기](#2-직렬화기)
 3. [뷰: APIView에서 ViewSet까지](#3-뷰-apiview에서-viewset까지)
@@ -32,15 +30,43 @@ Django REST Framework(DRF)는 Django로 RESTful API를 구축하는 표준 라�
 
 ---
 
-## 이론과 원리
+## 1. DRF 설정
 
-DRF는 Django의 MTV(레슨 10 §B)에서 *T*(template)를 JSON 직렬화기로 바꾸고, 그 위에 REST 관습을 붙이면 얻는 것입니다. 세 개의 독립된 메커니즘이 다른 모든 것을 구동합니다.
+```bash
+pip install djangorestframework~=3.15 django-filter~=24.3 djangorestframework-simplejwt~=5.3
+```
 
-- **(A) 양방향 validator/직렬화기로서의 직렬화기** — 같은 클래스가 "입력 → 인스턴스"와 "인스턴스 → 출력"을 모두 다루며, 명시적 단계가 있습니다.
-- **(B) ViewSet + Router: 관습 기반 리소스 매핑** — `list/retrieve/create/update/destroy` 메서드를 가진 클래스가 자동 생성된 URL을 통해 완전한 REST 리소스가 됩니다.
-- **(C) 플러그 가능한 백엔드 프로토콜** — 인증, 권한, throttle, 페이지네이션, 필터 모두가 같은 모양을 공유합니다: DRF가 적절한 시점에 호출하는 잘 정의된 메서드 하나를 가진 클래스.
+```python
+# settings.py
+INSTALLED_APPS = [... "rest_framework", "django_filters"]
 
-### A. 직렬화기: 두 방향, 하나의 클래스
+REST_FRAMEWORK = {
+    "DEFAULT_AUTHENTICATION_CLASSES": [
+        "rest_framework.authentication.SessionAuthentication",
+        "rest_framework_simplejwt.authentication.JWTAuthentication",
+    ],
+    "DEFAULT_PERMISSION_CLASSES": [
+        "rest_framework.permissions.IsAuthenticatedOrReadOnly",
+    ],
+    "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
+    "PAGE_SIZE": 20,
+    "DEFAULT_FILTER_BACKENDS": [
+        "django_filters.rest_framework.DjangoFilterBackend",
+        "rest_framework.filters.SearchFilter",
+        "rest_framework.filters.OrderingFilter",
+    ],
+}
+```
+
+DRF는 브라우저에서 바로 사용할 수 있는 HTML 브라우저블 API(browsable API)를 기본으로 제공합니다.
+
+---
+
+## 2. 직렬화기
+
+직렬화기(Serializer)는 모델 인스턴스를 JSON으로 변환하고 들어오는 데이터를 유효성 검사합니다(FastAPI의 Pydantic과 유사).
+
+### 이론: 직렬화기: 두 방향, 하나의 클래스
 
 DRF 직렬화기는 *외부* 표현(JSON 모양)과 *내부* 표현(Python 객체, 보통 Django 모델 인스턴스) 둘 다를 아는 클래스입니다. 방향에 따라 두 파이프라인을 돌립니다.
 
@@ -97,155 +123,6 @@ class PostSerializer(serializers.ModelSerializer):
 
 레슨 02 §B와 같은 평행: FastAPI에서 같은 Pydantic 모델이 검증·직렬화·OpenAPI 문서를 구동하듯, DRF에서 같은 ModelSerializer가 검증·직렬화·API 스키마를 구동합니다.
 
-### B. ViewSet + Router: 관습 기반 리소스 매핑
-
-평범한 Django(레슨 10 §C.4)에서는 모든 URL이 명시적으로 매핑됩니다. DRF는 관습 계층을 더합니다. HTTP 동작에 매핑되는 메서드 이름의 클래스를 정의하고, Router에 등록하면 URL 패턴이 생성됩니다.
-
-#### B.1 동작 매핑
-
-`ModelViewSet`은 6개의 표준 메서드를 노출하며, 각각이 HTTP 메서드/경로에 묶여 있습니다.
-
-| 동작 | HTTP 메서드 | URL 패턴 |
-|--------|-------------|-------------|
-| `list` | GET | `/posts/` |
-| `create` | POST | `/posts/` |
-| `retrieve` | GET | `/posts/{pk}/` |
-| `update` | PUT | `/posts/{pk}/` |
-| `partial_update` | PATCH | `/posts/{pk}/` |
-| `destroy` | DELETE | `/posts/{pk}/` |
-
-다섯 줄 코드로 완전한 CRUD 엔드포인트 세트를 얻습니다.
-
-```python
-class PostViewSet(viewsets.ModelViewSet):
-    queryset = Post.objects.all()
-    serializer_class = PostSerializer
-```
-
-여섯 메서드 모두의 기본 구현이 `ModelViewSet`에서 상속됩니다. 커스터마이즈가 필요한 것만 override합니다.
-
-#### B.2 Router가 URL 배선을 한다
-
-```python
-router = DefaultRouter()
-router.register(r"posts", PostViewSet)
-urlpatterns = router.urls
-```
-
-`router.urls`는 명시적 `path()` 라인 6줄을 직접 쓰는 것과 동등한 `path(...)` 항목 리스트입니다. URL 패턴을 0개 작성했고, 레슨 01 §B.3의 완전한 REST 리소스 모양을 얻었습니다.
-
-#### B.3 커스텀 동작: `@action` 데코레이터
-
-비표준 엔드포인트(예: `POST /posts/{pk}/publish/`)에는 `@action` 데코레이터가 추가 메서드를 선언합니다.
-
-```python
-class PostViewSet(viewsets.ModelViewSet):
-    ...
-    @action(detail=True, methods=["post"])
-    def publish(self, request, pk=None):
-        post = self.get_object()
-        post.publish()
-        return Response({"status": "published"})
-```
-
-`detail=True`는 `/posts/{pk}/publish/`에 바인딩하고, `detail=False`는 `/posts/publish/`에 바인딩합니다. Router가 자동으로 픽업합니다.
-
-#### B.4 이것이 중요한 이유: REST 모양이 기본값이 된다
-
-DRF 없이는 모든 Django REST API가 "그것의 URL은 무엇이어야 하지?"에 대한 한 개발자의 해석입니다. DRF + ViewSet + Router로는 답이 프레임워크에 의해 고정됩니다. 표준 6개 동작이 표준 URL의 표준 HTTP 메서드에 매핑됩니다. 팀에 합류하는 새 개발자가 모델 리스트만 보고도 URL 표면의 90%를 예측할 수 있습니다.
-
-### C. 플러그 가능한 백엔드 프로토콜
-
-DRF의 모든 횡단 관심사 — 인증, 권한, throttle, 페이지네이션, 필터 — 는 같은 플러그인 패턴을 따릅니다: 잘 알려진 메서드 하나를 가진 클래스를 리스트에 등록하면, 뷰가 적절한 시점에 호출합니다.
-
-#### C.1 모양
-
-```python
-class MyAuthentication(BaseAuthentication):
-    def authenticate(self, request):
-        # 성공 시 (user, auth_token) 반환, 자격 증명 없으면 None, 잘못된 자격 증명이면 throw
-        ...
-
-class MyPermission(BasePermission):
-    def has_permission(self, request, view):
-        return True or False  # 뷰에 대해 전역
-    def has_object_permission(self, request, view, obj):
-        return True or False  # 객체별 검사
-
-class MyThrottle(BaseThrottle):
-    def allow_request(self, request, view):
-        return True or False
-```
-
-각 백엔드는 (구조적 타이핑 의미에서) *프로토콜*입니다. 올바른 메서드를 구현하면 DRF가 그것을 유효한 구현으로 취급합니다.
-
-#### C.2 실행 순서
-
-한 요청에 대해 DRF의 `APIView.initial(request)`가 실행됩니다.
-
-1. **인증.** `authentication_classes` 리스트를 따라갑니다. 처음 `(user, auth)`를 반환하는 것이 이기고 `request.user`와 `request.auth`를 설정합니다. 매치된 것이 없으면 `request.user = AnonymousUser`.
-2. **권한.** `permission_classes`를 따라가며 각각에 `has_permission(request, view)`를 호출합니다. 어느 하나라도 False → `403 Forbidden`(익명이면 `401`).
-3. **Throttle.** `throttle_classes`를 따라가며 `allow_request`를 호출합니다. 어느 하나라도 False → `429 Too Many Requests`.
-
-그 후 뷰의 동작 메서드(`list`, `retrieve` 등)가 실행됩니다. 객체 수준 뷰의 경우 `get_object()`가 추가로 인스턴스를 가져온 뒤 `has_object_permission`을 검사합니다.
-
-#### C.3 출력에도 같은 패턴: 페이지네이션, 필터링
-
-출력 측은 입력을 거울처럼 따릅니다. `pagination_class`는 `paginate_queryset(queryset, request, view)`와 `get_paginated_response(data)`를 제공합니다. `filter_backends`는 `filter_queryset(request, queryset, view)`를 제공합니다. 각각이 파이프라인의 알려진 지점에서 호출되는 알려진 메서드를 가진 클래스입니다.
-
-이 균일성의 이득: 커스텀 인증, 권한, throttle, paginator, 필터를 작성하는 것이 같은 연습입니다 — 프로토콜을 구현하고, 클래스를 등록하고, 끝. "DRF를 어떻게 확장하지?"의 인지 부담이 "그 백엔드의 메서드 이름이 뭐였더라?"로 줄어듭니다.
-
-### 이론에서 아래 코드로
-
-뒤에 나오는 각 절은 이 틀의 한 조각을 구체화합니다.
-
-- §1 (DRF 설정)은 §C 백엔드 프로토콜이 읽는 전역 기본값을 구성합니다.
-- §2 (직렬화기)는 §A 양방향 파이프라인입니다. ModelSerializer(§A.3)와 검증 hook 포함.
-- §3 (뷰: APIView에서 ViewSet까지)는 추상화 사다리를 따라갑니다 — `APIView`는 §B의 원시 클래스, ViewSet은 관습 주도 확장.
-- §4 (라우터)는 §B.2를 구체적인 코드로 보여줍니다: `register()`가 URL 패턴을 자동 생성합니다.
-- §5 (인증)은 첫 번째 §C 백엔드 슬롯입니다 — token, JWT, session이 §C.1 프로토콜의 구현입니다.
-- §6 (권한)은 두 번째 §C 백엔드 슬롯입니다 — `IsAuthenticated`, `IsAdminUser`, 커스텀 객체 수준 검사.
-- §7 (페이지네이션)은 queryset을 페이지 크기 인지 응답으로 감싸는 §C.3 출력 백엔드입니다.
-- §8 (필터링과 검색)은 queryset 위에 쿼리 파라미터 필터링을 추가하는 또 다른 §C.3 백엔드입니다.
-
----
-
-## 1. DRF 설정
-
-```bash
-pip install djangorestframework~=3.15 django-filter~=24.3 djangorestframework-simplejwt~=5.3
-```
-
-```python
-# settings.py
-INSTALLED_APPS = [... "rest_framework", "django_filters"]
-
-REST_FRAMEWORK = {
-    "DEFAULT_AUTHENTICATION_CLASSES": [
-        "rest_framework.authentication.SessionAuthentication",
-        "rest_framework_simplejwt.authentication.JWTAuthentication",
-    ],
-    "DEFAULT_PERMISSION_CLASSES": [
-        "rest_framework.permissions.IsAuthenticatedOrReadOnly",
-    ],
-    "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
-    "PAGE_SIZE": 20,
-    "DEFAULT_FILTER_BACKENDS": [
-        "django_filters.rest_framework.DjangoFilterBackend",
-        "rest_framework.filters.SearchFilter",
-        "rest_framework.filters.OrderingFilter",
-    ],
-}
-```
-
-DRF는 브라우저에서 바로 사용할 수 있는 HTML 브라우저블 API(browsable API)를 기본으로 제공합니다.
-
----
-
-## 2. 직렬화기
-
-직렬화기(Serializer)는 모델 인스턴스를 JSON으로 변환하고 들어오는 데이터를 유효성 검사합니다(FastAPI의 Pydantic과 유사).
-
 ### ModelSerializer
 
 ```python
@@ -301,6 +178,63 @@ class PostSerializer(serializers.ModelSerializer):
 ## 3. 뷰: APIView에서 ViewSet까지
 
 DRF는 저수준부터 고수준까지 다양한 스펙트럼을 제공합니다:
+
+### 이론: ViewSet + Router: 관습 기반 리소스 매핑
+
+평범한 Django(레슨 10 §C.4)에서는 모든 URL이 명시적으로 매핑됩니다. DRF는 관습 계층을 더합니다. HTTP 동작에 매핑되는 메서드 이름의 클래스를 정의하고, Router에 등록하면 URL 패턴이 생성됩니다.
+
+#### B.1 동작 매핑
+
+`ModelViewSet`은 6개의 표준 메서드를 노출하며, 각각이 HTTP 메서드/경로에 묶여 있습니다.
+
+| 동작 | HTTP 메서드 | URL 패턴 |
+|--------|-------------|-------------|
+| `list` | GET | `/posts/` |
+| `create` | POST | `/posts/` |
+| `retrieve` | GET | `/posts/{pk}/` |
+| `update` | PUT | `/posts/{pk}/` |
+| `partial_update` | PATCH | `/posts/{pk}/` |
+| `destroy` | DELETE | `/posts/{pk}/` |
+
+다섯 줄 코드로 완전한 CRUD 엔드포인트 세트를 얻습니다.
+
+```python
+class PostViewSet(viewsets.ModelViewSet):
+    queryset = Post.objects.all()
+    serializer_class = PostSerializer
+```
+
+여섯 메서드 모두의 기본 구현이 `ModelViewSet`에서 상속됩니다. 커스터마이즈가 필요한 것만 override합니다.
+
+#### B.2 Router가 URL 배선을 한다
+
+```python
+router = DefaultRouter()
+router.register(r"posts", PostViewSet)
+urlpatterns = router.urls
+```
+
+`router.urls`는 명시적 `path()` 라인 6줄을 직접 쓰는 것과 동등한 `path(...)` 항목 리스트입니다. URL 패턴을 0개 작성했고, 레슨 01 §B.3의 완전한 REST 리소스 모양을 얻었습니다.
+
+#### B.3 커스텀 동작: `@action` 데코레이터
+
+비표준 엔드포인트(예: `POST /posts/{pk}/publish/`)에는 `@action` 데코레이터가 추가 메서드를 선언합니다.
+
+```python
+class PostViewSet(viewsets.ModelViewSet):
+    ...
+    @action(detail=True, methods=["post"])
+    def publish(self, request, pk=None):
+        post = self.get_object()
+        post.publish()
+        return Response({"status": "published"})
+```
+
+`detail=True`는 `/posts/{pk}/publish/`에 바인딩하고, `detail=False`는 `/posts/publish/`에 바인딩합니다. Router가 자동으로 픽업합니다.
+
+#### B.4 이것이 중요한 이유: REST 모양이 기본값이 된다
+
+DRF 없이는 모든 Django REST API가 "그것의 URL은 무엇이어야 하지?"에 대한 한 개발자의 해석입니다. DRF + ViewSet + Router로는 답이 프레임워크에 의해 고정됩니다. 표준 6개 동작이 표준 URL의 표준 HTTP 메서드에 매핑됩니다. 팀에 합류하는 새 개발자가 모델 리스트만 보고도 URL 표면의 90%를 예측할 수 있습니다.
 
 ### APIView (완전한 제어)
 
@@ -385,6 +319,47 @@ urlpatterns = [path("api/", include(router.urls))]
 ---
 
 ## 5. 인증
+
+### 이론: 플러그 가능한 백엔드 프로토콜
+
+DRF의 모든 횡단 관심사 — 인증, 권한, throttle, 페이지네이션, 필터 — 는 같은 플러그인 패턴을 따릅니다: 잘 알려진 메서드 하나를 가진 클래스를 리스트에 등록하면, 뷰가 적절한 시점에 호출합니다.
+
+#### C.1 모양
+
+```python
+class MyAuthentication(BaseAuthentication):
+    def authenticate(self, request):
+        # 성공 시 (user, auth_token) 반환, 자격 증명 없으면 None, 잘못된 자격 증명이면 throw
+        ...
+
+class MyPermission(BasePermission):
+    def has_permission(self, request, view):
+        return True or False  # 뷰에 대해 전역
+    def has_object_permission(self, request, view, obj):
+        return True or False  # 객체별 검사
+
+class MyThrottle(BaseThrottle):
+    def allow_request(self, request, view):
+        return True or False
+```
+
+각 백엔드는 (구조적 타이핑 의미에서) *프로토콜*입니다. 올바른 메서드를 구현하면 DRF가 그것을 유효한 구현으로 취급합니다.
+
+#### C.2 실행 순서
+
+한 요청에 대해 DRF의 `APIView.initial(request)`가 실행됩니다.
+
+1. **인증.** `authentication_classes` 리스트를 따라갑니다. 처음 `(user, auth)`를 반환하는 것이 이기고 `request.user`와 `request.auth`를 설정합니다. 매치된 것이 없으면 `request.user = AnonymousUser`.
+2. **권한.** `permission_classes`를 따라가며 각각에 `has_permission(request, view)`를 호출합니다. 어느 하나라도 False → `403 Forbidden`(익명이면 `401`).
+3. **Throttle.** `throttle_classes`를 따라가며 `allow_request`를 호출합니다. 어느 하나라도 False → `429 Too Many Requests`.
+
+그 후 뷰의 동작 메서드(`list`, `retrieve` 등)가 실행됩니다. 객체 수준 뷰의 경우 `get_object()`가 추가로 인스턴스를 가져온 뒤 `has_object_permission`을 검사합니다.
+
+#### C.3 출력에도 같은 패턴: 페이지네이션, 필터링
+
+출력 측은 입력을 거울처럼 따릅니다. `pagination_class`는 `paginate_queryset(queryset, request, view)`와 `get_paginated_response(data)`를 제공합니다. `filter_backends`는 `filter_queryset(request, queryset, view)`를 제공합니다. 각각이 파이프라인의 알려진 지점에서 호출되는 알려진 메서드를 가진 클래스입니다.
+
+이 균일성의 이득: 커스텀 인증, 권한, throttle, paginator, 필터를 작성하는 것이 같은 연습입니다 — 프로토콜을 구현하고, 클래스를 등록하고, 끝. "DRF를 어떻게 확장하지?"의 인지 부담이 "그 백엔드의 메서드 이름이 뭐였더라?"로 줄어듭니다.
 
 ### JWT (SimpleJWT)
 

@@ -14,8 +14,6 @@
 
 ## 목차
 
-도구 참조에 들어가기 전에, [**이론과 원리**](#이론과-원리) 섹션을 먼저 읽어보세요. 세 기둥(metrics/logs/traces)의 형식적 정의, W3C Trace Context와 span이 서비스 경계를 가로질러 어떻게 전파되는지, 그리고 OpenTelemetry의 semantic convention과 함께하는 Prometheus의 pull 기반 메트릭 모델을 다룹니다.
-
 1. [관찰 가능성의 세 기둥](#1-관찰-가능성의-세-기둥)
 2. [구조화 로깅](#2-구조화-로깅)
 3. [Prometheus를 이용한 메트릭](#3-prometheus를-이용한-메트릭)
@@ -27,15 +25,11 @@
 
 ---
 
-## 이론과 원리
+## 1. 관찰 가능성의 세 기둥
 
-관찰 가능성은 "로깅 + 메트릭 + 트레이싱"을 쌓아 둔 것이 *아닙니다*. 세 기둥이 존재하는 이유는 각각이 다른 기둥이 답할 수 없는 다른 부류의 질문에 답하기 때문입니다. 형식적 분리를 이해하면 도구가 제 자리를 찾습니다.
+관찰 가능성(Observability)은 시스템의 외부 출력을 검사하여 내부 상태를 이해하는 능력이다. 세 기둥은 시스템 동작에 대한 상호 보완적인 관점을 제공한다.
 
-- **(A) 세 기둥: metrics, logs, traces** — 각 기둥이 무엇을 잘하고, 어디서 실패하며, 왜 셋 다 필요한가.
-- **(B) 분산 트레이싱: W3C Trace Context와 span 전파** — 요청이 서비스 경계를 가로질러 살아남는 고유 trace ID를 어떻게 얻는가.
-- **(C) Prometheus: pull 기반 메트릭과 OpenTelemetry semantic convention** — 지배적 메트릭 모델과 표준 명명.
-
-### A. 세 기둥
+### 이론: 세 기둥
 
 각 기둥은 시스템 동작의 다른 *인코딩*이며, 다른 질문에 최적화되어 있습니다.
 
@@ -91,114 +85,6 @@ Traces는 서비스를 가로지르는 *인과성*을 포착하는 유일한 기
 - **Metrics**는 모니터링과 알림에(연속, 낮은 카디널리티).
 - **Traces**는 서비스를 통과하는 단일 요청의 경로를 이해하는 데.
 - **Logs**는 이미 범위를 좁힌 후(종종 trace ID를 통해) 특정 이벤트의 전체 세부 사항에.
-
-### B. 분산 트레이싱: W3C Trace Context
-
-Trace가 작동하는 이유는 모든 서비스가 HTTP 경계를 가로질러 trace ID를 *전파*하는 공통 프로토콜을 말하기 때문입니다. W3C Trace Context 표준(W3C Recommendation, 2020)이 이전의 임시 Zipkin / Jaeger 헤더를 대체했습니다.
-
-#### B.1 두 헤더
-
-```
-traceparent: 00-{trace_id}-{parent_span_id}-{flags}
-tracestate: vendor1=val,vendor2=val
-```
-
-`traceparent`는 필수이며 다음을 운반합니다.
-
-- `00` — 명세 버전.
-- `trace_id` — trace를 식별하는 16바이트 16진 ID(요청의 모든 서비스에서 동일).
-- `parent_span_id` — *부모* span의 8바이트 span ID(upstream 호출자).
-- `flags` — sampled / not sampled 비트.
-
-`tracestate`는 벤더 특화 확장 데이터입니다.
-
-#### B.2 전파 작동 방식
-
-서비스 A가 HTTP로 서비스 B를 호출할 때:
-
-1. A의 tracer가 들어오는 요청 헤더를 읽습니다. `traceparent`가 있으면 그 trace에 합류하고, 없으면 새로 시작합니다.
-2. A가 새 span을 만듭니다(받은 무엇이든의 자식).
-3. B를 호출하기 전, A가 `traceparent: 00-{trace_id}-{A의_span_id}-01`을 나가는 요청 헤더에 주입합니다.
-4. B가 그 헤더를 받고 trace를 계속하며, B의 span은 A의 span의 자식입니다.
-
-Trace 트리는 모든 서비스가 협력해서 만듭니다. 각자가 자체 span을 기여하고, ID가 그것들을 연결합니다. 수집된 span은 (out-of-band로, OTLP/gRPC로) 트레이싱 백엔드(Jaeger, Tempo, Honeycomb)로 보내져 완전한 trace로 꿰매집니다.
-
-#### B.3 샘플링
-
-모든 요청을 trace하면 네트워크와 저장 비용이 곱해집니다. 프로덕션 시스템은 샘플합니다: 1%의 trace를 보관하거나, 100%의 오류 trace와 0.1%의 성공 trace를 보관합니다. 두 가지 주된 전략:
-
-- **Head-based 샘플링.** 시작에서(첫 서비스에서) 샘플할지를 결정합니다. 결정은 `traceparent`의 `flags` 바이트에 있습니다. 저렴하지만 나중에 일어나는 일에 기반해 결정을 내릴 수 없습니다(예: "느린 trace는 항상 보관").
-- **Tail-based 샘플링.** 모든 span을 버퍼링하고, trace가 완료된 후 결정합니다. 모든 오류 trace, 모든 느린 trace를 보관하고 성공 trace는 샘플할 수 있습니다. 더 비쌉니다(버퍼링하는 OpenTelemetry Collector 같은 사이드카가 필요).
-
-### C. Prometheus와 OpenTelemetry
-
-Prometheus는 지배적 오픈 소스 메트릭 시스템입니다. 그 모델은 의견이 강하며 업계가 메트릭에 대해 생각하는 방식을 형성했습니다.
-
-#### C.1 Pull 기반 스크레이핑
-
-대부분의 메트릭 시스템은 *push*입니다: 앱이 백엔드로 메트릭을 보냅니다. Prometheus는 *pull*입니다: 백엔드가 각 앱이 노출하는 `/metrics` 엔드포인트를 주기적으로 스크레이프합니다.
-
-```
-Prometheus 서버                          앱
-     │                                   │
-     │── GET /metrics ──────────────────►│
-     │◄── http_requests_total{...} ─────│
-     │   ... (텍스트 형식) ...            │
-     │ (15초마다)                         │
-```
-
-Pull 기반의 성질:
-
-- **서비스 발견이 중앙집중**됩니다 — 앱이 아니라 Prometheus에.
-- **실패한 스크레이프가 보입니다** — `up{job="..."}` 메트릭으로. 앱이 도달 불가능한 것 자체가 신호입니다.
-- **앱이 Prometheus를 모릅니다** — 그저 `/metrics`를 노출할 뿐입니다. 같은 엔드포인트가 호환되는 어떤 스크레이퍼와도 작동합니다.
-
-단점: 단명 작업(cron, batch)이 스크레이프되기 전에 끝날 수 있습니다. 해결책은 *Pushgateway*입니다 — Prometheus가 수집할 때까지 메트릭을 보관하는 중간 서비스.
-
-#### C.2 네 가지 메트릭 타입
-
-| 타입 | 측정하는 것 | 예시 |
-|------|------------------|---------|
-| Counter | 단조 증가하는 총합 | requests_total, errors_total |
-| Gauge | 현재 값(올라가거나 내려갈 수 있음) | memory_bytes, queue_depth |
-| Histogram | 관측의 버킷 분포 | request_duration_seconds |
-| Summary | 슬라이딩 윈도우의 분위수 추정 | response_size_bytes |
-
-Histogram이 SLO 작업에 가장 중요합니다. 버킷 카운트를 읽어 "100ms 미만인 요청의 비율은?"을 물어볼 수 있게 해줍니다. Summary는 클라이언트 측에서 분위수를 계산하므로 인스턴스 간 집계가 더 어려워집니다. Histogram이 보통 선호됩니다.
-
-#### C.3 OpenTelemetry semantic convention
-
-OpenTelemetry(OTel)는 trace와 metric 모두를 위한 떠오르는 표준이며, 모든 주요 언어에 벤더 중립 SDK를 제공합니다. 가장 큰 기여는 **semantic conventions** — 흔한 속성에 대한 표준 명명 체계입니다.
-
-```
-http.request.method = GET
-http.response.status_code = 200
-http.route = /users/{id}
-db.system = postgresql
-db.statement = SELECT * FROM ...
-```
-
-모든 서비스가 같은 속성 이름을 쓰면 대시보드와 알림이 서비스 간에 작동합니다. Semantic convention 이전에는 모든 팀이 자체 명명을 발명했고 대시보드는 팀별이었습니다. 그것과 함께라면 "HTTP 요청의 95번째 백분위 지연시간을 route별로 보여주세요"가 OTel로 계측된 어떤 서비스에서도 작동하는 한 쿼리입니다.
-
-추세는 OTel을 앱 측의 *벤더 중립 SDK*로 두고, 플랫폼이 사용하는 백엔드(Jaeger, Tempo, Datadog, Honeycomb)로 OTLP를 통해 export하는 것입니다. 백엔드는 바뀔 수 있고, 계측은 바뀌지 않습니다.
-
-### 이론에서 아래 도구로
-
-뒤에 나오는 각 절은 이 틀의 한 조각을 구체화합니다.
-
-- §1 (세 기둥)은 §A를 구체적인 예제로.
-- §2 (구조화 로깅)은 §A.2 logs 기둥입니다 — JSON 출력, correlation ID, OTel `trace_id` 주입.
-- §3 (Prometheus를 이용한 메트릭)은 §C.1(pull 모델)과 §C.2(네 타입)을 구체적인 코드로.
-- §4 (OpenTelemetry를 이용한 분산 추적)은 §B(W3C Trace Context)와 §C.3(semantic convention)을 코드로.
-- §5 (Grafana 대시보드)는 §C.1의 메트릭을 읽는 시각화 계층입니다.
-- §6 (알림 전략)은 §C 메트릭 위에 세워졌습니다 — 원시 원인이 아니라 SLO 위반에 대한 증상 기반 알림.
-- §7 (Sentry를 이용한 오류 추적)은 예외에 특화된 §A.2 logs 기둥이며, 스택 트레이스와 그룹화가 있습니다.
-
----
-
-## 1. 관찰 가능성의 세 기둥
-
-관찰 가능성(Observability)은 시스템의 외부 출력을 검사하여 내부 상태를 이해하는 능력이다. 세 기둥은 시스템 동작에 대한 상호 보완적인 관점을 제공한다.
 
 ### 로그(Logs): 무슨 일이 일어났나
 
@@ -388,6 +274,58 @@ app.get("/users/:id", (req, res) => {
 
 Prometheus(프로메테우스)는 HTTP 엔드포인트를 스크래핑(scraping)하여 메트릭을 수집한다. 애플리케이션은 Prometheus 텍스트 형식으로 메트릭 값을 반환하는 `/metrics` 엔드포인트를 노출한다.
 
+### 이론: Prometheus와 OpenTelemetry
+
+Prometheus는 지배적 오픈 소스 메트릭 시스템입니다. 그 모델은 의견이 강하며 업계가 메트릭에 대해 생각하는 방식을 형성했습니다.
+
+#### C.1 Pull 기반 스크레이핑
+
+대부분의 메트릭 시스템은 *push*입니다: 앱이 백엔드로 메트릭을 보냅니다. Prometheus는 *pull*입니다: 백엔드가 각 앱이 노출하는 `/metrics` 엔드포인트를 주기적으로 스크레이프합니다.
+
+```
+Prometheus 서버                          앱
+     │                                   │
+     │── GET /metrics ──────────────────►│
+     │◄── http_requests_total{...} ─────│
+     │   ... (텍스트 형식) ...            │
+     │ (15초마다)                         │
+```
+
+Pull 기반의 성질:
+
+- **서비스 발견이 중앙집중**됩니다 — 앱이 아니라 Prometheus에.
+- **실패한 스크레이프가 보입니다** — `up{job="..."}` 메트릭으로. 앱이 도달 불가능한 것 자체가 신호입니다.
+- **앱이 Prometheus를 모릅니다** — 그저 `/metrics`를 노출할 뿐입니다. 같은 엔드포인트가 호환되는 어떤 스크레이퍼와도 작동합니다.
+
+단점: 단명 작업(cron, batch)이 스크레이프되기 전에 끝날 수 있습니다. 해결책은 *Pushgateway*입니다 — Prometheus가 수집할 때까지 메트릭을 보관하는 중간 서비스.
+
+#### C.2 네 가지 메트릭 타입
+
+| 타입 | 측정하는 것 | 예시 |
+|------|------------------|---------|
+| Counter | 단조 증가하는 총합 | requests_total, errors_total |
+| Gauge | 현재 값(올라가거나 내려갈 수 있음) | memory_bytes, queue_depth |
+| Histogram | 관측의 버킷 분포 | request_duration_seconds |
+| Summary | 슬라이딩 윈도우의 분위수 추정 | response_size_bytes |
+
+Histogram이 SLO 작업에 가장 중요합니다. 버킷 카운트를 읽어 "100ms 미만인 요청의 비율은?"을 물어볼 수 있게 해줍니다. Summary는 클라이언트 측에서 분위수를 계산하므로 인스턴스 간 집계가 더 어려워집니다. Histogram이 보통 선호됩니다.
+
+#### C.3 OpenTelemetry semantic convention
+
+OpenTelemetry(OTel)는 trace와 metric 모두를 위한 떠오르는 표준이며, 모든 주요 언어에 벤더 중립 SDK를 제공합니다. 가장 큰 기여는 **semantic conventions** — 흔한 속성에 대한 표준 명명 체계입니다.
+
+```
+http.request.method = GET
+http.response.status_code = 200
+http.route = /users/{id}
+db.system = postgresql
+db.statement = SELECT * FROM ...
+```
+
+모든 서비스가 같은 속성 이름을 쓰면 대시보드와 알림이 서비스 간에 작동합니다. Semantic convention 이전에는 모든 팀이 자체 명명을 발명했고 대시보드는 팀별이었습니다. 그것과 함께라면 "HTTP 요청의 95번째 백분위 지연시간을 route별로 보여주세요"가 OTel로 계측된 어떤 서비스에서도 작동하는 한 쿼리입니다.
+
+추세는 OTel을 앱 측의 *벤더 중립 SDK*로 두고, 플랫폼이 사용하는 백엔드(Jaeger, Tempo, Datadog, Honeycomb)로 OTLP를 통해 export하는 것입니다. 백엔드는 바뀔 수 있고, 계측은 바뀌지 않습니다.
+
 ### 메트릭 유형
 
 | 유형      | 설명                              | 예시                                     |
@@ -435,20 +373,17 @@ DB_QUERY_DURATION = Histogram(
     buckets=[0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5],
 )
 
-
 @app.post("/users")
 async def create_user(user: UserCreate):
     result = await save_user(user)
     USERS_CREATED.labels(registration_method="email").inc()
     return result
 
-
 @app.post("/payments")
 async def process_payment(payment: PaymentRequest):
     result = await charge(payment)
     PAYMENT_AMOUNT.observe(payment.amount)
     return result
-
 
 # Database query timing helper
 class QueryTimer:
@@ -466,7 +401,6 @@ class QueryTimer:
         DB_QUERY_DURATION.labels(
             query_type=self.query_type, table=self.table
         ).observe(duration)
-
 
 # Usage
 async def get_user_by_id(user_id: int):
@@ -502,6 +436,44 @@ scrape_configs:
 ## 4. OpenTelemetry를 이용한 분산 추적
 
 OpenTelemetry(OTel)는 분산 추적의 업계 표준이다. Jaeger, Zipkin, Grafana Tempo 또는 OTLP 호환 백엔드로 내보낼 수 있는 벤더 중립적인 계측 도구를 제공한다.
+
+### 이론: 분산 트레이싱: W3C Trace Context
+
+Trace가 작동하는 이유는 모든 서비스가 HTTP 경계를 가로질러 trace ID를 *전파*하는 공통 프로토콜을 말하기 때문입니다. W3C Trace Context 표준(W3C Recommendation, 2020)이 이전의 임시 Zipkin / Jaeger 헤더를 대체했습니다.
+
+#### B.1 두 헤더
+
+```
+traceparent: 00-{trace_id}-{parent_span_id}-{flags}
+tracestate: vendor1=val,vendor2=val
+```
+
+`traceparent`는 필수이며 다음을 운반합니다.
+
+- `00` — 명세 버전.
+- `trace_id` — trace를 식별하는 16바이트 16진 ID(요청의 모든 서비스에서 동일).
+- `parent_span_id` — *부모* span의 8바이트 span ID(upstream 호출자).
+- `flags` — sampled / not sampled 비트.
+
+`tracestate`는 벤더 특화 확장 데이터입니다.
+
+#### B.2 전파 작동 방식
+
+서비스 A가 HTTP로 서비스 B를 호출할 때:
+
+1. A의 tracer가 들어오는 요청 헤더를 읽습니다. `traceparent`가 있으면 그 trace에 합류하고, 없으면 새로 시작합니다.
+2. A가 새 span을 만듭니다(받은 무엇이든의 자식).
+3. B를 호출하기 전, A가 `traceparent: 00-{trace_id}-{A의_span_id}-01`을 나가는 요청 헤더에 주입합니다.
+4. B가 그 헤더를 받고 trace를 계속하며, B의 span은 A의 span의 자식입니다.
+
+Trace 트리는 모든 서비스가 협력해서 만듭니다. 각자가 자체 span을 기여하고, ID가 그것들을 연결합니다. 수집된 span은 (out-of-band로, OTLP/gRPC로) 트레이싱 백엔드(Jaeger, Tempo, Honeycomb)로 보내져 완전한 trace로 꿰매집니다.
+
+#### B.3 샘플링
+
+모든 요청을 trace하면 네트워크와 저장 비용이 곱해집니다. 프로덕션 시스템은 샘플합니다: 1%의 trace를 보관하거나, 100%의 오류 trace와 0.1%의 성공 trace를 보관합니다. 두 가지 주된 전략:
+
+- **Head-based 샘플링.** 시작에서(첫 서비스에서) 샘플할지를 결정합니다. 결정은 `traceparent`의 `flags` 바이트에 있습니다. 저렴하지만 나중에 일어나는 일에 기반해 결정을 내릴 수 없습니다(예: "느린 trace는 항상 보관").
+- **Tail-based 샘플링.** 모든 span을 버퍼링하고, trace가 완료된 후 결정합니다. 모든 오류 trace, 모든 느린 trace를 보관하고 성공 trace는 샘플할 수 있습니다. 더 비쌉니다(버퍼링하는 OpenTelemetry Collector 같은 사이드카가 필요).
 
 ### 핵심 개념
 

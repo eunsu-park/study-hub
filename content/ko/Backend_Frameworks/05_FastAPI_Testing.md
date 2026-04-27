@@ -18,8 +18,6 @@
 
 ## 목차
 
-프레임워크 참조에 들어가기 전에, [**이론과 원리**](#이론과-원리) 섹션을 먼저 읽어보세요. TestClient가 ASGI 위에서 in-process로 무엇을 하는지, pytest 픽스처의 네 가지 범위와 그 생명주기 함의가 무엇인지, 그리고 dependency_overrides + 트랜잭션 롤백이 어떻게 일회용 데이터베이스 없이 격리를 주는지를 다룹니다.
-
 1. [동기 테스트를 위한 TestClient](#1-동기-테스트를-위한-testclient)
 2. [비동기 테스트를 위한 httpx.AsyncClient](#2-비동기-테스트를-위한-httpxasyncclient)
 3. [pytest 픽스처와 conftest.py](#3-pytest-픽스처와-conftestpy)
@@ -32,15 +30,11 @@
 
 ---
 
-## 이론과 원리
+## 1. 동기 테스트를 위한 TestClient
 
-FastAPI 애플리케이션의 테스트 스위트는 그저 "엔드포인트를 호출하고 JSON을 검사하는 것"이 아닙니다. 빠르고, 격리되고, 정확한 스위트가 되려면 별도로 이해해야 할 세 가지 독립된 메커니즘 위에 얹혀 있습니다.
+FastAPI의 `TestClient`는 `httpx`를 감싸(wrap) 실제 서버를 실행하지 않고도 앱에 요청을 전송합니다. 동기 방식이기 때문에 테스트에서 `async/await`를 사용할 필요가 없습니다.
 
-- **(A) ASGI 트랜스포트를 통한 in-process HTTP** — `TestClient`는 TCP 소켓을 열지 않고, 앱 객체와 직접 ASGI로 대화합니다.
-- **(B) 생명주기 위계로서의 픽스처 범위** — `function`, `class`, `module`, `session`이 무엇을 한 번 만들지, 무엇을 매 테스트마다 다시 만들지를 결정합니다.
-- **(C) 테스트 격리 전략** — 트랜잭션 롤백, 테스트별 데이터베이스, 의존성 주입이 함께 "이 테스트가 다른 테스트의 데이터를 볼 수 없다"는 계약을 형성합니다.
-
-### A. In-process ASGI 트랜스포트
+### 이론: In-process ASGI 트랜스포트
 
 프로덕션에서 HTTP 요청은 이렇게 흐릅니다: 클라이언트 → 커널 → TCP → 커널 → uvicorn → ASGI → FastAPI → 핸들러. 테스트에서는 그 전체 체인이 과합니다. `TestClient`(그리고 `ASGITransport`가 있는 `httpx.AsyncClient`)는 이를 압축합니다: 클라이언트 → ASGI dict → FastAPI → 핸들러. FastAPI 안의 코드 경로는 동일하고, 소켓은 관여하지 않습니다.
 
@@ -65,109 +59,6 @@ FastAPI 애플리케이션의 테스트 스위트는 그저 "엔드포인트를 
 `TestClient`는 동기 래퍼이고, 내부적으로는 비동기 앱을 내부 이벤트 루프에서 돌립니다. 픽스처를 await하는 `async def` 핸들러 테스트에는 보통 `httpx.AsyncClient`를 `ASGITransport(app=app)`와 함께 직접 쓰는 것이 좋습니다 — 그렇게 하면 테스트 코드와 핸들러가 같은 이벤트 루프를 공유하고, 픽스처 자원을 자연스럽게 await할 수 있습니다.
 
 선택은 사용성의 문제이지 성능 문제가 아닙니다. 둘 다 같은 ASGI 메커니즘으로 흐릅니다.
-
-### B. 픽스처 범위: 생명주기 위계
-
-pytest 픽스처는 좁은 것부터 넓은 것 순서로 네 개의 내장 범위를 가집니다.
-
-| 범위 | 만들어지는 시점 | 해체되는 시점 | 비용 분산 단위 |
-|-------|------------|----------------|---------------------|
-| `function`(기본) | 각 테스트 시작 | 각 테스트 종료 | 테스트 1개 |
-| `class` | 클래스의 첫 테스트가 필요로 할 때 | 클래스의 마지막 테스트 종료 | 클래스의 모든 테스트 |
-| `module` | 파일의 첫 테스트가 필요로 할 때 | 파일의 마지막 테스트 종료 | 파일의 모든 테스트 |
-| `session` | 실행의 첫 테스트가 필요로 할 때 | 실행 전체 종료 | 전체 테스트 스위트 |
-
-선택은 **격리**와 **속도** 사이의 트레이드오프입니다.
-
-- 전체 SQLAlchemy 엔진을 `function` 범위로 만드는 것은 정확하지만 매우 느립니다 — 엔진 설정 비용 × N개 테스트를 치릅니다.
-- `session` 범위로 만들면 빠르지만, 리셋하지 않으면 테스트 간 상태 누수의 위험이 있습니다.
-
-관용적 패턴: 무거운 읽기 전용 자원은 `session`(엔진, FastAPI 앱 인스턴스). 변경 가능한 테스트별 상태는 `function`(데이터베이스 세션, HTTP 클라이언트, 의존성 override). 이렇게 하면 설정 비용을 최소화하면서 각 테스트의 변경이 이웃에게 보이지 않게 유지됩니다.
-
-#### B.1 픽스처 합성
-
-픽스처는 다른 픽스처를 이름으로 요청할 수 있습니다.
-
-```python
-@pytest.fixture(scope="session")
-def engine(): ...
-
-@pytest.fixture(scope="function")
-def db_session(engine): ...
-
-@pytest.fixture(scope="function")
-def client(db_session): ...
-```
-
-pytest는 (레슨 03의 FastAPI Depends DAG처럼) DAG를 만들고, 범위를 존중하며(`function`은 자기보다 좁은 범위를 의존할 수 없지만, 더 넓은 범위에 의존하는 것은 괜찮습니다), 빌드 역순으로 해체합니다.
-
-#### B.2 설정/해체를 위한 `yield`
-
-픽스처의 `yield` 패턴은 레슨 03의 Depends 패턴과 일치합니다.
-
-```python
-@pytest.fixture
-def db_session(engine):
-    connection = engine.connect()
-    transaction = connection.begin()
-    session = SessionLocal(bind=connection)
-    try:
-        yield session
-    finally:
-        session.close()
-        transaction.rollback()
-        connection.close()
-```
-
-yield 이전에 설정, 이후에 해체. 테스트가 실패해도 해체는 실행됩니다. 이것이 §C 테스트 격리의 토대입니다.
-
-### C. 테스트 격리: 세 가지 메커니즘
-
-테스트 스위트에서 가장 유지하기 어려운 성질이 **격리**입니다. 테스트 B가 테스트 A가 한 일을 보아서는 안 됩니다. 세 가지 메커니즘이 함께 작동해 이를 제공합니다.
-
-#### C.1 트랜잭션 롤백
-
-매 테스트마다 데이터베이스를 drop하고 재생성하는 대신, 각 테스트를 끝에서 롤백되는 트랜잭션으로 감쌉니다.
-
-```
-BEGIN
-  ... 테스트 실행, INSERT, UPDATE ...
-ROLLBACK
-```
-
-데이터베이스는 시작 상태로 돌아가지만, 테스트마다 `CREATE TABLE` 비용은 치르지 않습니다. SQLAlchemy의 표준 패턴입니다. 세션을 연결에 고정하고, 트랜잭션을 시작하고, 세션을 테스트에 넘겨주고, 끝나면 롤백.
-
-미묘한 점: 테스트 코드가 직접 `session.commit()`을 호출해서는 안 됩니다. 그러면 바깥 트랜잭션이 닫혀 버립니다. 해결책은 **세이브포인트(savepoint)**(`SAVEPOINT` / `ROLLBACK TO SAVEPOINT`) — 중첩 트랜잭션입니다. SQLAlchemy는 `connection.begin_nested()`와 commit 후 새 세이브포인트를 다시 여는 hook으로 이를 제공합니다. 테스트는 정상적인 commit 의미를 보지만, 바깥 트랜잭션은 여전히 롤백됩니다.
-
-#### C.2 페이크를 위한 dependency_overrides
-
-`app.dependency_overrides[get_db] = override_get_db`(레슨 03 §A.4)는 테스트가 어떤 의존성의 가짜 구현을 대체할 수 있게 해줍니다. 데이터베이스 테스트에서는 override가 테스트의 트랜잭션 세션을 반환합니다. 외부 API 테스트에서는 가짜 클라이언트를 반환합니다. 핸들러는 수정되지 않지만 이제 테스트가 통제하는 더블을 받습니다.
-
-override는 `TestClient`가 첫 요청을 보내기 *전에* 설정되어야 하고, 끝난 후에 해체되어야 합니다 — 보통은 픽스처의 setup/teardown에서. 그렇지 않으면 override가 다음 테스트로 누수됩니다.
-
-#### C.3 테스트별이 아니라 워커별 데이터베이스
-
-테스트가 병렬로 실행될 때(`pytest-xdist`), 모든 워커가 한 SQLite 파일이나 한 PostgreSQL 스키마를 공유해서는 안 됩니다 — 서로를 짓밟습니다. 패턴은 **워커당 데이터베이스 1개**입니다. pytest는 `worker_id`("gw0", "gw1", ...)를 노출하고, 데이터베이스 이름에 그것을 접미합니다. 워커 안에서는 테스트가 여전히 직렬화되므로 트랜잭션 롤백이 그대로 작동합니다.
-
-조합 — 워커당 session 범위 엔진, function 범위 트랜잭션 세션, 의존성 override된 핸들러 — 이 올바른 균형을 줍니다. 각 테스트가 격리되고, 스위트는 초 단위로 실행되며, 병렬성은 워커 수에 선형으로 확장됩니다.
-
-### 이론에서 아래 코드로
-
-뒤에 나오는 각 절은 이 틀의 한 조각을 구체화합니다.
-
-- §1 (TestClient)는 §A.1 in-process ASGI 트랜스포트에 동기 래퍼를 입힌 것입니다.
-- §2 (httpx.AsyncClient)는 같은 §A.1 트랜스포트를 비동기 테스트에서 사용해 `async def` 픽스처와 루프를 공유합니다.
-- §3 (pytest 픽스처와 conftest.py)는 §B의 범위 위계와 DAG 합성을 공유 파일로 조직합니다.
-- §4 (데이터베이스 픽스처)는 §B.2 yield 패턴 위에 §C.1 트랜잭션 롤백을 구현합니다.
-- §5 (dependency_overrides)는 §C.2 메커니즘입니다 — 핸들러를 바꾸지 않고 페이크를 대체.
-- §6 (인증 흐름)은 TestClient를 사용해 "로그인 → 토큰 사용" 시퀀스를 체이닝합니다 — 인증 헤더가 있는 §A 경로입니다.
-- §7 (커버리지)는 §A–§C의 테스트 스위트가 실제로 어떤 코드 경로를 시험하는지를 측정하는 메타 도구입니다.
-
----
-
-## 1. 동기 테스트를 위한 TestClient
-
-FastAPI의 `TestClient`는 `httpx`를 감싸(wrap) 실제 서버를 실행하지 않고도 앱에 요청을 전송합니다. 동기 방식이기 때문에 테스트에서 `async/await`를 사용할 필요가 없습니다.
 
 ### 기본 설정
 
@@ -349,6 +240,61 @@ async def test_create_and_get_user(async_client: AsyncClient):
 
 픽스처(fixture)는 재사용 가능한 테스트 설정/해제(setup/teardown) 함수입니다. `conftest.py`는 픽스처를 직접 임포트하지 않아도 디렉토리 내 모든 테스트에서 사용 가능하게 합니다.
 
+### 이론: 픽스처 범위: 생명주기 위계
+
+pytest 픽스처는 좁은 것부터 넓은 것 순서로 네 개의 내장 범위를 가집니다.
+
+| 범위 | 만들어지는 시점 | 해체되는 시점 | 비용 분산 단위 |
+|-------|------------|----------------|---------------------|
+| `function`(기본) | 각 테스트 시작 | 각 테스트 종료 | 테스트 1개 |
+| `class` | 클래스의 첫 테스트가 필요로 할 때 | 클래스의 마지막 테스트 종료 | 클래스의 모든 테스트 |
+| `module` | 파일의 첫 테스트가 필요로 할 때 | 파일의 마지막 테스트 종료 | 파일의 모든 테스트 |
+| `session` | 실행의 첫 테스트가 필요로 할 때 | 실행 전체 종료 | 전체 테스트 스위트 |
+
+선택은 **격리**와 **속도** 사이의 트레이드오프입니다.
+
+- 전체 SQLAlchemy 엔진을 `function` 범위로 만드는 것은 정확하지만 매우 느립니다 — 엔진 설정 비용 × N개 테스트를 치릅니다.
+- `session` 범위로 만들면 빠르지만, 리셋하지 않으면 테스트 간 상태 누수의 위험이 있습니다.
+
+관용적 패턴: 무거운 읽기 전용 자원은 `session`(엔진, FastAPI 앱 인스턴스). 변경 가능한 테스트별 상태는 `function`(데이터베이스 세션, HTTP 클라이언트, 의존성 override). 이렇게 하면 설정 비용을 최소화하면서 각 테스트의 변경이 이웃에게 보이지 않게 유지됩니다.
+
+#### B.1 픽스처 합성
+
+픽스처는 다른 픽스처를 이름으로 요청할 수 있습니다.
+
+```python
+@pytest.fixture(scope="session")
+def engine(): ...
+
+@pytest.fixture(scope="function")
+def db_session(engine): ...
+
+@pytest.fixture(scope="function")
+def client(db_session): ...
+```
+
+pytest는 (레슨 03의 FastAPI Depends DAG처럼) DAG를 만들고, 범위를 존중하며(`function`은 자기보다 좁은 범위를 의존할 수 없지만, 더 넓은 범위에 의존하는 것은 괜찮습니다), 빌드 역순으로 해체합니다.
+
+#### B.2 설정/해체를 위한 `yield`
+
+픽스처의 `yield` 패턴은 레슨 03의 Depends 패턴과 일치합니다.
+
+```python
+@pytest.fixture
+def db_session(engine):
+    connection = engine.connect()
+    transaction = connection.begin()
+    session = SessionLocal(bind=connection)
+    try:
+        yield session
+    finally:
+        session.close()
+        transaction.rollback()
+        connection.close()
+```
+
+yield 이전에 설정, 이후에 해체. 테스트가 실패해도 해체는 실행됩니다. 이것이 §C 테스트 격리의 토대입니다.
+
 ### 프로젝트 구조
 
 ```
@@ -462,6 +408,36 @@ def sample_user_data() -> dict:
 ---
 
 ## 4. 데이터베이스 픽스처
+
+### 이론: 테스트 격리: 세 가지 메커니즘
+
+테스트 스위트에서 가장 유지하기 어려운 성질이 **격리**입니다. 테스트 B가 테스트 A가 한 일을 보아서는 안 됩니다. 세 가지 메커니즘이 함께 작동해 이를 제공합니다.
+
+#### C.1 트랜잭션 롤백
+
+매 테스트마다 데이터베이스를 drop하고 재생성하는 대신, 각 테스트를 끝에서 롤백되는 트랜잭션으로 감쌉니다.
+
+```
+BEGIN
+  ... 테스트 실행, INSERT, UPDATE ...
+ROLLBACK
+```
+
+데이터베이스는 시작 상태로 돌아가지만, 테스트마다 `CREATE TABLE` 비용은 치르지 않습니다. SQLAlchemy의 표준 패턴입니다. 세션을 연결에 고정하고, 트랜잭션을 시작하고, 세션을 테스트에 넘겨주고, 끝나면 롤백.
+
+미묘한 점: 테스트 코드가 직접 `session.commit()`을 호출해서는 안 됩니다. 그러면 바깥 트랜잭션이 닫혀 버립니다. 해결책은 **세이브포인트(savepoint)**(`SAVEPOINT` / `ROLLBACK TO SAVEPOINT`) — 중첩 트랜잭션입니다. SQLAlchemy는 `connection.begin_nested()`와 commit 후 새 세이브포인트를 다시 여는 hook으로 이를 제공합니다. 테스트는 정상적인 commit 의미를 보지만, 바깥 트랜잭션은 여전히 롤백됩니다.
+
+#### C.2 페이크를 위한 dependency_overrides
+
+`app.dependency_overrides[get_db] = override_get_db`(레슨 03 §A.4)는 테스트가 어떤 의존성의 가짜 구현을 대체할 수 있게 해줍니다. 데이터베이스 테스트에서는 override가 테스트의 트랜잭션 세션을 반환합니다. 외부 API 테스트에서는 가짜 클라이언트를 반환합니다. 핸들러는 수정되지 않지만 이제 테스트가 통제하는 더블을 받습니다.
+
+override는 `TestClient`가 첫 요청을 보내기 *전에* 설정되어야 하고, 끝난 후에 해체되어야 합니다 — 보통은 픽스처의 setup/teardown에서. 그렇지 않으면 override가 다음 테스트로 누수됩니다.
+
+#### C.3 테스트별이 아니라 워커별 데이터베이스
+
+테스트가 병렬로 실행될 때(`pytest-xdist`), 모든 워커가 한 SQLite 파일이나 한 PostgreSQL 스키마를 공유해서는 안 됩니다 — 서로를 짓밟습니다. 패턴은 **워커당 데이터베이스 1개**입니다. pytest는 `worker_id`("gw0", "gw1", ...)를 노출하고, 데이터베이스 이름에 그것을 접미합니다. 워커 안에서는 테스트가 여전히 직렬화되므로 트랜잭션 롤백이 그대로 작동합니다.
+
+조합 — 워커당 session 범위 엔진, function 범위 트랜잭션 세션, 의존성 override된 핸들러 — 이 올바른 균형을 줍니다. 각 테스트가 격리되고, 스위트는 초 단위로 실행되며, 병렬성은 워커 수에 선형으로 확장됩니다.
 
 ### 전략: 트랜잭션 롤백
 

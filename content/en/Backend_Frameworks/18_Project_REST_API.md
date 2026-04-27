@@ -14,8 +14,6 @@
 
 ## Table of Contents
 
-Before the project walkthrough, read [**Theory & Principles**](#theory--principles) — the architectural decisions you have to make for any backend, the layered architecture pattern (router → service → repository), and the trade-offs that turn a working prototype into a maintainable system.
-
 1. [Project Overview](#1-project-overview)
 2. [Project Setup](#2-project-setup)
 3. [Data Models](#3-data-models)
@@ -28,15 +26,11 @@ Before the project walkthrough, read [**Theory & Principles**](#theory--principl
 
 ---
 
-## Theory & Principles
+## 1. Project Overview
 
-A capstone project is where the fragments from previous lessons (FastAPI patterns, SQLAlchemy queries, JWT auth, Docker) become a single coherent system. The interesting part is not any individual piece — those are covered in lessons 02–17 — it is the *architectural decisions* that bind them together. Three lenses make those decisions discussable.
+In this capstone project, you will build a **blog API** that brings together the patterns covered throughout this course. The API supports user registration and authentication, blog post management, and commenting --- all with proper pagination, filtering, and error handling.
 
-- **(A) The architectural decisions every backend project makes** — explicitly named, with their alternatives.
-- **(B) Layered architecture: router / service / repository** — the canonical separation of concerns and what each layer owns.
-- **(C) The build vs buy vs use-managed tradeoff** — most production decisions reduce to this.
-
-### A. The Architectural Decisions Every Backend Makes
+### Theory: The Architectural Decisions Every Backend Makes
 
 When you start a backend project, you implicitly answer these questions. Making them explicit lets you defend each choice rather than copy a template.
 
@@ -64,7 +58,68 @@ For example, why FastAPI over Django?
 
 Neither is universally right. The lesson's project is FastAPI because the curriculum focuses on async patterns; a Django version of the same project would be equally valid.
 
-### B. Layered Architecture: Router / Service / Repository
+### Features
+
+- User registration and JWT authentication (access + refresh tokens)
+- Blog post CRUD (create, read, update, delete) with ownership enforcement
+- Commenting on posts
+- Pagination (cursor-based), filtering (by author, status, tag), and sorting
+- Input validation with Pydantic
+- Database migrations with Alembic
+- Comprehensive test suite
+- Docker containerization
+
+### Final Project Structure
+
+```
+blog-api/
+├── app/
+│   ├── __init__.py
+│   ├── main.py            # FastAPI application entry point
+│   ├── config.py           # Settings (Pydantic BaseSettings)
+│   ├── database.py         # SQLAlchemy engine and session
+│   ├── models/
+│   │   ├── __init__.py
+│   │   ├── user.py
+│   │   ├── post.py
+│   │   └── comment.py
+│   ├── schemas/
+│   │   ├── __init__.py
+│   │   ├── user.py
+│   │   ├── post.py
+│   │   ├── comment.py
+│   │   └── pagination.py
+│   ├── routers/
+│   │   ├── __init__.py
+│   │   ├── auth.py
+│   │   ├── users.py
+│   │   ├── posts.py
+│   │   └── comments.py
+│   ├── services/
+│   │   ├── __init__.py
+│   │   ├── auth.py
+│   │   └── post.py
+│   └── dependencies.py     # Shared FastAPI dependencies
+├── alembic/
+│   ├── env.py
+│   └── versions/
+├── tests/
+│   ├── conftest.py
+│   ├── test_auth.py
+│   ├── test_posts.py
+│   └── test_comments.py
+├── alembic.ini
+├── requirements.txt
+├── Dockerfile
+├── docker-compose.yml
+└── .env
+```
+
+---
+
+## 2. Project Setup
+
+### Theory: Layered Architecture: Router / Service / Repository
 
 The mistake every codebase eventually makes: putting all the logic in the route handler.
 
@@ -143,117 +198,6 @@ The arrow goes one way: router → service → repository. The repository never 
 
 When the dependency arrow gets reversed (a model knows about HTTP, a repository raises HTTPException), the layers fold into each other and the architecture stops paying off.
 
-### C. Build vs Buy vs Managed Service
-
-Every component of a backend is one of three things:
-
-- **Build** — write it yourself in your codebase.
-- **Buy / use a library** — install an open-source package.
-- **Managed service** — pay AWS/GCP/etc to run it.
-
-#### C.1 The framework for choosing
-
-| Question | Build | Buy | Managed |
-|----------|-------|-----|---------|
-| Cost (eng time + infra) | High eng time, low infra | Medium both | Low eng, high infra |
-| Time to running | Slowest | Medium | Fastest |
-| Customization | Total | Bounded | Limited |
-| Operational burden | All you | Mostly you | Mostly the vendor |
-| Lock-in | None | Low | High |
-
-#### C.2 Where each fits
-
-- **Build** authentication-related logic that encodes your business rules (who can do what), the unique parts of your domain.
-- **Buy** generic infrastructure: web framework, ORM, JSON libraries, JWT signing libraries. These are commoditized and well-tested.
-- **Managed** the truly hard things: databases (RDS, Cloud SQL), object storage (S3, GCS), message queues (SQS, Pub/Sub), email (SES, SendGrid). The cost of running these well is enormous; pay someone else.
-
-#### C.3 The "we don't need it yet" rule
-
-The biggest waste in early projects is building or operating things you don't need yet. A single PostgreSQL instance, no message queue, no Redis cache, no Elasticsearch — most apps work fine until traffic actually demands more. Adding infrastructure pre-emptively multiplies operational complexity without adding value.
-
-The discipline: introduce each new piece of infrastructure when a measurement (latency p99, cost per request, error rate) says you need it. Not before.
-
-### From Theory to the Project Below
-
-Each section that follows operationalizes one piece of this framework:
-
-- §1 (Project overview) declares the §A.1 architectural choices for this project.
-- §2 (Project setup) follows §A.2 — set up only what you need now (FastAPI + SQLAlchemy + Alembic).
-- §3 (Data models) is the §B repository layer's data shape, plus the Pydantic schemas the router uses.
-- §4 (CRUD endpoints) walks all three §B layers — router calls service calls repository.
-- §5 (JWT authentication) implements Lesson 15 §A.3's access + refresh pattern as a service-layer concern.
-- §6 (Pagination and filtering) is Lesson 14 §4–§5 in concrete code at the §B router/service boundary.
-- §7 (Testing with pytest) follows Lesson 05 §C — fixture-driven, transactional rollback, dependency overrides for the §B service layer.
-- §8 (Docker deployment) is Lesson 16 §5 made concrete: §A.10 dev/prod parity through a single image.
-- §9 (Extension ideas) is the "what next?" — adding caching (Lesson 20), background jobs (Lesson 21), observability (Lesson 17) when measurements justify them per §C.3.
-
----
-
-## 1. Project Overview
-
-In this capstone project, you will build a **blog API** that brings together the patterns covered throughout this course. The API supports user registration and authentication, blog post management, and commenting --- all with proper pagination, filtering, and error handling.
-
-### Features
-
-- User registration and JWT authentication (access + refresh tokens)
-- Blog post CRUD (create, read, update, delete) with ownership enforcement
-- Commenting on posts
-- Pagination (cursor-based), filtering (by author, status, tag), and sorting
-- Input validation with Pydantic
-- Database migrations with Alembic
-- Comprehensive test suite
-- Docker containerization
-
-### Final Project Structure
-
-```
-blog-api/
-├── app/
-│   ├── __init__.py
-│   ├── main.py            # FastAPI application entry point
-│   ├── config.py           # Settings (Pydantic BaseSettings)
-│   ├── database.py         # SQLAlchemy engine and session
-│   ├── models/
-│   │   ├── __init__.py
-│   │   ├── user.py
-│   │   ├── post.py
-│   │   └── comment.py
-│   ├── schemas/
-│   │   ├── __init__.py
-│   │   ├── user.py
-│   │   ├── post.py
-│   │   ├── comment.py
-│   │   └── pagination.py
-│   ├── routers/
-│   │   ├── __init__.py
-│   │   ├── auth.py
-│   │   ├── users.py
-│   │   ├── posts.py
-│   │   └── comments.py
-│   ├── services/
-│   │   ├── __init__.py
-│   │   ├── auth.py
-│   │   └── post.py
-│   └── dependencies.py     # Shared FastAPI dependencies
-├── alembic/
-│   ├── env.py
-│   └── versions/
-├── tests/
-│   ├── conftest.py
-│   ├── test_auth.py
-│   ├── test_posts.py
-│   └── test_comments.py
-├── alembic.ini
-├── requirements.txt
-├── Dockerfile
-├── docker-compose.yml
-└── .env
-```
-
----
-
-## 2. Project Setup
-
 ### Requirements
 
 ```
@@ -279,7 +223,6 @@ pytest-asyncio==0.24.0
 from pydantic_settings import BaseSettings
 from functools import lru_cache
 
-
 class Settings(BaseSettings):
     app_name: str = "Blog API"
     debug: bool = False
@@ -298,7 +241,6 @@ class Settings(BaseSettings):
     max_page_size: int = 100
 
     model_config = {"env_file": ".env"}
-
 
 @lru_cache
 def get_settings() -> Settings:
@@ -329,10 +271,8 @@ AsyncSessionLocal = async_sessionmaker(
     expire_on_commit=False,
 )
 
-
 class Base(DeclarativeBase):
     pass
-
 
 async def get_db() -> AsyncSession:
     """Dependency that provides a database session per request."""
@@ -359,7 +299,6 @@ from app.routers import auth, users, posts, comments
 
 settings = get_settings()
 
-
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup
@@ -368,7 +307,6 @@ async def lifespan(app: FastAPI):
     yield
     # Shutdown
     await engine.dispose()
-
 
 app = FastAPI(
     title=settings.app_name,
@@ -388,7 +326,6 @@ app.include_router(auth.router, prefix="/auth", tags=["Authentication"])
 app.include_router(users.router, prefix="/users", tags=["Users"])
 app.include_router(posts.router, prefix="/posts", tags=["Posts"])
 app.include_router(comments.router, prefix="/posts", tags=["Comments"])
-
 
 @app.get("/health")
 async def health_check():
@@ -432,7 +369,6 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
 
-
 class User(Base):
     __tablename__ = "users"
 
@@ -462,12 +398,10 @@ import enum
 
 from app.database import Base
 
-
 class PostStatus(str, enum.Enum):
     DRAFT = "draft"
     PUBLISHED = "published"
     ARCHIVED = "archived"
-
 
 class Post(Base):
     __tablename__ = "posts"
@@ -507,7 +441,6 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
 
-
 class Comment(Base):
     __tablename__ = "comments"
 
@@ -532,12 +465,10 @@ class Comment(Base):
 from pydantic import BaseModel, EmailStr, Field
 from datetime import datetime
 
-
 class UserCreate(BaseModel):
     username: str = Field(..., min_length=3, max_length=50)
     email: EmailStr
     password: str = Field(..., min_length=8, max_length=128)
-
 
 class UserResponse(BaseModel):
     id: int
@@ -548,25 +479,21 @@ class UserResponse(BaseModel):
 
     model_config = {"from_attributes": True}
 
-
 # app/schemas/post.py
 from pydantic import BaseModel, Field
 from datetime import datetime
 from typing import Optional
 from app.models.post import PostStatus
 
-
 class PostCreate(BaseModel):
     title: str = Field(..., min_length=1, max_length=200)
     content: str = Field(..., min_length=1)
     status: PostStatus = PostStatus.DRAFT
 
-
 class PostUpdate(BaseModel):
     title: Optional[str] = Field(None, min_length=1, max_length=200)
     content: Optional[str] = Field(None, min_length=1)
     status: Optional[PostStatus] = None
-
 
 class PostResponse(BaseModel):
     id: int
@@ -581,11 +508,9 @@ class PostResponse(BaseModel):
 
     model_config = {"from_attributes": True}
 
-
 # app/schemas/comment.py
 class CommentCreate(BaseModel):
     content: str = Field(..., min_length=1, max_length=5000)
-
 
 class CommentResponse(BaseModel):
     id: int
@@ -619,14 +544,12 @@ from app.dependencies import get_current_user
 
 router = APIRouter()
 
-
 def generate_slug(title: str) -> str:
     """Convert a title to a URL-friendly slug."""
     slug = title.lower().strip()
     slug = re.sub(r"[^\w\s-]", "", slug)
     slug = re.sub(r"[\s_]+", "-", slug)
     return slug.strip("-")
-
 
 @router.post("/", status_code=status.HTTP_201_CREATED, response_model=PostResponse)
 async def create_post(
@@ -653,7 +576,6 @@ async def create_post(
     await db.refresh(post, attribute_names=["author", "comments"])
     return post
 
-
 @router.get("/{post_id}", response_model=PostResponse)
 async def get_post(post_id: int, db: AsyncSession = Depends(get_db)):
     result = await db.execute(
@@ -668,7 +590,6 @@ async def get_post(post_id: int, db: AsyncSession = Depends(get_db)):
             detail=f"Post with id {post_id} not found",
         )
     return post
-
 
 @router.put("/{post_id}", response_model=PostResponse)
 async def update_post(
@@ -700,7 +621,6 @@ async def update_post(
     await db.flush()
     await db.refresh(post)
     return post
-
 
 @router.delete("/{post_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_post(
@@ -736,7 +656,6 @@ from app.dependencies import get_current_user
 
 router = APIRouter()
 
-
 @router.post(
     "/{post_id}/comments",
     status_code=status.HTTP_201_CREATED,
@@ -763,7 +682,6 @@ async def create_comment(
     await db.refresh(comment, attribute_names=["author"])
     return comment
 
-
 @router.get("/{post_id}/comments", response_model=list[CommentResponse])
 async def list_comments(
     post_id: int,
@@ -776,7 +694,6 @@ async def list_comments(
         .order_by(Comment.created_at.desc())
     )
     return result.scalars().all()
-
 
 @router.delete(
     "/{post_id}/comments/{comment_id}",
@@ -818,14 +735,11 @@ from app.config import get_settings
 settings = get_settings()
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
-
 def hash_password(password: str) -> str:
     return pwd_context.hash(password)
 
-
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     return pwd_context.verify(plain_password, hashed_password)
-
 
 def create_access_token(user_id: int) -> str:
     expire = datetime.now(timezone.utc) + timedelta(
@@ -834,14 +748,12 @@ def create_access_token(user_id: int) -> str:
     payload = {"sub": str(user_id), "exp": expire, "type": "access"}
     return jwt.encode(payload, settings.secret_key, algorithm=settings.algorithm)
 
-
 def create_refresh_token(user_id: int) -> str:
     expire = datetime.now(timezone.utc) + timedelta(
         days=settings.refresh_token_expire_days
     )
     payload = {"sub": str(user_id), "exp": expire, "type": "refresh"}
     return jwt.encode(payload, settings.secret_key, algorithm=settings.algorithm)
-
 
 def decode_token(token: str) -> dict:
     """Decode and validate a JWT token. Raises JWTError on failure."""
@@ -863,7 +775,6 @@ from app.models.user import User
 from app.services.auth import decode_token
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
-
 
 async def get_current_user(
     token: str = Depends(oauth2_scheme),
@@ -914,7 +825,6 @@ from app.services.auth import (
 
 router = APIRouter()
 
-
 @router.post("/register", status_code=status.HTTP_201_CREATED, response_model=UserResponse)
 async def register(user_data: UserCreate, db: AsyncSession = Depends(get_db)):
     # Check for existing username or email
@@ -939,7 +849,6 @@ async def register(user_data: UserCreate, db: AsyncSession = Depends(get_db)):
     await db.refresh(user)
     return user
 
-
 @router.post("/login")
 async def login(
     form_data: OAuth2PasswordRequestForm = Depends(),
@@ -963,7 +872,6 @@ async def login(
         "refresh_token": create_refresh_token(user.id),
         "token_type": "bearer",
     }
-
 
 @router.post("/refresh")
 async def refresh_token(refresh_token: str, db: AsyncSession = Depends(get_db)):
@@ -1001,7 +909,6 @@ import json
 
 T = TypeVar("T")
 
-
 class CursorPage(BaseModel, Generic[T]):
     """Generic paginated response with cursor-based pagination."""
     items: list[T]
@@ -1009,12 +916,10 @@ class CursorPage(BaseModel, Generic[T]):
     has_more: bool = False
     total: int = 0
 
-
 def encode_cursor(post_id: int, created_at: str) -> str:
     """Encode pagination cursor as base64 JSON."""
     data = {"id": post_id, "created_at": created_at}
     return base64.urlsafe_b64encode(json.dumps(data).encode()).decode()
-
 
 def decode_cursor(cursor: str) -> dict:
     """Decode pagination cursor from base64 JSON."""
@@ -1141,7 +1046,6 @@ TestSessionLocal = async_sessionmaker(
     test_engine, class_=AsyncSession, expire_on_commit=False
 )
 
-
 @pytest_asyncio.fixture
 async def db_session():
     """Create tables and provide a clean session for each test."""
@@ -1154,7 +1058,6 @@ async def db_session():
     async with test_engine.begin() as conn:
         await conn.run_sync(Base.metadata.drop_all)
 
-
 @pytest_asyncio.fixture
 async def client(db_session):
     """HTTP client with test database injected."""
@@ -1166,7 +1069,6 @@ async def client(db_session):
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
         yield ac
     app.dependency_overrides.clear()
-
 
 @pytest_asyncio.fixture
 async def test_user(db_session):
@@ -1190,7 +1092,6 @@ async def test_user(db_session):
 # tests/test_auth.py
 import pytest
 
-
 @pytest.mark.asyncio
 async def test_register_user(client):
     response = await client.post("/auth/register", json={
@@ -1203,7 +1104,6 @@ async def test_register_user(client):
     assert data["username"] == "newuser"
     assert data["email"] == "new@example.com"
     assert "hashed_password" not in data  # Ensure password is not exposed
-
 
 @pytest.mark.asyncio
 async def test_register_duplicate_username(client):
@@ -1221,7 +1121,6 @@ async def test_register_duplicate_username(client):
     })
     assert response.status_code == 409
 
-
 @pytest.mark.asyncio
 async def test_login_success(client, test_user):
     response = await client.post("/auth/login", data={
@@ -1233,7 +1132,6 @@ async def test_login_success(client, test_user):
     assert "access_token" in data
     assert "refresh_token" in data
     assert data["token_type"] == "bearer"
-
 
 @pytest.mark.asyncio
 async def test_login_wrong_password(client, test_user):
@@ -1249,7 +1147,6 @@ async def test_login_wrong_password(client, test_user):
 ```python
 # tests/test_posts.py
 import pytest
-
 
 @pytest.mark.asyncio
 async def test_create_post(client, test_user):
@@ -1269,7 +1166,6 @@ async def test_create_post(client, test_user):
     assert data["slug"] == "my-first-post"
     assert data["status"] == "published"
 
-
 @pytest.mark.asyncio
 async def test_create_post_unauthorized(client):
     response = await client.post("/posts/", json={
@@ -1277,7 +1173,6 @@ async def test_create_post_unauthorized(client):
         "content": "Should fail.",
     })
     assert response.status_code == 401
-
 
 @pytest.mark.asyncio
 async def test_get_post(client, test_user):
@@ -1299,7 +1194,6 @@ async def test_get_post(client, test_user):
     assert response.status_code == 200
     assert response.json()["title"] == "Readable Post"
 
-
 @pytest.mark.asyncio
 async def test_update_post_by_owner(client, test_user):
     token = test_user["token"]
@@ -1317,7 +1211,6 @@ async def test_update_post_by_owner(client, test_user):
     )
     assert response.status_code == 200
     assert response.json()["title"] == "Updated Title"
-
 
 @pytest.mark.asyncio
 async def test_delete_post(client, test_user):
@@ -1338,7 +1231,6 @@ async def test_delete_post(client, test_user):
     # Verify it is gone
     get_response = await client.get(f"/posts/{post_id}")
     assert get_response.status_code == 404
-
 
 @pytest.mark.asyncio
 async def test_list_posts_pagination(client, test_user):
@@ -1373,6 +1265,36 @@ async def test_list_posts_pagination(client, test_user):
 ---
 
 ## 8. Docker Deployment
+
+### Theory: Build vs Buy vs Managed Service
+
+Every component of a backend is one of three things:
+
+- **Build** — write it yourself in your codebase.
+- **Buy / use a library** — install an open-source package.
+- **Managed service** — pay AWS/GCP/etc to run it.
+
+#### C.1 The framework for choosing
+
+| Question | Build | Buy | Managed |
+|----------|-------|-----|---------|
+| Cost (eng time + infra) | High eng time, low infra | Medium both | Low eng, high infra |
+| Time to running | Slowest | Medium | Fastest |
+| Customization | Total | Bounded | Limited |
+| Operational burden | All you | Mostly you | Mostly the vendor |
+| Lock-in | None | Low | High |
+
+#### C.2 Where each fits
+
+- **Build** authentication-related logic that encodes your business rules (who can do what), the unique parts of your domain.
+- **Buy** generic infrastructure: web framework, ORM, JSON libraries, JWT signing libraries. These are commoditized and well-tested.
+- **Managed** the truly hard things: databases (RDS, Cloud SQL), object storage (S3, GCS), message queues (SQS, Pub/Sub), email (SES, SendGrid). The cost of running these well is enormous; pay someone else.
+
+#### C.3 The "we don't need it yet" rule
+
+The biggest waste in early projects is building or operating things you don't need yet. A single PostgreSQL instance, no message queue, no Redis cache, no Elasticsearch — most apps work fine until traffic actually demands more. Adding infrastructure pre-emptively multiplies operational complexity without adding value.
+
+The discipline: introduce each new piece of infrastructure when a measurement (latency p99, cost per request, error rate) says you need it. Not before.
 
 ### Dockerfile
 

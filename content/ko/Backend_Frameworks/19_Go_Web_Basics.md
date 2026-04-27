@@ -18,8 +18,6 @@
 
 ## 목차
 
-프레임워크 참조에 들어가기 전에, [**이론과 원리**](#이론과-원리) 섹션을 먼저 읽어보세요. `net/http`와 ServeMux 라우팅, Go의 동시성을 구동하는 goroutine + channel CSP 모델, 그리고 보편적 취소 전파 메커니즘으로서의 `context.Context`를 다룹니다.
-
 1. [백엔드 개발에 Go를 선택하는 이유](#1-백엔드-개발에-go를-선택하는-이유)
 2. [net/http 표준 라이브러리](#2-nethttp-표준-라이브러리)
 3. [Gin 프레임워크 기초](#3-gin-프레임워크-기초)
@@ -31,171 +29,6 @@
 9. [프로젝트 구조 관례](#9-프로젝트-구조-관례)
 10. [Go 웹 애플리케이션 테스트](#10-go-웹-애플리케이션-테스트)
 11. [연습 문제](#11-연습-문제)
-
----
-
-## 이론과 원리
-
-Go의 웹 스택은 표면적으로 다른 언어와 비슷해 보입니다 — 핸들러, 미들웨어, ORM — 그러나 밑에 깔린 동시성과 요청 취소 모델은 코드를 작성하는 방식을 바꾸는 면에서 다릅니다. 세 개념이 그 차이를 다룹니다.
-
-- **(A) `net/http`와 ServeMux** — Go의 stdlib HTTP 서버, 모든 프레임워크가 감싸는 빌딩 블록.
-- **(B) 고루틴과 채널: CSP 스타일 동시성** — "go func()"이 실제로 무엇을 하고, 왜 Go에 이벤트 루프가 없는가.
-- **(C) 취소 전파를 위한 `context.Context`** — HTTP 요청을 모든 다운스트림 호출에 묶는 사슬.
-
-### A. net/http와 ServeMux
-
-Python(Flask/FastAPI/Django가 필요)이나 Node(Express가 필요)와 달리, Go의 표준 라이브러리는 프로덕션 등급 HTTP 서버를 함께 제공합니다. 모든 Go 웹 프레임워크는 그저 `net/http` 위의 계층입니다.
-
-#### A.1 Handler 인터페이스
-
-전체 HTTP 서버가 한 인터페이스 위에 세워졌습니다.
-
-```go
-type Handler interface {
-    ServeHTTP(w http.ResponseWriter, r *http.Request)
-}
-```
-
-핸들러는 `ServeHTTP`를 구현하는 것이면 무엇이든 됩니다. `http.HandlerFunc`은 평범한 함수를 사용할 수 있게 해주는 편의 래퍼입니다.
-
-```go
-http.HandleFunc("/hello", func(w http.ResponseWriter, r *http.Request) {
-    fmt.Fprintln(w, "hello")
-})
-http.ListenAndServe(":8080", nil)
-```
-
-그것이 완전한 프로덕션 가능 HTTP 서버입니다. 프레임워크도 데코레이터도 없이, 그저 표준 라이브러리.
-
-#### A.2 ServeMux: 패턴 기반 라우팅
-
-`http.ServeMux`는 내장 라우터입니다. URL 경로를 등록된 패턴과 매칭합니다.
-
-```go
-mux := http.NewServeMux()
-mux.HandleFunc("/users/", listUsers)        // /users/, /users/foo 등에 매치
-mux.HandleFunc("GET /users/{id}", getUser)  // Go 1.22+: 메서드 + 경로의 {id}
-http.ListenAndServe(":8080", mux)
-```
-
-Go 1.22 이전 ServeMux는 매우 기본적이었습니다 — 메서드 매칭 없음, 경로 파라미터 없음. 그 공백이 서드파티 라우터(gorilla/mux, chi, gin의 트리)가 인기를 얻은 이유입니다. Go 1.22가 메서드 인지 패턴과 경로 파라미터를 stdlib에 추가하여 공백을 좁혔습니다. Gin과 Echo는 여전히 미들웨어 사용성, 바인딩, 오류 헬퍼에서 이깁니다 — 그러나 stdlib `net/http`은 이제 많은 API에 충분합니다.
-
-#### A.3 요청 생명주기
-
-수락된 각 연결에 대해 Go의 HTTP 서버는
-
-1. 요청 헤더를 읽고 파싱.
-2. mux에서 핸들러를 조회.
-3. *새 고루틴에서* `handler.ServeHTTP(w, r)` 호출 — 그것이 마법.
-4. 핸들러가 필요하면 본문을 읽고 응답을 씀.
-5. 고루틴이 끝나고, 연결은 재사용(HTTP/1.1 keep-alive)되거나 닫힘.
-
-"요청당 새 고루틴"이 전체 동시성 모델입니다. 크기를 정할 스레드 풀도, 공유할 이벤트 루프도 없습니다 — 런타임이 고루틴을 OS 스레드로 투명하게 다중화합니다.
-
-### B. 고루틴과 채널: CSP 스타일 동시성
-
-모델은 Communicating Sequential Processes(CSP, Tony Hoare 1978)입니다. 고루틴이 process이고, 채널이 통신 프리미티브입니다.
-
-#### B.1 고루틴이 실제로 무엇인가
-
-`go func() { ... }()`이 새 고루틴을 시작합니다. 비용:
-
-- 약 2KB 초기 스택(필요에 따라 MB까지 증가).
-- spawn당 몇 마이크로초의 스케줄러 오버헤드.
-- 런타임의 고루틴 테이블의 한 슬롯.
-
-Go 서버는 동시에 *수백만* 개의 I/O 블로킹 고루틴을 가질 수 있습니다. 런타임이 그것들을 `GOMAXPROCS`개의 OS 스레드(기본은 CPU 수)에 다중화합니다. syscall에서 블로킹해도 OS 스레드를 블로킹하지 않습니다 — 런타임이 다른 고루틴을 다른 스레드로 옮깁니다.
-
-이것이 Go에 이벤트 루프와 `async`/`await`이 없는 이유입니다. 런타임이 *바로* 이벤트 루프이며, 문법적 동기 코드 아래에 숨겨져 있습니다.
-
-#### B.2 채널: 고루틴 사이의 타입이 있는 파이프
-
-채널은 고루틴이 메모리를 공유하지 않고 통신하는 방법입니다. 두 연산: `ch <- value`(송신), `<-ch`(수신). 둘 다 다른 쪽이 준비될 때까지 블로킹됩니다(unbuffered 채널의 경우).
-
-```go
-ch := make(chan int)
-go func() { ch <- 42 }()
-val := <-ch  // 고루틴이 송신할 때까지 블로킹
-```
-
-Go의 격언: **메모리를 공유해서 통신하지 말고, 통신해서 메모리를 공유하라**. 공유 변수 주위의 락 대신 채널로 변수를 전달하세요. 값을 가진 자가 그것을 변경할 수 있는 자입니다.
-
-웹 서버에서 채널이 등장하는 곳:
-
-- **워커 풀.** N개 고루틴이 한 채널에서 작업을 가져옵니다.
-- **Fan-in/fan-out.** 병렬 작업을 위해 N개 고루틴을 spawn하고, 채널에서 결과를 모읍니다.
-- **취소.** `done := make(chan struct{}); close(done)`이 모든 listener에 시그널.
-- **속도 제한.** 크기 N의 buffered 채널이 세마포어.
-
-#### B.3 Race 검출기
-
-Go는 내장 race 검출기와 함께 옵니다: `go run -race ./...`. 데이터 race(같은 메모리에 대한 동기화되지 않은 동시 접근)를 런타임에 잡습니다. 어떤 동시 Go 코드의 CI든 `-race`로 실행해야 합니다. 비용: 2-10배 더 느리고, 약 5배 더 많은 메모리. 가치 있습니다.
-
-### C. context.Context: 취소 전파
-
-웹 요청은 보통 데이터베이스를 호출하고, 그것이 캐시를 호출하고, 그것이 다운스트림 서비스를 호출할 수 있습니다. 클라이언트가 끊기면 그 모든 호출이 멈춰야 합니다. `context.Context`가 Go가 그 취소 신호를 전파하는 방법입니다.
-
-#### C.1 Context 인터페이스
-
-```go
-type Context interface {
-    Deadline() (time.Time, bool)  // 이 context가 만료될 때
-    Done() <-chan struct{}        // 취소되면 닫힘
-    Err() error                   // 왜 취소되었는지
-    Value(key any) any            // 요청 범위 값
-}
-```
-
-Go의 모든 HTTP 핸들러는 context를 얻습니다: `r.Context()`. 그 context는 클라이언트가 끊기거나 요청이 타임아웃될 때 취소됩니다. *모든* 다운스트림 호출에 전달하세요.
-
-```go
-func handler(w http.ResponseWriter, r *http.Request) {
-    rows, err := db.QueryContext(r.Context(), "SELECT ...")
-    // r.Context()가 취소되면 쿼리도 취소됨
-}
-```
-
-데이터베이스 드라이버(`database/sql`), HTTP 클라이언트(`http.Client.Do`), Redis 클라이언트, gRPC 클라이언트 — 모두 `context.Context`를 받고 취소를 존중합니다. 이것이 graceful shutdown이 end-to-end로 작동하게 만드는 것입니다.
-
-#### C.2 Context 파생: WithCancel, WithTimeout, WithDeadline
-
-추가 제약을 가진 자식 context를 파생할 수 있습니다.
-
-```go
-ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
-defer cancel()
-result, err := slowAPI.Call(ctx)
-```
-
-`ctx`는 부모가 취소되거나 2초 타임아웃이 발화하면 *둘 중 하나일 때* 취소됩니다. `defer cancel()`은 필수 위생입니다 — 성공 경로에서도 자원을 해제합니다.
-
-#### C.3 전파 규율
-
-규칙: **블로킹할 수 있는 모든 함수는 첫 파라미터로 `ctx context.Context`를 받는다**. 이는 Go 표준 라이브러리와 생태계 전반의 관습입니다. 함수가 몇 초 걸릴 수 있는데 context를 받지 않으면, 협력적으로 취소될 수 없습니다.
-
-안티 패턴: 코드 깊숙이 `context.Background()`. 그것은 위로부터의 어떤 취소도 무시하여, 코드를 요청 생명주기에서 분리합니다. `context.Background()`는 `main()`, 테스트, 또는 진정한 루트 context에서만 사용하세요.
-
-#### C.4 Context 값: 제한적, 주의 깊게
-
-`ctx.Value(key)`는 요청 범위 값(request ID, user ID, tracing span)을 붙이게 해줍니다. 유용하지만 오용하기 쉽습니다.
-
-- **하라**: 배관 데이터 — trace ID, request ID, auth principal.
-- **하지 말라**: 비즈니스 데이터 — 명시적 함수 인자로 전달하세요. Context 값은 타입이 없고 타입 시스템에 보이지 않습니다.
-
-### 이론에서 아래 코드로
-
-뒤에 나오는 각 절은 이 틀의 한 조각을 구체화합니다.
-
-- §1 (왜 Go)는 §B 동시성 이야기와 §C 취소 규율을 핵심 장점으로 판매합니다.
-- §2 (`net/http` 표준 라이브러리)는 §A입니다 — 모든 프레임워크가 의지하는 토대.
-- §3 (Gin 프레임워크)는 §A.2를 더 친절한 라우팅, 요청 바인딩, 미들웨어 DSL로 감쌉니다.
-- §4 (Echo 비교)는 같은 축으로 Gin과 Echo를 비교합니다 — 성능, 사용성, 생태계.
-- §5 (요청 처리와 JSON)은 레슨 02의 Pydantic 이야기와 같은 아이디어로, Go struct 태그가 바인딩/검증을 구동합니다.
-- §6 (미들웨어 패턴)은 `func(next http.Handler) http.Handler`입니다 — 프레임워크 변종보다 단순한 Go의 미들웨어 관용구.
-- §7 (GORM)은 `database/sql` 위의 §A repository 추상화이며, 레슨 04 §C의 자체 N+1 고려사항이 있습니다.
-- §8 (오류 처리)는 Go의 `if err != nil` 규율입니다 — 명시적 오류, 예외 없음, 매칭에 `errors.Is/As`.
-- §9 (프로젝트 구조)는 Go 프로젝트에 예측 가능한 모양을 주는 `cmd/`, `internal/`, `pkg/` 관습입니다.
-- §10 (테스트)는 stdlib `testing` 패키지에 더해 §A 핸들러의 통합 테스트를 위한 `httptest.NewServer`입니다.
 
 ---
 
@@ -254,6 +87,56 @@ OS Thread Model:              Goroutine Model:
 ## 2. net/http 표준 라이브러리
 
 Go의 `net/http` 패키지는 프로덕션 수준의 품질을 가진다. 많은 팀이 프레임워크 없이 이 패키지만으로 개발한다.
+
+### 이론: net/http와 ServeMux
+
+Python(Flask/FastAPI/Django가 필요)이나 Node(Express가 필요)와 달리, Go의 표준 라이브러리는 프로덕션 등급 HTTP 서버를 함께 제공합니다. 모든 Go 웹 프레임워크는 그저 `net/http` 위의 계층입니다.
+
+#### A.1 Handler 인터페이스
+
+전체 HTTP 서버가 한 인터페이스 위에 세워졌습니다.
+
+```go
+type Handler interface {
+    ServeHTTP(w http.ResponseWriter, r *http.Request)
+}
+```
+
+핸들러는 `ServeHTTP`를 구현하는 것이면 무엇이든 됩니다. `http.HandlerFunc`은 평범한 함수를 사용할 수 있게 해주는 편의 래퍼입니다.
+
+```go
+http.HandleFunc("/hello", func(w http.ResponseWriter, r *http.Request) {
+    fmt.Fprintln(w, "hello")
+})
+http.ListenAndServe(":8080", nil)
+```
+
+그것이 완전한 프로덕션 가능 HTTP 서버입니다. 프레임워크도 데코레이터도 없이, 그저 표준 라이브러리.
+
+#### A.2 ServeMux: 패턴 기반 라우팅
+
+`http.ServeMux`는 내장 라우터입니다. URL 경로를 등록된 패턴과 매칭합니다.
+
+```go
+mux := http.NewServeMux()
+mux.HandleFunc("/users/", listUsers)        // /users/, /users/foo 등에 매치
+mux.HandleFunc("GET /users/{id}", getUser)  // Go 1.22+: 메서드 + 경로의 {id}
+http.ListenAndServe(":8080", mux)
+```
+
+Go 1.22 이전 ServeMux는 매우 기본적이었습니다 — 메서드 매칭 없음, 경로 파라미터 없음. 그 공백이 서드파티 라우터(gorilla/mux, chi, gin의 트리)가 인기를 얻은 이유입니다. Go 1.22가 메서드 인지 패턴과 경로 파라미터를 stdlib에 추가하여 공백을 좁혔습니다. Gin과 Echo는 여전히 미들웨어 사용성, 바인딩, 오류 헬퍼에서 이깁니다 — 그러나 stdlib `net/http`은 이제 많은 API에 충분합니다.
+
+#### A.3 요청 생명주기
+
+수락된 각 연결에 대해 Go의 HTTP 서버는
+
+1. 요청 헤더를 읽고 파싱.
+2. mux에서 핸들러를 조회.
+3. *새 고루틴에서* `handler.ServeHTTP(w, r)` 호출 — 그것이 마법.
+4. 핸들러가 필요하면 본문을 읽고 응답을 씀.
+5. 고루틴이 끝나고, 연결은 재사용(HTTP/1.1 keep-alive)되거나 닫힘.
+
+"요청당 새 고루틴"이 전체 동시성 모델입니다. 크기를 정할 스레드 풀도, 공유할 이벤트 루프도 없습니다 — 런타임이 고루틴을 OS 스레드로 투명하게 다중화합니다.
 
 ### 기본 HTTP 서버
 
@@ -618,6 +501,57 @@ func main() {
 
 ## 5. 요청 처리와 JSON 응답
 
+### 이론: context.Context: 취소 전파
+
+웹 요청은 보통 데이터베이스를 호출하고, 그것이 캐시를 호출하고, 그것이 다운스트림 서비스를 호출할 수 있습니다. 클라이언트가 끊기면 그 모든 호출이 멈춰야 합니다. `context.Context`가 Go가 그 취소 신호를 전파하는 방법입니다.
+
+#### C.1 Context 인터페이스
+
+```go
+type Context interface {
+    Deadline() (time.Time, bool)  // 이 context가 만료될 때
+    Done() <-chan struct{}        // 취소되면 닫힘
+    Err() error                   // 왜 취소되었는지
+    Value(key any) any            // 요청 범위 값
+}
+```
+
+Go의 모든 HTTP 핸들러는 context를 얻습니다: `r.Context()`. 그 context는 클라이언트가 끊기거나 요청이 타임아웃될 때 취소됩니다. *모든* 다운스트림 호출에 전달하세요.
+
+```go
+func handler(w http.ResponseWriter, r *http.Request) {
+    rows, err := db.QueryContext(r.Context(), "SELECT ...")
+    // r.Context()가 취소되면 쿼리도 취소됨
+}
+```
+
+데이터베이스 드라이버(`database/sql`), HTTP 클라이언트(`http.Client.Do`), Redis 클라이언트, gRPC 클라이언트 — 모두 `context.Context`를 받고 취소를 존중합니다. 이것이 graceful shutdown이 end-to-end로 작동하게 만드는 것입니다.
+
+#### C.2 Context 파생: WithCancel, WithTimeout, WithDeadline
+
+추가 제약을 가진 자식 context를 파생할 수 있습니다.
+
+```go
+ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
+defer cancel()
+result, err := slowAPI.Call(ctx)
+```
+
+`ctx`는 부모가 취소되거나 2초 타임아웃이 발화하면 *둘 중 하나일 때* 취소됩니다. `defer cancel()`은 필수 위생입니다 — 성공 경로에서도 자원을 해제합니다.
+
+#### C.3 전파 규율
+
+규칙: **블로킹할 수 있는 모든 함수는 첫 파라미터로 `ctx context.Context`를 받는다**. 이는 Go 표준 라이브러리와 생태계 전반의 관습입니다. 함수가 몇 초 걸릴 수 있는데 context를 받지 않으면, 협력적으로 취소될 수 없습니다.
+
+안티 패턴: 코드 깊숙이 `context.Background()`. 그것은 위로부터의 어떤 취소도 무시하여, 코드를 요청 생명주기에서 분리합니다. `context.Background()`는 `main()`, 테스트, 또는 진정한 루트 context에서만 사용하세요.
+
+#### C.4 Context 값: 제한적, 주의 깊게
+
+`ctx.Value(key)`는 요청 범위 값(request ID, user ID, tracing span)을 붙이게 해줍니다. 유용하지만 오용하기 쉽습니다.
+
+- **하라**: 배관 데이터 — trace ID, request ID, auth principal.
+- **하지 말라**: 비즈니스 데이터 — 명시적 함수 인자로 전달하세요. Context 값은 타입이 없고 타입 시스템에 보이지 않습니다.
+
 ### 일관된 응답 엔벨로프(Envelope)
 
 API 전반에 걸쳐 표준 응답 형식을 정의한다:
@@ -718,6 +652,45 @@ func handleStream(c *gin.Context) {
 ---
 
 ## 6. 미들웨어 패턴
+
+### 이론: 고루틴과 채널: CSP 스타일 동시성
+
+모델은 Communicating Sequential Processes(CSP, Tony Hoare 1978)입니다. 고루틴이 process이고, 채널이 통신 프리미티브입니다.
+
+#### B.1 고루틴이 실제로 무엇인가
+
+`go func() { ... }()`이 새 고루틴을 시작합니다. 비용:
+
+- 약 2KB 초기 스택(필요에 따라 MB까지 증가).
+- spawn당 몇 마이크로초의 스케줄러 오버헤드.
+- 런타임의 고루틴 테이블의 한 슬롯.
+
+Go 서버는 동시에 *수백만* 개의 I/O 블로킹 고루틴을 가질 수 있습니다. 런타임이 그것들을 `GOMAXPROCS`개의 OS 스레드(기본은 CPU 수)에 다중화합니다. syscall에서 블로킹해도 OS 스레드를 블로킹하지 않습니다 — 런타임이 다른 고루틴을 다른 스레드로 옮깁니다.
+
+이것이 Go에 이벤트 루프와 `async`/`await`이 없는 이유입니다. 런타임이 *바로* 이벤트 루프이며, 문법적 동기 코드 아래에 숨겨져 있습니다.
+
+#### B.2 채널: 고루틴 사이의 타입이 있는 파이프
+
+채널은 고루틴이 메모리를 공유하지 않고 통신하는 방법입니다. 두 연산: `ch <- value`(송신), `<-ch`(수신). 둘 다 다른 쪽이 준비될 때까지 블로킹됩니다(unbuffered 채널의 경우).
+
+```go
+ch := make(chan int)
+go func() { ch <- 42 }()
+val := <-ch  // 고루틴이 송신할 때까지 블로킹
+```
+
+Go의 격언: **메모리를 공유해서 통신하지 말고, 통신해서 메모리를 공유하라**. 공유 변수 주위의 락 대신 채널로 변수를 전달하세요. 값을 가진 자가 그것을 변경할 수 있는 자입니다.
+
+웹 서버에서 채널이 등장하는 곳:
+
+- **워커 풀.** N개 고루틴이 한 채널에서 작업을 가져옵니다.
+- **Fan-in/fan-out.** 병렬 작업을 위해 N개 고루틴을 spawn하고, 채널에서 결과를 모읍니다.
+- **취소.** `done := make(chan struct{}); close(done)`이 모든 listener에 시그널.
+- **속도 제한.** 크기 N의 buffered 채널이 세마포어.
+
+#### B.3 Race 검출기
+
+Go는 내장 race 검출기와 함께 옵니다: `go run -race ./...`. 데이터 race(같은 메모리에 대한 동기화되지 않은 동시 접근)를 런타임에 잡습니다. 어떤 동시 Go 코드의 CI든 `-race`로 실행해야 합니다. 비용: 2-10배 더 느리고, 약 5배 더 많은 메모리. 가치 있습니다.
 
 ### 인증 미들웨어(Authentication Middleware)
 

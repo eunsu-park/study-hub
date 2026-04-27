@@ -18,8 +18,6 @@ Building a basic Express server is straightforward, but production applications 
 
 ## Table of Contents
 
-Before the framework reference, read [**Theory & Principles**](#theory--principles) — how errors propagate through the middleware chain (sync vs async, Promise rejection routing), why streaming responses are the default in Node, and how the cluster module's master/worker model fits Node's single-thread architecture.
-
 1. [Error Handling Middleware](#1-error-handling-middleware)
 2. [Authentication with Passport.js](#2-authentication-with-passportjs)
 3. [Rate Limiting](#3-rate-limiting)
@@ -32,15 +30,11 @@ Before the framework reference, read [**Theory & Principles**](#theory--principl
 
 ---
 
-## Theory & Principles
+## 1. Error Handling Middleware
 
-Production Express is mostly about three orthogonal mechanisms: how errors travel through the chain, how responses leave the process, and how a single Node process scales across CPU cores. Each section below is a concrete application of one of these.
+Express recognizes error-handling middleware by its **four arguments**: `(err, req, res, next)`. This distinguishes it from regular middleware and route handlers.
 
-- **(A) Error propagation in the middleware chain** — the rules that decide whether a thrown error reaches your error handler.
-- **(B) Streaming responses as Node's default** — why `res.write` and `pipe()` are the right primitives, and what happens when a client disconnects mid-stream.
-- **(C) The cluster module: scaling beyond one core** — Node's master/worker model and the kernel-level load balancing it relies on.
-
-### A. Error Propagation: The Rules
+### Theory: Error Propagation: The Rules
 
 Express decides which middleware runs next based on the *arity* of registered functions and how each one returns. The rules are short, but every advanced production bug eventually traces to violating one of them.
 
@@ -81,108 +75,6 @@ A useful classification (from the Joyent Node guide):
 - **Programmer errors** are bugs: undefined variables, type errors, broken invariants. These should crash the worker — there is no safe state to recover from.
 
 The error handler in §1 should convert operational errors to HTTP responses and let programmer errors propagate to a process-level handler that logs and exits. `process.on('uncaughtException', ...)` and `process.on('unhandledRejection', ...)` are the last-resort hooks; both should log and call `process.exit(1)` so the process supervisor (systemd, Kubernetes) restarts you with fresh state.
-
-### B. Streaming Responses as Node's Default
-
-Lesson 06 §C established that `res` is a Writable stream. Production Express puts that to constant use — for file downloads, server-sent events, large API payloads, and proxying responses from upstream services.
-
-#### B.1 Why streaming is the right default
-
-A non-streaming response builds the entire body in memory before the first byte goes out. For a 100 MB CSV export, that is 100 MB of RSS held until the response ends. Multiply by N concurrent requests and the worker OOMs.
-
-A streaming response writes chunks as they become available. Memory stays flat regardless of the total response size. The client can also start consuming earlier (TTFB drops), which improves perceived latency.
-
-```javascript
-app.get("/export.csv", (req, res) => {
-    res.setHeader("Content-Type", "text/csv");
-    const cursor = db.collection("rows").find().stream();
-    cursor.pipe(csvTransform()).pipe(res);
-});
-```
-
-The cursor reads pages at a time, the transform converts to CSV chunks, and `pipe` handles back-pressure. No explicit memory accounting.
-
-#### B.2 Client disconnect and abort signals
-
-A streaming response that runs for minutes must check whether the client is still listening. Two signals matter:
-
-- `req.on('close', ...)` — the connection was terminated by the client.
-- `res.on('close', ...)` — the response stream was closed (could be `req.close` or normal completion).
-
-For `async` handlers, the modern equivalent is the `AbortController` / `req.signal` pattern (available natively in Node 18+ and in Express 5 with `req.signal`). You pass that signal to downstream `fetch`, database query cancellation, and any long-running work. If the client disconnects, the signal aborts and the work cancels — releasing resources without producing a response no one will read.
-
-#### B.3 Server-sent events (SSE) — streaming the long way
-
-SSE is "long-running text/event-stream over HTTP". The handler keeps `res` open and writes `data: ...\n\n` chunks. It is the simplest server-push primitive Node has — no protocol upgrade, no library required, works through CDNs that allow streaming.
-
-```javascript
-res.setHeader("Content-Type", "text/event-stream");
-res.setHeader("Cache-Control", "no-cache");
-const interval = setInterval(() => res.write(`data: ${Date.now()}\n\n`), 1000);
-req.on("close", () => clearInterval(interval));
-```
-
-Two production considerations: (1) reverse proxies often buffer responses by default (disable buffering with `X-Accel-Buffering: no` for nginx, or matching settings elsewhere); (2) keep-alive timeouts must be configured to allow long-lived connections.
-
-### C. The Cluster Module: Scaling Beyond One Core
-
-Node runs JavaScript on one thread. On a 16-core box, one Node process uses about 6% of available CPU. The fix at the OS level is to run multiple processes that share a port.
-
-#### C.1 Master/worker layout
-
-The Node `cluster` module forks N worker processes from a master. Each worker has its own V8 instance, its own event loop, and its own memory. The master does *not* serve requests — it just spawns and supervises workers.
-
-```
-                ┌──────────┐
-                │  master  │
-                └────┬─────┘
-                     │ fork
-       ┌─────────────┼─────────────┐
-       ↓             ↓             ↓
-   ┌────────┐   ┌────────┐   ┌────────┐
-   │worker 1│   │worker 2│   │worker N│ ← each runs the full Express app
-   └────────┘   └────────┘   └────────┘
-```
-
-Conventional sizing: `numCPUs` workers, sometimes `numCPUs - 1` to keep one core for the OS and observability sidecars.
-
-#### C.2 How load balancing actually happens
-
-The cluster module supports two distribution strategies:
-
-- **Round-robin (default on Linux/macOS).** The master accepts connections on the listening socket, then hands them to workers in round-robin order.
-- **Shared socket (Windows / opt-in).** All workers `accept()` on the same socket; the kernel picks one per incoming connection. Lower fairness, lower master overhead.
-
-The round-robin master is a single point of accept latency, but never a bottleneck for actual request handling — the workers do the work.
-
-#### C.3 Modern alternatives
-
-Most modern deployments skip `cluster` entirely:
-
-- **PM2** — a process manager that runs `cluster` for you with a config file, plus log management and restart-on-crash.
-- **Container orchestrators (Kubernetes).** Run one Node process per container; the orchestrator runs N containers and the load balancer round-robins them. Workers do not share memory across pods, but you trade that for portability.
-- **`worker_threads`** — for CPU-bound work *inside* one process. Different problem; not a `cluster` substitute.
-
-The mental model to keep: one Node event loop = one CPU core max. Anything beyond that is a multi-process design choice.
-
-### From Theory to the Code Below
-
-Each section that follows is one piece of this framework made concrete:
-
-- §1 (Error handling middleware) operationalizes the §A.1 chain control-flow rules and the §A.2 sync/async error routing.
-- §2 (Passport.js) is `(req, res, next)` middleware that authenticates and either calls `next()` (success) or sends a `401` (failure) — pure §A.1.
-- §3 (Rate limiting) is middleware that short-circuits with `429` when the bucket is empty — also §A.1.
-- §4 (CORS) is middleware that adds response headers and short-circuits OPTIONS preflights with `204`.
-- §5 (Multer) reads the §B streaming request body chunk-by-chunk into either memory or disk, instead of buffering all of it.
-- §6 (Zod) validates parsed `req.body`/`req.query`, throwing on failure → routed via §A.2 to the error handler.
-- §7 (Helmet) sets a battery of security headers — middleware modifying the §B response.
-- §8 (Putting it all together) is the conventional middleware order discussed in Lesson 06 §C.1, with the §C scaling overlay applied at deploy time.
-
----
-
-## 1. Error Handling Middleware
-
-Express recognizes error-handling middleware by its **four arguments**: `(err, req, res, next)`. This distinguishes it from regular middleware and route handlers.
 
 ### The Problem with Unhandled Errors
 
@@ -451,6 +343,48 @@ Multer handles `multipart/form-data`, the encoding type used for file uploads.
 npm install multer
 ```
 
+### Theory: Streaming Responses as Node's Default
+
+Lesson 06 §C established that `res` is a Writable stream. Production Express puts that to constant use — for file downloads, server-sent events, large API payloads, and proxying responses from upstream services.
+
+#### B.1 Why streaming is the right default
+
+A non-streaming response builds the entire body in memory before the first byte goes out. For a 100 MB CSV export, that is 100 MB of RSS held until the response ends. Multiply by N concurrent requests and the worker OOMs.
+
+A streaming response writes chunks as they become available. Memory stays flat regardless of the total response size. The client can also start consuming earlier (TTFB drops), which improves perceived latency.
+
+```javascript
+app.get("/export.csv", (req, res) => {
+    res.setHeader("Content-Type", "text/csv");
+    const cursor = db.collection("rows").find().stream();
+    cursor.pipe(csvTransform()).pipe(res);
+});
+```
+
+The cursor reads pages at a time, the transform converts to CSV chunks, and `pipe` handles back-pressure. No explicit memory accounting.
+
+#### B.2 Client disconnect and abort signals
+
+A streaming response that runs for minutes must check whether the client is still listening. Two signals matter:
+
+- `req.on('close', ...)` — the connection was terminated by the client.
+- `res.on('close', ...)` — the response stream was closed (could be `req.close` or normal completion).
+
+For `async` handlers, the modern equivalent is the `AbortController` / `req.signal` pattern (available natively in Node 18+ and in Express 5 with `req.signal`). You pass that signal to downstream `fetch`, database query cancellation, and any long-running work. If the client disconnects, the signal aborts and the work cancels — releasing resources without producing a response no one will read.
+
+#### B.3 Server-sent events (SSE) — streaming the long way
+
+SSE is "long-running text/event-stream over HTTP". The handler keeps `res` open and writes `data: ...\n\n` chunks. It is the simplest server-push primitive Node has — no protocol upgrade, no library required, works through CDNs that allow streaming.
+
+```javascript
+res.setHeader("Content-Type", "text/event-stream");
+res.setHeader("Cache-Control", "no-cache");
+const interval = setInterval(() => res.write(`data: ${Date.now()}\n\n`), 1000);
+req.on("close", () => clearInterval(interval));
+```
+
+Two production considerations: (1) reverse proxies often buffer responses by default (disable buffering with `X-Accel-Buffering: no` for nginx, or matching settings elsewhere); (2) keep-alive timeouts must be configured to allow long-lived connections.
+
 ### Basic File Upload
 
 ```javascript
@@ -694,6 +628,47 @@ export default app;
 ```
 
 ---
+
+### Theory: The Cluster Module: Scaling Beyond One Core
+
+Node runs JavaScript on one thread. On a 16-core box, one Node process uses about 6% of available CPU. The fix at the OS level is to run multiple processes that share a port.
+
+#### C.1 Master/worker layout
+
+The Node `cluster` module forks N worker processes from a master. Each worker has its own V8 instance, its own event loop, and its own memory. The master does *not* serve requests — it just spawns and supervises workers.
+
+```
+                ┌──────────┐
+                │  master  │
+                └────┬─────┘
+                     │ fork
+       ┌─────────────┼─────────────┐
+       ↓             ↓             ↓
+   ┌────────┐   ┌────────┐   ┌────────┐
+   │worker 1│   │worker 2│   │worker N│ ← each runs the full Express app
+   └────────┘   └────────┘   └────────┘
+```
+
+Conventional sizing: `numCPUs` workers, sometimes `numCPUs - 1` to keep one core for the OS and observability sidecars.
+
+#### C.2 How load balancing actually happens
+
+The cluster module supports two distribution strategies:
+
+- **Round-robin (default on Linux/macOS).** The master accepts connections on the listening socket, then hands them to workers in round-robin order.
+- **Shared socket (Windows / opt-in).** All workers `accept()` on the same socket; the kernel picks one per incoming connection. Lower fairness, lower master overhead.
+
+The round-robin master is a single point of accept latency, but never a bottleneck for actual request handling — the workers do the work.
+
+#### C.3 Modern alternatives
+
+Most modern deployments skip `cluster` entirely:
+
+- **PM2** — a process manager that runs `cluster` for you with a config file, plus log management and restart-on-crash.
+- **Container orchestrators (Kubernetes).** Run one Node process per container; the orchestrator runs N containers and the load balancer round-robins them. Workers do not share memory across pods, but you trade that for portability.
+- **`worker_threads`** — for CPU-bound work *inside* one process. Different problem; not a `cluster` substitute.
+
+The mental model to keep: one Node event loop = one CPU core max. Anything beyond that is a multi-process design choice.
 
 ## 9. Practice Problems
 

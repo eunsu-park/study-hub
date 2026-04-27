@@ -18,8 +18,6 @@
 
 ## Table of Contents
 
-Before the framework reference, read [**Theory & Principles**](#theory--principles) — `net/http` and ServeMux routing, the goroutine + channel CSP model that powers Go's concurrency, and `context.Context` as the universal cancellation propagation mechanism.
-
 1. [Why Go for Backend Development](#1-why-go-for-backend-development)
 2. [The net/http Standard Library](#2-the-nethttp-standard-library)
 3. [Gin Framework Basics](#3-gin-framework-basics)
@@ -31,171 +29,6 @@ Before the framework reference, read [**Theory & Principles**](#theory--principl
 9. [Project Structure Conventions](#9-project-structure-conventions)
 10. [Testing Go Web Applications](#10-testing-go-web-applications)
 11. [Practice Exercises](#11-practice-exercises)
-
----
-
-## Theory & Principles
-
-Go's web stack looks similar to other languages on the surface — handlers, middleware, ORMs — but the underlying concurrency and request-cancellation models are different in ways that change how you write the code. Three concepts cover the differences.
-
-- **(A) `net/http` and the ServeMux** — Go's stdlib HTTP server, the building block every framework wraps.
-- **(B) Goroutines and channels: CSP-style concurrency** — what "go func()" actually does and why Go has no event loop.
-- **(C) `context.Context` for cancellation propagation** — the chain that ties an HTTP request to every downstream call.
-
-### A. net/http and the ServeMux
-
-Unlike Python (where you need Flask/FastAPI/Django) or Node (where you need Express), Go's standard library ships a production-grade HTTP server. Every Go web framework is just a layer over `net/http`.
-
-#### A.1 The Handler interface
-
-The whole HTTP server is built on one interface:
-
-```go
-type Handler interface {
-    ServeHTTP(w http.ResponseWriter, r *http.Request)
-}
-```
-
-A handler is anything that implements `ServeHTTP`. `http.HandlerFunc` is a convenience wrapper that lets you use plain functions:
-
-```go
-http.HandleFunc("/hello", func(w http.ResponseWriter, r *http.Request) {
-    fmt.Fprintln(w, "hello")
-})
-http.ListenAndServe(":8080", nil)
-```
-
-That's a complete production-capable HTTP server. No framework, no decorators, just the standard library.
-
-#### A.2 ServeMux: pattern-based routing
-
-`http.ServeMux` is the built-in router. It matches URL paths against registered patterns:
-
-```go
-mux := http.NewServeMux()
-mux.HandleFunc("/users/", listUsers)        // matches /users/, /users/foo, etc
-mux.HandleFunc("GET /users/{id}", getUser)  // Go 1.22+: method + path with {id}
-http.ListenAndServe(":8080", mux)
-```
-
-Pre-Go 1.22, ServeMux was very basic — no method matching, no path parameters. That gap is why third-party routers (gorilla/mux, chi, gin's tree) became popular. Go 1.22 added method-aware patterns and path parameters to the stdlib, narrowing the gap. Gin and Echo still win on middleware ergonomics, binding, and error helpers — but stdlib `net/http` is now sufficient for many APIs.
-
-#### A.3 The request lifecycle
-
-For each accepted connection, Go's HTTP server runs:
-
-1. Read and parse the request headers.
-2. Look up the handler in the mux.
-3. Call `handler.ServeHTTP(w, r)` *in a new goroutine* — that's the magic.
-4. Handler reads the body if needed, writes the response.
-5. The goroutine ends; the connection may be reused (HTTP/1.1 keep-alive) or closed.
-
-The "new goroutine per request" is the entire concurrency model. There is no thread pool to size, no event loop to share — the runtime multiplexes goroutines onto OS threads transparently.
-
-### B. Goroutines and Channels: CSP-Style Concurrency
-
-The model is Communicating Sequential Processes (CSP, Tony Hoare 1978). Goroutines are the processes, channels are the communication primitive.
-
-#### B.1 What a goroutine actually is
-
-`go func() { ... }()` starts a new goroutine. Costs:
-
-- ~2 KB initial stack (grows on demand to MB).
-- A few microseconds of scheduler overhead per spawn.
-- One slot in the runtime's goroutine table.
-
-A Go server can have *millions* of goroutines blocked on I/O simultaneously. The runtime multiplexes them across `GOMAXPROCS` OS threads (defaults to CPU count). Blocking on a syscall doesn't block the OS thread — the runtime moves other goroutines to other threads.
-
-This is why Go has no event loop and no `async`/`await`. The runtime *is* the event loop, hidden under syntactic sync code.
-
-#### B.2 Channels: typed pipes between goroutines
-
-Channels are how goroutines communicate without sharing memory. Two operations: `ch <- value` (send), `<-ch` (receive). Both block until the other side is ready (for unbuffered channels).
-
-```go
-ch := make(chan int)
-go func() { ch <- 42 }()
-val := <-ch  // blocks until the goroutine sends
-```
-
-The Go mantra: **don't communicate by sharing memory; share memory by communicating**. Instead of locks around a shared variable, pass the variable on a channel; whoever holds the value is the one allowed to mutate it.
-
-For web servers, channels appear in:
-
-- **Worker pools.** N goroutines pull jobs from one channel.
-- **Fan-in/fan-out.** Spawn N goroutines for parallel work, collect results on a channel.
-- **Cancellation.** `done := make(chan struct{}); close(done)` signals every listener.
-- **Rate limiting.** A buffered channel of size N is a semaphore.
-
-#### B.3 The race detector
-
-Go ships with a built-in race detector: `go run -race ./...`. It catches data races (concurrent unsynchronized access to the same memory) at runtime. CI for any concurrent Go code should run with `-race`. The cost: 2-10× slower, ~5× more memory. Worth it.
-
-### C. context.Context: Cancellation Propagation
-
-A web request typically calls a database, which calls a cache, which might call a downstream service. If the client disconnects, every one of those calls should stop. `context.Context` is how Go propagates that cancellation signal.
-
-#### C.1 The Context interface
-
-```go
-type Context interface {
-    Deadline() (time.Time, bool)  // when this context expires
-    Done() <-chan struct{}        // closed when canceled
-    Err() error                   // why it was canceled
-    Value(key any) any            // request-scoped values
-}
-```
-
-Every HTTP handler in Go gets a context: `r.Context()`. That context is canceled when the client disconnects or the request times out. Pass it to *every* downstream call:
-
-```go
-func handler(w http.ResponseWriter, r *http.Request) {
-    rows, err := db.QueryContext(r.Context(), "SELECT ...")
-    // if r.Context() is canceled, the query is canceled too
-}
-```
-
-Database drivers (`database/sql`), HTTP clients (`http.Client.Do`), Redis clients, gRPC clients — all accept a `context.Context` and respect cancellation. This is what makes graceful shutdown work end-to-end.
-
-#### C.2 Deriving contexts: WithCancel, WithTimeout, WithDeadline
-
-You can derive a child context with extra constraints:
-
-```go
-ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
-defer cancel()
-result, err := slowAPI.Call(ctx)
-```
-
-`ctx` is canceled when *either* the parent is canceled *or* the 2-second timeout fires. The `defer cancel()` is mandatory hygiene — it releases resources even on the success path.
-
-#### C.3 The propagation discipline
-
-The rule: **every function that can block accepts `ctx context.Context` as its first parameter**. This is the convention across the Go standard library and ecosystem. If a function can take seconds and does not accept a context, it cannot be cooperatively canceled.
-
-The anti-pattern: `context.Background()` deep in your code. That ignores any cancellation from above, decoupling your code from the request lifecycle. Use `context.Background()` only in `main()`, tests, or true root contexts.
-
-#### C.4 Context values: limited, with care
-
-`ctx.Value(key)` lets you attach request-scoped values (request ID, user ID, tracing span). Useful but easy to misuse:
-
-- **Do** put plumbing data: trace IDs, request IDs, auth principal.
-- **Do not** put business data — pass it as explicit function arguments. Context values are untyped and invisible to the type system.
-
-### From Theory to the Code Below
-
-Each section that follows operationalizes one piece of this framework:
-
-- §1 (Why Go) sells the §B concurrency story and §C cancellation discipline as core advantages.
-- §2 (`net/http` standard library) is §A — the foundation every framework rests on.
-- §3 (Gin framework) wraps §A.2 with friendlier routing, request binding, and middleware DSL.
-- §4 (Echo comparison) compares Gin and Echo on the same axes — performance, ergonomics, ecosystem.
-- §5 (Request handling and JSON) is the same idea as Lesson 02's Pydantic story, with Go struct tags driving binding/validation.
-- §6 (Middleware patterns) is `func(next http.Handler) http.Handler` — Go's middleware idiom, simpler than the framework variants.
-- §7 (GORM) is the §A repository abstraction over `database/sql`, with its own N+1 considerations from Lesson 04 §C.
-- §8 (Error handling) is Go's `if err != nil` discipline — explicit errors, no exceptions, with `errors.Is/As` for matching.
-- §9 (Project structure) is the convention `cmd/`, `internal/`, `pkg/` that gives Go projects predictable shape.
-- §10 (Testing) is the stdlib `testing` package plus `httptest.NewServer` for integration tests of §A handlers.
 
 ---
 
@@ -254,6 +87,56 @@ OS Thread Model:              Goroutine Model:
 ## 2. The net/http Standard Library
 
 Go's `net/http` package is production-grade. Many teams use it without any framework at all.
+
+### Theory: net/http and the ServeMux
+
+Unlike Python (where you need Flask/FastAPI/Django) or Node (where you need Express), Go's standard library ships a production-grade HTTP server. Every Go web framework is just a layer over `net/http`.
+
+#### A.1 The Handler interface
+
+The whole HTTP server is built on one interface:
+
+```go
+type Handler interface {
+    ServeHTTP(w http.ResponseWriter, r *http.Request)
+}
+```
+
+A handler is anything that implements `ServeHTTP`. `http.HandlerFunc` is a convenience wrapper that lets you use plain functions:
+
+```go
+http.HandleFunc("/hello", func(w http.ResponseWriter, r *http.Request) {
+    fmt.Fprintln(w, "hello")
+})
+http.ListenAndServe(":8080", nil)
+```
+
+That's a complete production-capable HTTP server. No framework, no decorators, just the standard library.
+
+#### A.2 ServeMux: pattern-based routing
+
+`http.ServeMux` is the built-in router. It matches URL paths against registered patterns:
+
+```go
+mux := http.NewServeMux()
+mux.HandleFunc("/users/", listUsers)        // matches /users/, /users/foo, etc
+mux.HandleFunc("GET /users/{id}", getUser)  // Go 1.22+: method + path with {id}
+http.ListenAndServe(":8080", mux)
+```
+
+Pre-Go 1.22, ServeMux was very basic — no method matching, no path parameters. That gap is why third-party routers (gorilla/mux, chi, gin's tree) became popular. Go 1.22 added method-aware patterns and path parameters to the stdlib, narrowing the gap. Gin and Echo still win on middleware ergonomics, binding, and error helpers — but stdlib `net/http` is now sufficient for many APIs.
+
+#### A.3 The request lifecycle
+
+For each accepted connection, Go's HTTP server runs:
+
+1. Read and parse the request headers.
+2. Look up the handler in the mux.
+3. Call `handler.ServeHTTP(w, r)` *in a new goroutine* — that's the magic.
+4. Handler reads the body if needed, writes the response.
+5. The goroutine ends; the connection may be reused (HTTP/1.1 keep-alive) or closed.
+
+The "new goroutine per request" is the entire concurrency model. There is no thread pool to size, no event loop to share — the runtime multiplexes goroutines onto OS threads transparently.
 
 ### Basic HTTP Server
 
@@ -618,6 +501,57 @@ func main() {
 
 ## 5. Request Handling and JSON Responses
 
+### Theory: context.Context: Cancellation Propagation
+
+A web request typically calls a database, which calls a cache, which might call a downstream service. If the client disconnects, every one of those calls should stop. `context.Context` is how Go propagates that cancellation signal.
+
+#### C.1 The Context interface
+
+```go
+type Context interface {
+    Deadline() (time.Time, bool)  // when this context expires
+    Done() <-chan struct{}        // closed when canceled
+    Err() error                   // why it was canceled
+    Value(key any) any            // request-scoped values
+}
+```
+
+Every HTTP handler in Go gets a context: `r.Context()`. That context is canceled when the client disconnects or the request times out. Pass it to *every* downstream call:
+
+```go
+func handler(w http.ResponseWriter, r *http.Request) {
+    rows, err := db.QueryContext(r.Context(), "SELECT ...")
+    // if r.Context() is canceled, the query is canceled too
+}
+```
+
+Database drivers (`database/sql`), HTTP clients (`http.Client.Do`), Redis clients, gRPC clients — all accept a `context.Context` and respect cancellation. This is what makes graceful shutdown work end-to-end.
+
+#### C.2 Deriving contexts: WithCancel, WithTimeout, WithDeadline
+
+You can derive a child context with extra constraints:
+
+```go
+ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
+defer cancel()
+result, err := slowAPI.Call(ctx)
+```
+
+`ctx` is canceled when *either* the parent is canceled *or* the 2-second timeout fires. The `defer cancel()` is mandatory hygiene — it releases resources even on the success path.
+
+#### C.3 The propagation discipline
+
+The rule: **every function that can block accepts `ctx context.Context` as its first parameter**. This is the convention across the Go standard library and ecosystem. If a function can take seconds and does not accept a context, it cannot be cooperatively canceled.
+
+The anti-pattern: `context.Background()` deep in your code. That ignores any cancellation from above, decoupling your code from the request lifecycle. Use `context.Background()` only in `main()`, tests, or true root contexts.
+
+#### C.4 Context values: limited, with care
+
+`ctx.Value(key)` lets you attach request-scoped values (request ID, user ID, tracing span). Useful but easy to misuse:
+
+- **Do** put plumbing data: trace IDs, request IDs, auth principal.
+- **Do not** put business data — pass it as explicit function arguments. Context values are untyped and invisible to the type system.
+
 ### Consistent Response Envelope
 
 Define a standard response format across your API:
@@ -718,6 +652,45 @@ func handleStream(c *gin.Context) {
 ---
 
 ## 6. Middleware Patterns
+
+### Theory: Goroutines and Channels: CSP-Style Concurrency
+
+The model is Communicating Sequential Processes (CSP, Tony Hoare 1978). Goroutines are the processes, channels are the communication primitive.
+
+#### B.1 What a goroutine actually is
+
+`go func() { ... }()` starts a new goroutine. Costs:
+
+- ~2 KB initial stack (grows on demand to MB).
+- A few microseconds of scheduler overhead per spawn.
+- One slot in the runtime's goroutine table.
+
+A Go server can have *millions* of goroutines blocked on I/O simultaneously. The runtime multiplexes them across `GOMAXPROCS` OS threads (defaults to CPU count). Blocking on a syscall doesn't block the OS thread — the runtime moves other goroutines to other threads.
+
+This is why Go has no event loop and no `async`/`await`. The runtime *is* the event loop, hidden under syntactic sync code.
+
+#### B.2 Channels: typed pipes between goroutines
+
+Channels are how goroutines communicate without sharing memory. Two operations: `ch <- value` (send), `<-ch` (receive). Both block until the other side is ready (for unbuffered channels).
+
+```go
+ch := make(chan int)
+go func() { ch <- 42 }()
+val := <-ch  // blocks until the goroutine sends
+```
+
+The Go mantra: **don't communicate by sharing memory; share memory by communicating**. Instead of locks around a shared variable, pass the variable on a channel; whoever holds the value is the one allowed to mutate it.
+
+For web servers, channels appear in:
+
+- **Worker pools.** N goroutines pull jobs from one channel.
+- **Fan-in/fan-out.** Spawn N goroutines for parallel work, collect results on a channel.
+- **Cancellation.** `done := make(chan struct{}); close(done)` signals every listener.
+- **Rate limiting.** A buffered channel of size N is a semaphore.
+
+#### B.3 The race detector
+
+Go ships with a built-in race detector: `go run -race ./...`. It catches data races (concurrent unsynchronized access to the same memory) at runtime. CI for any concurrent Go code should run with `-race`. The cost: 2-10× slower, ~5× more memory. Worth it.
 
 ### Authentication Middleware
 
