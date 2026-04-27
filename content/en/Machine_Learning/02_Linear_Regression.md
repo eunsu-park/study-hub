@@ -22,11 +22,9 @@ Linear regression is the most basic regression algorithm that predicts continuou
 
 ---
 
-## Theory & Principles
+## 1. Simple Linear Regression
 
-The scikit-learn API hides four very different mathematical objects behind one verb (`.fit()`): the closed-form least-squares solution, gradient-based iterative solvers, and the L2 / L1 / Elastic Net regularizers. To choose between them you need to know what each one is actually solving and where it breaks.
-
-### A. Ordinary Least Squares: a Closed-Form Solution
+### Theory: Ordinary Least Squares Closed-Form Solution
 
 Stack `N` observations into the design matrix `X ∈ ℝ^{N×p}` (with a leading column of ones for the intercept) and target vector `y ∈ ℝ^N`. The OLS objective is
 
@@ -47,83 +45,6 @@ The Hessian `2 XᵀX` is positive semi-definite, so the critical point is a glob
 The catch is the inverse `(XᵀX)⁻¹`. It exists only when `XᵀX` has full rank — i.e., when the columns of `X` are linearly independent. Two ways this fails: (1) you have more features than samples (`p > N`), and (2) two features are perfectly correlated. In both cases the system has infinitely many least-squares solutions and OLS becomes ill-defined. Numerically, even *near*-singularity blows up the variance of `β̂`.
 
 Computational cost is `O(p² N + p³)` — fine for thousands of features, infeasible for millions. Below that ceiling, OLS is the optimum starting point: deterministic, reproducible, calibrated.
-
-### B. Gradient Descent: Trading Exactness for Scalability
-
-When `p` or `N` is too large for the normal equations, you minimize the same loss iteratively. The update rule is
-
-```
-β_{t+1} = β_t - η · ∇_β L(β_t) = β_t + (2η/N) · Xᵀ(y - X β_t)
-```
-
-The three flavours differ only in *which* gradient you use at each step:
-
-- **Batch GD**: gradient over the full `N` examples. Smooth descent, expensive per step.
-- **Stochastic GD (SGD)**: gradient on one random example. Cheap per step, noisy trajectory — the noise can actually *help* escape sharp curvature regions.
-- **Mini-batch GD**: gradient over `B` examples (typical `B = 32-512`). Hits a sweet spot: enough averaging to be stable, small enough to run in vectorized hardware.
-
-For the convex linear regression loss, all three converge to the *same* OLS optimum given a small enough learning rate. The difference is wall-clock cost, not the answer. Step-size choice matters: too large diverges, too small wastes compute. Practical defaults (Adam, learning-rate schedules) automate this for you.
-
-### C. Regularization: Constraining the Solution
-
-When `XᵀX` is near-singular or `p` is comparable to `N`, OLS has high variance: tiny changes to `y` produce large swings in `β̂`. Regularization adds a penalty that pulls `β` toward zero, trading a bit of bias for a lot of variance reduction.
-
-#### C.1 Ridge (L2): the closed form survives
-
-```
-β̂_ridge = argmin_β  ‖y - Xβ‖² + λ ‖β‖²₂
-        = (XᵀX + λI)⁻¹ Xᵀy
-```
-
-Adding `λI` makes the matrix invertible no matter what — this single fact is half the reason Ridge exists. As `λ → 0` you recover OLS; as `λ → ∞` all coefficients shrink to zero. Coefficients shrink *proportionally* but never reach zero, so Ridge keeps every feature in the model.
-
-#### C.2 Lasso (L1): why it produces sparsity
-
-```
-β̂_lasso = argmin_β  ‖y - Xβ‖² + λ ‖β‖₁
-```
-
-The L1 penalty is non-differentiable at `β_j = 0`. Use the subdifferential:
-
-```
-∂|β_j| = { sign(β_j)         if β_j ≠ 0
-         { [-1, +1]           if β_j = 0
-```
-
-The optimality condition for coordinate `j` reads `(Xᵀ(y - Xβ))_j ∈ λ · ∂|β_j|`. When the unpenalized residual correlation `|(Xᵀ(y - Xβ))_j|` is below `λ`, the only way to satisfy the inclusion is to set `β_j = 0` exactly. Geometrically, the L1 ball has corners on the axes — and constrained least-squares solutions tend to land on those corners. The L2 ball is round and has no corners, so Ridge cannot produce exact zeros.
-
-This is *the* reason to choose Lasso: automatic feature selection. The price is no closed form (you need coordinate descent or proximal gradient methods) and instability when features are highly correlated — Lasso arbitrarily picks one of a correlated group and zeros the rest.
-
-#### C.3 Elastic Net: convex combination
-
-```
-β̂_en = argmin_β  ‖y - Xβ‖² + λ [α ‖β‖₁ + (1-α) ‖β‖²₂]
-```
-
-Mixes L1 and L2 with mixing weight `α ∈ [0, 1]`. Inherits Lasso's sparsity and Ridge's stability under correlated features (it tends to keep correlated features as a group rather than picking one). When `α = 1` it reduces to Lasso; `α = 0` to Ridge.
-
-### D. Choosing the Right Tool
-
-| Situation | Best choice | Why |
-|-----------|-------------|-----|
-| Small `p`, well-conditioned `XᵀX` | OLS | Exact, free |
-| Many correlated features, want all kept | Ridge | Stable shrinkage, closed form |
-| `p > N` or want feature selection | Lasso | Sparsity from L1 corners |
-| Correlated features + want sparsity | Elastic Net | Group selection |
-| `N > 10⁶` | SGD / mini-batch | Normal equations infeasible |
-
-The choice is not stylistic — it follows from the conditioning of `XᵀX` and what you want from the coefficient vector.
-
-### From Theory to the Code Below
-
-- Section 1's `LinearRegression().fit(X, y)` solves the normal equations from (A) directly.
-- Section 2's `SGDRegressor` loop is the gradient-descent recursion from (B).
-- Section 3 exposes `Ridge`, `Lasso`, and `ElasticNet` — the three regularizers from (C). The `alpha` parameter in scikit-learn is the `λ` in our formulas; the `l1_ratio` parameter is the `α` of Elastic Net.
-- The polynomial features in Section 4 do not change any of this — they only expand `X` before fitting, so all the same mathematics applies in the higher-dimensional design matrix.
-
----
-
-## 1. Simple Linear Regression
 
 ### 1.1 Concept
 
@@ -193,6 +114,18 @@ print(f"θ₁ = {theta_best[1][0]:.4f}")
 
 ## 2. Multiple Linear Regression
 
+### Theory: Choosing Between OLS, Gradient Descent, and Regularization
+
+| Situation | Best choice | Why |
+|-----------|-------------|-----|
+| Small `p`, well-conditioned `XᵀX` | OLS | Exact, free |
+| Many correlated features, want all kept | Ridge | Stable shrinkage, closed form |
+| `p > N` or want feature selection | Lasso | Sparsity from L1 corners |
+| Correlated features + want sparsity | Elastic Net | Group selection |
+| `N > 10⁶` | SGD / mini-batch | Normal equations infeasible |
+
+The choice is not stylistic — it follows from the conditioning of `XᵀX` and what you want from the coefficient vector.
+
 ### 2.1 Concept
 
 Predict dependent variable using multiple independent variables.
@@ -247,6 +180,22 @@ print(coefficients)
 ---
 
 ## 3. Gradient Descent
+
+### Theory: Gradient Descent — Trading Exactness for Scalability
+
+When `p` or `N` is too large for the normal equations, you minimize the same loss iteratively. The update rule is
+
+```
+β_{t+1} = β_t - η · ∇_β L(β_t) = β_t + (2η/N) · Xᵀ(y - X β_t)
+```
+
+The three flavours differ only in *which* gradient you use at each step:
+
+- **Batch GD**: gradient over the full `N` examples. Smooth descent, expensive per step.
+- **Stochastic GD (SGD)**: gradient on one random example. Cheap per step, noisy trajectory — the noise can actually *help* escape sharp curvature regions.
+- **Mini-batch GD**: gradient over `B` examples (typical `B = 32-512`). Hits a sweet spot: enough averaging to be stable, small enough to run in vectorized hardware.
+
+For the convex linear regression loss, all three converge to the *same* OLS optimum given a small enough learning rate. The difference is wall-clock cost, not the answer. Step-size choice matters: too large diverges, too small wastes compute. Practical defaults (Adam, learning-rate schedules) automate this for you.
 
 ### 3.1 Batch Gradient Descent
 
@@ -339,6 +288,44 @@ print(f"Mini-batch GD result: θ₀={theta[0][0]:.4f}, θ₁={theta[1][0]:.4f}")
 ---
 
 ## 4. Regularization
+
+### Theory: Regularization as Constraint on the Solution
+
+When `XᵀX` is near-singular or `p` is comparable to `N`, OLS has high variance: tiny changes to `y` produce large swings in `β̂`. Regularization adds a penalty that pulls `β` toward zero, trading a bit of bias for a lot of variance reduction.
+
+#### C.1 Ridge (L2): the closed form survives
+
+```
+β̂_ridge = argmin_β  ‖y - Xβ‖² + λ ‖β‖²₂
+        = (XᵀX + λI)⁻¹ Xᵀy
+```
+
+Adding `λI` makes the matrix invertible no matter what — this single fact is half the reason Ridge exists. As `λ → 0` you recover OLS; as `λ → ∞` all coefficients shrink to zero. Coefficients shrink *proportionally* but never reach zero, so Ridge keeps every feature in the model.
+
+#### C.2 Lasso (L1): why it produces sparsity
+
+```
+β̂_lasso = argmin_β  ‖y - Xβ‖² + λ ‖β‖₁
+```
+
+The L1 penalty is non-differentiable at `β_j = 0`. Use the subdifferential:
+
+```
+∂|β_j| = { sign(β_j)         if β_j ≠ 0
+         { [-1, +1]           if β_j = 0
+```
+
+The optimality condition for coordinate `j` reads `(Xᵀ(y - Xβ))_j ∈ λ · ∂|β_j|`. When the unpenalized residual correlation `|(Xᵀ(y - Xβ))_j|` is below `λ`, the only way to satisfy the inclusion is to set `β_j = 0` exactly. Geometrically, the L1 ball has corners on the axes — and constrained least-squares solutions tend to land on those corners. The L2 ball is round and has no corners, so Ridge cannot produce exact zeros.
+
+This is *the* reason to choose Lasso: automatic feature selection. The price is no closed form (you need coordinate descent or proximal gradient methods) and instability when features are highly correlated — Lasso arbitrarily picks one of a correlated group and zeros the rest.
+
+#### C.3 Elastic Net: convex combination
+
+```
+β̂_en = argmin_β  ‖y - Xβ‖² + λ [α ‖β‖₁ + (1-α) ‖β‖²₂]
+```
+
+Mixes L1 and L2 with mixing weight `α ∈ [0, 1]`. Inherits Lasso's sparsity and Ridge's stability under correlated features (it tends to keep correlated features as a group rather than picking one). When `α = 1` it reduces to Lasso; `α = 0` to Ridge.
 
 Penalize model complexity to prevent overfitting.
 

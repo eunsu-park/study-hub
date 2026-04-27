@@ -25,11 +25,9 @@ You built a better model. Cross-validation says it's 2% more accurate. SHAP valu
 
 ---
 
-## Theory & Principles
+## 1. Why A/B Test ML Models?
 
-A/B testing for ML is applied statistical hypothesis testing — every step (sample size, p-value, multiple comparisons, sequential testing) has a precise mathematical justification, and the most common A/B-testing mistakes are misapplications of those steps. This section grounds the practice in the statistics so the code in the rest of the lesson stops being mysterious recipe and becomes deliberate decision-making.
-
-### A. The Hypothesis-Testing Frame
+### Theory: The Hypothesis-Testing Frame
 
 A/B testing fits the standard statistical framework:
 
@@ -45,109 +43,6 @@ Decision rule:    if p < α, reject H_0  ⟹  declare a "winner"
 The complementary error: failing to detect a true difference (Type II error, probability `β`). **Power** is `1 - β`, the probability of detecting a true difference of size `δ`. Standard target is power = 0.80.
 
 The four quantities `(α, β, δ, n)` are linked by one equation. Pick any three, the fourth is determined. This is the *only* equation you need for sample-size planning.
-
-### B. Sample Size Formula and the MDE
-
-For comparing two proportions (e.g., conversion rates) with `α = 0.05` and power = 0.80, the per-group sample size is approximately:
-
-```
-n ≈ 16 · (p · (1-p)) / δ²        for δ = absolute difference
-```
-
-For continuous metrics with standard deviation `σ`:
-
-```
-n ≈ 16 · σ² / δ²
-```
-
-The factor 16 comes from the standard normal critical values for the chosen `α` and power. The key insight: **sample size is inverse-square in the effect size**. Detecting a 1% lift requires 4× the sample of a 2% lift; detecting 0.5% requires 16× as many users.
-
-The **MDE (minimum detectable effect)** inverts the formula: given the traffic you have, what is the smallest effect you can reliably detect? If your MDE is larger than the lift you actually expect, the test is doomed before it starts.
-
-### C. The Z-Test and t-Test for Proportions and Means
-
-For binary outcomes (clicked / didn't click):
-
-```
-z = (p̂_A - p̂_B) / sqrt(p̂(1-p̂)(1/n_A + 1/n_B))     where p̂ is pooled
-p-value = 2 · (1 - Φ(|z|))                            two-sided
-```
-
-For continuous outcomes (revenue per user, time on page):
-
-```
-t = (x̄_A - x̄_B) / sqrt(s²(1/n_A + 1/n_B))
-p-value comes from a t-distribution with appropriate df
-```
-
-For very large `n` the two are essentially identical; the t-test is the safe choice in general.
-
-A/B test platforms (Optimizely, Google Optimize, scikit-learn, scipy.stats) wrap these tests, but the underlying math is exactly what is above. Knowing it lets you sanity-check the numbers you are shown.
-
-### D. The p-Value Trap
-
-A p-value is the probability of seeing data *at least as extreme* as what you observed, *if the null were true*. It is **not**:
-
-- The probability that the null is true.
-- The probability that the result is due to chance.
-- The size of the effect.
-
-Two common mistakes:
-
-1. **Peeking**: checking the p-value continuously and stopping when it crosses 0.05. This is a guaranteed false-positive machine — even when the null is true, repeated peeking will eventually give `p < 0.05` by chance. The false positive rate of "peek every day for 30 days" is around 30%, not 5%. Use **sequential testing** (mSPRT, group-sequential designs) or commit to a fixed sample size before starting.
-2. **Confusing statistical and practical significance**: with enough sample size, *any* nonzero difference becomes statistically significant. A "significant" 0.01% lift may not be worth the engineering cost. Always report both the p-value and the effect-size confidence interval.
-
-### E. Multiple Comparisons: the Bonferroni Trap
-
-Run 20 independent A/B tests with `α = 0.05` each, and the probability that at least one is a false positive is `1 - 0.95²⁰ ≈ 0.64`. This is the **multiple-comparisons problem** — the family-wise error rate explodes with the number of tests.
-
-Three corrections:
-
-- **Bonferroni**: divide `α` by the number of tests. Conservative — guarantees family-wise error ≤ `α`. Costs power.
-- **Benjamini-Hochberg (FDR)**: controls the false-discovery rate (expected fraction of false positives among declared positives) instead of family-wise error. Less conservative, more power.
-- **Family-wise testing with adjusted thresholds**: e.g., Holm-Bonferroni — slightly more powerful than plain Bonferroni at the same FWE level.
-
-For ML A/B tests this matters whenever you compare across multiple metrics (CTR, revenue, retention, latency, ...) or multiple variants (A vs B vs C vs D). Decide the correction *before* you peek at results.
-
-### F. Common ML-Specific Pitfalls
-
-A/B testing ML models has failure modes general A/B testing does not:
-
-- **Network effects**: if user A's experience depends on what other users see (recommendations, social feeds), the unit of randomization must be the cluster, not the individual. Otherwise the assumption of independent treatment effects is violated.
-- **Long-term effects**: a model that increases short-term clicks might erode long-term retention. Run the test long enough to capture both, or run a **holdback experiment** (a fraction of users always sees the old model for several months as a control).
-- **Heterogeneous treatment effects**: the average effect can be positive while a critical sub-population is harmed. Always slice results by user segment, geography, device, etc.
-- **Selection bias**: if assignment to A or B depends on user behavior (e.g., "users who clicked yesterday see model A"), you cannot infer causal effects. Random assignment must be unconditional on outcome.
-
-These are not statistical sophistication issues — they are architectural decisions made before any test runs.
-
-### G. Sequential and Bayesian Alternatives
-
-Classical fixed-sample-size A/B testing has two pain points: peeking is forbidden, and you must commit to `n` upfront. Two alternatives address this:
-
-- **Sequential testing** (Wald's SPRT, mSPRT, group-sequential): explicit stopping rules that allow checking the data periodically without inflating Type I error. You can stop early when the result is decisive in either direction.
-- **Bayesian A/B testing**: compute the posterior probability that B is better than A, given the data. Stop when this posterior crosses a threshold. More natural to interpret ("80% probability B is better") than p-values, and supports continuous monitoring without the peeking penalty.
-
-Modern A/B platforms (Eppo, Statsig, GrowthBook) usually implement one of these as the default.
-
-### H. The Causal Identification Story
-
-The ultimate justification for A/B testing is **random assignment**. Random assignment makes the treatment group statistically identical to the control group in *expectation*, so any observed difference is attributable to the treatment. Without random assignment (e.g., comparing users who chose to opt into the new model with those who didn't), confounding makes causal inference impossible.
-
-This is why "ramp up gradually" (canary) and "compare new model on day N to old model on day N-30" are not substitutes for proper A/B testing. The first lacks a contemporaneous control; the second lacks random assignment within a fixed time window. They are useful for *risk reduction* but not for *causal attribution*.
-
-### From Theory to the Code Below
-
-- Section 1's "offline ≠ online" discussion is the motivation for the entire framework in (A).
-- Section 2's `statsmodels.stats.power` sample-size calculations implement the formula in (B); the MDE concept is what determines whether the test will be conclusive.
-- Section 3's z-test / t-test implementations (`scipy.stats.ttest_ind`, `proportions_ztest`) are the algorithms in (C).
-- Section 4's "p-value pitfalls" callouts mirror the warnings in (D).
-- Section 5's Bonferroni / FDR correction code is the multiple-comparisons handling from (E).
-- Section 6's segmented analysis (per-region, per-device) is the heterogeneity check from (F).
-- Section 7's Bayesian A/B example (using PyMC or beta-binomial) is the alternative paradigm from (G).
-
----
-
-## 1. Why A/B Test ML Models?
 
 ### 1.1 The Offline-Online Gap
 
@@ -206,6 +101,24 @@ Why they diverge:
 ---
 
 ## 2. Experimental Design
+
+### Theory: Sample Size Formula and the MDE
+
+For comparing two proportions (e.g., conversion rates) with `α = 0.05` and power = 0.80, the per-group sample size is approximately:
+
+```
+n ≈ 16 · (p · (1-p)) / δ²        for δ = absolute difference
+```
+
+For continuous metrics with standard deviation `σ`:
+
+```
+n ≈ 16 · σ² / δ²
+```
+
+The factor 16 comes from the standard normal critical values for the chosen `α` and power. The key insight: **sample size is inverse-square in the effect size**. Detecting a 1% lift requires 4× the sample of a 2% lift; detecting 0.5% requires 16× as many users.
+
+The **MDE (minimum detectable effect)** inverts the formula: given the traffic you have, what is the smallest effect you can reliably detect? If your MDE is larger than the lift you actually expect, the test is doomed before it starts.
 
 ### 2.1 The Anatomy of an A/B Test
 
@@ -342,6 +255,26 @@ Problem: Early significance is often driven by:
 ---
 
 ## 3. Statistical Foundations
+
+### Theory: The Z-Test and t-Test for Proportions and Means
+
+For binary outcomes (clicked / didn't click):
+
+```
+z = (p̂_A - p̂_B) / sqrt(p̂(1-p̂)(1/n_A + 1/n_B))     where p̂ is pooled
+p-value = 2 · (1 - Φ(|z|))                            two-sided
+```
+
+For continuous outcomes (revenue per user, time on page):
+
+```
+t = (x̄_A - x̄_B) / sqrt(s²(1/n_A + 1/n_B))
+p-value comes from a t-distribution with appropriate df
+```
+
+For very large `n` the two are essentially identical; the t-test is the safe choice in general.
+
+A/B test platforms (Optimizely, Google Optimize, scikit-learn, scipy.stats) wrap these tests, but the underlying math is exactly what is above. Knowing it lets you sanity-check the numbers you are shown.
 
 ### 3.1 Hypothesis Testing for Model Comparison
 
@@ -492,6 +425,15 @@ apply_corrections(p_values)
 
 ## 4. Sequential Testing
 
+### Theory: Sequential and Bayesian Alternatives
+
+Classical fixed-sample-size A/B testing has two pain points: peeking is forbidden, and you must commit to `n` upfront. Two alternatives address this:
+
+- **Sequential testing** (Wald's SPRT, mSPRT, group-sequential): explicit stopping rules that allow checking the data periodically without inflating Type I error. You can stop early when the result is decisive in either direction.
+- **Bayesian A/B testing**: compute the posterior probability that B is better than A, given the data. Stop when this posterior crosses a threshold. More natural to interpret ("80% probability B is better") than p-values, and supports continuous monitoring without the peeking penalty.
+
+Modern A/B platforms (Eppo, Statsig, GrowthBook) usually implement one of these as the default.
+
 ### 4.1 The Peeking Problem
 
 ```python
@@ -583,6 +525,12 @@ sequential_ab_test(control, treatment)
 ---
 
 ## 5. Multi-Armed Bandits
+
+### Theory: The Causal Identification Story
+
+The ultimate justification for A/B testing is **random assignment**. Random assignment makes the treatment group statistically identical to the control group in *expectation*, so any observed difference is attributable to the treatment. Without random assignment (e.g., comparing users who chose to opt into the new model with those who didn't), confounding makes causal inference impossible.
+
+This is why "ramp up gradually" (canary) and "compare new model on day N to old model on day N-30" are not substitutes for proper A/B testing. The first lacks a contemporaneous control; the second lacks random assignment within a fixed time window. They are useful for *risk reduction* but not for *causal attribution*.
 
 ### 5.1 A/B Testing vs. Bandits
 
@@ -778,6 +726,19 @@ print(f"Total reward: {total_reward_ts} (vs UCB: {total_reward_ucb}, "
 
 ## 6. Interleaving Experiments
 
+### Theory: The p-Value Trap
+
+A p-value is the probability of seeing data *at least as extreme* as what you observed, *if the null were true*. It is **not**:
+
+- The probability that the null is true.
+- The probability that the result is due to chance.
+- The size of the effect.
+
+Two common mistakes:
+
+1. **Peeking**: checking the p-value continuously and stopping when it crosses 0.05. This is a guaranteed false-positive machine — even when the null is true, repeated peeking will eventually give `p < 0.05` by chance. The false positive rate of "peek every day for 30 days" is around 30%, not 5%. Use **sequential testing** (mSPRT, group-sequential designs) or commit to a fixed sample size before starting.
+2. **Confusing statistical and practical significance**: with enough sample size, *any* nonzero difference becomes statistically significant. A "significant" 0.01% lift may not be worth the engineering cost. Always report both the p-value and the effect-size confidence interval.
+
 ### 6.1 Why Interleaving?
 
 ```python
@@ -869,6 +830,18 @@ print(f"Team B items:    {team_b}")
 
 ## 7. Guardrail Metrics
 
+### Theory: Multiple Comparisons — the Bonferroni Trap
+
+Run 20 independent A/B tests with `α = 0.05` each, and the probability that at least one is a false positive is `1 - 0.95²⁰ ≈ 0.64`. This is the **multiple-comparisons problem** — the family-wise error rate explodes with the number of tests.
+
+Three corrections:
+
+- **Bonferroni**: divide `α` by the number of tests. Conservative — guarantees family-wise error ≤ `α`. Costs power.
+- **Benjamini-Hochberg (FDR)**: controls the false-discovery rate (expected fraction of false positives among declared positives) instead of family-wise error. Less conservative, more power.
+- **Family-wise testing with adjusted thresholds**: e.g., Holm-Bonferroni — slightly more powerful than plain Bonferroni at the same FWE level.
+
+For ML A/B tests this matters whenever you compare across multiple metrics (CTR, revenue, retention, latency, ...) or multiple variants (A vs B vs C vs D). Decide the correction *before* you peek at results.
+
 ### 7.1 What Are Guardrail Metrics?
 
 ```python
@@ -955,6 +928,17 @@ evaluate_experiment(primary, guardrails)
 ---
 
 ## 8. Practical A/B Testing Workflow
+
+### Theory: Common ML-Specific Pitfalls
+
+A/B testing ML models has failure modes general A/B testing does not:
+
+- **Network effects**: if user A's experience depends on what other users see (recommendations, social feeds), the unit of randomization must be the cluster, not the individual. Otherwise the assumption of independent treatment effects is violated.
+- **Long-term effects**: a model that increases short-term clicks might erode long-term retention. Run the test long enough to capture both, or run a **holdback experiment** (a fraction of users always sees the old model for several months as a control).
+- **Heterogeneous treatment effects**: the average effect can be positive while a critical sub-population is harmed. Always slice results by user segment, geography, device, etc.
+- **Selection bias**: if assignment to A or B depends on user behavior (e.g., "users who clicked yesterday see model A"), you cannot infer causal effects. Random assignment must be unconditional on outcome.
+
+These are not statistical sophistication issues — they are architectural decisions made before any test runs.
 
 ### 8.1 End-to-End Checklist
 

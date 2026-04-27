@@ -22,11 +22,9 @@ Classical time series methods like ARIMA model a single series at a time using l
 
 ---
 
-## Theory & Principles
+## 1. ML vs Classical Time Series
 
-Time series ML is not a different kind of model — it is a different kind of *data preparation*. The data has a temporal ordering that breaks the i.i.d. assumption underlying every other lesson, and that ordering imposes specific constraints on feature engineering, validation, and which models are even appropriate. This section nails down those constraints from the ground up.
-
-### A. Stationarity: the Statistical Foundation
+### Theory: Stationarity — the Statistical Foundation
 
 A time series `{y_t}` is **strictly stationary** if its joint distribution is invariant under time shifts:
 
@@ -46,109 +44,6 @@ Most classical ML assumes the data is stationary or can be made so. Two common t
 - **Log-then-difference** stabilizes variance for series with multiplicative seasonality.
 
 A stationarity test (Augmented Dickey-Fuller, KPSS) tells you whether to difference. If you skip this and feed a non-stationary series to ML, the model can latch onto the trend and produce nonsense extrapolations.
-
-### B. Autocorrelation Functions: ACF and PACF
-
-The **autocorrelation function (ACF)** at lag `h`:
-
-```
-ACF(h) = γ(h) / γ(0) = Cov(y_t, y_{t+h}) / Var(y_t)
-```
-
-ACF measures how strongly `y_t` correlates with `y_{t-h}`, including all the indirect correlation through `y_{t-1}, ..., y_{t-h+1}`.
-
-The **partial autocorrelation function (PACF)** at lag `h` is the correlation between `y_t` and `y_{t-h}` *after removing* the linear effect of `y_{t-1}, ..., y_{t-h+1}`. It is the direct correlation, not mediated by intermediate lags.
-
-Reading ACF/PACF plots tells you which lag features matter:
-- ACF cuts off at lag `q` ⟹ pure MA(q) process.
-- PACF cuts off at lag `p` ⟹ pure AR(p) process.
-- Both decay slowly ⟹ ARMA(p, q).
-
-For ML feature engineering, PACF is the better guide: it tells you which lag features add information *beyond* what shorter lags already provide.
-
-### C. ARIMA in One Equation
-
-ARIMA(p, d, q) on a series `y_t`:
-
-```
-1. Difference d times:   z_t = Δ^d y_t
-2. Fit ARMA(p, q) on z_t:
-       z_t = c + φ_1 z_{t-1} + ... + φ_p z_{t-p}    ← AR(p): autoregressive
-                + ε_t + θ_1 ε_{t-1} + ... + θ_q ε_{t-q}  ← MA(q): moving average
-```
-
-`p` lagged values of the series (AR), `d` orders of differencing (I), `q` lagged residuals (MA). Parameters are estimated by maximum likelihood. SARIMA adds a seasonal `(P, D, Q, s)` block with `s`-period lags for periodic patterns (s=12 for monthly with annual seasonality, s=7 for daily with weekly).
-
-ARIMA is linear, univariate, and assumes Gaussian residuals. Its interpretability and theoretical foundations are unmatched, but its rigidity is also why ML approaches dominate when data is rich.
-
-### D. Prophet: Decomposable Additive Model
-
-Prophet (Facebook, 2017) is an additive decomposition:
-
-```
-y(t) = g(t) + s(t) + h(t) + ε_t
-```
-
-- `g(t)`: trend (piecewise-linear or piecewise-logistic with automatic changepoint detection).
-- `s(t)`: seasonality (Fourier series for weekly, yearly, custom periods).
-- `h(t)`: holidays (user-supplied list of special dates with effects).
-- `ε_t`: noise.
-
-Each component is fit with Bayesian inference (Stan under the hood). The result is interpretable, robust to missing data and outliers, and works out of the box on business time series. The trade-off: it is much more rigid than gradient-boosted ML when relationships are complex non-linear interactions of many features.
-
-### E. Why You Cannot Use Random K-Fold
-
-Standard K-fold randomly shuffles data into folds. On time-series this is a *catastrophic* leakage: training fold contains examples from time `t_1, t_3, t_5, ...` and the validation fold contains `t_2, t_4, t_6, ...`. The model has access to *future* data when predicting the validation set — exactly the opposite of how it will be deployed.
-
-The CV error of random K-fold on a time series is biased *downward* (looks better than reality) because the model is essentially interpolating between training examples it has already seen. Production performance will be much worse.
-
-### F. Walk-Forward Validation: the Right CV
-
-Time-series CV must mimic deployment: train on the past, test on the future. Two equivalent schemes:
-
-- **Expanding window**: training set grows over time. Fold `k` trains on `[1..t_k]` and tests on `[t_k+1..t_k+h]`.
-- **Rolling window**: training set is a fixed-length window that slides forward. Fold `k` trains on `[t_k-W..t_k]` and tests on `[t_k+1..t_k+h]`.
-
-Expanding window uses more data per fold; rolling window enforces that the model learns from a constant-size, recent slice (better when distribution drifts).
-
-A subtle gotcha: the **gap** between training end and validation start. If your forecast horizon is `h`, leave a gap of size `h` between training and validation — otherwise the model would have access to information that, in deployment, would not yet be available.
-
-scikit-learn's `TimeSeriesSplit` implements expanding-window CV; `gap` and `max_train_size` parameters control the variants.
-
-### G. Lag, Rolling, and Calendar Features
-
-Once you accept the temporal-CV discipline, ML reduces time series to a tabular problem via three feature families:
-
-- **Lag features**: `y_{t-1}, y_{t-2}, ..., y_{t-L}`. PACF tells you which lags matter.
-- **Rolling-window features**: `mean(y_{t-W..t-1}), std(y_{t-W..t-1}), max(...), min(...)`. Aggregate recent history into a small set of summaries.
-- **Calendar features**: `day_of_week, month, day_of_month, is_holiday, days_since_last_event`. Raw timestamps converted into useful categorical predictors.
-
-Each of these can be computed for each row independently using only past data, so they pose no leakage problem — *as long as* you compute them inside the pipeline, after the temporal split.
-
-A subtler trap: **target encoding by time block**. If you target-encode `month` using all training rows, including those after the row being encoded, you leak future information. Use only past rows when encoding.
-
-### H. Multi-Step Forecasting Strategies
-
-Predicting `h > 1` steps ahead has three approaches:
-
-1. **Recursive (one-step-ahead repeated)**: train one model to predict `t+1` from history, then feed its prediction back as input to predict `t+2`, etc. Errors compound.
-2. **Direct (one model per horizon)**: train `h` separate models, each predicting `y_{t+k}` for fixed `k`. No error compounding, but `h` models to maintain.
-3. **Multi-output (single model, h outputs)**: train one model whose output is `(y_{t+1}, ..., y_{t+h})`. Captures correlations between horizons; available in some frameworks (Prophet, neural nets).
-
-Direct is the safest default for moderate `h`; recursive scales worse with horizon; multi-output is best when you can support it.
-
-### From Theory to the Code Below
-
-- Section 1's "ML vs classical" framing is the dichotomy from (A)–(D).
-- Section 2's `adfuller` test from `statsmodels` is the stationarity check from (A); the differencing transform is also there.
-- Section 3's lag/rolling/calendar feature engineering is exactly (G); ACF/PACF plots in Section 3 are the diagnostics from (B).
-- Section 4's `TimeSeriesSplit(n_splits=K, gap=...)` is the walk-forward CV from (F).
-- Section 5's recursive forecasting loop is the strategy from (H.1); the multi-model approach is (H.2).
-- Section 6's Prophet example is the additive-decomposition model from (D); the comparison with XGBoost/LightGBM is the rigidity-vs-flexibility trade-off from (D).
-
----
-
-## 1. ML vs Classical Time Series
 
 ### 1.1 Two Paradigms
 
@@ -209,6 +104,18 @@ print("\nFeatures: lag_1, lag_2, lag_3  →  Target: sales")
 ---
 
 ## 2. Feature Engineering for Time Series
+
+### Theory: Lag, Rolling, and Calendar Features
+
+Once you accept the temporal-CV discipline, ML reduces time series to a tabular problem via three feature families:
+
+- **Lag features**: `y_{t-1}, y_{t-2}, ..., y_{t-L}`. PACF tells you which lags matter.
+- **Rolling-window features**: `mean(y_{t-W..t-1}), std(y_{t-W..t-1}), max(...), min(...)`. Aggregate recent history into a small set of summaries.
+- **Calendar features**: `day_of_week, month, day_of_month, is_holiday, days_since_last_event`. Raw timestamps converted into useful categorical predictors.
+
+Each of these can be computed for each row independently using only past data, so they pose no leakage problem — *as long as* you compute them inside the pipeline, after the temporal split.
+
+A subtler trap: **target encoding by time block**. If you target-encode `month` using all training rows, including those after the row being encoded, you leak future information. Use only past rows when encoding.
 
 ### 2.1 Lag Features
 
@@ -309,6 +216,12 @@ print(f"Added {len(fourier_cols)} Fourier features")
 
 ## 3. Cross-Validation for Time Series
 
+### Theory: Why You Cannot Use Random K-Fold
+
+Standard K-fold randomly shuffles data into folds. On time-series this is a *catastrophic* leakage: training fold contains examples from time `t_1, t_3, t_5, ...` and the validation fold contains `t_2, t_4, t_6, ...`. The model has access to *future* data when predicting the validation set — exactly the opposite of how it will be deployed.
+
+The CV error of random K-fold on a time series is biased *downward* (looks better than reality) because the model is essentially interpolating between training examples it has already seen. Production performance will be much worse.
+
 ### 3.1 Why Random CV Fails
 
 ```python
@@ -388,6 +301,25 @@ print(f"First fold: train {splits[0][0][0]}-{splits[0][0][-1]}, val {splits[0][1
 ---
 
 ## 4. Tree-Based Time Series Forecasting
+
+### Theory: Autocorrelation Functions — ACF and PACF
+
+The **autocorrelation function (ACF)** at lag `h`:
+
+```
+ACF(h) = γ(h) / γ(0) = Cov(y_t, y_{t+h}) / Var(y_t)
+```
+
+ACF measures how strongly `y_t` correlates with `y_{t-h}`, including all the indirect correlation through `y_{t-1}, ..., y_{t-h+1}`.
+
+The **partial autocorrelation function (PACF)** at lag `h` is the correlation between `y_t` and `y_{t-h}` *after removing* the linear effect of `y_{t-1}, ..., y_{t-h+1}`. It is the direct correlation, not mediated by intermediate lags.
+
+Reading ACF/PACF plots tells you which lag features matter:
+- ACF cuts off at lag `q` ⟹ pure MA(q) process.
+- PACF cuts off at lag `p` ⟹ pure AR(p) process.
+- Both decay slowly ⟹ ARMA(p, q).
+
+For ML feature engineering, PACF is the better guide: it tells you which lag features add information *beyond* what shorter lags already provide.
 
 ### 4.1 XGBoost / LightGBM for Forecasting
 
@@ -503,6 +435,21 @@ print("For critical applications, prefer Direct or Multi-output strategies.")
 
 ## 5. Prophet and NeuralProphet
 
+### Theory: Prophet — Decomposable Additive Model
+
+Prophet (Facebook, 2017) is an additive decomposition:
+
+```
+y(t) = g(t) + s(t) + h(t) + ε_t
+```
+
+- `g(t)`: trend (piecewise-linear or piecewise-logistic with automatic changepoint detection).
+- `s(t)`: seasonality (Fourier series for weekly, yearly, custom periods).
+- `h(t)`: holidays (user-supplied list of special dates with effects).
+- `ε_t`: noise.
+
+Each component is fit with Bayesian inference (Stan under the hood). The result is interpretable, robust to missing data and outliers, and works out of the box on business time series. The trade-off: it is much more rigid than gradient-boosted ML when relationships are complex non-linear interactions of many features.
+
 ### 5.1 Facebook Prophet
 
 ```python
@@ -577,6 +524,21 @@ print("Handles missing data, outliers, and trend changes automatically.")
 ---
 
 ## 6. Time Series Classification
+
+### Theory: ARIMA in One Equation
+
+ARIMA(p, d, q) on a series `y_t`:
+
+```
+1. Difference d times:   z_t = Δ^d y_t
+2. Fit ARMA(p, q) on z_t:
+       z_t = c + φ_1 z_{t-1} + ... + φ_p z_{t-p}    ← AR(p): autoregressive
+                + ε_t + θ_1 ε_{t-1} + ... + θ_q ε_{t-q}  ← MA(q): moving average
+```
+
+`p` lagged values of the series (AR), `d` orders of differencing (I), `q` lagged residuals (MA). Parameters are estimated by maximum likelihood. SARIMA adds a seasonal `(P, D, Q, s)` block with `s`-period lags for periodic patterns (s=12 for monthly with annual seasonality, s=7 for daily with weekly).
+
+ARIMA is linear, univariate, and assumes Gaussian residuals. Its interpretability and theoretical foundations are unmatched, but its rigidity is also why ML approaches dominate when data is rich.
 
 ### 6.1 Feature-Based Classification
 
@@ -718,6 +680,19 @@ print("tsfresh: Extracts 700+ features automatically, then selects relevant ones
 
 ## 7. Backtesting and Evaluation
 
+### Theory: Walk-Forward Validation — the Right CV
+
+Time-series CV must mimic deployment: train on the past, test on the future. Two equivalent schemes:
+
+- **Expanding window**: training set grows over time. Fold `k` trains on `[1..t_k]` and tests on `[t_k+1..t_k+h]`.
+- **Rolling window**: training set is a fixed-length window that slides forward. Fold `k` trains on `[t_k-W..t_k]` and tests on `[t_k+1..t_k+h]`.
+
+Expanding window uses more data per fold; rolling window enforces that the model learns from a constant-size, recent slice (better when distribution drifts).
+
+A subtle gotcha: the **gap** between training end and validation start. If your forecast horizon is `h`, leave a gap of size `h` between training and validation — otherwise the model would have access to information that, in deployment, would not yet be available.
+
+scikit-learn's `TimeSeriesSplit` implements expanding-window CV; `gap` and `max_train_size` parameters control the variants.
+
 ### 7.1 Walk-Forward Validation
 
 ```python
@@ -813,6 +788,16 @@ Metric Guide:
 ---
 
 ## 8. Practical Considerations
+
+### Theory: Multi-Step Forecasting Strategies
+
+Predicting `h > 1` steps ahead has three approaches:
+
+1. **Recursive (one-step-ahead repeated)**: train one model to predict `t+1` from history, then feed its prediction back as input to predict `t+2`, etc. Errors compound.
+2. **Direct (one model per horizon)**: train `h` separate models, each predicting `y_{t+k}` for fixed `k`. No error compounding, but `h` models to maintain.
+3. **Multi-output (single model, h outputs)**: train one model whose output is `(y_{t+1}, ..., y_{t+h})`. Captures correlations between horizons; available in some frameworks (Prophet, neural nets).
+
+Direct is the safest default for moderate `h`; recursive scales worse with horizon; multi-output is best when you can support it.
 
 ### 8.1 Handling Multiple Time Series (Global Models)
 

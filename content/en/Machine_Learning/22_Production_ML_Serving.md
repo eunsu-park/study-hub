@@ -25,11 +25,9 @@ A model that achieves 95% accuracy in your Jupyter notebook is not the same as a
 
 ---
 
-## Theory & Principles
+## 1. Training vs. Inference: Mind the Gap
 
-Production ML serving is a different optimization problem than training. The training metric is "validation accuracy"; the production metric is some weighted combination of accuracy, p99 latency, throughput, cost, and operational risk. Each of the techniques in this lesson — model versioning, quantization, A/B routing, drift detection — is a knob in this multi-objective space, with sharp trade-offs that matter only after a model leaves the notebook.
-
-### A. Latency vs Throughput: the Two Performance Dimensions
+### Theory: Latency vs Throughput — Two Performance Dimensions
 
 These two are often confused but are independent:
 
@@ -42,87 +40,6 @@ The distinction matters because the levers are different:
 - To improve **throughput**: dynamic batching (group concurrent requests, run one larger forward pass), more replicas behind a load balancer, async I/O.
 
 Some optimizations help one and hurt the other. Dynamic batching with a 20ms wait window improves throughput at the cost of adding ~20ms to per-request latency. The right choice depends on which constraint is binding (an interactive recommender needs low latency; a nightly batch scoring job only cares about throughput).
-
-### B. The p99 Trap
-
-Reporting "average latency" hides everything that matters. A model with 50ms mean latency can have a p99 of 2 seconds — meaning 1% of users get a terrible experience. SLAs are written on tail percentiles, not means.
-
-Sources of tail latency:
-- Garbage collection pauses (Python, JVM).
-- Cold model loading on a freshly-deployed replica.
-- Resource contention with co-located workloads.
-- Variable input size (a 10x longer text takes 10x longer to embed).
-
-Mitigations: warm pools (keep replicas hot), fixed batch size with padding, careful resource isolation, capping input length. Always measure p99, not just mean.
-
-### C. Model Versioning and the Reproducibility Contract
-
-A production model is not a single file — it is a *contract* over multiple artifacts:
-- The serialized model (weights / tree structure / coefficients).
-- The exact preprocessor (scaler means, encoder vocabularies, feature names).
-- The training data hash and code version.
-- The Python / library versions (sklearn 1.3 ≠ sklearn 1.4 in subtle ways).
-- The schema of expected input features (names, types, ranges).
-
-Tools like **MLflow**, **DVC**, and **Weights & Biases** track these as a unit. The discipline is: a model version `v_n` is reproducible from its tracked metadata, and any difference between training-time and serving-time predictions on the same input is treated as a bug. Without this, you cannot debug the inevitable production discrepancies.
-
-### D. A/B Testing and Shadow Deployment
-
-Replacing a production model is risky. Standard playbook:
-
-1. **Shadow deployment**: route a copy of production traffic to the new model, log its predictions, but serve the old model's predictions to users. Compare the two prediction streams offline. No user-visible risk.
-2. **Canary deployment**: route a small fraction (1%, then 5%, then 25%) of *real* traffic to the new model, monitor business metrics. Roll back instantly on degradation.
-3. **A/B test**: route a stable fraction (typically 50/50) for long enough to measure a statistically significant difference in the business metric. Lesson 23 covers the statistical machinery.
-
-Each step gradually shifts risk: shadow has zero risk, canary has small risk, A/B has measured risk. Skip steps at your peril.
-
-### E. Quantization, Pruning, Distillation: Cheaper Inference
-
-When the model is too slow or too large, three techniques reduce it without retraining from scratch:
-
-- **Quantization**: replace 32-bit floats with 8-bit integers (or 16-bit floats). Cuts memory and compute by ~4× with typically <1% accuracy loss. Standard for deep nets; less commonly applied to gradient boosting.
-- **Pruning**: remove weights or filters that contribute little to predictions. Network becomes sparse; with the right hardware support, sparse multiplies are faster.
-- **Distillation**: train a small "student" model to mimic the predictions of a large "teacher" model. The student learns from the teacher's *soft probabilities*, not just the hard labels — that extra signal often makes a small model unexpectedly competitive.
-
-Each technique trades capacity for speed. Measure the accuracy cost on your real validation set; never assume the published numbers transfer to your data.
-
-### F. Drift: Data Drift vs Concept Drift
-
-A model's accuracy can degrade in production for two distinct reasons:
-
-- **Data drift** (covariate shift): the *input distribution* `p(x)` changes. Example: a fraud model trained on 2020 transaction patterns sees different patterns in 2025 (mobile vs desktop ratios, new merchant categories). The relationship `p(y | x)` may be unchanged — the model just sees inputs it was not trained on.
-- **Concept drift**: the *target relationship* `p(y | x)` changes. Example: spammer behavior evolves to evade detection — the same input features now have a different probability of being spam.
-
-Detection methods differ:
-- For data drift: monitor `p(x)` directly via population statistics (mean, std, KS test on each feature, PSI). Doable without ground-truth labels.
-- For concept drift: requires labels (or a surrogate). Compare model accuracy / log-loss over a recent window to a baseline window.
-
-Mitigations: scheduled retraining, online learning, drift-triggered retraining (alarm fires ⟹ kick off retraining pipeline). The right cadence depends on how fast the world is changing.
-
-### G. Monitoring: What to Log
-
-Production ML monitoring covers four layers:
-
-1. **Infrastructure**: CPU, memory, replica count, request rate. Standard SRE telemetry.
-2. **Service**: latency (p50/p95/p99), error rate, throughput. Standard service telemetry.
-3. **Model inputs and outputs**: feature distributions, prediction distributions, confidence histograms. ML-specific.
-4. **Business metrics**: conversion rate, revenue per prediction, click-through rate, user complaints. The ultimate KPI.
-
-Layer 3 is where ML serving differs from generic services. A drift in the input distribution should fire an alarm even if the service is technically healthy. Tools like **Evidently AI**, **WhyLabs**, **Arize** specialize in this layer.
-
-### From Theory to the Code Below
-
-- Section 1's training-vs-production environment table is the gap that drives every optimization in (A)–(G).
-- Section 2's `joblib.dump` / `joblib.load` round-trip and version pinning is the contract from (C); MLflow examples implement the same discipline at scale.
-- Section 3's quantization / pruning examples (typically with `torch.quantization` or `tensorflow_model_optimization`) are the techniques in (E).
-- Section 4's batching example is the throughput optimization from (A); the latency measurement code is the discipline from (B).
-- Section 5's shadow-deployment / canary code is the rollout pattern from (D).
-- Section 6's drift-detection code (KS test, PSI) implements (F.1); concept-drift detection requires the labeled-feedback loop from (F.2).
-- Section 7's monitoring dashboard code targets layer 3 from (G).
-
----
-
-## 1. Training vs. Inference: Mind the Gap
 
 ### 1.1 Environment Differences
 
@@ -163,6 +80,16 @@ preprocessing logic during training differs from what runs in production.
 ---
 
 ## 2. Model Optimization for Inference
+
+### Theory: Quantization, Pruning, Distillation — Cheaper Inference
+
+When the model is too slow or too large, three techniques reduce it without retraining from scratch:
+
+- **Quantization**: replace 32-bit floats with 8-bit integers (or 16-bit floats). Cuts memory and compute by ~4× with typically <1% accuracy loss. Standard for deep nets; less commonly applied to gradient boosting.
+- **Pruning**: remove weights or filters that contribute little to predictions. Network becomes sparse; with the right hardware support, sparse multiplies are faster.
+- **Distillation**: train a small "student" model to mimic the predictions of a large "teacher" model. The student learns from the teacher's *soft probabilities*, not just the hard labels — that extra signal often makes a small model unexpectedly competitive.
+
+Each technique trades capacity for speed. Measure the accuracy cost on your real validation set; never assume the published numbers transfer to your data.
 
 ### 2.1 Quantization
 
@@ -351,6 +278,16 @@ def compare_model_sizes(sklearn_model, onnx_path=None):
 
 ## 3. Serving Patterns
 
+### Theory: A/B Testing and Shadow Deployment
+
+Replacing a production model is risky. Standard playbook:
+
+1. **Shadow deployment**: route a copy of production traffic to the new model, log its predictions, but serve the old model's predictions to users. Compare the two prediction streams offline. No user-visible risk.
+2. **Canary deployment**: route a small fraction (1%, then 5%, then 25%) of *real* traffic to the new model, monitor business metrics. Roll back instantly on degradation.
+3. **A/B test**: route a stable fraction (typically 50/50) for long enough to measure a statistically significant difference in the business metric. Lesson 23 covers the statistical machinery.
+
+Each step gradually shifts risk: shadow has zero risk, canary has small risk, A/B has measured risk. Skip steps at your peril.
+
 ### 3.1 Pattern Comparison
 
 ```python
@@ -473,6 +410,19 @@ Which serving pattern should I use?
 
 ## 4. Preventing Training-Serving Skew
 
+### Theory: Drift — Data Drift vs Concept Drift
+
+A model's accuracy can degrade in production for two distinct reasons:
+
+- **Data drift** (covariate shift): the *input distribution* `p(x)` changes. Example: a fraud model trained on 2020 transaction patterns sees different patterns in 2025 (mobile vs desktop ratios, new merchant categories). The relationship `p(y | x)` may be unchanged — the model just sees inputs it was not trained on.
+- **Concept drift**: the *target relationship* `p(y | x)` changes. Example: spammer behavior evolves to evade detection — the same input features now have a different probability of being spam.
+
+Detection methods differ:
+- For data drift: monitor `p(x)` directly via population statistics (mean, std, KS test on each feature, PSI). Doable without ground-truth labels.
+- For concept drift: requires labels (or a surrogate). Compare model accuracy / log-loss over a recent window to a baseline window.
+
+Mitigations: scheduled retraining, online learning, drift-triggered retraining (alarm fires ⟹ kick off retraining pipeline). The right cadence depends on how fast the world is changing.
+
 ### 4.1 What Is Training-Serving Skew?
 
 Training-serving skew occurs when the data or transformations at training time differ from those at inference time:
@@ -571,6 +521,18 @@ Before deploying a model, verify these items:
 
 ## 5. Latency-Accuracy Trade-offs
 
+### Theory: The p99 Trap
+
+Reporting "average latency" hides everything that matters. A model with 50ms mean latency can have a p99 of 2 seconds — meaning 1% of users get a terrible experience. SLAs are written on tail percentiles, not means.
+
+Sources of tail latency:
+- Garbage collection pauses (Python, JVM).
+- Cold model loading on a freshly-deployed replica.
+- Resource contention with co-located workloads.
+- Variable input size (a 10x longer text takes 10x longer to embed).
+
+Mitigations: warm pools (keep replicas hot), fixed batch size with padding, careful resource isolation, capping input length. Always measure p99, not just mean.
+
 ### 5.1 The Trade-off Landscape
 
 ```python
@@ -664,6 +626,17 @@ for name, acc, p50, p99 in results:
 ---
 
 ## 6. Model Packaging Best Practices
+
+### Theory: Model Versioning and the Reproducibility Contract
+
+A production model is not a single file — it is a *contract* over multiple artifacts:
+- The serialized model (weights / tree structure / coefficients).
+- The exact preprocessor (scaler means, encoder vocabularies, feature names).
+- The training data hash and code version.
+- The Python / library versions (sklearn 1.3 ≠ sklearn 1.4 in subtle ways).
+- The schema of expected input features (names, types, ranges).
+
+Tools like **MLflow**, **DVC**, and **Weights & Biases** track these as a unit. The discipline is: a model version `v_n` is reproducible from its tracked metadata, and any difference between training-time and serving-time predictions on the same input is treated as a bug. Without this, you cannot debug the inevitable production discrepancies.
 
 ### 6.1 Serialization Formats
 
@@ -784,6 +757,17 @@ def validate_input(data, expected_features, expected_dtypes=None):
 ---
 
 ## 7. Monitoring: What to Watch (ML Perspective)
+
+### Theory: Monitoring — What to Log
+
+Production ML monitoring covers four layers:
+
+1. **Infrastructure**: CPU, memory, replica count, request rate. Standard SRE telemetry.
+2. **Service**: latency (p50/p95/p99), error rate, throughput. Standard service telemetry.
+3. **Model inputs and outputs**: feature distributions, prediction distributions, confidence histograms. ML-specific.
+4. **Business metrics**: conversion rate, revenue per prediction, click-through rate, user complaints. The ultimate KPI.
+
+Layer 3 is where ML serving differs from generic services. A drift in the input distribution should fire an alarm even if the service is technically healthy. Tools like **Evidently AI**, **WhyLabs**, **Arize** specialize in this layer.
 
 ### 7.1 Data Drift
 

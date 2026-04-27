@@ -22,87 +22,9 @@ Where bagging reduces variance by averaging independent models, boosting takes a
 
 ---
 
-## Theory & Principles
+## 1. Boosting Concepts
 
-Boosting reads as "fit weak learners one after another" — but the algorithms that follow this pattern (AdaBoost, Gradient Boosting, XGBoost, LightGBM) are united by a much sharper idea: each one is doing **functional gradient descent** on a specific loss, using the weak learners as the steps. Once you see this, the differences between them — exponential loss vs arbitrary loss, first-order vs second-order, GOSS vs EFB — become engineering choices on top of the same mathematical skeleton.
-
-### A. AdaBoost: Exponential-Loss Minimization
-
-AdaBoost (Freund & Schapire, 1995) sequentially fits weak learners `h_m(x) ∈ {-1, +1}` and combines them into
-
-```
-F_M(x) = Σ_{m=1..M}  α_m · h_m(x)        prediction = sign(F_M(x))
-```
-
-The training algorithm:
-
-```
-initialize sample weights w_i = 1/N
-for m = 1..M:
-    fit h_m on weighted training data        ← weights w_i
-    err_m = Σ w_i · 1{h_m(x_i) ≠ y_i} / Σ w_i
-    α_m   = ½ · log((1 - err_m) / err_m)      ← stage weight
-    w_i  ← w_i · exp(-α_m · y_i · h_m(x_i))   ← reweight
-```
-
-The reweight rule is the giveaway. Misclassified examples have `y · h(x) = -1`, so their weight is multiplied by `exp(α_m) > 1`. Correctly classified examples are multiplied by `exp(-α_m) < 1`. The next learner is forced to focus on the still-wrong examples.
-
-The deeper fact is that the entire procedure is *equivalent* to greedy minimization of the **exponential loss** `L(F) = Σ exp(-y_i · F(x_i))` via forward stagewise additive modeling. The `α_m` formula is the closed-form line search for the exponential loss; the weight update is what falls out of the gradient of that loss. AdaBoost was discovered before this view, but seeing it as exponential-loss minimization is what unlocks the generalization to arbitrary losses.
-
-### B. Gradient Boosting: Functional Gradient Descent for Any Loss
-
-Friedman (2001) generalized AdaBoost: replace the exponential loss with *any* differentiable loss `L(y, F(x))` and iterate
-
-```
-F_0(x) = argmin_c  Σ L(y_i, c)              ← constant initial prediction
-for m = 1..M:
-    r_im = -[ ∂L(y_i, F(x_i)) / ∂F(x_i) ]_{F=F_{m-1}}    ← negative gradient
-    fit h_m to predict the residual r_im     ← regression tree
-    γ_m = argmin_γ  Σ L(y_i, F_{m-1}(x_i) + γ · h_m(x_i))   ← line search
-    F_m(x) = F_{m-1}(x) + ν · γ_m · h_m(x)   ← shrinkage (learning rate ν)
-```
-
-This is gradient descent — but in **function space**, not parameter space. The "step" at iteration `m` is the function `h_m`, and the negative gradient is the **pseudo-residual** `r_im` that `h_m` is fit to predict. For squared loss, the negative gradient is just the ordinary residual `y_i - F(x_i)`. For log loss, it is `y_i - p_i`. The same algorithm handles regression, classification, ranking, and any loss you can differentiate.
-
-The **shrinkage** parameter `ν` (the learning rate, typically 0.05–0.1) controls how much of each step you take. Smaller `ν` requires more trees `M` but generalizes better — the same trade-off as the learning rate in any gradient descent.
-
-### C. XGBoost: Second-Order Taylor + Explicit Regularization
-
-XGBoost (Chen & Guestrin, 2016) made two changes that turned gradient boosting into a competition-dominating algorithm:
-
-**1. Second-order Taylor approximation.** Expand `L(y_i, F_{m-1} + h_m)` to second order:
-
-```
-L(y_i, F_{m-1} + h_m(x_i))  ≈  L(y_i, F_{m-1}(x_i)) + g_i · h_m(x_i) + ½ · h_i · h_m(x_i)²
-```
-
-where `g_i = ∂L/∂F` and `h_i = ∂²L/∂F²` (gradient and Hessian for sample `i`). For squared loss `h_i = 1` and you recover ordinary GBM. For log loss `h_i = p(1-p)` — naturally larger near `p = 0.5`, smaller at confident predictions, so the algorithm spends its capacity on uncertain examples.
-
-**2. Explicit regularization.** Add a complexity penalty per tree:
-
-```
-Ω(h) = γ · T + ½ · λ · ‖w‖²
-```
-
-`T` is the number of leaves, `w` are the leaf scores, `γ` and `λ` are penalties. The objective for tree `m` becomes:
-
-```
-Obj^{(m)} = Σ_i [ g_i · h_m(x_i) + ½ · h_i · h_m(x_i)² ] + Ω(h_m)
-```
-
-The leaf-score optimization has a closed form `w_j* = -G_j / (H_j + λ)` (where `G_j`, `H_j` are summed gradient/Hessian in leaf `j`), and the gain from a candidate split is computable analytically — no need to test trees by training them. This is what makes XGBoost both fast and accurate.
-
-### D. LightGBM: GOSS and EFB for Speed at Scale
-
-LightGBM (Ke et al., 2017) preserves XGBoost's mathematical core but adds two engineering tricks for very large datasets:
-
-**GOSS (Gradient-based One-Side Sampling).** Examples with small gradients are already well-fit; examples with large gradients dominate the next step. GOSS keeps all `top-a%` of large-gradient examples, randomly samples `b%` of the rest, and reweights to keep the gradient estimate unbiased. The result: similar accuracy with `1 - (1-a-b)` of the data per iteration.
-
-**EFB (Exclusive Feature Bundling).** In sparse high-dimensional data (one-hot encoded categoricals, text, etc.), many features are mutually exclusive — they are never nonzero on the same row. EFB packs such features into a single "bundle" feature, reducing effective dimensionality without information loss. Splitting cost drops from `O(#features)` to `O(#bundles)`.
-
-LightGBM also defaults to **leaf-wise** tree growth (always split the leaf with maximum loss reduction) instead of XGBoost's default level-wise growth. Leaf-wise produces more accurate trees of the same size but is more prone to overfit on small datasets — guard with `max_depth` or `num_leaves`.
-
-### E. The Unifying Picture
+### Theory: The Unifying Picture of Boosting
 
 Every boosting algorithm in this lesson is gradient descent in function space, customized along three axes:
 
@@ -115,18 +37,6 @@ Every boosting algorithm in this lesson is gradient descent in function space, c
 | Engineering | None | None | Cache-aware split finding | GOSS + EFB + leaf-wise |
 
 Boosting reduces bias because each new tree explicitly targets the residual error. Variance can grow if `M` is too large or `ν` too small — early stopping on a validation set is the standard guard.
-
-### From Theory to the Code Below
-
-- Section 1.2's AdaBoost example implements the loop in (A); the `learning_rate` parameter is a multiplier on `α_m`.
-- Section 2's `GradientBoostingClassifier` is the algorithm in (B); `learning_rate` is `ν`, `loss` selects the differentiable loss whose negative gradient defines the residuals.
-- Section 3's `XGBClassifier` uses the second-order objective from (C); `reg_alpha` is L1, `reg_lambda` is L2 regularization on leaf scores; `gamma` is the per-leaf complexity penalty.
-- Section 4's `LGBMClassifier` adds GOSS/EFB from (D) on top of the same XGBoost-style objective; `num_leaves` controls the leaf-wise growth budget.
-- The `early_stopping_rounds` argument across all of them is the practical defense against the "too many iterations ⟹ overfit" failure mode mentioned in (E).
-
----
-
-## 1. Boosting Concepts
 
 ### 1.1 Key Principles
 
@@ -153,6 +63,29 @@ Boosting reduces bias because each new tree explicitly targets the residual erro
 ---
 
 ## 2. AdaBoost (Adaptive Boosting)
+
+### Theory: AdaBoost — Exponential-Loss Minimization
+
+AdaBoost (Freund & Schapire, 1995) sequentially fits weak learners `h_m(x) ∈ {-1, +1}` and combines them into
+
+```
+F_M(x) = Σ_{m=1..M}  α_m · h_m(x)        prediction = sign(F_M(x))
+```
+
+The training algorithm:
+
+```
+initialize sample weights w_i = 1/N
+for m = 1..M:
+    fit h_m on weighted training data        ← weights w_i
+    err_m = Σ w_i · 1{h_m(x_i) ≠ y_i} / Σ w_i
+    α_m   = ½ · log((1 - err_m) / err_m)      ← stage weight
+    w_i  ← w_i · exp(-α_m · y_i · h_m(x_i))   ← reweight
+```
+
+The reweight rule is the giveaway. Misclassified examples have `y · h(x) = -1`, so their weight is multiplied by `exp(α_m) > 1`. Correctly classified examples are multiplied by `exp(-α_m) < 1`. The next learner is forced to focus on the still-wrong examples.
+
+The deeper fact is that the entire procedure is *equivalent* to greedy minimization of the **exponential loss** `L(F) = Σ exp(-y_i · F(x_i))` via forward stagewise additive modeling. The `α_m` formula is the closed-form line search for the exponential loss; the weight update is what falls out of the gradient of that loss. AdaBoost was discovered before this view, but seeing it as exponential-loss minimization is what unlocks the generalization to arbitrary losses.
 
 ### 2.1 Algorithm Process
 
@@ -230,6 +163,23 @@ plt.show()
 
 ## 3. Gradient Boosting
 
+### Theory: Gradient Boosting — Functional Gradient Descent for Any Loss
+
+Friedman (2001) generalized AdaBoost: replace the exponential loss with *any* differentiable loss `L(y, F(x))` and iterate
+
+```
+F_0(x) = argmin_c  Σ L(y_i, c)              ← constant initial prediction
+for m = 1..M:
+    r_im = -[ ∂L(y_i, F(x_i)) / ∂F(x_i) ]_{F=F_{m-1}}    ← negative gradient
+    fit h_m to predict the residual r_im     ← regression tree
+    γ_m = argmin_γ  Σ L(y_i, F_{m-1}(x_i) + γ · h_m(x_i))   ← line search
+    F_m(x) = F_{m-1}(x) + ν · γ_m · h_m(x)   ← shrinkage (learning rate ν)
+```
+
+This is gradient descent — but in **function space**, not parameter space. The "step" at iteration `m` is the function `h_m`, and the negative gradient is the **pseudo-residual** `r_im` that `h_m` is fit to predict. For squared loss, the negative gradient is just the ordinary residual `y_i - F(x_i)`. For log loss, it is `y_i - p_i`. The same algorithm handles regression, classification, ranking, and any loss you can differentiate.
+
+The **shrinkage** parameter `ν` (the learning rate, typically 0.05–0.1) controls how much of each step you take. Smaller `ν` requires more trees `M` but generalizes better — the same trade-off as the learning rate in any gradient descent.
+
 ### 3.1 Core Concepts
 
 **Gradient Descent in Function Space**
@@ -292,6 +242,32 @@ print(f"Test Accuracy: {gb_clf.score(X_test, y_test):.4f}")
 ---
 
 ## 4. XGBoost (Extreme Gradient Boosting)
+
+### Theory: XGBoost — Second-Order Taylor + Explicit Regularization
+
+XGBoost (Chen & Guestrin, 2016) made two changes that turned gradient boosting into a competition-dominating algorithm:
+
+**1. Second-order Taylor approximation.** Expand `L(y_i, F_{m-1} + h_m)` to second order:
+
+```
+L(y_i, F_{m-1} + h_m(x_i))  ≈  L(y_i, F_{m-1}(x_i)) + g_i · h_m(x_i) + ½ · h_i · h_m(x_i)²
+```
+
+where `g_i = ∂L/∂F` and `h_i = ∂²L/∂F²` (gradient and Hessian for sample `i`). For squared loss `h_i = 1` and you recover ordinary GBM. For log loss `h_i = p(1-p)` — naturally larger near `p = 0.5`, smaller at confident predictions, so the algorithm spends its capacity on uncertain examples.
+
+**2. Explicit regularization.** Add a complexity penalty per tree:
+
+```
+Ω(h) = γ · T + ½ · λ · ‖w‖²
+```
+
+`T` is the number of leaves, `w` are the leaf scores, `γ` and `λ` are penalties. The objective for tree `m` becomes:
+
+```
+Obj^{(m)} = Σ_i [ g_i · h_m(x_i) + ½ · h_i · h_m(x_i)² ] + Ω(h_m)
+```
+
+The leaf-score optimization has a closed form `w_j* = -G_j / (H_j + λ)` (where `G_j`, `H_j` are summed gradient/Hessian in leaf `j`), and the gain from a candidate split is computable analytically — no need to test trees by training them. This is what makes XGBoost both fast and accurate.
 
 ### 4.1 Advantages of XGBoost
 
@@ -380,6 +356,16 @@ for idx in importances.argsort()[::-1][:5]:
 ---
 
 ## 5. LightGBM
+
+### Theory: LightGBM — GOSS and EFB for Speed at Scale
+
+LightGBM (Ke et al., 2017) preserves XGBoost's mathematical core but adds two engineering tricks for very large datasets:
+
+**GOSS (Gradient-based One-Side Sampling).** Examples with small gradients are already well-fit; examples with large gradients dominate the next step. GOSS keeps all `top-a%` of large-gradient examples, randomly samples `b%` of the rest, and reweights to keep the gradient estimate unbiased. The result: similar accuracy with `1 - (1-a-b)` of the data per iteration.
+
+**EFB (Exclusive Feature Bundling).** In sparse high-dimensional data (one-hot encoded categoricals, text, etc.), many features are mutually exclusive — they are never nonzero on the same row. EFB packs such features into a single "bundle" feature, reducing effective dimensionality without information loss. Splitting cost drops from `O(#features)` to `O(#bundles)`.
+
+LightGBM also defaults to **leaf-wise** tree growth (always split the leaf with maximum loss reduction) instead of XGBoost's default level-wise growth. Leaf-wise produces more accurate trees of the same size but is more prone to overfit on small datasets — guard with `max_depth` or `num_leaves`.
 
 ### 5.1 Features of LightGBM
 

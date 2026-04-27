@@ -22,11 +22,9 @@ A model evaluated on a single train/test split can give misleading results -- yo
 
 ---
 
-## Theory & Principles
+## 1. Cross-Validation
 
-Cross-validation and hyperparameter search both attack the same statistical problem: how do you choose between models without spending the test set? The answer requires thinking carefully about the bias-variance properties of the *estimator of generalization error itself*, and about how a search procedure interacts with that estimator.
-
-### A. Why a Single Hold-Out Is Not Enough
+### Theory: Why a Single Hold-Out Is Not Enough
 
 Take the train/test split from Lesson 1 and look at the test error as a random variable over the random choice of split. Its expected value is roughly the true generalization error (low bias) but its variance can be large — especially when the test set is small. A single number from a single split tells you nothing about how reliable that number is.
 
@@ -36,76 +34,6 @@ K-fold cross-validation runs the same fit-and-evaluate procedure `K` times on `K
 Test split:    high variance, low bias, cheap (1 fit)
 K-fold CV:     lower variance, ~same bias, K× more expensive
 ```
-
-### B. Bias and Variance of the K-Fold Estimator
-
-The choice of `K` is itself a bias-variance trade-off, this time about the CV estimator:
-
-| K | Train size per fold | Bias of estimator | Variance of estimator | Cost |
-|---|---------------------|---------------------|----------------------|------|
-| 2 | N/2 | high (small training set ⟹ optimistic test) | low | cheap |
-| 5–10 | 0.8N–0.9N | small | moderate | moderate |
-| N (LOO) | N-1 | ~zero (each fold trains on almost all data) | high (folds are highly correlated) | expensive |
-
-**Leave-one-out (LOO) CV** trains on `N-1` and tests on `1`, repeated `N` times. It is *unbiased* for the generalization error of the model trained on `N-1` points, but its variance is large because the `N` training sets are almost identical — the fold-level errors are highly correlated and averaging does not reduce variance as much as you would expect from `N` independent samples.
-
-The empirical sweet spot is `K = 5` or `K = 10`. They give a small bias (because `~0.9N` is close to `N`) and a manageable variance, at a cost most workflows can absorb.
-
-### C. Stratified, Grouped, and Time-Series CV: Respecting Structure
-
-Plain `KFold` shuffles examples uniformly. That is wrong whenever the data has structure that would let evaluation leak.
-
-- **Stratified K-fold** preserves the class proportion in each fold. Required for classification, especially with rare classes — otherwise an unlucky split can produce a fold with zero positive examples and a meaningless score.
-- **Group K-fold** keeps all examples from the same "group" (patient, user, document) in one fold. Required when groups appear multiple times in the dataset — otherwise the model can memorize group-level features and the CV score will be optimistic about new groups.
-- **Time-series CV** uses only the *past* to predict the *future*. The standard expanding-window or rolling-window split trains on `[1..t]` and tests on `[t+1..t+h]`, never going backwards. Random shuffling on time-series leaks future information and makes the CV score useless.
-
-The general principle: the CV split should mimic how the model will be deployed. If deployment means "new patients", split by patient. If deployment means "tomorrow's data", split by time.
-
-### D. Nested CV: When the Search Itself Has a Cost
-
-Hyperparameter search adds a second loop. The naïve workflow is wrong:
-
-```
-WRONG: tune hyperparameters with CV → report best CV score as test error
-```
-
-This is wrong because the *best* CV score is the maximum over many candidates — and the maximum of a set of noisy estimates is biased upward. You picked the configuration that happened to be lucky on the CV folds; the true generalization error of that configuration is worse.
-
-The fix is **nested cross-validation**: an outer CV loop estimates generalization error, and inside *each* outer fold an inner CV loop selects the hyperparameter. The inner loop's optimization noise is averaged out by the outer loop:
-
-```
-for outer_fold in 1..K_outer:
-    for hp in hp_grid:
-        inner_score = inner_CV(hp, outer_train)        ← inner CV
-    best_hp = argmax inner_score
-    refit on outer_train with best_hp
-    record outer_test_score
-report mean(outer_test_scores)                          ← unbiased estimate
-```
-
-Cost is `K_outer × K_inner × |hp_grid|` fits. Expensive but principled.
-
-### E. Search Algorithms: Grid, Random, Bayesian
-
-How you propose hyperparameters matters once the budget gets tight.
-
-- **Grid search** evaluates every point in a Cartesian product. Exhaustive, embarrassingly parallel, but suffers from the curse of dimensionality: doubling the number of hyperparameters squares the cost.
-- **Random search** samples each hyperparameter from its prior independently. Bergstra & Bengio (2012) showed it is *strictly better* than grid when only a few hyperparameters matter — random search wastes fewer trials on irrelevant axes. For the same budget, it explores each important axis more densely.
-- **Bayesian optimization** fits a surrogate model (Gaussian Process or tree-based) to the evaluations seen so far, then uses an acquisition function (Expected Improvement, Upper Confidence Bound) to choose the next point that balances exploration of unknown regions and exploitation of promising ones. Sample-efficient but adds its own optimization overhead per step. Best when each evaluation is expensive (deep models, long training runs).
-
-There is no free lunch: grid wins when you have very few hyperparameters and unlimited compute, random wins for medium budgets, Bayesian wins when each fit costs hours.
-
-### From Theory to the Code Below
-
-- Section 1.1's `cross_val_score(..., cv=5)` is the K=5 averaging from (A)/(B).
-- Section 1.2's `StratifiedKFold` is the structure-aware splitter from (C).
-- Section 2's `GridSearchCV` is the exhaustive search from (E); `RandomizedSearchCV` is the random-sample variant.
-- Section 3's `cross_val_score(GridSearchCV(...), ...)` is nested CV from (D) — the outer `cross_val_score` provides the unbiased estimate, the inner `GridSearchCV` selects hyperparameters.
-- Tools like `optuna` and `scikit-optimize` (when introduced in Lesson 19) implement the Bayesian-optimization branch of (E).
-
----
-
-## 1. Cross-Validation
 
 ### 1.1 K-Fold Cross-Validation
 
@@ -197,6 +125,20 @@ for fold, (train_idx, test_idx) in enumerate(tscv.split(X), 1):
 
 ## 2. cross_val_score vs cross_validate
 
+### Theory: Bias and Variance of the K-Fold Estimator
+
+The choice of `K` is itself a bias-variance trade-off, this time about the CV estimator:
+
+| K | Train size per fold | Bias of estimator | Variance of estimator | Cost |
+|---|---------------------|---------------------|----------------------|------|
+| 2 | N/2 | high (small training set ⟹ optimistic test) | low | cheap |
+| 5–10 | 0.8N–0.9N | small | moderate | moderate |
+| N (LOO) | N-1 | ~zero (each fold trains on almost all data) | high (folds are highly correlated) | expensive |
+
+**Leave-one-out (LOO) CV** trains on `N-1` and tests on `1`, repeated `N` times. It is *unbiased* for the generalization error of the model trained on `N-1` points, but its variance is large because the `N` training sets are almost identical — the fold-level errors are highly correlated and averaging does not reduce variance as much as you would expect from `N` independent samples.
+
+The empirical sweet spot is `K = 5` or `K = 10`. They give a small bias (because `~0.9N` is close to `N`) and a manageable variance, at a cost most workflows can absorb.
+
 ```python
 from sklearn.model_selection import cross_validate
 
@@ -226,6 +168,16 @@ print(f"Average prediction time: {cv_results['score_time'].mean():.4f}s")
 ---
 
 ## 3. Hyperparameter Tuning
+
+### Theory: Search Algorithms — Grid, Random, Bayesian
+
+How you propose hyperparameters matters once the budget gets tight.
+
+- **Grid search** evaluates every point in a Cartesian product. Exhaustive, embarrassingly parallel, but suffers from the curse of dimensionality: doubling the number of hyperparameters squares the cost.
+- **Random search** samples each hyperparameter from its prior independently. Bergstra & Bengio (2012) showed it is *strictly better* than grid when only a few hyperparameters matter — random search wastes fewer trials on irrelevant axes. For the same budget, it explores each important axis more densely.
+- **Bayesian optimization** fits a surrogate model (Gaussian Process or tree-based) to the evaluations seen so far, then uses an acquisition function (Expected Improvement, Upper Confidence Bound) to choose the next point that balances exploration of unknown regions and exploitation of promising ones. Sample-efficient but adds its own optimization overhead per step. Best when each evaluation is expensive (deep models, long training runs).
+
+There is no free lunch: grid wins when you have very few hyperparameters and unlimited compute, random wins for medium budgets, Bayesian wins when each fit costs hours.
 
 ### 3.1 Grid Search
 
@@ -326,6 +278,16 @@ Selection criteria:
 
 ## 4. Advanced Tuning Techniques
 
+### Theory: Stratified, Grouped, and Time-Series CV — Respecting Structure
+
+Plain `KFold` shuffles examples uniformly. That is wrong whenever the data has structure that would let evaluation leak.
+
+- **Stratified K-fold** preserves the class proportion in each fold. Required for classification, especially with rare classes — otherwise an unlucky split can produce a fold with zero positive examples and a meaningless score.
+- **Group K-fold** keeps all examples from the same "group" (patient, user, document) in one fold. Required when groups appear multiple times in the dataset — otherwise the model can memorize group-level features and the CV score will be optimistic about new groups.
+- **Time-series CV** uses only the *past* to predict the *future*. The standard expanding-window or rolling-window split trains on `[1..t]` and tests on `[t+1..t+h]`, never going backwards. Random shuffling on time-series leaks future information and makes the CV score useless.
+
+The general principle: the CV split should mimic how the model will be deployed. If deployment means "new patients", split by patient. If deployment means "tomorrow's data", split by time.
+
 ### 4.1 Halving Search
 
 ```python
@@ -387,6 +349,30 @@ def objective(trial):
 ---
 
 ## 5. Nested Cross-Validation
+
+### Theory: Nested CV — When the Search Itself Has a Cost
+
+Hyperparameter search adds a second loop. The naïve workflow is wrong:
+
+```
+WRONG: tune hyperparameters with CV → report best CV score as test error
+```
+
+This is wrong because the *best* CV score is the maximum over many candidates — and the maximum of a set of noisy estimates is biased upward. You picked the configuration that happened to be lucky on the CV folds; the true generalization error of that configuration is worse.
+
+The fix is **nested cross-validation**: an outer CV loop estimates generalization error, and inside *each* outer fold an inner CV loop selects the hyperparameter. The inner loop's optimization noise is averaged out by the outer loop:
+
+```
+for outer_fold in 1..K_outer:
+    for hp in hp_grid:
+        inner_score = inner_CV(hp, outer_train)        ← inner CV
+    best_hp = argmax inner_score
+    refit on outer_train with best_hp
+    record outer_test_score
+report mean(outer_test_scores)                          ← unbiased estimate
+```
+
+Cost is `K_outer × K_inner × |hp_grid|` fits. Expensive but principled.
 
 ```python
 from sklearn.model_selection import cross_val_score, GridSearchCV

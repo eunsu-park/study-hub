@@ -22,99 +22,6 @@ Decision trees are among the most intuitive machine learning algorithms -- they 
 
 ---
 
-## Theory & Principles
-
-A decision tree looks like a stack of if-else statements, but the algorithm that builds one is doing serious mathematics: at every node it solves an optimization problem (which split reduces impurity the most), and the recursive procedure that combines those local solutions is the **CART** algorithm. To use trees well — and especially to understand why ensembles of them dominate tabular data — you need the formal picture.
-
-### A. Splitting Criteria: Information Gain and Gini
-
-A split at a node partitions the data into child sets `L` and `R`. We need a scalar that says "is the data in each child more pure than in the parent?" Two standard impurity measures dominate, both built from the class distribution at a node.
-
-Let `p_k` be the fraction of class `k` at a node. Then:
-
-```
-Entropy:        H = - Σ_k p_k · log₂(p_k)            ← in bits
-Gini impurity:  G = 1 - Σ_k p_k² = Σ_{k ≠ k'} p_k · p_{k'}
-```
-
-Both are zero when one class dominates (`p_k = 1` for some `k`) and maximal when classes are uniform. The **information gain** of a split is the expected impurity reduction:
-
-```
-IG(parent → L, R) = H(parent) - [ |L|/|parent| · H(L) + |R|/|parent| · H(R) ]
-```
-
-(Replace `H` with `G` to use Gini gain instead.) The greedy CART algorithm at each node enumerates candidate splits — for each numeric feature, every midpoint between adjacent sorted values; for each categorical feature, every binary partition — and picks the one with maximum gain.
-
-### A.1 Gini vs Entropy: a Practical Difference
-
-The two are nearly equivalent in practice. Both are concave functions of `p`, both peak at uniform distributions, both are zero at pure nodes. The numerical optima they pick agree most of the time. The differences:
-
-- **Computational cost**: Gini avoids the `log` and is slightly faster. scikit-learn defaults to Gini for that reason.
-- **Sensitivity to class probability changes**: Entropy is more sensitive to changes near `p = 0` or `p = 1` (because `log p → -∞`), so it favors splits that drive the impurity strongly toward zero. Gini grows more linearly. In tightly imbalanced data the choice can produce different trees, but rarely with a clear winner.
-
-A regression tree replaces these criteria with the within-node variance `Var(y)`, and the gain is the weighted variance reduction. Same algorithm, different impurity.
-
-### B. The CART Algorithm
-
-CART (Classification And Regression Trees) is the recursive greedy procedure:
-
-```
-function build_tree(data):
-    if stopping_criterion(data):                 # see below
-        return Leaf(majority_class(data))
-    best_split = argmax_{(feature, threshold)} IG(data, feature, threshold)
-    L, R = split(data, best_split)
-    return Node(best_split, build_tree(L), build_tree(R))
-```
-
-The greediness is essential and limiting. At every node CART picks the *locally* best split, never reconsidering. This is computationally tractable but gives no global optimality guarantee — the resulting tree is rarely the smallest tree consistent with the data, and small changes in the training set can produce very different trees (high variance).
-
-**Stopping criteria** are how you control overfitting at build time:
-- `max_depth`: hard cap on tree depth
-- `min_samples_split`: do not split nodes with fewer than this many samples
-- `min_samples_leaf`: every leaf must have at least this many samples
-- `min_impurity_decrease`: skip splits whose gain falls below threshold
-
-Without any of these, CART will keep splitting until every leaf is pure, producing a tree that perfectly fits the training set — and almost certainly overfits.
-
-### C. Pruning: Cost-Complexity Theory
-
-Pre-pruning (the stopping criteria above) is conservative — it cannot recover from a bad early decision. **Post-pruning** grows the tree to full depth, then trims back. The principled version is **cost-complexity pruning** (Breiman et al., 1984):
-
-```
-R_α(T) = R(T) + α · |T|
-       = (training error of T) + α · (number of leaves)
-```
-
-`α ≥ 0` is the complexity parameter. For each `α` there is a unique smallest subtree `T_α` that minimizes `R_α`. As `α` grows from 0 to ∞, the optimal subtree shrinks monotonically, producing a *finite* sequence of nested candidate trees `T_0 ⊃ T_1 ⊃ ... ⊃ T_root` with associated `α` values. CV picks the best `α` from this sequence.
-
-scikit-learn exposes this as `ccp_alpha`: set it to a positive value to prune. The bigger the `α`, the smaller (and more biased) the resulting tree.
-
-### D. Why Trees Are Both Useful and Limited
-
-The strengths of trees follow from how the algorithm works:
-
-- **No feature scaling needed.** Splits use thresholds on raw feature values; multiplying a feature by 1000 changes nothing.
-- **Mixed feature types.** Numeric and categorical features are handled by the same splitting machinery (with appropriate enumerations).
-- **Interpretable.** A tree is a flowchart you can read end-to-end; feature importances drop out as a side effect of training.
-- **Captures interactions.** Each path from root to leaf is a conjunction of conditions — interactions between features are first-class.
-
-The weaknesses are equally structural:
-
-- **High variance.** Greedy split selection makes trees brittle: bootstrap-resample the data and you can get a totally different tree. This is the *exact* weakness that bagging (Lesson 7) was invented to fix.
-- **Axis-aligned splits.** A single decision boundary is parallel to a feature axis. Smooth diagonal boundaries require many small steps — a deep tree to approximate what a linear model fits in one shot.
-- **Bias toward features with many levels.** A categorical feature with 1000 unique values has more candidate splits to choose from, so it can "win" by chance. Random forests partially address this by subsampling features at each split.
-
-### From Theory to the Code Below
-
-- Section 1.1's tree-structure example is the recursive `Node`/`Leaf` pattern from the CART pseudocode in (B).
-- Section 2's `DecisionTreeClassifier(criterion='gini' | 'entropy')` is the choice between the two impurity measures from (A).
-- Section 2's `max_depth`, `min_samples_split`, `min_samples_leaf` are the pre-pruning stopping criteria from (B).
-- The `ccp_alpha` parameter (when used) is the cost-complexity pruning parameter from (C).
-- The feature-importance scores (`model.feature_importances_`) are the total impurity reduction summed across every node where each feature is used — a direct corollary of the splitting criterion in (A).
-
----
-
 ## 1. Basic Concepts of Decision Trees
 
 ### 1.1 Tree Structure
@@ -197,6 +104,34 @@ for name, importance in zip(iris.feature_names, clf.feature_importances_):
 ---
 
 ## 2. Split Criteria
+
+### Theory: Splitting Criteria — Information Gain and Gini
+
+A split at a node partitions the data into child sets `L` and `R`. We need a scalar that says "is the data in each child more pure than in the parent?" Two standard impurity measures dominate, both built from the class distribution at a node.
+
+Let `p_k` be the fraction of class `k` at a node. Then:
+
+```
+Entropy:        H = - Σ_k p_k · log₂(p_k)            ← in bits
+Gini impurity:  G = 1 - Σ_k p_k² = Σ_{k ≠ k'} p_k · p_{k'}
+```
+
+Both are zero when one class dominates (`p_k = 1` for some `k`) and maximal when classes are uniform. The **information gain** of a split is the expected impurity reduction:
+
+```
+IG(parent → L, R) = H(parent) - [ |L|/|parent| · H(L) + |R|/|parent| · H(R) ]
+```
+
+(Replace `H` with `G` to use Gini gain instead.) The greedy CART algorithm at each node enumerates candidate splits — for each numeric feature, every midpoint between adjacent sorted values; for each categorical feature, every binary partition — and picks the one with maximum gain.
+
+### Theory: Gini vs Entropy — a Practical Difference
+
+The two are nearly equivalent in practice. Both are concave functions of `p`, both peak at uniform distributions, both are zero at pure nodes. The numerical optima they pick agree most of the time. The differences:
+
+- **Computational cost**: Gini avoids the `log` and is slightly faster. scikit-learn defaults to Gini for that reason.
+- **Sensitivity to class probability changes**: Entropy is more sensitive to changes near `p = 0` or `p = 1` (because `log p → -∞`), so it favors splits that drive the impurity strongly toward zero. Gini grows more linearly. In tightly imbalanced data the choice can produce different trees, but rarely with a clear winner.
+
+A regression tree replaces these criteria with the within-node variance `Var(y)`, and the gain is the weighted variance reduction. Same algorithm, different impurity.
 
 ### 2.1 Entropy
 
@@ -295,6 +230,29 @@ print(f"  Split B (mixed): {information_gain(parent, left_b, right_b):.4f}")
 ---
 
 ## 3. CART Algorithm
+
+### Theory: The CART Algorithm
+
+CART (Classification And Regression Trees) is the recursive greedy procedure:
+
+```
+function build_tree(data):
+    if stopping_criterion(data):                 # see below
+        return Leaf(majority_class(data))
+    best_split = argmax_{(feature, threshold)} IG(data, feature, threshold)
+    L, R = split(data, best_split)
+    return Node(best_split, build_tree(L), build_tree(R))
+```
+
+The greediness is essential and limiting. At every node CART picks the *locally* best split, never reconsidering. This is computationally tractable but gives no global optimality guarantee — the resulting tree is rarely the smallest tree consistent with the data, and small changes in the training set can produce very different trees (high variance).
+
+**Stopping criteria** are how you control overfitting at build time:
+- `max_depth`: hard cap on tree depth
+- `min_samples_split`: do not split nodes with fewer than this many samples
+- `min_samples_leaf`: every leaf must have at least this many samples
+- `min_impurity_decrease`: skip splits whose gain falls below threshold
+
+Without any of these, CART will keep splitting until every leaf is pure, producing a tree that perfectly fits the training set — and almost certainly overfits.
 
 ### 3.1 Classification Tree
 
@@ -406,6 +364,19 @@ for i, name in enumerate(iris.feature_names):
 ---
 
 ## 4. Pruning
+
+### Theory: Pruning — Cost-Complexity Theory
+
+Pre-pruning (the stopping criteria above) is conservative — it cannot recover from a bad early decision. **Post-pruning** grows the tree to full depth, then trims back. The principled version is **cost-complexity pruning** (Breiman et al., 1984):
+
+```
+R_α(T) = R(T) + α · |T|
+       = (training error of T) + α · (number of leaves)
+```
+
+`α ≥ 0` is the complexity parameter. For each `α` there is a unique smallest subtree `T_α` that minimizes `R_α`. As `α` grows from 0 to ∞, the optimal subtree shrinks monotonically, producing a *finite* sequence of nested candidate trees `T_0 ⊃ T_1 ⊃ ... ⊃ T_root` with associated `α` values. CV picks the best `α` from this sequence.
+
+scikit-learn exposes this as `ccp_alpha`: set it to a positive value to prune. The bigger the `α`, the smaller (and more biased) the resulting tree.
 
 ### 4.1 Pre-pruning
 
@@ -537,6 +508,21 @@ plt.show()
 ---
 
 ## 6. Advantages and Disadvantages of Decision Trees
+
+### Theory: Why Trees Are Both Useful and Limited
+
+The strengths of trees follow from how the algorithm works:
+
+- **No feature scaling needed.** Splits use thresholds on raw feature values; multiplying a feature by 1000 changes nothing.
+- **Mixed feature types.** Numeric and categorical features are handled by the same splitting machinery (with appropriate enumerations).
+- **Interpretable.** A tree is a flowchart you can read end-to-end; feature importances drop out as a side effect of training.
+- **Captures interactions.** Each path from root to leaf is a conjunction of conditions — interactions between features are first-class.
+
+The weaknesses are equally structural:
+
+- **High variance.** Greedy split selection makes trees brittle: bootstrap-resample the data and you can get a totally different tree. This is the *exact* weakness that bagging (Lesson 7) was invented to fix.
+- **Axis-aligned splits.** A single decision boundary is parallel to a feature axis. Smooth diagonal boundaries require many small steps — a deep tree to approximate what a linear model fits in one shot.
+- **Bias toward features with many levels.** A categorical feature with 1000 unique values has more candidate splits to choose from, so it can "win" by chance. Random forests partially address this by subsampling features at each split.
 
 ### 6.1 Pros and Cons
 

@@ -22,11 +22,9 @@ Training a model is only half the story -- you need to know how well it actually
 
 ---
 
-## Theory & Principles
+## 1. Classification Evaluation Metrics
 
-Every classification metric is a different summary of the same 2×2 confusion matrix. The choice between accuracy, precision, recall, F1, ROC-AUC, and PR-AUC is not stylistic — each answers a different operational question, and using the wrong one can hide a model that is in fact useless.
-
-### A. The Confusion Matrix as the Source of All Metrics
+### Theory: The Confusion Matrix as the Source of All Metrics
 
 For a binary classifier, four counts exhaust the joint distribution of `(y, ŷ)`:
 
@@ -50,86 +48,6 @@ F1         = 2 · Precision · Recall / (Precision + Recall)   ← harmonic mean
 ```
 
 Accuracy is dangerous on imbalanced data because the dominant class drowns it out. If 99% of patients are healthy, predicting "healthy" for everyone gives 99% accuracy with zero diagnostic value. Precision and recall break the matrix down by *which* errors you make, exposing this failure mode.
-
-### B. Precision-Recall Trade-off and F1
-
-Precision and recall move in opposite directions as you change the decision threshold. Lower the threshold (predict positive more aggressively): recall rises (you catch more true positives) but precision drops (more false positives slip in). Raise the threshold: precision rises, recall falls.
-
-The **F1 score** is the harmonic mean:
-
-```
-F1 = 2 / (1/Precision + 1/Recall) = 2 · P · R / (P + R)
-```
-
-Why harmonic, not arithmetic? Because the harmonic mean is dominated by the smaller of the two — `F1` is high only when *both* are high. Arithmetic mean would give `(0.0 + 1.0) / 2 = 0.5`, which is misleadingly high for a useless classifier with zero precision.
-
-The general form is **F-beta**:
-
-```
-F_β = (1 + β²) · P · R / (β² · P + R)
-```
-
-`β > 1` weights recall more (use when missing positives is costly: cancer screening); `β < 1` weights precision (use when false positives are costly: spam filtering for important inboxes); `β = 1` weights them equally.
-
-### C. ROC-AUC: a Probabilistic Interpretation
-
-The Receiver Operating Characteristic curve plots TPR (recall) against FPR as you sweep the decision threshold from 0 to 1. The **AUC** (area under the curve) has a clean probabilistic meaning that is easy to forget:
-
-```
-AUC = P( score(positive_example) > score(negative_example) )
-```
-
-i.e., the probability that a randomly drawn positive example receives a higher predicted score than a randomly drawn negative example. AUC = 0.5 is random ranking; AUC = 1.0 is perfect ranking; AUC = 0.0 means the classifier is perfectly *wrong* (and you can fix it by flipping predictions).
-
-Crucially, AUC is **threshold-free**: it summarizes ranking quality, not any specific operating point. Two classifiers with the same AUC can have very different precision-recall trade-offs at any chosen threshold.
-
-When to *not* trust AUC: on heavily imbalanced data, the ROC curve is dominated by the easy-to-classify negative class and AUC stays artificially high. The **PR-AUC** (precision-recall curve area) is the right substitute — it ignores true negatives entirely and focuses on the rare positive class.
-
-### D. Threshold Selection and Cost-Sensitive Learning
-
-Every classifier outputs a *score*; turning it into a *prediction* requires picking a threshold. The default 0.5 is rarely optimal. The right threshold depends on the asymmetric cost of the two error types.
-
-Let `c_FP` and `c_FN` be the costs of a false positive and a false negative. Total expected cost is
-
-```
-Cost(threshold) = c_FP · FP(threshold) + c_FN · FN(threshold)
-```
-
-The cost-minimizing threshold satisfies a Bayes-optimal rule:
-
-```
-predict positive  ⟺  P(y=1 | x) > c_FP / (c_FP + c_FN)
-```
-
-When `c_FN >> c_FP` (missing a tumor is much worse than a false alarm), the threshold drops well below 0.5 — recall up, precision down. When `c_FP >> c_FN` (annoying users with bad recommendations is the bigger sin), threshold rises above 0.5.
-
-Two practical workflows:
-- Pick threshold to maximize a chosen metric (F1, F-beta, Youden's J = TPR - FPR) on a validation set.
-- Pick threshold from the cost formula above when the costs `c_FP`, `c_FN` are explicitly known (medical, fraud, churn).
-
-### E. Regression Metrics: a Quick Map
-
-Regression metrics measure different things even when they "all just look at residuals":
-
-- **MSE = (1/N) · Σ (y_i - ŷ_i)²** — squared so it penalizes large errors disproportionately. Differentiable, the natural OLS objective.
-- **RMSE = √MSE** — same units as `y`, so directly interpretable.
-- **MAE = (1/N) · Σ |y_i - ŷ_i|** — penalizes errors linearly, robust to outliers, but not differentiable at zero.
-- **R² = 1 - SS_res / SS_tot** — fraction of variance explained. R² = 1 is perfect; R² = 0 matches the constant-mean predictor; R² < 0 is worse than predicting the mean.
-- **MAPE = (1/N) · Σ |(y_i - ŷ_i) / y_i|** — relative error, but explodes when `y_i ≈ 0`.
-
-Choose by what you want to penalize: MSE/RMSE for "big mistakes are very bad", MAE for "outliers exist and I want to ignore them", MAPE for "errors should scale with magnitude".
-
-### From Theory to the Code Below
-
-- Section 1.1's `confusion_matrix` is the 2×2 table from (A); every classification metric in the rest of the section is one of the ratios listed there.
-- Section 1.2's `precision_score`, `recall_score`, `f1_score` implement the formulas in (A) and (B).
-- Section 1.3's `roc_auc_score` is the probability from (C); the ROC curve plot makes that geometric.
-- Section 2's threshold-tuning code is the mechanism behind (D) — you sweep thresholds and pick the operating point that maximizes your chosen objective.
-- Section 3's regression metrics map directly to (E).
-
----
-
-## 1. Classification Evaluation Metrics
 
 ### 1.1 Confusion Matrix
 
@@ -296,6 +214,26 @@ print(f"Average Precision: {ap:.4f}")
 
 ## 2. Multi-class Classification Evaluation
 
+### Theory: Precision-Recall Trade-off and F1
+
+Precision and recall move in opposite directions as you change the decision threshold. Lower the threshold (predict positive more aggressively): recall rises (you catch more true positives) but precision drops (more false positives slip in). Raise the threshold: precision rises, recall falls.
+
+The **F1 score** is the harmonic mean:
+
+```
+F1 = 2 / (1/Precision + 1/Recall) = 2 · P · R / (P + R)
+```
+
+Why harmonic, not arithmetic? Because the harmonic mean is dominated by the smaller of the two — `F1` is high only when *both* are high. Arithmetic mean would give `(0.0 + 1.0) / 2 = 0.5`, which is misleadingly high for a useless classifier with zero precision.
+
+The general form is **F-beta**:
+
+```
+F_β = (1 + β²) · P · R / (β² · P + R)
+```
+
+`β > 1` weights recall more (use when missing positives is costly: cancer screening); `β < 1` weights precision (use when false positives are costly: spam filtering for important inboxes); `β = 1` weights them equally.
+
 ### 2.1 Multi-class Metrics
 
 ```python
@@ -357,6 +295,18 @@ plt.show()
 ---
 
 ## 3. Regression Evaluation Metrics
+
+### Theory: Regression Metrics — a Quick Map
+
+Regression metrics measure different things even when they "all just look at residuals":
+
+- **MSE = (1/N) · Σ (y_i - ŷ_i)²** — squared so it penalizes large errors disproportionately. Differentiable, the natural OLS objective.
+- **RMSE = √MSE** — same units as `y`, so directly interpretable.
+- **MAE = (1/N) · Σ |y_i - ŷ_i|** — penalizes errors linearly, robust to outliers, but not differentiable at zero.
+- **R² = 1 - SS_res / SS_tot** — fraction of variance explained. R² = 1 is perfect; R² = 0 matches the constant-mean predictor; R² < 0 is worse than predicting the mean.
+- **MAPE = (1/N) · Σ |(y_i - ŷ_i) / y_i|** — relative error, but explodes when `y_i ≈ 0`.
+
+Choose by what you want to penalize: MSE/RMSE for "big mistakes are very bad", MAE for "outliers exist and I want to ignore them", MAPE for "errors should scale with magnitude".
 
 ```python
 import numpy as np
@@ -437,6 +387,20 @@ plt.show()
 
 ## 4. Evaluation Metric Selection Guide
 
+### Theory: ROC-AUC — a Probabilistic Interpretation
+
+The Receiver Operating Characteristic curve plots TPR (recall) against FPR as you sweep the decision threshold from 0 to 1. The **AUC** (area under the curve) has a clean probabilistic meaning that is easy to forget:
+
+```
+AUC = P( score(positive_example) > score(negative_example) )
+```
+
+i.e., the probability that a randomly drawn positive example receives a higher predicted score than a randomly drawn negative example. AUC = 0.5 is random ranking; AUC = 1.0 is perfect ranking; AUC = 0.0 means the classifier is perfectly *wrong* (and you can fix it by flipping predictions).
+
+Crucially, AUC is **threshold-free**: it summarizes ranking quality, not any specific operating point. Two classifiers with the same AUC can have very different precision-recall trade-offs at any chosen threshold.
+
+When to *not* trust AUC: on heavily imbalanced data, the ROC curve is dominated by the easy-to-classify negative class and AUC stays artificially high. The **PR-AUC** (precision-recall curve area) is the right substitute — it ignores true negatives entirely and focuses on the rare positive class.
+
 ```python
 """
 Classification Problems:
@@ -456,7 +420,6 @@ Classification Problems:
    - Macro F1: Equal importance per class
    - Weighted F1: Importance proportional to sample count
    - Micro F1: Similar to overall accuracy
-
 
 Regression Problems:
 
@@ -496,6 +459,28 @@ def evaluate_regression(y_true, y_pred):
 ---
 
 ## 5. Learning Curves and Validation Curves
+
+### Theory: Threshold Selection and Cost-Sensitive Learning
+
+Every classifier outputs a *score*; turning it into a *prediction* requires picking a threshold. The default 0.5 is rarely optimal. The right threshold depends on the asymmetric cost of the two error types.
+
+Let `c_FP` and `c_FN` be the costs of a false positive and a false negative. Total expected cost is
+
+```
+Cost(threshold) = c_FP · FP(threshold) + c_FN · FN(threshold)
+```
+
+The cost-minimizing threshold satisfies a Bayes-optimal rule:
+
+```
+predict positive  ⟺  P(y=1 | x) > c_FP / (c_FP + c_FN)
+```
+
+When `c_FN >> c_FP` (missing a tumor is much worse than a false alarm), the threshold drops well below 0.5 — recall up, precision down. When `c_FP >> c_FN` (annoying users with bad recommendations is the bigger sin), threshold rises above 0.5.
+
+Two practical workflows:
+- Pick threshold to maximize a chosen metric (F1, F-beta, Youden's J = TPR - FPR) on a validation set.
+- Pick threshold from the cost formula above when the costs `c_FP`, `c_FN` are explicitly known (medical, fraud, churn).
 
 ### 5.1 Learning Curve
 

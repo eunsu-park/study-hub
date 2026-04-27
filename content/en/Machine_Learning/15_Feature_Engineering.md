@@ -24,11 +24,9 @@ The difference between a mediocre model and a competition-winning one is rarely 
 
 ---
 
-## Theory & Principles
+## 1. Why Feature Engineering Matters
 
-Feature engineering is the bridge between domain knowledge and a model's inductive bias. The transformations are not arbitrary tricks — each one has a mathematical justification rooted in distributional assumptions, and each interacts with the leakage rules from Lesson 13. Understanding these justifications turns feature engineering from guesswork into a deliberate practice.
-
-### A. Why Transforms Help: Matching Inductive Bias
+### Theory: Why Transforms Help — Matching Inductive Bias
 
 Most ML algorithms have implicit assumptions about how features relate to the target:
 - Linear and logistic regression assume the target is approximately linear in the features.
@@ -37,115 +35,6 @@ Most ML algorithms have implicit assumptions about how features relate to the ta
 - Naive Bayes assumes conditional independence of features.
 
 A transformation that makes the data better satisfy these assumptions reduces the model's bias *for free*, with no extra capacity needed. That is the entire mathematical justification for feature engineering — you are pre-shaping the data to match the algorithm's inductive bias.
-
-### B. Logarithmic and Power Transforms
-
-When a feature spans many orders of magnitude (income, population, file size), the model is forced to learn a function that responds smoothly across that whole range. Log-transforming compresses the scale and turns multiplicative relationships into additive ones:
-
-```
-log(a · b) = log(a) + log(b)
-log1p(x)   = log(1 + x)         ← safe for x ≥ 0 including 0
-```
-
-The justification: many real-world quantities are log-normal, and a log-normal `y = exp(βᵀx + ε)` is exactly the model OLS fits when you regress `log(y)` on `x`. If your residuals are skewed and heteroscedastic, log-transforming the target often fixes both at once.
-
-The **Box-Cox transform** generalizes this with a free parameter `λ`:
-
-```
-y(λ) = (y^λ - 1) / λ      if λ ≠ 0
-     = log(y)              if λ = 0
-```
-
-`λ` is fit by maximum likelihood to make the transformed data as Gaussian as possible. `λ = 1` ⟹ no transform, `λ = 0` ⟹ log, `λ = -1` ⟹ reciprocal. Box-Cox requires positive values; **Yeo-Johnson** is the version that handles zero and negative values too. Both make the transformed feature better-suited to algorithms that assume Gaussian residuals (linear models, GMM, LDA).
-
-### C. Categorical Encoding: a Hierarchy of Trade-offs
-
-Models cannot consume strings — categorical features must become numbers. The choice of encoding interacts with both algorithm type and cardinality:
-
-- **Label encoding**: assign each level an integer. Fast, but injects a fake ordering — `apple = 0, banana = 1, cherry = 2` makes "banana" between "apple" and "cherry", which trees and linear models will interpret literally. Use only for ordinal features (low/medium/high).
-- **One-hot encoding (OHE)**: one binary column per level. Algorithm-agnostic, exact, but explodes feature count for high-cardinality features (a 10K-level zipcode becomes 10K columns).
-- **Target encoding**: replace each level with the mean target value for that level. Compact (1 column instead of K), informative — but with a giant catch: it **leaks the target through the feature**.
-
-### C.1 Why Target Encoding Needs Out-of-Fold Computation
-
-Naive target encoding (`y_mean.groupby(level).mean()` on the whole training set) is the textbook leakage trap. The encoded value for row `i` includes `y_i` itself, so a model trained on the encoded feature can perfectly memorize the training target — and generalize terribly.
-
-The fix is **out-of-fold target encoding**:
-
-```
-for each fold f:
-    train_other = train rows not in fold f
-    means = train_other.groupby(level).mean(target)
-    encoded[fold f] = level → means    (rows in fold f use means computed without them)
-```
-
-Each row's encoded value is computed from data that does *not* include the row's own target. Equivalent to running the encoder inside a CV split. Always do this, never the naive version.
-
-For unseen test levels, fall back to the global mean. To stabilize the encoding for rare levels, use **smoothing**:
-
-```
-encoded(level) = (count(level) · mean(level) + α · global_mean)  /  (count(level) + α)
-```
-
-`α` is a hyperparameter; rare levels get pulled toward the global mean.
-
-### D. Numeric Binning and Discretization
-
-Sometimes a continuous feature has a non-monotonic effect on the target — e.g., age (children and elderly behave differently from middle-aged). A linear model cannot capture this without polynomial terms. Binning the feature into discrete buckets and one-hot encoding the bucket lets the model assign each bucket its own coefficient.
-
-Three binning strategies:
-- **Equal-width**: split the range `[min, max]` into `K` equal intervals. Sensitive to outliers.
-- **Equal-frequency (quantile)**: each bucket has the same number of training examples. Outlier-robust, common default.
-- **Decision-tree based**: fit a shallow tree on `(x_j, y)` and use its leaves as bins. Supervised — buckets respect the relationship to the target.
-
-Binning trades resolution for non-linearity. Tree-based models do not benefit (they bin internally); linear models often do.
-
-### E. Interaction Features
-
-Many real relationships involve two features together: BMI = weight / height², price-per-bedroom = price / bedrooms. A linear model cannot learn these from `(weight, height)` alone — the product or ratio must be supplied as an explicit feature.
-
-Polynomial features `(x_1, x_2)` → `(x_1, x_2, x_1², x_1·x_2, x_2²)` enumerate all degree-`d` interactions automatically. Trees and gradient boosting models discover interactions implicitly through nested splits, but even they often benefit from a few hand-coded ratios when the ratio is the genuinely meaningful quantity.
-
-The cost is feature explosion: `O(p^d)` polynomial features for degree `d`. Combine with regularization (Lasso) to prune the noisy ones automatically.
-
-### F. Feature Selection: Three Families
-
-When you have too many features, removing irrelevant ones reduces overfitting risk and speeds up training. Three families of selection methods:
-
-1. **Filter methods**: rank features by a univariate statistic (variance, mutual information with target, chi-squared) and keep the top `k`. Fast, model-agnostic, ignores feature interactions.
-2. **Wrapper methods**: forward/backward selection — add/remove one feature at a time and retrain. Slow but accounts for interactions.
-3. **Embedded methods**: regularization (Lasso L1) or tree-based importance built into the training. Free as a side effect of model fitting; the most common choice in practice.
-
-The right choice depends on dimensionality and compute budget: filters when `p` is huge, embedded when you can afford to fit one regularized model, wrappers rarely.
-
-### G. The Leakage Tax on Feature Engineering
-
-Every transformation must respect the leakage rule from Lesson 13. The pipeline-wrapping discipline is non-negotiable:
-
-| Transformation | Inside pipeline? | Why |
-|----------------|------------------|-----|
-| `log(x)` | Optional (no learned params) | Constant transform |
-| `StandardScaler` | YES | Mean and std are learned |
-| Median imputation | YES | Median is learned |
-| Target encoding | YES (with out-of-fold) | Uses target |
-| One-hot encoding with fixed schema | Optional | If `handle_unknown='ignore'` |
-| PCA | YES | Eigenvectors are learned |
-| Polynomial features | Optional (no learned params) | Deterministic expansion |
-
-The *test* of whether something belongs in the pipeline is: "does this read other rows' values or the target?" If yes, it belongs in the pipeline. No exceptions.
-
-### From Theory to the Code Below
-
-- Section 2's `np.log1p`, `PowerTransformer(method='box-cox' | 'yeo-johnson')` is the family in (B).
-- Section 3's `OneHotEncoder`, `LabelEncoder`, and target-encoding example map to (C); the out-of-fold target-encoding loop in Section 3.4 is exactly (C.1).
-- Section 4's `KBinsDiscretizer(strategy='uniform' | 'quantile' | 'kmeans')` is the binning hierarchy from (D).
-- Section 5's `PolynomialFeatures` is the interaction enumeration from (E).
-- Section 6's `SelectKBest`, `RFE`, and `SelectFromModel` are the three families from (F): filter, wrapper, embedded.
-- The `Pipeline` wrapping that appears throughout is the leakage discipline from (G).
-
----
-
-## 1. Why Feature Engineering Matters
 
 ### 1.1 Features Drive Model Performance
 
@@ -177,6 +66,37 @@ a complex model with poor features.
 ---
 
 ## 2. Numerical Feature Transformations
+
+### Theory: Logarithmic and Power Transforms
+
+When a feature spans many orders of magnitude (income, population, file size), the model is forced to learn a function that responds smoothly across that whole range. Log-transforming compresses the scale and turns multiplicative relationships into additive ones:
+
+```
+log(a · b) = log(a) + log(b)
+log1p(x)   = log(1 + x)         ← safe for x ≥ 0 including 0
+```
+
+The justification: many real-world quantities are log-normal, and a log-normal `y = exp(βᵀx + ε)` is exactly the model OLS fits when you regress `log(y)` on `x`. If your residuals are skewed and heteroscedastic, log-transforming the target often fixes both at once.
+
+The **Box-Cox transform** generalizes this with a free parameter `λ`:
+
+```
+y(λ) = (y^λ - 1) / λ      if λ ≠ 0
+     = log(y)              if λ = 0
+```
+
+`λ` is fit by maximum likelihood to make the transformed data as Gaussian as possible. `λ = 1` ⟹ no transform, `λ = 0` ⟹ log, `λ = -1` ⟹ reciprocal. Box-Cox requires positive values; **Yeo-Johnson** is the version that handles zero and negative values too. Both make the transformed feature better-suited to algorithms that assume Gaussian residuals (linear models, GMM, LDA).
+
+### Theory: Numeric Binning and Discretization
+
+Sometimes a continuous feature has a non-monotonic effect on the target — e.g., age (children and elderly behave differently from middle-aged). A linear model cannot capture this without polynomial terms. Binning the feature into discrete buckets and one-hot encoding the bucket lets the model assign each bucket its own coefficient.
+
+Three binning strategies:
+- **Equal-width**: split the range `[min, max]` into `K` equal intervals. Sensitive to outliers.
+- **Equal-frequency (quantile)**: each bucket has the same number of training examples. Outlier-robust, common default.
+- **Decision-tree based**: fit a shallow tree on `(x_j, y)` and use its leaves as bins. Supervised — buckets respect the relationship to the target.
+
+Binning trades resolution for non-linearity. Tree-based models do not benefit (they bin internally); linear models often do.
 
 ### 2.1 Scaling and Normalization
 
@@ -332,6 +252,37 @@ print("\nInteraction-only features:", interact_names)
 ---
 
 ## 3. Categorical Feature Encoding
+
+### Theory: Categorical Encoding — a Hierarchy of Trade-offs
+
+Models cannot consume strings — categorical features must become numbers. The choice of encoding interacts with both algorithm type and cardinality:
+
+- **Label encoding**: assign each level an integer. Fast, but injects a fake ordering — `apple = 0, banana = 1, cherry = 2` makes "banana" between "apple" and "cherry", which trees and linear models will interpret literally. Use only for ordinal features (low/medium/high).
+- **One-hot encoding (OHE)**: one binary column per level. Algorithm-agnostic, exact, but explodes feature count for high-cardinality features (a 10K-level zipcode becomes 10K columns).
+- **Target encoding**: replace each level with the mean target value for that level. Compact (1 column instead of K), informative — but with a giant catch: it **leaks the target through the feature**.
+
+### Theory: Why Target Encoding Needs Out-of-Fold Computation
+
+Naive target encoding (`y_mean.groupby(level).mean()` on the whole training set) is the textbook leakage trap. The encoded value for row `i` includes `y_i` itself, so a model trained on the encoded feature can perfectly memorize the training target — and generalize terribly.
+
+The fix is **out-of-fold target encoding**:
+
+```
+for each fold f:
+    train_other = train rows not in fold f
+    means = train_other.groupby(level).mean(target)
+    encoded[fold f] = level → means    (rows in fold f use means computed without them)
+```
+
+Each row's encoded value is computed from data that does *not* include the row's own target. Equivalent to running the encoder inside a CV split. Always do this, never the naive version.
+
+For unseen test levels, fall back to the global mean. To stabilize the encoding for rare levels, use **smoothing**:
+
+```
+encoded(level) = (count(level) · mean(level) + α · global_mean)  /  (count(level) + α)
+```
+
+`α` is a hyperparameter; rare levels get pulled toward the global mean.
 
 ### 3.1 Review of Basic Encodings
 
@@ -677,6 +628,14 @@ print("\nBigram features:", bigram_vec.get_feature_names_out())
 
 ## 6. Domain-Specific Feature Engineering
 
+### Theory: Interaction Features
+
+Many real relationships involve two features together: BMI = weight / height², price-per-bedroom = price / bedrooms. A linear model cannot learn these from `(weight, height)` alone — the product or ratio must be supplied as an explicit feature.
+
+Polynomial features `(x_1, x_2)` → `(x_1, x_2, x_1², x_1·x_2, x_2²)` enumerate all degree-`d` interactions automatically. Trees and gradient boosting models discover interactions implicitly through nested splits, but even they often benefit from a few hand-coded ratios when the ratio is the genuinely meaningful quantity.
+
+The cost is feature explosion: `O(p^d)` polynomial features for degree `d`. Combine with regularization (Lasso) to prune the noisy ones automatically.
+
 ### 6.1 E-Commerce Features
 
 ```python
@@ -856,6 +815,16 @@ for fd in feature_defs[:10]:
 
 ## 8. Feature Selection
 
+### Theory: Feature Selection — Three Families
+
+When you have too many features, removing irrelevant ones reduces overfitting risk and speeds up training. Three families of selection methods:
+
+1. **Filter methods**: rank features by a univariate statistic (variance, mutual information with target, chi-squared) and keep the top `k`. Fast, model-agnostic, ignores feature interactions.
+2. **Wrapper methods**: forward/backward selection — add/remove one feature at a time and retrain. Slow but accounts for interactions.
+3. **Embedded methods**: regularization (Lasso L1) or tree-based importance built into the training. Free as a side effect of model fitting; the most common choice in practice.
+
+The right choice depends on dimensionality and compute budget: filters when `p` is huge, embedded when you can afford to fit one regularized model, wrappers rarely.
+
 ### 8.1 Filter Methods
 
 ```python
@@ -984,6 +953,22 @@ print(f"Features with zero Lasso coefficient (can be dropped): {zero_features}")
 ---
 
 ## 9. Preventing Data Leakage in Feature Engineering
+
+### Theory: The Leakage Tax on Feature Engineering
+
+Every transformation must respect the leakage rule from Lesson 13. The pipeline-wrapping discipline is non-negotiable:
+
+| Transformation | Inside pipeline? | Why |
+|----------------|------------------|-----|
+| `log(x)` | Optional (no learned params) | Constant transform |
+| `StandardScaler` | YES | Mean and std are learned |
+| Median imputation | YES | Median is learned |
+| Target encoding | YES (with out-of-fold) | Uses target |
+| One-hot encoding with fixed schema | Optional | If `handle_unknown='ignore'` |
+| PCA | YES | Eigenvectors are learned |
+| Polynomial features | Optional (no learned params) | Deterministic expansion |
+
+The *test* of whether something belongs in the pipeline is: "does this read other rows' values or the target?" If yes, it belongs in the pipeline. No exceptions.
 
 ### 9.1 Common Leakage Patterns
 

@@ -22,11 +22,11 @@ This lesson covers two algorithms that sit at opposite ends of the machine learn
 
 ---
 
-## Theory & Principles
+## Part 1: k-Nearest Neighbors (k-NN)
 
-k-NN and Naive Bayes share the page because they showcase opposite ends of the bias-variance spectrum: k-NN has zero bias and unbounded variance, Naive Bayes has high bias and very low variance. The mathematics behind why each works (and where each fails) is essential to using them well.
+## 1. k-NN Concepts
 
-### A. k-NN: a Non-Parametric Estimator with No Training Phase
+### Theory: k-NN — a Non-Parametric Estimator with No Training Phase
 
 k-NN classification predicts by majority vote among the `k` training points nearest to the query `x`. Formally:
 
@@ -42,105 +42,6 @@ The choice of `k` is a bias-variance knob:
 
 - `k = 1`: zero training error (each point is its own nearest neighbor), maximally jagged decision boundary, very high variance.
 - Large `k`: smoother boundary, lower variance, higher bias. In the limit `k = N`, k-NN predicts the global majority class everywhere.
-
-### B. Distance Metrics and the Curse of Dimensionality
-
-Common distance metrics are special cases of the **Minkowski p-norm** `(Σ |x_j - x'_j|^p)^{1/p}`:
-
-- `p = 1`: Manhattan distance
-- `p = 2`: Euclidean distance
-- `p → ∞`: Chebyshev (max coordinate difference)
-
-In high dimensions, distances stop being informative — the **curse of dimensionality**. As `p` grows, the volume of a unit hypercube concentrates near its corners and surface. For random points uniform in `[0, 1]^p`:
-
-```
-E[d_max] / E[d_min]  →  1   as p → ∞
-```
-
-That is, the nearest and farthest training points are almost the same distance from the query. The "nearest neighbor" notion becomes meaningless. As a rough rule of thumb, k-NN starts breaking down somewhere around `p > 20` features without aggressive dimensionality reduction or domain-specific distance metrics.
-
-A second consequence: every feature must be on the same scale, or the largest-magnitude feature dominates the distance computation. Standardize before fitting k-NN.
-
-### C. Speed-Up Data Structures: KD-Tree and Ball Tree
-
-The naive `O(N)` neighbor search is unaffordable for large `N`. Two data structures bring it down to `O(log N)` average-case for moderate dimensions:
-
-- **KD-tree**: recursively partitions feature space along axis-aligned hyperplanes (alternating dimensions). Excellent in low dimensions (`p ≤ 20`), degrades to brute-force performance in high dimensions because most cells are visited.
-- **Ball tree**: partitions data into nested hyperspheres. Better behaved than KD-tree in higher dimensions because spheres adapt to the data geometry.
-
-scikit-learn's `KNeighborsClassifier(algorithm='auto')` picks between these and brute-force based on `N` and `p`.
-
-### D. Naive Bayes: Bayes' Theorem with a Strong Conditional Independence Assumption
-
-Bayes' theorem relates the posterior to the prior and likelihood:
-
-```
-P(y | x_1, ..., x_p)  =  P(x_1, ..., x_p | y) · P(y)  /  P(x_1, ..., x_p)
-```
-
-The numerator's `P(x_1, ..., x_p | y)` is hopeless to estimate directly — it requires modeling the joint distribution of all features in each class. The **Naive Bayes assumption** is the famous (and usually wrong) simplification that features are conditionally independent given the class:
-
-```
-P(x_1, ..., x_p | y)  =  ∏_j  P(x_j | y)
-```
-
-With this assumption the classifier becomes:
-
-```
-ŷ(x) = argmax_y   P(y) · ∏_j  P(x_j | y)
-```
-
-The denominator `P(x)` is dropped because it does not depend on `y`. In log space:
-
-```
-ŷ(x) = argmax_y   log P(y) + Σ_j  log P(x_j | y)
-```
-
-Each `log P(x_j | y)` can be estimated separately from a 1-dimensional histogram (or parametric model), so total parameter count is `O(p · K)` instead of the exponential count needed without the assumption.
-
-### E. The Three Variants
-
-Different distributional choices for `P(x_j | y)` give different Naive Bayes variants:
-
-- **Gaussian NB**: assumes each feature is Gaussian within class, `P(x_j | y) = N(μ_{y,j}, σ²_{y,j})`. For continuous features.
-- **Multinomial NB**: features are counts (e.g., word frequencies), `P(x_j | y)` follows a multinomial distribution. Standard for text classification.
-- **Bernoulli NB**: features are binary (presence/absence), `P(x_j | y)` is Bernoulli. Useful for short text where word presence matters more than count.
-
-### F. Laplace Smoothing: Avoiding Zero Probabilities
-
-In Multinomial/Bernoulli NB, if a feature value never appears with class `y` in training, then `P(x_j = v | y) = 0`. The product collapses to zero and the classifier confidently predicts not-`y`, even if every other feature points to `y`.
-
-**Laplace smoothing** (additive smoothing with parameter `α`) fixes this:
-
-```
-P(x_j = v | y) = (count(x_j = v, y) + α)  /  (count(y) + α · |V|)
-```
-
-`|V|` is the number of possible values. `α = 1` is full Laplace smoothing; `0 < α < 1` is Lidstone smoothing. Smoothing trades a little accuracy on seen patterns for robustness against unseen patterns. Required in practice — never run Multinomial NB without it.
-
-### G. Why Naive Bayes Works Despite Being Wrong
-
-The independence assumption is almost always violated in real data, yet Naive Bayes often performs well. Two reasons:
-
-1. **Decision boundary, not probability.** Classification only needs the *argmax* of posteriors, not their absolute values. Even badly miscalibrated probabilities can produce correct argmax decisions if the relative *ordering* across classes is preserved. Naive Bayes' miscalibration is often consistent across classes, so it cancels.
-2. **Bias-variance trade-off.** With `O(p · K)` parameters, NB has tiny variance — it estimates well even from small training sets. The bias from the wrong independence assumption is the price you pay; on text and other high-dimensional sparse data, the price is small enough to be worth it.
-
-NB is dominated by more flexible models when training data is abundant. Its niche is small-data regimes and text classification, where the bias is tolerable and the speed is unbeatable.
-
-### From Theory to the Code Below
-
-- Section 1.1's "lazy learning" framing is the no-training-phase property from (A).
-- Section 1.3's distance-metric examples are the Minkowski family from (B); the standardization step before fitting is the dimensionality-curse mitigation from (B).
-- Section 1.4's `KNeighborsClassifier(algorithm='kd_tree' | 'ball_tree' | 'brute')` selects the data structure from (C).
-- Section 2's `GaussianNB`, `MultinomialNB`, `BernoulliNB` are the three variants from (E).
-- The `alpha` parameter on Multinomial/Bernoulli NB is the Laplace-smoothing parameter from (F).
-- The "k-NN good for non-linear boundaries, NB good for text" comparison at the end is the bias-variance position summary from (G).
-
----
-
-## Part 1: k-Nearest Neighbors (k-NN)
-
-## 1. k-NN Concepts
 
 ### 1.1 Basic Principle
 
@@ -174,6 +75,15 @@ NB is dominated by more flexible models when training data is abundant. Its nich
 ---
 
 ## 2. k-NN Classification
+
+### Theory: Speed-Up Data Structures — KD-Tree and Ball Tree
+
+The naive `O(N)` neighbor search is unaffordable for large `N`. Two data structures bring it down to `O(log N)` average-case for moderate dimensions:
+
+- **KD-tree**: recursively partitions feature space along axis-aligned hyperplanes (alternating dimensions). Excellent in low dimensions (`p ≤ 20`), degrades to brute-force performance in high dimensions because most cells are visited.
+- **Ball tree**: partitions data into nested hyperspheres. Better behaved than KD-tree in higher dimensions because spheres adapt to the data geometry.
+
+scikit-learn's `KNeighborsClassifier(algorithm='auto')` picks between these and brute-force based on `N` and `p`.
 
 ### 2.1 Basic Implementation
 
@@ -339,6 +249,24 @@ plt.show()
 
 ## 4. Feature Scaling for k-NN
 
+### Theory: Distance Metrics and the Curse of Dimensionality
+
+Common distance metrics are special cases of the **Minkowski p-norm** `(Σ |x_j - x'_j|^p)^{1/p}`:
+
+- `p = 1`: Manhattan distance
+- `p = 2`: Euclidean distance
+- `p → ∞`: Chebyshev (max coordinate difference)
+
+In high dimensions, distances stop being informative — the **curse of dimensionality**. As `p` grows, the volume of a unit hypercube concentrates near its corners and surface. For random points uniform in `[0, 1]^p`:
+
+```
+E[d_max] / E[d_min]  →  1   as p → ∞
+```
+
+That is, the nearest and farthest training points are almost the same distance from the query. The "nearest neighbor" notion becomes meaningless. As a rough rule of thumb, k-NN starts breaking down somewhere around `p > 20` features without aggressive dimensionality reduction or domain-specific distance metrics.
+
+A second consequence: every feature must be on the same scale, or the largest-magnitude feature dominates the distance computation. Standardize before fitting k-NN.
+
 ### 4.1 Why Scaling is Critical
 
 k-NN is **distance-based**, so features with large scales dominate the distance calculation.
@@ -392,6 +320,34 @@ print(f"  Test:  {knn_pipeline.score(X_test, y_test):.4f}")
 
 ## 6. Naive Bayes Concepts
 
+### Theory: Bayes' Theorem and the Conditional Independence Assumption
+
+Bayes' theorem relates the posterior to the prior and likelihood:
+
+```
+P(y | x_1, ..., x_p)  =  P(x_1, ..., x_p | y) · P(y)  /  P(x_1, ..., x_p)
+```
+
+The numerator's `P(x_1, ..., x_p | y)` is hopeless to estimate directly — it requires modeling the joint distribution of all features in each class. The **Naive Bayes assumption** is the famous (and usually wrong) simplification that features are conditionally independent given the class:
+
+```
+P(x_1, ..., x_p | y)  =  ∏_j  P(x_j | y)
+```
+
+With this assumption the classifier becomes:
+
+```
+ŷ(x) = argmax_y   P(y) · ∏_j  P(x_j | y)
+```
+
+The denominator `P(x)` is dropped because it does not depend on `y`. In log space:
+
+```
+ŷ(x) = argmax_y   log P(y) + Σ_j  log P(x_j | y)
+```
+
+Each `log P(x_j | y)` can be estimated separately from a 1-dimensional histogram (or parametric model), so total parameter count is `O(p · K)` instead of the exponential count needed without the assumption.
+
 ### 6.1 Bayes' Theorem
 
 ```
@@ -417,6 +373,14 @@ This assumption is rarely true in practice, but Naive Bayes works well anyway!
 ---
 
 ## 7. Types of Naive Bayes
+
+### Theory: The Three Variants — Gaussian, Multinomial, Bernoulli
+
+Different distributional choices for `P(x_j | y)` give different Naive Bayes variants:
+
+- **Gaussian NB**: assumes each feature is Gaussian within class, `P(x_j | y) = N(μ_{y,j}, σ²_{y,j})`. For continuous features.
+- **Multinomial NB**: features are counts (e.g., word frequencies), `P(x_j | y)` follows a multinomial distribution. Standard for text classification.
+- **Bernoulli NB**: features are binary (presence/absence), `P(x_j | y)` is Bernoulli. Useful for short text where word presence matters more than count.
 
 ### 7.1 Gaussian Naive Bayes
 
@@ -511,6 +475,18 @@ print(f"Accuracy: {accuracy_score(y_test, y_pred):.4f}")
 
 ## 8. Text Classification with Naive Bayes
 
+### Theory: Laplace Smoothing — Avoiding Zero Probabilities
+
+In Multinomial/Bernoulli NB, if a feature value never appears with class `y` in training, then `P(x_j = v | y) = 0`. The product collapses to zero and the classifier confidently predicts not-`y`, even if every other feature points to `y`.
+
+**Laplace smoothing** (additive smoothing with parameter `α`) fixes this:
+
+```
+P(x_j = v | y) = (count(x_j = v, y) + α)  /  (count(y) + α · |V|)
+```
+
+`|V|` is the number of possible values. `α = 1` is full Laplace smoothing; `0 < α < 1` is Lidstone smoothing. Smoothing trades a little accuracy on seen patterns for robustness against unseen patterns. Required in practice — never run Multinomial NB without it.
+
 ### 8.1 Complete Pipeline
 
 ```python
@@ -564,6 +540,15 @@ for alpha in alphas:
 ---
 
 ## 9. Comparison: k-NN vs Naive Bayes
+
+### Theory: Why Naive Bayes Works Despite Being Wrong
+
+The independence assumption is almost always violated in real data, yet Naive Bayes often performs well. Two reasons:
+
+1. **Decision boundary, not probability.** Classification only needs the *argmax* of posteriors, not their absolute values. Even badly miscalibrated probabilities can produce correct argmax decisions if the relative *ordering* across classes is preserved. Naive Bayes' miscalibration is often consistent across classes, so it cancels.
+2. **Bias-variance trade-off.** With `O(p · K)` parameters, NB has tiny variance — it estimates well even from small training sets. The bias from the wrong independence assumption is the price you pay; on text and other high-dimensional sparse data, the price is small enough to be worth it.
+
+NB is dominated by more flexible models when training data is abundant. Its niche is small-data regimes and text classification, where the bias is tolerable and the speed is unbeatable.
 
 | Feature | k-NN | Naive Bayes |
 |---------|------|-------------|

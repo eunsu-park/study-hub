@@ -22,140 +22,6 @@ All the supervised algorithms we have studied so far require labeled data -- som
 
 ---
 
-## Theory & Principles
-
-The four clustering algorithms in this lesson — K-Means, GMM, DBSCAN, hierarchical — solve four genuinely different optimization problems with four different definitions of "cluster". Treating them as interchangeable produces bad clusterings; understanding which objective each one minimizes lets you pick the right tool.
-
-### A. K-Means: Within-Cluster Sum of Squares
-
-K-Means partitions `N` points into `K` clusters by minimizing the **within-cluster sum of squares**:
-
-```
-J(C, μ) = Σ_{k=1..K}  Σ_{x ∈ C_k}  ‖x - μ_k‖²
-```
-
-`C = {C_1, ..., C_K}` is the assignment, `μ_k` is the centroid of cluster `k`. The objective is non-convex (NP-hard exactly), but **Lloyd's algorithm** finds a local optimum efficiently:
-
-```
-initialize μ_1, ..., μ_K
-repeat:
-    assign each x_i to nearest μ_k          ← E-step (assignment)
-    update each μ_k = mean(C_k)              ← M-step (centroid update)
-until assignments stop changing
-```
-
-The two steps each *strictly* decrease `J` (or leave it unchanged), and `J` is bounded below by 0, so Lloyd's algorithm converges in finite iterations. It does *not* converge to the global optimum — bad initial centroids produce bad local minima.
-
-### A.1 K-Means++: Smarter Initialization
-
-Random initialization can place all centroids in the same cluster, requiring many restarts to escape. **K-Means++** (Arthur & Vassilvitskii, 2007) initializes greedily:
-
-```
-pick μ_1 uniformly at random from data
-for k = 2..K:
-    for each x: D(x) = distance to nearest already-chosen centroid
-    pick x as μ_k with probability proportional to D(x)²
-```
-
-This biases new centroids toward regions far from existing centroids, spreading the initial seeds. Provably gives an `O(log K)` approximation to the optimum in expectation, and in practice almost always beats random init.
-
-### A.2 What K-Means Assumes
-
-K-Means implicitly assumes:
-- Clusters are roughly **spherical** (Euclidean distance, equal variance per dimension).
-- Clusters have similar size (the squared-distance objective is dominated by large clusters).
-- `K` is known.
-
-When these break — elongated clusters, density variation, unknown `K` — K-Means produces nonsense, and you need a different algorithm.
-
-### B. Gaussian Mixture Models and the EM Algorithm
-
-A **GMM** generalizes K-Means by modeling the data as a mixture of `K` Gaussian distributions:
-
-```
-p(x) = Σ_k  π_k · N(x ; μ_k, Σ_k)            π_k > 0,  Σ π_k = 1
-```
-
-`π_k` is the prior weight of component `k`, `Σ_k` is its covariance. K-Means is the limiting case where every `Σ_k = ε · I` and `ε → 0` — equal isotropic variance. GMM relaxes this: each cluster has its own shape (covariance) and softness (probabilistic membership).
-
-The **Expectation-Maximization (EM) algorithm** maximizes the log-likelihood by alternating two steps:
-
-```
-E-step:  compute posterior responsibility γ_{ik} = P(z_i = k | x_i; θ)
-                = π_k · N(x_i; μ_k, Σ_k)  /  Σ_j π_j · N(x_i; μ_j, Σ_j)
-
-M-step:  update parameters as weighted MLE
-                π_k  = (1/N) · Σ_i γ_{ik}
-                μ_k  = (Σ_i γ_{ik} · x_i)  /  (Σ_i γ_{ik})
-                Σ_k  = (Σ_i γ_{ik} · (x_i - μ_k)(x_i - μ_k)ᵀ)  /  (Σ_i γ_{ik})
-```
-
-EM is guaranteed to monotonically increase the log-likelihood, but like Lloyd's it converges to a local optimum. Each iteration costs `O(NKp²)` (the covariance updates dominate).
-
-GMM gives **soft assignments** (`γ_{ik}` is the probability that point `i` belongs to cluster `k`) and handles **non-spherical clusters** because each `Σ_k` can be elongated in any direction. The price: more parameters to estimate (each `Σ_k` adds `p(p+1)/2` parameters), so GMM needs more data per cluster than K-Means.
-
-### C. DBSCAN: Density-Based Clustering
-
-DBSCAN (Ester et al., 1996) defines clusters as **dense regions** rather than as compact balls. Two parameters: `ε` (neighborhood radius) and `MinPts` (minimum neighbors to be "dense").
-
-```
-core point:    has ≥ MinPts neighbors within ε
-border point:  within ε of a core point, but not core itself
-noise point:   neither core nor border
-```
-
-A cluster is a maximal set of points connected by **density-reachability**: `x` is density-reachable from `y` if there is a chain `y = p_1, p_2, ..., p_n = x` where each `p_i` is core and `p_{i+1}` is within `ε` of `p_i`. The algorithm sweeps every point, expands clusters from each unvisited core point, and labels everything else.
-
-DBSCAN's strengths follow from its definition:
-- Discovers clusters of **arbitrary shape** (no spherical assumption).
-- Identifies **noise** explicitly (no forced assignment).
-- **No `K` to choose** — number of clusters emerges from `ε` and `MinPts`.
-
-The weaknesses:
-- **Sensitive to `ε`**: clusters of varying density cannot all be captured with one `ε`.
-- **Curse of dimensionality**: density is hard to estimate in high dimensions, where everything looks equidistant.
-
-### D. Hierarchical Clustering
-
-**Agglomerative** clustering builds a tree (dendrogram) bottom-up:
-
-```
-start: each point is its own cluster
-repeat:
-    find the closest two clusters, merge them
-until one cluster remains
-```
-
-The choice of "closest" is the **linkage criterion**, and it produces qualitatively different trees:
-
-- **Single linkage**: distance = min pairwise distance. Produces "chains" (one bridge of points links two distant clusters).
-- **Complete linkage**: distance = max pairwise distance. Produces compact clusters.
-- **Average linkage**: distance = mean pairwise distance.
-- **Ward's method**: merge the pair that minimally increases within-cluster variance — equivalent to K-Means objective but bottom-up. Tends to produce balanced clusters.
-
-The output is a tree, not a fixed clustering. You cut the dendrogram at any height to get a flat clustering with that many clusters. This is useful when `K` is unknown — you can inspect the dendrogram to choose.
-
-Cost is `O(N²)` memory and `O(N² log N)` time, so hierarchical clustering is impractical above `N ≈ 10^4`.
-
-### E. Choosing K and Evaluating Clusters
-
-Without labels there is no "correct" answer to evaluate against. Two heuristics for picking `K`:
-
-- **Elbow method**: plot `J` (within-cluster SSE) vs `K`. The "elbow" — the kink where adding more clusters stops sharply reducing SSE — suggests the right `K`. Subjective but useful.
-- **Silhouette score**: for each point, `s = (b - a) / max(a, b)` where `a` is mean distance to its own cluster and `b` is mean distance to nearest other cluster. Range `[-1, 1]`; higher is better. Average across points gives a single score; argmax over `K` picks the best.
-
-For GMM, **AIC/BIC** model-selection criteria (penalizing log-likelihood by parameter count) are the principled choice for picking `K`.
-
-### From Theory to the Code Below
-
-- Section 2's `KMeans(n_clusters=K)` runs Lloyd's algorithm from (A); `init='k-means++'` uses the smart initialization from (A.1).
-- Section 3's `GaussianMixture(n_components=K)` runs the EM algorithm from (B); `covariance_type='full' | 'tied' | 'diag' | 'spherical'` controls how flexible each `Σ_k` can be.
-- Section 4's `DBSCAN(eps=..., min_samples=...)` is the density-reachability algorithm from (C).
-- Section 5's `AgglomerativeClustering(linkage='ward' | 'average' | 'complete' | 'single')` is the hierarchical method from (D).
-- Section 6's elbow plot and `silhouette_score` are the K-selection heuristics from (E).
-
----
-
 ## 1. Clustering Concepts
 
 ### 1.1 What is Clustering?
@@ -183,6 +49,48 @@ For GMM, **AIC/BIC** model-selection criteria (penalizing log-likelihood by para
 ---
 
 ## 2. K-Means Clustering
+
+### Theory: K-Means — Within-Cluster Sum of Squares
+
+K-Means partitions `N` points into `K` clusters by minimizing the **within-cluster sum of squares**:
+
+```
+J(C, μ) = Σ_{k=1..K}  Σ_{x ∈ C_k}  ‖x - μ_k‖²
+```
+
+`C = {C_1, ..., C_K}` is the assignment, `μ_k` is the centroid of cluster `k`. The objective is non-convex (NP-hard exactly), but **Lloyd's algorithm** finds a local optimum efficiently:
+
+```
+initialize μ_1, ..., μ_K
+repeat:
+    assign each x_i to nearest μ_k          ← E-step (assignment)
+    update each μ_k = mean(C_k)              ← M-step (centroid update)
+until assignments stop changing
+```
+
+The two steps each *strictly* decrease `J` (or leave it unchanged), and `J` is bounded below by 0, so Lloyd's algorithm converges in finite iterations. It does *not* converge to the global optimum — bad initial centroids produce bad local minima.
+
+### Theory: K-Means++ Initialization
+
+Random initialization can place all centroids in the same cluster, requiring many restarts to escape. **K-Means++** (Arthur & Vassilvitskii, 2007) initializes greedily:
+
+```
+pick μ_1 uniformly at random from data
+for k = 2..K:
+    for each x: D(x) = distance to nearest already-chosen centroid
+    pick x as μ_k with probability proportional to D(x)²
+```
+
+This biases new centroids toward regions far from existing centroids, spreading the initial seeds. Provably gives an `O(log K)` approximation to the optimum in expectation, and in practice almost always beats random init.
+
+### Theory: What K-Means Assumes
+
+K-Means implicitly assumes:
+- Clusters are roughly **spherical** (Euclidean distance, equal variance per dimension).
+- Clusters have similar size (the squared-distance objective is dominated by large clusters).
+- `K` is known.
+
+When these break — elongated clusters, density variation, unknown `K` — K-Means produces nonsense, and you need a different algorithm.
 
 ### 2.1 Algorithm
 
@@ -336,6 +244,27 @@ for k in [3, 4, 5]:
 
 ## 3. DBSCAN (Density-Based Spatial Clustering)
 
+### Theory: DBSCAN — Density-Based Clustering
+
+DBSCAN (Ester et al., 1996) defines clusters as **dense regions** rather than as compact balls. Two parameters: `ε` (neighborhood radius) and `MinPts` (minimum neighbors to be "dense").
+
+```
+core point:    has ≥ MinPts neighbors within ε
+border point:  within ε of a core point, but not core itself
+noise point:   neither core nor border
+```
+
+A cluster is a maximal set of points connected by **density-reachability**: `x` is density-reachable from `y` if there is a chain `y = p_1, p_2, ..., p_n = x` where each `p_i` is core and `p_{i+1}` is within `ε` of `p_i`. The algorithm sweeps every point, expands clusters from each unvisited core point, and labels everything else.
+
+DBSCAN's strengths follow from its definition:
+- Discovers clusters of **arbitrary shape** (no spherical assumption).
+- Identifies **noise** explicitly (no forced assignment).
+- **No `K` to choose** — number of clusters emerges from `ε` and `MinPts`.
+
+The weaknesses:
+- **Sensitive to `ε`**: clusters of varying density cannot all be captured with one `ε`.
+- **Curse of dimensionality**: density is hard to estimate in high dimensions, where everything looks equidistant.
+
 ### 3.1 Algorithm
 
 **Core Idea**: Clusters are dense regions separated by sparse regions
@@ -461,6 +390,28 @@ plt.show()
 
 ## 4. Hierarchical Clustering
 
+### Theory: Hierarchical Clustering
+
+**Agglomerative** clustering builds a tree (dendrogram) bottom-up:
+
+```
+start: each point is its own cluster
+repeat:
+    find the closest two clusters, merge them
+until one cluster remains
+```
+
+The choice of "closest" is the **linkage criterion**, and it produces qualitatively different trees:
+
+- **Single linkage**: distance = min pairwise distance. Produces "chains" (one bridge of points links two distant clusters).
+- **Complete linkage**: distance = max pairwise distance. Produces compact clusters.
+- **Average linkage**: distance = mean pairwise distance.
+- **Ward's method**: merge the pair that minimally increases within-cluster variance — equivalent to K-Means objective but bottom-up. Tends to produce balanced clusters.
+
+The output is a tree, not a fixed clustering. You cut the dendrogram at any height to get a flat clustering with that many clusters. This is useful when `K` is unknown — you can inspect the dendrogram to choose.
+
+Cost is `O(N²)` memory and `O(N² log N)` time, so hierarchical clustering is impractical above `N ≈ 10^4`.
+
 ### 4.1 Agglomerative (Bottom-up)
 
 ```
@@ -520,6 +471,32 @@ plt.show()
 ---
 
 ## 5. Gaussian Mixture Models (GMM)
+
+### Theory: Gaussian Mixture Models and the EM Algorithm
+
+A **GMM** generalizes K-Means by modeling the data as a mixture of `K` Gaussian distributions:
+
+```
+p(x) = Σ_k  π_k · N(x ; μ_k, Σ_k)            π_k > 0,  Σ π_k = 1
+```
+
+`π_k` is the prior weight of component `k`, `Σ_k` is its covariance. K-Means is the limiting case where every `Σ_k = ε · I` and `ε → 0` — equal isotropic variance. GMM relaxes this: each cluster has its own shape (covariance) and softness (probabilistic membership).
+
+The **Expectation-Maximization (EM) algorithm** maximizes the log-likelihood by alternating two steps:
+
+```
+E-step:  compute posterior responsibility γ_{ik} = P(z_i = k | x_i; θ)
+                = π_k · N(x_i; μ_k, Σ_k)  /  Σ_j π_j · N(x_i; μ_j, Σ_j)
+
+M-step:  update parameters as weighted MLE
+                π_k  = (1/N) · Σ_i γ_{ik}
+                μ_k  = (Σ_i γ_{ik} · x_i)  /  (Σ_i γ_{ik})
+                Σ_k  = (Σ_i γ_{ik} · (x_i - μ_k)(x_i - μ_k)ᵀ)  /  (Σ_i γ_{ik})
+```
+
+EM is guaranteed to monotonically increase the log-likelihood, but like Lloyd's it converges to a local optimum. Each iteration costs `O(NKp²)` (the covariance updates dominate).
+
+GMM gives **soft assignments** (`γ_{ik}` is the probability that point `i` belongs to cluster `k`) and handles **non-spherical clusters** because each `Σ_k` can be elongated in any direction. The price: more parameters to estimate (each `Σ_k` adds `p(p+1)/2` parameters), so GMM needs more data per cluster than K-Means.
 
 ### 5.1 Concept
 
@@ -593,6 +570,15 @@ plt.show()
 ---
 
 ## 6. Cluster Evaluation Metrics
+
+### Theory: Choosing K and Evaluating Clusters
+
+Without labels there is no "correct" answer to evaluate against. Two heuristics for picking `K`:
+
+- **Elbow method**: plot `J` (within-cluster SSE) vs `K`. The "elbow" — the kink where adding more clusters stops sharply reducing SSE — suggests the right `K`. Subjective but useful.
+- **Silhouette score**: for each point, `s = (b - a) / max(a, b)` where `a` is mean distance to its own cluster and `b` is mean distance to nearest other cluster. Range `[-1, 1]`; higher is better. Average across points gives a single score; argmax over `K` picks the best.
+
+For GMM, **AIC/BIC** model-selection criteria (penalizing log-likelihood by parameter count) are the principled choice for picking `K`.
 
 ### 6.1 Internal Metrics (no ground truth needed)
 

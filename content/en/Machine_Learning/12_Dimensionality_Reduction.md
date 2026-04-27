@@ -24,128 +24,6 @@ Real-world datasets routinely contain dozens, hundreds, or even thousands of fea
 
 ---
 
-## Theory & Principles
-
-The three families of dimensionality reduction in this lesson — PCA, t-SNE, UMAP — answer three different questions about high-dimensional data. PCA preserves global linear structure (variance). t-SNE preserves local neighborhoods at the cost of global geometry. UMAP balances the two with a fuzzy-topology framework. Knowing which question each one answers is what tells you which to use.
-
-### A. PCA: Eigendecomposition of the Covariance Matrix
-
-PCA finds the orthogonal directions along which the data has maximum variance. Center the data so each column has mean zero, stack into `X ∈ ℝ^{N×p}`. The empirical covariance matrix is
-
-```
-S = (1/(N-1)) · XᵀX        ∈ ℝ^{p×p}
-```
-
-PCA solves: find unit vector `v` that maximizes the variance of the projection `Xv`. Variance of `Xv` is `vᵀSv`, and maximizing `vᵀSv` subject to `‖v‖ = 1` gives (via Lagrange multipliers) the eigenvalue problem:
-
-```
-S v = λ v
-```
-
-The principal components `v_1, v_2, ..., v_p` are the eigenvectors of `S`, ordered by eigenvalue magnitude. The eigenvalue `λ_k` *is* the variance of the data projected onto `v_k`. Picking the top `r` eigenvectors gives the projection that preserves the most variance for any chosen rank `r`.
-
-### A.1 PCA via SVD: a Numerically Better Path
-
-Forming `S = XᵀX` squares the condition number — bad for numerical stability when features are nearly collinear. The **singular value decomposition** of `X` gives the same answer without forming `S`:
-
-```
-X = U Σ Vᵀ          (U: N×p, Σ: diagonal, V: p×p)
-```
-
-Then `XᵀX = V Σ² Vᵀ`, so the eigenvectors of `S` are the columns of `V` (the right singular vectors), and the eigenvalues are `σ_k² / (N-1)`. Modern PCA implementations (including scikit-learn's) use SVD directly. Cost is `O(min(N²p, Np²))`.
-
-### A.2 What PCA Preserves and What It Loses
-
-The fraction of variance preserved by the top `r` components is:
-
-```
-explained_variance_ratio(r) = Σ_{k=1..r} λ_k  /  Σ_{k=1..p} λ_k
-```
-
-This is the standard graph for picking `r` — plot it cumulatively and find the elbow.
-
-PCA assumes the **interesting structure is linear and aligned with maximum variance**. Both assumptions can fail:
-- A nonlinear manifold (e.g., a Swiss roll) is unrolled by PCA into a flat blob — the manifold structure is destroyed.
-- Variance and "interesting" can disagree — a class label can vary along a low-variance direction that PCA discards.
-
-Standardize features before PCA when they are on different scales (otherwise the largest-magnitude feature dominates the variance).
-
-### B. t-SNE: Probabilistic Local Neighborhood Preservation
-
-t-SNE (van der Maaten & Hinton, 2008) gives up on global geometry and instead preserves local neighborhoods. The recipe:
-
-**1. Build a probability distribution over neighbors in high-D.** For each pair `(i, j)`, define a conditional probability that `j` is `i`'s neighbor:
-
-```
-p_{j|i} = exp(-‖x_i - x_j‖² / 2σ_i²)  /  Σ_{k ≠ i} exp(-‖x_i - x_k‖² / 2σ_i²)
-p_{ij}  = (p_{j|i} + p_{i|j}) / (2N)        ← symmetrize
-```
-
-The bandwidth `σ_i` is set per-point to make the entropy of `p_{·|i}` equal `log(perplexity)` — `perplexity` is roughly the effective number of neighbors (5–50 typical). Each point thus has a similarity distribution adapted to local density.
-
-**2. Build a probability distribution over neighbors in low-D using a heavy-tailed (Student-t) kernel.** For low-D embedding `y_i`:
-
-```
-q_{ij} = (1 + ‖y_i - y_j‖²)⁻¹  /  Σ_{k ≠ l} (1 + ‖y_k - y_l‖²)⁻¹
-```
-
-The Student-t (with 1 degree of freedom) has heavier tails than a Gaussian, which lets distant points in low-D be embedded farther apart without penalty — solving the "crowding problem" that PCA-style methods struggle with.
-
-**3. Minimize KL divergence between the two distributions.**
-
-```
-L = KL(P ∥ Q) = Σ_{ij}  p_{ij} · log(p_{ij} / q_{ij})
-```
-
-Gradient descent on `L` produces the embedding. The asymmetry of KL — penalizing `q_{ij}` being small when `p_{ij}` is large — means t-SNE strongly preserves *near* neighbors but tolerates moving *far* neighbors arbitrarily. That is why t-SNE plots show clean local clusters but inter-cluster distances are not interpretable.
-
-### B.1 t-SNE Caveats
-
-- Distances *between* clusters in a t-SNE plot are meaningless; only *within*-cluster structure is faithful.
-- Cluster *sizes* depend on local density, not on actual cluster volume — small dense clusters look big.
-- The `perplexity` hyperparameter materially changes the result. Always inspect with multiple values (e.g., 5, 30, 50).
-- Slow: `O(N²)` naively, `O(N log N)` with Barnes-Hut approximation. Above `N ≈ 50K` it gets painful.
-
-### C. UMAP: Fuzzy Simplicial Sets
-
-UMAP (McInnes et al., 2018) shares t-SNE's "preserve local neighborhoods" philosophy but builds it on a different mathematical foundation: **fuzzy simplicial complexes** from algebraic topology. The mechanics:
-
-**1. Construct a fuzzy graph in high-D.** For each point, connect to its `k` nearest neighbors with edge weights given by an exponentially decaying function of distance, normalized so each point has the same "amount" of connectivity.
-
-**2. Construct a fuzzy graph in low-D using a different kernel** with adjustable parameters `a, b` (the smoothness of the embedding distance function).
-
-**3. Minimize the cross-entropy** between the two fuzzy graphs (an objective that resembles KL divergence but is two-sided — penalizing both attractive forces between similar points and repulsive forces between dissimilar ones).
-
-The practical differences from t-SNE:
-- **Faster**: `O(N · log N)` per epoch with stochastic gradient descent on the graph.
-- **Better global structure**: the symmetric cross-entropy preserves more long-range distance information than t-SNE's asymmetric KL.
-- **Reproducible**: less sensitive to initialization than t-SNE.
-- **Embeddable**: a transformed test point can be added to an existing UMAP embedding (t-SNE has no such operation).
-
-The hyperparameter `n_neighbors` plays a similar role to `perplexity` — small values emphasize local structure, large values emphasize global.
-
-### D. PCA vs t-SNE vs UMAP: When to Use Which
-
-| Need | Use | Why |
-|------|-----|-----|
-| Linear preprocessing for downstream model | PCA | Fast, exact, preserves variance |
-| Visualize cluster structure in 2D/3D | t-SNE or UMAP | Local-neighborhood preservation |
-| Visualize cluster structure with global distances meaningful | UMAP | Better global structure than t-SNE |
-| Want to embed new test points | PCA or UMAP | Both have a transform-method analog; t-SNE does not |
-| Need very fast embedding for large `N` | UMAP | Best scaling |
-| Want explained-variance ratio | PCA | Eigenvalues directly give it |
-
-A common pipeline: PCA down to ~50 dimensions first (removes noise, speeds up subsequent algorithms), then t-SNE or UMAP for 2D visualization.
-
-### From Theory to the Code Below
-
-- Section 2's `PCA(n_components=r)` runs the SVD-based PCA from (A) and (A.1); `pca.explained_variance_ratio_` is the formula in (A.2).
-- Section 3's `TSNE(perplexity=...)` is the algorithm in (B); `perplexity` is the bandwidth-control parameter from (B).
-- Section 4's `UMAP(n_neighbors=..., min_dist=...)` is the fuzzy-simplicial-set algorithm from (C).
-- The standardization (`StandardScaler`) before PCA in any preprocessing step is the scale-equalization warning from (A.2).
-
----
-
 ## 1. Why Dimensionality Reduction?
 
 ### 1.1 Curse of Dimensionality
@@ -174,6 +52,48 @@ A common pipeline: PCA down to ~50 dimensions first (removes noise, speeds up su
 ---
 
 ## 2. Principal Component Analysis (PCA)
+
+### Theory: PCA — Eigendecomposition of the Covariance Matrix
+
+PCA finds the orthogonal directions along which the data has maximum variance. Center the data so each column has mean zero, stack into `X ∈ ℝ^{N×p}`. The empirical covariance matrix is
+
+```
+S = (1/(N-1)) · XᵀX        ∈ ℝ^{p×p}
+```
+
+PCA solves: find unit vector `v` that maximizes the variance of the projection `Xv`. Variance of `Xv` is `vᵀSv`, and maximizing `vᵀSv` subject to `‖v‖ = 1` gives (via Lagrange multipliers) the eigenvalue problem:
+
+```
+S v = λ v
+```
+
+The principal components `v_1, v_2, ..., v_p` are the eigenvectors of `S`, ordered by eigenvalue magnitude. The eigenvalue `λ_k` *is* the variance of the data projected onto `v_k`. Picking the top `r` eigenvectors gives the projection that preserves the most variance for any chosen rank `r`.
+
+### Theory: PCA via SVD — a Numerically Better Path
+
+Forming `S = XᵀX` squares the condition number — bad for numerical stability when features are nearly collinear. The **singular value decomposition** of `X` gives the same answer without forming `S`:
+
+```
+X = U Σ Vᵀ          (U: N×p, Σ: diagonal, V: p×p)
+```
+
+Then `XᵀX = V Σ² Vᵀ`, so the eigenvectors of `S` are the columns of `V` (the right singular vectors), and the eigenvalues are `σ_k² / (N-1)`. Modern PCA implementations (including scikit-learn's) use SVD directly. Cost is `O(min(N²p, Np²))`.
+
+### Theory: What PCA Preserves and What It Loses
+
+The fraction of variance preserved by the top `r` components is:
+
+```
+explained_variance_ratio(r) = Σ_{k=1..r} λ_k  /  Σ_{k=1..p} λ_k
+```
+
+This is the standard graph for picking `r` — plot it cumulatively and find the elbow.
+
+PCA assumes the **interesting structure is linear and aligned with maximum variance**. Both assumptions can fail:
+- A nonlinear manifold (e.g., a Swiss roll) is unrolled by PCA into a flat blob — the manifold structure is destroyed.
+- Variance and "interesting" can disagree — a class label can vary along a low-variance direction that PCA discards.
+
+Standardize features before PCA when they are on different scales (otherwise the largest-magnitude feature dominates the variance).
 
 ### 2.1 Concepts
 
@@ -321,6 +241,42 @@ plt.show()
 
 ## 3. t-SNE (t-Distributed Stochastic Neighbor Embedding)
 
+### Theory: t-SNE — Probabilistic Local Neighborhood Preservation
+
+t-SNE (van der Maaten & Hinton, 2008) gives up on global geometry and instead preserves local neighborhoods. The recipe:
+
+**1. Build a probability distribution over neighbors in high-D.** For each pair `(i, j)`, define a conditional probability that `j` is `i`'s neighbor:
+
+```
+p_{j|i} = exp(-‖x_i - x_j‖² / 2σ_i²)  /  Σ_{k ≠ i} exp(-‖x_i - x_k‖² / 2σ_i²)
+p_{ij}  = (p_{j|i} + p_{i|j}) / (2N)        ← symmetrize
+```
+
+The bandwidth `σ_i` is set per-point to make the entropy of `p_{·|i}` equal `log(perplexity)` — `perplexity` is roughly the effective number of neighbors (5–50 typical). Each point thus has a similarity distribution adapted to local density.
+
+**2. Build a probability distribution over neighbors in low-D using a heavy-tailed (Student-t) kernel.** For low-D embedding `y_i`:
+
+```
+q_{ij} = (1 + ‖y_i - y_j‖²)⁻¹  /  Σ_{k ≠ l} (1 + ‖y_k - y_l‖²)⁻¹
+```
+
+The Student-t (with 1 degree of freedom) has heavier tails than a Gaussian, which lets distant points in low-D be embedded farther apart without penalty — solving the "crowding problem" that PCA-style methods struggle with.
+
+**3. Minimize KL divergence between the two distributions.**
+
+```
+L = KL(P ∥ Q) = Σ_{ij}  p_{ij} · log(p_{ij} / q_{ij})
+```
+
+Gradient descent on `L` produces the embedding. The asymmetry of KL — penalizing `q_{ij}` being small when `p_{ij}` is large — means t-SNE strongly preserves *near* neighbors but tolerates moving *far* neighbors arbitrarily. That is why t-SNE plots show clean local clusters but inter-cluster distances are not interpretable.
+
+### Theory: t-SNE Caveats
+
+- Distances *between* clusters in a t-SNE plot are meaningless; only *within*-cluster structure is faithful.
+- Cluster *sizes* depend on local density, not on actual cluster volume — small dense clusters look big.
+- The `perplexity` hyperparameter materially changes the result. Always inspect with multiple values (e.g., 5, 30, 50).
+- Slow: `O(N²)` naively, `O(N log N)` with Barnes-Hut approximation. Above `N ≈ 50K` it gets painful.
+
 ### 3.1 Concepts
 
 **Goal**: Preserve local structure (nearby points stay nearby in low dimensions)
@@ -440,6 +396,24 @@ plt.show()
 ---
 
 ## 4. Other Dimensionality Reduction Techniques
+
+### Theory: UMAP — Fuzzy Simplicial Sets
+
+UMAP (McInnes et al., 2018) shares t-SNE's "preserve local neighborhoods" philosophy but builds it on a different mathematical foundation: **fuzzy simplicial complexes** from algebraic topology. The mechanics:
+
+**1. Construct a fuzzy graph in high-D.** For each point, connect to its `k` nearest neighbors with edge weights given by an exponentially decaying function of distance, normalized so each point has the same "amount" of connectivity.
+
+**2. Construct a fuzzy graph in low-D using a different kernel** with adjustable parameters `a, b` (the smoothness of the embedding distance function).
+
+**3. Minimize the cross-entropy** between the two fuzzy graphs (an objective that resembles KL divergence but is two-sided — penalizing both attractive forces between similar points and repulsive forces between dissimilar ones).
+
+The practical differences from t-SNE:
+- **Faster**: `O(N · log N)` per epoch with stochastic gradient descent on the graph.
+- **Better global structure**: the symmetric cross-entropy preserves more long-range distance information than t-SNE's asymmetric KL.
+- **Reproducible**: less sensitive to initialization than t-SNE.
+- **Embeddable**: a transformed test point can be added to an existing UMAP embedding (t-SNE has no such operation).
+
+The hyperparameter `n_neighbors` plays a similar role to `perplexity` — small values emphasize local structure, large values emphasize global.
 
 ### 4.1 Truncated SVD (Similar to PCA, works with sparse matrices)
 
@@ -638,6 +612,19 @@ print(f"  Speedup: {time_original/time_pca:.2f}x")
 ---
 
 ## 7. Comparison of Methods
+
+### Theory: PCA vs t-SNE vs UMAP — When to Use Which
+
+| Need | Use | Why |
+|------|-----|-----|
+| Linear preprocessing for downstream model | PCA | Fast, exact, preserves variance |
+| Visualize cluster structure in 2D/3D | t-SNE or UMAP | Local-neighborhood preservation |
+| Visualize cluster structure with global distances meaningful | UMAP | Better global structure than t-SNE |
+| Want to embed new test points | PCA or UMAP | Both have a transform-method analog; t-SNE does not |
+| Need very fast embedding for large `N` | UMAP | Best scaling |
+| Want explained-variance ratio | PCA | Eigenvalues directly give it |
+
+A common pipeline: PCA down to ~50 dimensions first (removes noise, speeds up subsequent algorithms), then t-SNE or UMAP for 2D visualization.
 
 | Method | Type | Linear | Speed | Use Case |
 |--------|------|--------|-------|----------|

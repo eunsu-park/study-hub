@@ -22,11 +22,9 @@ Knowing how to train a model is only half the story -- in production, the entire
 
 ---
 
-## Theory & Principles
+## 1. Pipeline Basics
 
-A scikit-learn Pipeline is more than a convenience wrapper — it formalizes the algebra of preprocessing transformations and the contract that every step must obey. Understanding this contract is what prevents the most insidious ML bug: data leakage, where information from the test set silently contaminates the training procedure.
-
-### A. The Estimator/Transformer Interface as Function Composition
+### Theory: The Estimator/Transformer Interface as Function Composition
 
 Every scikit-learn step is one of two things:
 - **Transformer**: implements `.fit(X, y)` and `.transform(X)`. Examples: `StandardScaler`, `PCA`, `OneHotEncoder`.
@@ -49,102 +47,6 @@ Pipeline.predict(X):
 ```
 
 The asymmetry is the entire point: during `fit`, each transformer learns its parameters from the *training* data via `fit_transform`. During `predict`, each transformer applies those *already-learned* parameters via `transform`. The transform parameters are part of the model, not part of the data.
-
-### B. Why Pipelines Prevent Leakage
-
-The classic leakage bug:
-
-```python
-# WRONG
-scaler = StandardScaler().fit(X)        # learns mean/std from FULL dataset
-X_scaled = scaler.transform(X)
-X_train, X_test, y_train, y_test = train_test_split(X_scaled, y)
-cross_val_score(model, X_train, y_train, cv=5)
-```
-
-The scaler saw the test data when computing mean/std, so test information leaked into the "training" pipeline. The CV score is biased upward; the deployment number will be worse.
-
-The pipeline version is automatically correct:
-
-```python
-# CORRECT
-pipe = Pipeline([('scaler', StandardScaler()), ('model', LogisticRegression())])
-cross_val_score(pipe, X, y, cv=5)
-```
-
-Inside each CV fold, scikit-learn calls `pipe.fit(X_train_fold, y_train_fold)` then `pipe.predict(X_val_fold)`. The scaler is `fit` only on the training fold; the `transform` on the validation fold uses the training-fold's mean/std. No leakage. This is the *single most important reason* to use pipelines.
-
-The same property extends to grid search: `GridSearchCV(pipe, params)` retrains the entire pipeline (including transformers) from scratch in each fold, with the candidate hyperparameters applied. The hyperparameter `model__C` (note the double underscore) sets `C` on the `model` step.
-
-### C. ColumnTransformer: Heterogeneous Preprocessing
-
-Real datasets mix types: numeric features need scaling, categorical features need encoding, text features need vectorization. Applying a single transform to everything fails. `ColumnTransformer` lets you route different columns through different transformers and concatenate the results:
-
-```
-ColumnTransformer(
-    [('num', StandardScaler(),    ['age', 'income']),
-     ('cat', OneHotEncoder(),     ['city', 'occupation']),
-     ('txt', TfidfVectorizer(),   'review_text')],
-    remainder='drop' | 'passthrough'
-)
-```
-
-Output is a horizontal stack of the per-transformer outputs. The whole `ColumnTransformer` is itself a transformer, so it slots inside a Pipeline:
-
-```
-Pipeline([('preproc', ColumnTransformer(...)), ('model', RandomForestClassifier())])
-```
-
-This single object is now the entire data-to-prediction stack: `pipe.fit(df, y)` learns scaler means, OHE categories, TF-IDF vocabulary, *and* trains the random forest. `pipe.predict(new_df)` applies all of it in order, with no leakage.
-
-### D. The Composition Algebra Behind It
-
-Mathematically, a pipeline is a function composition `f_n ∘ ... ∘ f_2 ∘ f_1` where each `f_i` is a learned function `f_i(x; θ_i)` with parameters `θ_i` fit on the training output of stage `i-1`. The `fit_transform` method of stage `i` is
-
-```
-f_i_fit_transform(X, y):
-    θ_i ← argmin_θ  L_i(X, y, θ)              ← learn parameters of step i
-    return f_i(X; θ_i)                         ← apply the just-learned function
-```
-
-For most preprocessors `L_i` is implicit (e.g., StandardScaler picks `θ = (μ, σ)` to satisfy `mean = 0, std = 1`). For PCA, `L_i` is the variance-maximization objective from Lesson 12. The point is that all of them respect the same `fit` / `transform` split.
-
-This algebra is what lets pipelines compose with cross-validation, grid search, model serialization (`joblib.dump(pipe, 'model.pkl')`), and deployment — they are all just operations on the function `pipe.predict(·)` whose internal structure is hidden behind the standard interface.
-
-### E. Custom Transformers and the Contract
-
-When a built-in transformer doesn't fit, you write your own by subclassing `BaseEstimator` and `TransformerMixin`:
-
-```python
-from sklearn.base import BaseEstimator, TransformerMixin
-
-class MyTransformer(BaseEstimator, TransformerMixin):
-    def __init__(self, param=1.0):
-        self.param = param
-
-    def fit(self, X, y=None):
-        # learn anything that depends on the training data
-        self.learned_ = X.mean()
-        return self
-
-    def transform(self, X):
-        # apply the learned parameters
-        return X - self.learned_
-```
-
-The contract is: store learned parameters as attributes ending in `_`, return `self` from `fit`, return the transformed data from `transform`. As long as you respect it, your transformer plugs into pipelines, grid search, and serialization just like any built-in.
-
-### From Theory to the Code Below
-
-- Section 1.2's `Pipeline([...])` constructor is the function composition from (A); the per-step fit-vs-transform split is the leakage prevention from (B).
-- Section 2's `ColumnTransformer` is the heterogeneous-routing object from (C); the `remainder` argument decides what to do with unrouted columns.
-- Section 3's `GridSearchCV(pipe, {'model__C': [...]})` uses the double-underscore parameter syntax — `step__hyperparameter` — that lets grid search reach inside the pipeline.
-- Section 4's `joblib.dump(pipe, ...)` and `joblib.load(...)` work *because* the pipeline's parameters are all stored in the `θ_i` attributes from (D).
-- Section 5's custom `Transformer` example follows the contract spelled out in (E).
-
----
-
-## 1. Pipeline Basics
 
 ### 1.1 Why Use Pipelines?
 
@@ -239,6 +141,27 @@ print(f"Shape after PCA: {X_pca.shape}")
 
 ## 2. ColumnTransformer
 
+### Theory: ColumnTransformer — Heterogeneous Preprocessing
+
+Real datasets mix types: numeric features need scaling, categorical features need encoding, text features need vectorization. Applying a single transform to everything fails. `ColumnTransformer` lets you route different columns through different transformers and concatenate the results:
+
+```
+ColumnTransformer(
+    [('num', StandardScaler(),    ['age', 'income']),
+     ('cat', OneHotEncoder(),     ['city', 'occupation']),
+     ('txt', TfidfVectorizer(),   'review_text')],
+    remainder='drop' | 'passthrough'
+)
+```
+
+Output is a horizontal stack of the per-transformer outputs. The whole `ColumnTransformer` is itself a transformer, so it slots inside a Pipeline:
+
+```
+Pipeline([('preproc', ColumnTransformer(...)), ('model', RandomForestClassifier())])
+```
+
+This single object is now the entire data-to-prediction stack: `pipe.fit(df, y)` learns scaler means, OHE categories, TF-IDF vocabulary, *and* trains the random forest. `pipe.predict(new_df)` applies all of it in order, with no leakage.
+
 ### 2.1 Handling Different Feature Types
 
 ```python
@@ -328,6 +251,20 @@ print(f"Prediction: {prediction[0]}")
 
 ## 3. Complex Preprocessing Pipelines
 
+### Theory: The Composition Algebra Behind It
+
+Mathematically, a pipeline is a function composition `f_n ∘ ... ∘ f_2 ∘ f_1` where each `f_i` is a learned function `f_i(x; θ_i)` with parameters `θ_i` fit on the training output of stage `i-1`. The `fit_transform` method of stage `i` is
+
+```
+f_i_fit_transform(X, y):
+    θ_i ← argmin_θ  L_i(X, y, θ)              ← learn parameters of step i
+    return f_i(X; θ_i)                         ← apply the just-learned function
+```
+
+For most preprocessors `L_i` is implicit (e.g., StandardScaler picks `θ = (μ, σ)` to satisfy `mean = 0, std = 1`). For PCA, `L_i` is the variance-maximization objective from Lesson 12. The point is that all of them respect the same `fit` / `transform` split.
+
+This algebra is what lets pipelines compose with cross-validation, grid search, model serialization (`joblib.dump(pipe, 'model.pkl')`), and deployment — they are all just operations on the function `pipe.predict(·)` whose internal structure is hidden behind the standard interface.
+
 ### 3.1 Including Missing Value Handling
 
 ```python
@@ -394,6 +331,32 @@ print("Pipeline with feature selection trained successfully")
 ---
 
 ## 4. Pipeline with Cross-Validation
+
+### Theory: Why Pipelines Prevent Leakage
+
+The classic leakage bug:
+
+```python
+# WRONG
+scaler = StandardScaler().fit(X)        # learns mean/std from FULL dataset
+X_scaled = scaler.transform(X)
+X_train, X_test, y_train, y_test = train_test_split(X_scaled, y)
+cross_val_score(model, X_train, y_train, cv=5)
+```
+
+The scaler saw the test data when computing mean/std, so test information leaked into the "training" pipeline. The CV score is biased upward; the deployment number will be worse.
+
+The pipeline version is automatically correct:
+
+```python
+# CORRECT
+pipe = Pipeline([('scaler', StandardScaler()), ('model', LogisticRegression())])
+cross_val_score(pipe, X, y, cv=5)
+```
+
+Inside each CV fold, scikit-learn calls `pipe.fit(X_train_fold, y_train_fold)` then `pipe.predict(X_val_fold)`. The scaler is `fit` only on the training fold; the `transform` on the validation fold uses the training-fold's mean/std. No leakage. This is the *single most important reason* to use pipelines.
+
+The same property extends to grid search: `GridSearchCV(pipe, params)` retrains the entire pipeline (including transformers) from scratch in each fold, with the candidate hyperparameters applied. The hyperparameter `model__C` (note the double underscore) sets `C` on the `model` step.
 
 ### 4.1 Correct Cross-Validation
 
@@ -621,6 +584,29 @@ print(f"Ratio feature addition CV score: {scores.mean():.4f}")
 
 ## 7. Custom Transformers
 
+### Theory: Custom Transformers and the Contract
+
+When a built-in transformer doesn't fit, you write your own by subclassing `BaseEstimator` and `TransformerMixin`:
+
+```python
+from sklearn.base import BaseEstimator, TransformerMixin
+
+class MyTransformer(BaseEstimator, TransformerMixin):
+    def __init__(self, param=1.0):
+        self.param = param
+
+    def fit(self, X, y=None):
+        # learn anything that depends on the training data
+        self.learned_ = X.mean()
+        return self
+
+    def transform(self, X):
+        # apply the learned parameters
+        return X - self.learned_
+```
+
+The contract is: store learned parameters as attributes ending in `_`, return `self` from `fit`, return the transformed data from `transform`. As long as you respect it, your transformer plugs into pipelines, grid search, and serialization just like any built-in.
+
 ```python
 from sklearn.base import BaseEstimator, TransformerMixin
 
@@ -646,7 +632,6 @@ class OutlierRemover(BaseEstimator, TransformerMixin):
                              X)
         return X_clipped
 
-
 class FeatureSelector(BaseEstimator, TransformerMixin):
     """Feature selection transformer"""
 
@@ -661,7 +646,6 @@ class FeatureSelector(BaseEstimator, TransformerMixin):
         if self.feature_indices is not None:
             return X[:, self.feature_indices]
         return X
-
 
 # Use custom transformers
 custom_pipeline = Pipeline([
@@ -722,7 +706,6 @@ def create_classification_pipeline(model, numeric_features=None, categorical_fea
     ])
 
     return pipeline
-
 
 # Usage example
 from sklearn.ensemble import GradientBoostingClassifier
@@ -811,7 +794,6 @@ class ModelWrapper:
             input_data = input_data[self.feature_names]
 
         return self.model.predict_proba(input_data)
-
 
 # Usage example
 # wrapper = ModelWrapper('best_model.joblib')

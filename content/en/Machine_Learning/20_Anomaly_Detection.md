@@ -22,11 +22,9 @@ Most machine learning assumes you know what you are looking for -- you have labe
 
 ---
 
-## Theory & Principles
+## 1. Types of Anomalies
 
-Anomaly detection looks like classification with a missing class — but it is actually a different mathematical problem with no direct supervision. Each algorithm in this lesson encodes a different *definition* of "normal", and that choice determines what kinds of anomalies the algorithm can and cannot find. Knowing the assumption behind each method is what lets you pick the right one for your data.
-
-### A. Three Definitions of "Normal"
+### Theory: Three Definitions of Normal
 
 The four standard anomaly-detection algorithms split into three definitional families:
 
@@ -35,127 +33,6 @@ The four standard anomaly-detection algorithms split into three definitional fam
 3. **Reconstruction-based**: Normal points can be reconstructed by a low-capacity model trained on normal data. Anomalies cannot. Example: Autoencoders, PCA reconstruction error.
 
 Each definition gives a different score function. The algorithm choice should match what makes a point "anomalous" in your domain.
-
-### B. Mahalanobis Distance: the Statistical Baseline
-
-For multivariate Gaussian data with mean `μ` and covariance `Σ`, the Mahalanobis distance from `x` to the distribution is:
-
-```
-D_M(x) = √[ (x - μ)ᵀ · Σ⁻¹ · (x - μ) ]
-```
-
-It is the Euclidean distance after the data has been "whitened" by `Σ⁻¹/²`. Equivalent to standardizing every direction so the cluster looks spherical, then measuring distance.
-
-The advantage over plain Euclidean: Mahalanobis correctly accounts for feature correlation and per-feature variance. A point that is 3 standard deviations away in a low-variance direction is more anomalous than a point 3 SD away in a high-variance direction — and Mahalanobis automatically reflects this.
-
-Under the Gaussian assumption, `D_M(x)²` follows a chi-squared distribution with `p` degrees of freedom. This gives a principled threshold: flag points whose `D_M²` exceeds the chi-square `1 - α` quantile (e.g., `α = 0.001` for the top 0.1% as anomalies).
-
-The catch: the Gaussian assumption is restrictive. For non-Gaussian data, Mahalanobis flags the wrong points.
-
-### C. Isolation Forest: Anomalies Are Easier to Isolate
-
-Isolation Forest (Liu et al., 2008) inverts the usual logic. Instead of modeling normal data and flagging deviations, it builds random trees that try to *isolate* each point, and reasons that anomalies should be isolatable in fewer splits.
-
-The procedure:
-
-```
-build T trees, each on a random subsample of the data
-each tree picks random splits at each node (random feature, random threshold)
-each tree grows until every leaf has ≤ 1 point (or hits height limit)
-
-For point x, isolation depth h(x) = average depth at which x lands in each tree
-```
-
-The score is normalized:
-
-```
-s(x) = 2^( -h(x) / c(N) )
-```
-
-where `c(N) ≈ 2 ln(N-1) - 2(N-1)/N` is the expected isolation depth in a random binary tree. `s(x) → 1` when `h` is small (easy to isolate ⟹ anomaly); `s(x) → 0.5` when `h` matches normal points; `s(x) → 0` when `h` is very large.
-
-Why does it work? Anomalies are by definition different from most points, so a random axis-aligned cut is more likely to isolate them. Normal points are clustered together, so isolating one requires many splits to peel away the surrounding population.
-
-Strengths:
-- No distributional assumption.
-- Handles high dimensions reasonably (random subsampling of features helps).
-- Linear in `N` and `T`; very fast.
-
-Weakness:
-- Axis-aligned splits — like decision trees, struggles with diagonal/curved anomaly regions.
-
-### D. One-Class SVM: ν Controls the Outlier Fraction
-
-One-class SVM (Schölkopf et al., 2001) finds a tight boundary around the bulk of the data and flags points outside as anomalies. The formulation:
-
-```
-minimize  ½ · ‖w‖² + (1/(ν · N)) · Σ ξ_i  -  ρ
-subject to  wᵀ φ(x_i) ≥ ρ - ξ_i,  ξ_i ≥ 0
-```
-
-`φ` is a kernel feature map (RBF default); `ρ` is the offset; `ξ_i` are slack variables. The decision function is `f(x) = sign(wᵀ φ(x) - ρ)`: positive for "normal", negative for "anomaly".
-
-The hyperparameter `ν ∈ (0, 1]` has a *clean dual interpretation*:
-
-- `ν` is an **upper bound** on the fraction of training points classified as anomalies (margin errors).
-- `ν` is a **lower bound** on the fraction of support vectors.
-
-So setting `ν = 0.05` says "at most 5% of training points are outliers; train accordingly". This makes One-class SVM unusual among ML algorithms — its main hyperparameter has direct practical meaning.
-
-The kernel choice matters: RBF lets the boundary wrap around non-linear normal regions. Linear is rarely useful in practice.
-
-Cost: `O(N²)` for kernel computations; impractical above ~10K samples.
-
-### E. Autoencoders: Reconstruction Error as Anomaly Score
-
-An autoencoder is a neural network trained to reconstruct its input through a low-dimensional bottleneck:
-
-```
-x → encoder → z (low-dim latent) → decoder → x̂
-loss = ‖x - x̂‖²
-```
-
-Trained on normal data only, the autoencoder learns a compressed representation that captures the *structure* of normal samples. Anomalous inputs do not lie on the learned manifold and reconstruct poorly. The reconstruction error `‖x - x̂‖²` becomes the anomaly score.
-
-This is essentially **PCA generalized to non-linear manifolds**. PCA reconstruction error itself is a viable anomaly score for linear data; autoencoders extend the same idea to non-linear data.
-
-Choice points:
-- **Bottleneck size**: too small ⟹ even normal data reconstructs poorly; too large ⟹ network learns the identity function and anomalies reconstruct well too. Cross-validation on a held-out normal set picks the size.
-- **Variational autoencoders** add a probabilistic latent that lets you compute a likelihood-based score, generalizing the reconstruction-error approach.
-- **Denoising autoencoders** are trained to reconstruct from noisy input — the resulting model is more robust and often gives better anomaly scores.
-
-### F. Threshold Selection for Anomaly Scores
-
-Every algorithm in (B)–(E) outputs a continuous score; you still have to pick a threshold. Three strategies:
-
-1. **Contamination assumption**: if you believe ~`α%` of the data is anomalous, set the threshold at the `(1-α)`-th percentile of training scores. scikit-learn's `contamination` parameter does this directly.
-2. **Statistical**: under a parametric assumption (Mahalanobis ⟹ chi-square), pick the chi-square `1 - α` quantile.
-3. **Operational**: pick the threshold to keep the alarm rate at the level your downstream process can absorb (e.g., your fraud team can investigate 100 cases per day; threshold scores so 100 trigger).
-
-The operational choice usually wins in production — anomaly detection rarely has labeled validation data, so you cannot optimize a metric like F1 directly. Calibrate to your operational constraint and revisit when the underlying distribution drifts.
-
-### G. Evaluating Without Labels
-
-The hardest part of anomaly detection is *evaluation*. With no labels, ROC-AUC and PR-AUC are unavailable. Three practical workarounds:
-
-- **Sentinel injection**: inject known synthetic anomalies into your test set and check whether they get flagged.
-- **Adversarial validation**: train a binary classifier between two suspected populations (e.g., "current week" vs "two weeks ago"). If it can distinguish them, the populations have drifted — possibly anomalous.
-- **Operational feedback loop**: log the items the system flags, get human investigators to label them, use the labels to tune the threshold (and eventually shift to semi-supervised methods like XGBoost on the labeled subset).
-
-Anomaly detection is an iterative, feedback-driven discipline more than a one-shot training problem.
-
-### From Theory to the Code Below
-
-- Section 2's `mahalanobis_distances` calculation and chi-square thresholding implement (B); the `EllipticEnvelope` class wraps both.
-- Section 3's `IsolationForest(n_estimators=..., contamination=...)` is the algorithm in (C); `contamination` is the threshold-selection strategy from (F.1).
-- Section 4's `OneClassSVM(nu=..., kernel='rbf')` is the algorithm in (D); the `nu` parameter is the bound from (D).
-- Section 5's `LocalOutlierFactor` is a distance-based variant in family (1) of (A) — it scores points by the ratio of the local density at `x` to the densities of `x`'s `k`-nearest neighbors.
-- Section 6's autoencoder reconstruction-error example is the algorithm in (E); the comparison with PCA reconstruction error in the same section is the linear-vs-nonlinear distinction from (E).
-- The "evaluating with limited labels" section at the end maps to the workarounds in (G).
-
----
-
-## 1. Types of Anomalies
 
 ### 1.1 Anomaly Taxonomy
 
@@ -190,6 +67,22 @@ Approaches:
 ---
 
 ## 2. Statistical Methods
+
+### Theory: Mahalanobis Distance — the Statistical Baseline
+
+For multivariate Gaussian data with mean `μ` and covariance `Σ`, the Mahalanobis distance from `x` to the distribution is:
+
+```
+D_M(x) = √[ (x - μ)ᵀ · Σ⁻¹ · (x - μ) ]
+```
+
+It is the Euclidean distance after the data has been "whitened" by `Σ⁻¹/²`. Equivalent to standardizing every direction so the cluster looks spherical, then measuring distance.
+
+The advantage over plain Euclidean: Mahalanobis correctly accounts for feature correlation and per-feature variance. A point that is 3 standard deviations away in a low-variance direction is more anomalous than a point 3 SD away in a high-variance direction — and Mahalanobis automatically reflects this.
+
+Under the Gaussian assumption, `D_M(x)²` follows a chi-squared distribution with `p` degrees of freedom. This gives a principled threshold: flag points whose `D_M²` exceeds the chi-square `1 - α` quantile (e.g., `α = 0.001` for the top 0.1% as anomalies).
+
+The catch: the Gaussian assumption is restrictive. For non-Gaussian data, Mahalanobis flags the wrong points.
 
 ### 2.1 Z-Score and IQR
 
@@ -295,6 +188,38 @@ plt.show()
 
 ## 3. Isolation Forest
 
+### Theory: Isolation Forest — Anomalies Are Easier to Isolate
+
+Isolation Forest (Liu et al., 2008) inverts the usual logic. Instead of modeling normal data and flagging deviations, it builds random trees that try to *isolate* each point, and reasons that anomalies should be isolatable in fewer splits.
+
+The procedure:
+
+```
+build T trees, each on a random subsample of the data
+each tree picks random splits at each node (random feature, random threshold)
+each tree grows until every leaf has ≤ 1 point (or hits height limit)
+
+For point x, isolation depth h(x) = average depth at which x lands in each tree
+```
+
+The score is normalized:
+
+```
+s(x) = 2^( -h(x) / c(N) )
+```
+
+where `c(N) ≈ 2 ln(N-1) - 2(N-1)/N` is the expected isolation depth in a random binary tree. `s(x) → 1` when `h` is small (easy to isolate ⟹ anomaly); `s(x) → 0.5` when `h` matches normal points; `s(x) → 0` when `h` is very large.
+
+Why does it work? Anomalies are by definition different from most points, so a random axis-aligned cut is more likely to isolate them. Normal points are clustered together, so isolating one requires many splits to peel away the surrounding population.
+
+Strengths:
+- No distributional assumption.
+- Handles high dimensions reasonably (random subsampling of features helps).
+- Linear in `N` and `T`; very fast.
+
+Weakness:
+- Axis-aligned splits — like decision trees, struggles with diagonal/curved anomaly regions.
+
 ### 3.1 Algorithm and Implementation
 
 ```python
@@ -391,6 +316,24 @@ print(results_df.round(3).to_string(index=False))
 
 ## 4. Local Outlier Factor (LOF)
 
+### Theory: Autoencoders — Reconstruction Error as Anomaly Score
+
+An autoencoder is a neural network trained to reconstruct its input through a low-dimensional bottleneck:
+
+```
+x → encoder → z (low-dim latent) → decoder → x̂
+loss = ‖x - x̂‖²
+```
+
+Trained on normal data only, the autoencoder learns a compressed representation that captures the *structure* of normal samples. Anomalous inputs do not lie on the learned manifold and reconstruct poorly. The reconstruction error `‖x - x̂‖²` becomes the anomaly score.
+
+This is essentially **PCA generalized to non-linear manifolds**. PCA reconstruction error itself is a viable anomaly score for linear data; autoencoders extend the same idea to non-linear data.
+
+Choice points:
+- **Bottleneck size**: too small ⟹ even normal data reconstructs poorly; too large ⟹ network learns the identity function and anomalies reconstruct well too. Cross-validation on a held-out normal set picks the size.
+- **Variational autoencoders** add a probabilistic latent that lets you compute a likelihood-based score, generalizing the reconstruction-error approach.
+- **Denoising autoencoders** are trained to reconstruct from noisy input — the resulting model is more robust and often gives better anomaly scores.
+
 ### 4.1 Density-Based Anomaly Detection
 
 ```python
@@ -459,6 +402,28 @@ print(f"New anomalies detected: {(y_new_pred[20:] == -1).sum()} / 10")
 ---
 
 ## 5. One-Class SVM
+
+### Theory: One-Class SVM — ν Controls the Outlier Fraction
+
+One-class SVM (Schölkopf et al., 2001) finds a tight boundary around the bulk of the data and flags points outside as anomalies. The formulation:
+
+```
+minimize  ½ · ‖w‖² + (1/(ν · N)) · Σ ξ_i  -  ρ
+subject to  wᵀ φ(x_i) ≥ ρ - ξ_i,  ξ_i ≥ 0
+```
+
+`φ` is a kernel feature map (RBF default); `ρ` is the offset; `ξ_i` are slack variables. The decision function is `f(x) = sign(wᵀ φ(x) - ρ)`: positive for "normal", negative for "anomaly".
+
+The hyperparameter `ν ∈ (0, 1]` has a *clean dual interpretation*:
+
+- `ν` is an **upper bound** on the fraction of training points classified as anomalies (margin errors).
+- `ν` is a **lower bound** on the fraction of support vectors.
+
+So setting `ν = 0.05` says "at most 5% of training points are outliers; train accordingly". This makes One-class SVM unusual among ML algorithms — its main hyperparameter has direct practical meaning.
+
+The kernel choice matters: RBF lets the boundary wrap around non-linear normal regions. Linear is rarely useful in practice.
+
+Cost: `O(N²)` for kernel computations; impractical above ~10K samples.
 
 ### 5.1 Support Vector Approach
 
@@ -661,6 +626,16 @@ print("making anomaly detection more sensitive to true deviations.")
 
 ## 8. Evaluation Without Labels
 
+### Theory: Evaluating Without Labels
+
+The hardest part of anomaly detection is *evaluation*. With no labels, ROC-AUC and PR-AUC are unavailable. Three practical workarounds:
+
+- **Sentinel injection**: inject known synthetic anomalies into your test set and check whether they get flagged.
+- **Adversarial validation**: train a binary classifier between two suspected populations (e.g., "current week" vs "two weeks ago"). If it can distinguish them, the populations have drifted — possibly anomalous.
+- **Operational feedback loop**: log the items the system flags, get human investigators to label them, use the labels to tune the threshold (and eventually shift to semi-supervised methods like XGBoost on the labeled subset).
+
+Anomaly detection is an iterative, feedback-driven discipline more than a one-shot training problem.
+
 ### 8.1 When You Don't Have Ground Truth
 
 ```python
@@ -712,6 +687,16 @@ print(f"Low-confidence (flagged in 1/5): {((stability_score > 0) & (stability_sc
 ---
 
 ## 9. Method Selection Guide
+
+### Theory: Threshold Selection for Anomaly Scores
+
+Every algorithm in (B)–(E) outputs a continuous score; you still have to pick a threshold. Three strategies:
+
+1. **Contamination assumption**: if you believe ~`α%` of the data is anomalous, set the threshold at the `(1-α)`-th percentile of training scores. scikit-learn's `contamination` parameter does this directly.
+2. **Statistical**: under a parametric assumption (Mahalanobis ⟹ chi-square), pick the chi-square `1 - α` quantile.
+3. **Operational**: pick the threshold to keep the alarm rate at the level your downstream process can absorb (e.g., your fraud team can investigate 100 cases per day; threshold scores so 100 trigger).
+
+The operational choice usually wins in production — anomaly detection rarely has labeled validation data, so you cannot optimize a metric like F1 directly. Calibrate to your operational constraint and revisit when the underlying distribution drifts.
 
 ### 9.1 Choosing the Right Method
 
