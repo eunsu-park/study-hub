@@ -16,8 +16,6 @@ After completing this lesson, you will be able to:
 
 A single Kubernetes cluster has hard limits -- etcd performance degrades beyond ~5,000 nodes, blast radius for control plane failures affects all workloads, and regulatory requirements may mandate geographic data residency. Multi-cluster architectures address these constraints by distributing workloads across independent clusters. But multi-cluster introduces its own complexity: service discovery, cross-cluster networking, consistent configuration, and unified observability. This lesson covers the architectures, tools, and patterns for running Kubernetes at multi-cluster scale.
 
-Before the configurations, read [**Theory & Principles**](#theory--principles) — the four reasons clusters multiply (scale, blast radius, geo, regulation), the topology choices (replicated, federated, hub-spoke) with their consistency trade-offs, why cross-cluster service discovery is fundamentally a DNS + identity problem, and the GitOps model that lets one config drive many clusters without a control plane that owns them.
-
 ## Table of Contents
 
 - [Theory & Principles](#theory--principles)
@@ -33,11 +31,9 @@ Before the configurations, read [**Theory & Principles**](#theory--principles) �
 
 ---
 
-## Theory & Principles
+## 1. Multi-Cluster Architectures
 
-A single Kubernetes cluster is the simplest deployment target — one API, one set of credentials, one observability stack. So the first question is: *why ever run more than one?* This section answers that, then explains the architectural choices for connecting them. The trade-offs are subtle: federation gives you a unified API at the cost of consistency complexity; service mesh-based connectivity gives you cross-cluster traffic but expands the trust boundary; GitOps gives you a unified deployment model without a runtime control plane. The right pick depends on which constraint dominates — scale, blast radius, geography, regulation.
-
-### A. Why Clusters Multiply
+### Theory: Why Clusters Multiply
 
 Four pressures push organizations beyond one cluster:
 
@@ -48,7 +44,7 @@ Four pressures push organizations beyond one cluster:
 
 A common path: start with one cluster, hit blast radius pain when an upgrade goes sideways, split into "prod" + "staging" + "dev." Then split prod by region for latency. Then add a hub for shared services (logging, monitoring, internal tools). Five clusters happens before you planned.
 
-### B. Three Topologies: Replicated, Federated, Hub-Spoke
+### Theory: Three Topologies: Replicated, Federated, Hub-Spoke
 
 The connection model between clusters has three archetypes:
 
@@ -59,51 +55,6 @@ The connection model between clusters has three archetypes:
 **Hub-Spoke.** One "hub" cluster runs shared platform services (CI/CD orchestration, observability aggregation, central policy enforcement); workload "spoke" clusters run only application workloads. The hub is small but critical; spokes are large but stateless from the platform's view. This model dominates in enterprises adopting OpenShift / Rancher / Anthos / EKS Anywhere where the vendor provides the hub.
 
 The right choice depends on what you're sharing: nothing across clusters → replicated; resources synchronized across clusters → federated; platform services across clusters → hub-spoke.
-
-### C. Cross-Cluster Service Discovery: A DNS + Identity Problem
-
-Within one cluster, a Pod calls `redis.cache.svc.cluster.local` and CoreDNS resolves it (lesson 03 §D). Across clusters this breaks — `cluster.local` is per-cluster. Three patterns make it work:
-
-**1. Multi-Cluster Services API (KEP-1645).** A standard CRD `ServiceExport` marks a Service as exportable; a controller in each cluster mirrors it under a global DNS name like `redis.cache.svc.clusterset.local`. Pods in any cluster of the clusterset can resolve and reach it. Implementations: AWS Cloud Map, GKE Multi-cluster Services, Submariner.
-
-**2. Service Mesh Multi-Cluster (Istio, Linkerd, Cilium Cluster Mesh).** Sidecars or eBPF programs in each cluster know about Services in *all* peer clusters. Calls to `redis.cache.svc.cluster.local` may transparently land in a remote cluster's Pod. Strong identity (mTLS between sidecars) is the gate; the data plane handles connectivity. Operationally heavy but the most powerful — you get traffic splitting, failover, and locality-aware routing across clusters.
-
-**3. Cluster-aware DNS + flat L3 (Submariner).** Submariner builds an encrypted IPsec tunnel between cluster nodes, making Pods in cluster A directly reachable from Pod IPs in cluster B (no NAT). Combined with a multi-cluster DNS view (Lighthouse), you get the in-cluster experience across clusters. Lighter than service mesh; doesn't give you mTLS or L7 features.
-
-The fundamental insight: cross-cluster connectivity is **not just a networking problem.** Identity (who is the caller, who is the callee), DNS (how do they find each other), and trust (do they validate each other) are all required. Service mesh bundles all three; the others compose them from pieces.
-
-### D. GitOps for Multi-Cluster: The Pull Model Saves You From the Hub
-
-In a GitOps model (Argo CD, Flux), each cluster runs an agent that pulls its desired state from a Git repository. The Git repo is the source of truth; the agent reconciles the cluster to match.
-
-For multi-cluster, this scales beautifully:
-
-- **One repo, many clusters.** A `clusters/` directory has one subdirectory per cluster; each agent pulls only its directory. Adding a cluster = adding a directory + bootstrapping the agent.
-- **No central control plane to fail.** If the hub cluster is down, the spoke agents keep reconciling against Git — which is independently HA. This is a fundamental advantage over Federation v2's push model.
-- **Argo CD ApplicationSets** generate Argo `Application` resources for many clusters from a template + a generator (cluster list, Git directory, pull request). One template, N clusters, automatic membership tracking.
-
-The mental model: GitOps replaces the "central controller pushes config to spokes" pattern (Federation v2) with "spokes pull config from a shared source" (Argo). Same end state, very different failure modes — the pull model has no central single-point-of-failure beyond the Git server.
-
-For workloads that need cross-cluster *connectivity* (not just deployment), GitOps composes with service mesh: GitOps deploys the mesh + the workloads to each cluster, the mesh handles cross-cluster traffic.
-
-### From Theory to the Configuration Below
-
-The lesson now applies these abstractions:
-
-- **Section 1 (Multi-Cluster Architectures)** is §A and §B — the why and the three topologies with concrete trade-offs.
-- **Section 2 (Federation v2)** is §B's federated topology in detail.
-- **Section 3 (Multi-Cluster Service Discovery)** is §C — the standardized CRD-based approach.
-- **Section 4 (Submariner)** is §C's flat-L3 implementation.
-- **Section 5 (Liqo)** is a newer "cluster sharing" model that lets a Pod from cluster A run on cluster B as if it were a virtual node.
-- **Section 6 (Multi-Cluster Service Mesh with Istio)** is §C's heaviest, most-featured option.
-- **Section 7 (GitOps for Multi-Cluster with ArgoCD ApplicationSets)** is §D in detail.
-- **Section 8 (Multi-Cluster Security)** is the cross-cutting concern: identity federation, secret distribution, RBAC consistency.
-
-Once you see clusters as units of failure isolation and §D's pull-based GitOps as the deployment glue, the multi-cluster story decomposes into "what do I need to share?" — config (GitOps), traffic (service mesh), identity (federation), or nothing (replicated).
-
----
-
-## 1. Multi-Cluster Architectures
 
 ### 1.1 Why Multi-Cluster?
 
@@ -140,7 +91,6 @@ Load balancer distributes traffic across clusters.
                     │  (DNS/Anycast) │
                     └───────────────┘
 
-
 Pattern 2: Federated
 ====================
 A control plane distributes resources across member clusters.
@@ -155,7 +105,6 @@ A control plane distributes resources across member clusters.
        ┌──────────┐  ┌──────────┐  ┌──────────┐
        │ Cluster A │  │ Cluster B │  │ Cluster C │
        └──────────┘  └──────────┘  └──────────┘
-
 
 Pattern 3: Hub-Spoke
 ====================
@@ -447,6 +396,18 @@ registered downstream clusters based on label selectors.
 ---
 
 ## 3. Multi-Cluster Service Discovery
+
+### Theory: Cross-Cluster Service Discovery: A DNS + Identity Problem
+
+Within one cluster, a Pod calls `redis.cache.svc.cluster.local` and CoreDNS resolves it (lesson 03 §D). Across clusters this breaks — `cluster.local` is per-cluster. Three patterns make it work:
+
+**1. Multi-Cluster Services API (KEP-1645).** A standard CRD `ServiceExport` marks a Service as exportable; a controller in each cluster mirrors it under a global DNS name like `redis.cache.svc.clusterset.local`. Pods in any cluster of the clusterset can resolve and reach it. Implementations: AWS Cloud Map, GKE Multi-cluster Services, Submariner.
+
+**2. Service Mesh Multi-Cluster (Istio, Linkerd, Cilium Cluster Mesh).** Sidecars or eBPF programs in each cluster know about Services in *all* peer clusters. Calls to `redis.cache.svc.cluster.local` may transparently land in a remote cluster's Pod. Strong identity (mTLS between sidecars) is the gate; the data plane handles connectivity. Operationally heavy but the most powerful — you get traffic splitting, failover, and locality-aware routing across clusters.
+
+**3. Cluster-aware DNS + flat L3 (Submariner).** Submariner builds an encrypted IPsec tunnel between cluster nodes, making Pods in cluster A directly reachable from Pod IPs in cluster B (no NAT). Combined with a multi-cluster DNS view (Lighthouse), you get the in-cluster experience across clusters. Lighter than service mesh; doesn't give you mTLS or L7 features.
+
+The fundamental insight: cross-cluster connectivity is **not just a networking problem.** Identity (who is the caller, who is the callee), DNS (how do they find each other), and trust (do they validate each other) are all required. Service mesh bundles all three; the others compose them from pieces.
 
 ### 3.1 The Discovery Problem
 
@@ -973,6 +934,20 @@ spec:
 ---
 
 ## 7. GitOps for Multi-Cluster (ArgoCD ApplicationSets)
+
+### Theory: GitOps for Multi-Cluster: The Pull Model Saves You From the Hub
+
+In a GitOps model (Argo CD, Flux), each cluster runs an agent that pulls its desired state from a Git repository. The Git repo is the source of truth; the agent reconciles the cluster to match.
+
+For multi-cluster, this scales beautifully:
+
+- **One repo, many clusters.** A `clusters/` directory has one subdirectory per cluster; each agent pulls only its directory. Adding a cluster = adding a directory + bootstrapping the agent.
+- **No central control plane to fail.** If the hub cluster is down, the spoke agents keep reconciling against Git — which is independently HA. This is a fundamental advantage over Federation v2's push model.
+- **Argo CD ApplicationSets** generate Argo `Application` resources for many clusters from a template + a generator (cluster list, Git directory, pull request). One template, N clusters, automatic membership tracking.
+
+The mental model: GitOps replaces the "central controller pushes config to spokes" pattern (Federation v2) with "spokes pull config from a shared source" (Argo). Same end state, very different failure modes — the pull model has no central single-point-of-failure beyond the Git server.
+
+For workloads that need cross-cluster *connectivity* (not just deployment), GitOps composes with service mesh: GitOps deploys the mesh + the workloads to each cluster, the mesh handles cross-cluster traffic.
 
 ### 7.1 ArgoCD Multi-Cluster Architecture
 

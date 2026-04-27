@@ -14,8 +14,6 @@
 
 Machine learning workloads have unique infrastructure demands: GPUs for training, large datasets that must be loaded efficiently, long-running distributed training jobs, and low-latency model serving. Kubernetes has become the platform of choice for ML infrastructure because it provides scheduling, resource management, and scalability in a standardized way. This lesson covers the complete lifecycle of ML on Kubernetes — from GPU scheduling to distributed training to production model serving.
 
-Before the configurations, read [**Theory & Principles**](#theory--principles) — why GPUs are "extended resources" and what that means for scheduling, the device-plugin interface that lets the kubelet see hardware it doesn't natively understand, the gang-scheduling problem that makes distributed training different from web services, and the model-serving runtime trade-offs (KServe vs Seldon vs Triton).
-
 ## Table of Contents
 
 - [Theory & Principles](#theory--principles)
@@ -31,11 +29,9 @@ Before the configurations, read [**Theory & Principles**](#theory--principles) �
 
 ---
 
-## Theory & Principles
+## 1. GPU Scheduling in Kubernetes
 
-ML workloads stress Kubernetes in ways that web services do not: GPUs as scarce resources, training jobs that must start a *coordinated set* of pods at once, datasets too large for container images, model artifacts that need versioned serving, and cost discipline that pushes everything to spot capacity. Kubernetes itself does not natively know about GPUs — it discovers them through the **device plugin** interface and treats them as extended resources. This section explains the device-plugin model, the gang scheduling needed for distributed training, the architecture of model serving systems (KServe, Seldon, Triton), and the spot-aware patterns that make GPU-hour budgets sustainable.
-
-### A. GPUs as Extended Resources: The Device Plugin Interface
+### Theory: GPUs as Extended Resources: The Device Plugin Interface
 
 A GPU is not a primitive in the kubelet. The kubelet knows about CPU and memory because they are first-class concepts in Linux cgroups. For everything else — GPUs, FPGAs, NICs with SR-IOV, RDMA devices — Kubernetes has the **device plugin** mechanism.
 
@@ -60,67 +56,6 @@ Two consequences:
 
 - **The cluster doesn't natively understand the device.** No fractional GPUs, no GPU memory tracking, no inter-GPU NVLink topology — those are all device-plugin or ecosystem-tool concerns. The NVIDIA GPU Operator is a complete package that installs the driver, container runtime hooks, device plugin, monitoring exporter, and more — managed via a single CR.
 - **Multi-instance GPU (MIG) and time-slicing.** A100/H100 GPUs can be partitioned (MIG) into smaller logical GPUs that the device plugin advertises separately. Time-slicing presents a single GPU as multiple "virtual" devices, useful for inference pods that don't need a full GPU each. Both are device-plugin extensions, not Kubernetes core features.
-
-### B. Gang Scheduling: All-or-Nothing for Distributed Training
-
-A distributed training job (PyTorch DDP, Horovod, Megatron) needs N pods to all start at once and stay running together. If you start 7 of 8 and the 8th can't get a GPU for an hour, those 7 sit idle burning expensive GPU-hours waiting. The default scheduler does not coordinate this — it schedules pods one at a time.
-
-**Gang scheduling** (also called co-scheduling) is the property that "schedule all N pods together or none." The default scheduler doesn't do this; you need a plugin or alternative scheduler:
-
-- **Kueue** (newer, recommended): a Kubernetes-native job queueing system that holds Jobs in a queue and admits them only when capacity for the entire workload is available. Integrates with the standard scheduler.
-- **Volcano**: a batch scheduler designed specifically for ML workloads; replaces or supplements kube-scheduler.
-- **YuniKorn**: another batch-aware scheduler with quota and queue management.
-
-Without gang scheduling, large distributed training jobs are operationally painful: they get stuck partially scheduled, you waste GPUs, and the only fix is manual cleanup. With gang scheduling, the queue absorbs the scheduling constraints and your jobs either run fully or wait politely.
-
-The same problem appears in **multi-pod inference** (e.g., a model split across 8 GPUs in a tensor-parallel serving setup) — all 8 pods must come up together for the model to serve traffic. Same gang-scheduling solution.
-
-### C. Model Serving: KServe, Seldon, Triton — Three Architectural Choices
-
-Once a model is trained, serving it at production traffic requires a runtime that handles HTTP/gRPC ingress, batching, scale-to-zero, multiple model versions, and (often) GPU sharing. Three dominant choices:
-
-**KServe** (formerly KFServing). A CRD `InferenceService` lets you declare "serve this model from this storage URL with this runtime." KServe handles the rest — pulling the model, deploying it via Knative Serving (which gives you scale-to-zero based on request rate), routing, and canary traffic. Strengths: simplest CRD-driven model deployment, native Knative integration for autoscaling. Weaknesses: requires Knative installed; complex stack.
-
-**Seldon Core / Seldon V2.** Similar concept (a CRD describing a deployment) but with strong support for multi-model graphs (`ModelChain`, `ModelEnsemble`) and explainability/monitoring integrations. Strengths: complex inference pipelines; A/B testing built-in. Weaknesses: more conceptual surface.
-
-**NVIDIA Triton.** Not Kubernetes-specific; a model server that supports many backends (TensorFlow, PyTorch, ONNX, TensorRT, custom) and can serve multiple models on one GPU with dynamic batching. Often deployed *inside* KServe or Seldon as the runtime. Strengths: best-in-class GPU efficiency, dynamic batching reduces latency-throughput trade-off. Weaknesses: not a deployment system itself; you need K8s manifests around it.
-
-A common production stack: KServe for the deployment lifecycle, Triton as the runtime under it, Knative Serving providing scale-to-zero. Each layer does one thing well.
-
-A subtle property all these share: **request batching.** Inference cost-per-request drops dramatically when you batch (one GPU forward pass for 16 requests is much cheaper than 16 separate passes). Triton does this automatically with a configurable max-wait-time. Tuning batch size against latency SLO is the central performance lever.
-
-### D. Spot Capacity and the Economics of Training
-
-GPU instances are expensive — an 8×A100 node is $30+/hour on-demand. **Spot instances** (also called preemptible/low-priority) cost 50-90% less but can be reclaimed by the cloud provider with as little as 30 seconds notice. For long training runs, this is a fundamental challenge: you cannot just lose a node mid-epoch.
-
-The solution is checkpointing + restart-friendly training:
-
-- **Frequent checkpoints.** Training writes model state to persistent storage (S3, GCS, NFS, PVC) every N steps (e.g., every 1000 batches or every 10 minutes, whichever first).
-- **Spot-aware termination handling.** A small sidecar listens for the cloud's preemption signal (AWS Spot Interruption notice, GCP Preemption, Azure Eviction Notice) and triggers a final checkpoint before pod kill.
-- **Automatic restart.** Use a Job with `restartPolicy: OnFailure` plus tolerations for spot nodes. When a spot node dies, the Job creates a new pod, which loads the latest checkpoint and continues.
-
-Combined with PyTorch's `torch.save`/`torch.load` and the **PyTorchJob** CRD (Kubeflow Training Operator), this pattern lets you train on spot at 70% cost reduction while still completing 99% of jobs (some will lose < 10 min of progress to a kill that happened to land between checkpoints).
-
-For inference, spot is harder — you don't want to lose serving capacity mid-request. The pattern: spot for training, on-demand or savings-plan for serving, with HPA (lesson 13) sizing the on-demand fleet. Kubernetes makes this composition tractable because node pools and tolerations let you schedule different workloads to different cost tiers.
-
-### From Theory to the Configuration Below
-
-The lesson now applies these abstractions:
-
-- **Section 1 (GPU Scheduling)** is §A — the device plugin model, requesting GPUs in pod specs, MIG, time-slicing.
-- **Section 2 (NVIDIA GPU Operator)** is the §A "all-in-one" install of driver + plugin + exporters.
-- **Section 3 (Kubeflow Components)** is the ML-specific platform — Notebooks for development, Pipelines for orchestration, Training Operator for distributed training (which includes gang-scheduling integrations).
-- **Section 4 (Distributed Training)** is §B — PyTorchJob, MPIJob, gang scheduling with Kueue/Volcano.
-- **Section 5 (Model Serving)** is §C — KServe, Seldon, Triton compared with concrete examples.
-- **Section 6 (Experiment Tracking)** is the data layer — MLflow, Weights & Biases — that lives alongside training and remembers what worked.
-- **Section 7 (Spot and Preemptible Instances)** is §D — checkpointing patterns, preemption handling, JobSet for retry semantics.
-- **Section 8 (Resource Quotas for ML Teams)** is multi-tenant cost control — quotas per namespace, with KEDA + Kueue mediating fairness.
-
-Once you see GPUs as extended resources, distributed training as a gang-scheduling problem, and model serving as "Triton-class runtime + scale-to-zero wrapper," the ML stack on Kubernetes decomposes into the same building blocks as everything else — just with hardware-aware scheduling and a strong opinion about checkpoints.
-
----
-
-## 1. GPU Scheduling in Kubernetes
 
 ### 1.1 How GPU Scheduling Works
 
@@ -813,6 +748,20 @@ spec:
 
 ## 4. Distributed Training on Kubernetes
 
+### Theory: Gang Scheduling: All-or-Nothing for Distributed Training
+
+A distributed training job (PyTorch DDP, Horovod, Megatron) needs N pods to all start at once and stay running together. If you start 7 of 8 and the 8th can't get a GPU for an hour, those 7 sit idle burning expensive GPU-hours waiting. The default scheduler does not coordinate this — it schedules pods one at a time.
+
+**Gang scheduling** (also called co-scheduling) is the property that "schedule all N pods together or none." The default scheduler doesn't do this; you need a plugin or alternative scheduler:
+
+- **Kueue** (newer, recommended): a Kubernetes-native job queueing system that holds Jobs in a queue and admits them only when capacity for the entire workload is available. Integrates with the standard scheduler.
+- **Volcano**: a batch scheduler designed specifically for ML workloads; replaces or supplements kube-scheduler.
+- **YuniKorn**: another batch-aware scheduler with quota and queue management.
+
+Without gang scheduling, large distributed training jobs are operationally painful: they get stuck partially scheduled, you waste GPUs, and the only fix is manual cleanup. With gang scheduling, the queue absorbs the scheduling constraints and your jobs either run fully or wait politely.
+
+The same problem appears in **multi-pod inference** (e.g., a model split across 8 GPUs in a tensor-parallel serving setup) — all 8 pods must come up together for the model to serve traffic. Same gang-scheduling solution.
+
 ### 4.1 Distributed Training Patterns
 
 ```
@@ -1141,6 +1090,20 @@ kubectl describe vcjob pytorch-dist-train -n ml-workloads
 ---
 
 ## 5. Model Serving
+
+### Theory: Model Serving: KServe, Seldon, Triton — Three Architectural Choices
+
+Once a model is trained, serving it at production traffic requires a runtime that handles HTTP/gRPC ingress, batching, scale-to-zero, multiple model versions, and (often) GPU sharing. Three dominant choices:
+
+**KServe** (formerly KFServing). A CRD `InferenceService` lets you declare "serve this model from this storage URL with this runtime." KServe handles the rest — pulling the model, deploying it via Knative Serving (which gives you scale-to-zero based on request rate), routing, and canary traffic. Strengths: simplest CRD-driven model deployment, native Knative integration for autoscaling. Weaknesses: requires Knative installed; complex stack.
+
+**Seldon Core / Seldon V2.** Similar concept (a CRD describing a deployment) but with strong support for multi-model graphs (`ModelChain`, `ModelEnsemble`) and explainability/monitoring integrations. Strengths: complex inference pipelines; A/B testing built-in. Weaknesses: more conceptual surface.
+
+**NVIDIA Triton.** Not Kubernetes-specific; a model server that supports many backends (TensorFlow, PyTorch, ONNX, TensorRT, custom) and can serve multiple models on one GPU with dynamic batching. Often deployed *inside* KServe or Seldon as the runtime. Strengths: best-in-class GPU efficiency, dynamic batching reduces latency-throughput trade-off. Weaknesses: not a deployment system itself; you need K8s manifests around it.
+
+A common production stack: KServe for the deployment lifecycle, Triton as the runtime under it, Knative Serving providing scale-to-zero. Each layer does one thing well.
+
+A subtle property all these share: **request batching.** Inference cost-per-request drops dramatically when you batch (one GPU forward pass for 16 requests is much cheaper than 16 separate passes). Triton does this automatically with a configurable max-wait-time. Tuning batch size against latency SLO is the central performance lever.
 
 ### 5.1 KServe (formerly KFServing)
 
@@ -1478,6 +1441,20 @@ with mlflow.start_run(run_name="gpu-training-v2"):
 ---
 
 ## 7. Spot and Preemptible Instances for Training
+
+### Theory: Spot Capacity and the Economics of Training
+
+GPU instances are expensive — an 8×A100 node is $30+/hour on-demand. **Spot instances** (also called preemptible/low-priority) cost 50-90% less but can be reclaimed by the cloud provider with as little as 30 seconds notice. For long training runs, this is a fundamental challenge: you cannot just lose a node mid-epoch.
+
+The solution is checkpointing + restart-friendly training:
+
+- **Frequent checkpoints.** Training writes model state to persistent storage (S3, GCS, NFS, PVC) every N steps (e.g., every 1000 batches or every 10 minutes, whichever first).
+- **Spot-aware termination handling.** A small sidecar listens for the cloud's preemption signal (AWS Spot Interruption notice, GCP Preemption, Azure Eviction Notice) and triggers a final checkpoint before pod kill.
+- **Automatic restart.** Use a Job with `restartPolicy: OnFailure` plus tolerations for spot nodes. When a spot node dies, the Job creates a new pod, which loads the latest checkpoint and continues.
+
+Combined with PyTorch's `torch.save`/`torch.load` and the **PyTorchJob** CRD (Kubeflow Training Operator), this pattern lets you train on spot at 70% cost reduction while still completing 99% of jobs (some will lose < 10 min of progress to a kill that happened to land between checkpoints).
+
+For inference, spot is harder — you don't want to lose serving capacity mid-request. The pattern: spot for training, on-demand or savings-plan for serving, with HPA (lesson 13) sizing the on-demand fleet. Kubernetes makes this composition tractable because node pools and tolerations let you schedule different workloads to different cost tiers.
 
 ### 7.1 Why Spot Instances for ML
 
@@ -2345,7 +2322,6 @@ def preprocess(
     train_df.to_parquet(train_split.path, index=False)
     val_df.to_parquet(val_split.path, index=False)
 
-
 @dsl.component(base_image="nvcr.io/nvidia/pytorch:24.01-py3")
 def train_model(
     train_data: Input[Dataset],
@@ -2363,7 +2339,6 @@ def train_model(
     accuracy = 0.962  # placeholder
     torch.save({}, model_output.path + "/model.pt")
     return accuracy
-
 
 @dsl.component(
     base_image="python:3.11",
@@ -2398,7 +2373,6 @@ def evaluate_and_log(
     metrics_output.log_metric("recall", recall)
 
     return accuracy
-
 
 @dsl.component(
     base_image="python:3.11",
@@ -2457,7 +2431,6 @@ def deploy_model(
                 body=isvc,
             )
 
-
 @dsl.component(
     base_image="python:3.11",
     packages_to_install=["requests"]
@@ -2482,7 +2455,6 @@ def send_notification(
         )
     }
     requests.post(slack_webhook_url, json=message)
-
 
 @dsl.pipeline(
     name="e2e-ml-pipeline",

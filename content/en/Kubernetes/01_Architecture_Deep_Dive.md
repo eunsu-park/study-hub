@@ -17,10 +17,7 @@ Understanding its architecture is essential for effective operation, debugging, 
 extension. This lesson dissects every major component, the request lifecycle, and
 the control loop pattern that makes Kubernetes self-healing.
 
-Before the component tour, read [**Theory & Principles**](#theory--principles) — why Kubernetes splits control plane and data plane, how every kubectl call ends up as an etcd write, and the watch/list/reconcile loop that lets independent controllers cooperate without ever talking to each other.
-
 ## Table of Contents
-0. [Theory & Principles](#theory--principles)
 1. [High-Level Architecture](#1-high-level-architecture)
 2. [Control Plane Components](#2-control-plane-components)
 3. [Node Components](#3-node-components)
@@ -31,100 +28,6 @@ Before the component tour, read [**Theory & Principles**](#theory--principles) �
 8. [Scheduler Algorithm](#8-scheduler-algorithm)
 9. [Control Loops and Reconciliation](#9-control-loops-and-reconciliation)
 10. [Exercises](#exercises)
-
----
-
-## Theory & Principles
-
-A Kubernetes cluster is best understood not as "many machines running containers" but as a **single distributed database (etcd) with a REST front-end (the API server) and a swarm of independent agents that continuously reconcile the world to whatever the database says it should look like.** Once you internalize that frame, every piece of the architecture stops looking like an arbitrary daemon and starts looking like a specialized client of the same store. This section explains the four ideas that hold the whole thing together: the watch-driven event model, the etcd Raft log, the scheduler as a two-phase optimizer, and the controller as a level-triggered reconciliation loop.
-
-### A. Watch, Don't Poll: How Components Talk Without Talking
-
-Naively, you might expect controllers and kubelets to constantly poll the API server: "any new pods for me?" That would not scale to thousands of nodes and millions of objects. Instead, every long-running Kubernetes component opens a single HTTP connection and issues a **watch** request:
-
-```
-GET /api/v1/pods?watch=1&resourceVersion=12345
-```
-
-The API server holds the connection open and streams **deltas** (`ADDED`, `MODIFIED`, `DELETED` events) every time something changes, starting just after `resourceVersion=12345`. The client maintains a local cache (the **informer**), updating it from the stream. This means:
-
-- The kubelet on every node has a real-time mirror of "the pods assigned to me" and reacts within milliseconds of an assignment.
-- The Deployment controller has a mirror of "all Deployments and their child ReplicaSets" and triggers reconciliation the moment a replica count changes.
-- Polling the API server is rare; it is mostly a one-time **list** (full snapshot) followed by an indefinite watch.
-
-If a watch breaks (network blip), the client lists again from the last known `resourceVersion`. This is how the cluster tolerates control plane disruptions — components rebuild their view from etcd's truth and continue without restart.
-
-### B. etcd and the Raft Consensus Algorithm
-
-Every Kubernetes object lives in **etcd**, a distributed key-value store that uses **Raft** for consensus. Raft is what makes etcd correct under partial failure: even if a control plane node crashes mid-write, you never get two API servers reporting different states for the same pod.
-
-Raft elects a single **leader** among (typically 3 or 5) etcd members. All writes go through the leader, which appends them to a replicated log. A write is only acknowledged after a **quorum** (majority) of members have persisted the log entry. This gives two key properties:
-
-- **Linearizability**: once a write is acknowledged, all subsequent reads see it. There are no stale reads from etcd's perspective.
-- **Split-brain immunity**: a minority partition cannot make progress (cannot reach quorum), so two halves of a partitioned cluster cannot both elect leaders and accept writes.
-
-Why an **odd** number of etcd members? A 3-member cluster tolerates 1 failure (2/3 still quorum). A 4-member cluster also tolerates only 1 failure (3/4 needed for majority) but doubles the write latency for the same fault tolerance. So odd numbers (3, 5, 7) are strictly better. Production clusters virtually always run 3 or 5.
-
-Inside etcd, Kubernetes objects are stored as protobuf-encoded values under hierarchical keys like `/registry/pods/default/my-pod`. The API server is the only client that talks to etcd; everyone else talks to the API server. This is the **single source of truth** principle made literal.
-
-### C. The Scheduler: A Two-Phase Optimizer
-
-When you create a Pod with no `nodeName` set, it lands in etcd in a "Pending" state. The scheduler watches for these unscheduled pods and, for each one, runs a two-phase algorithm:
-
-**Phase 1 — Filtering (Predicates).** The scheduler evaluates each node against a series of hard constraints:
-- Does the node have enough CPU and memory for the pod's requests?
-- Does the pod tolerate the node's taints?
-- Does the pod's node selector / affinity match this node's labels?
-- Does the volume the pod claims actually attach to this node's zone?
-
-Nodes that fail any predicate are eliminated. If zero nodes survive filtering, the pod stays Pending and the scheduler logs `FailedScheduling`.
-
-**Phase 2 — Scoring (Priorities).** Surviving nodes are ranked by soft preferences:
-- `LeastAllocated`: prefer nodes with more free resources (spread).
-- `BalancedResourceAllocation`: prefer nodes where CPU and memory utilization are balanced.
-- `ImageLocality`: prefer nodes that already have the container image cached.
-- `InterPodAffinity`: prefer nodes that satisfy pod-affinity rules (e.g., place a cache pod near its app).
-
-Each scorer returns 0–100; the scheduler weights and sums them, then picks the highest-scoring node. The choice is committed by **binding** — a single API call (`POST /pods/{name}/binding`) that writes `spec.nodeName` to the pod object. The kubelet on that node sees the watch event and starts the containers.
-
-If a high-priority pod cannot be scheduled, **preemption** kicks in: the scheduler finds lower-priority pods to evict so the high-priority one fits. This is why pod priority classes matter for production — they govern who gets evicted under contention.
-
-### D. Controllers as Level-Triggered Reconciliation Loops
-
-Every controller in `kube-controller-manager` (Deployment, ReplicaSet, Node, Job, Endpoints, ...) implements the same loop:
-
-```
-loop forever:
-    desired = read from informer cache (mirrors API server / etcd)
-    actual  = observe the world (or read status fields)
-    if desired != actual:
-        take action to converge (create/update/delete objects)
-    else:
-        do nothing
-```
-
-Two properties make this robust:
-
-- **Level-triggered, not edge-triggered.** A controller does not say "I saw an event, I will react once." It says "the current state is X, the desired state is Y, I will act to make X = Y." If the controller crashes and restarts, it re-reads the state and resumes — no missed events to recover.
-- **Idempotent actions.** Asking "create ReplicaSet R if it does not exist" has no effect on the second call. So even if a controller's action is duplicated (because of a retry, restart, or split work queue), the system converges to the same state.
-
-The `controller-manager` typically runs all built-in controllers in a single process, but only **one replica is active at a time** thanks to a leader-election lease in etcd. Standby replicas wait for the lease to expire, then take over. Custom controllers (Operators, lesson 11) use the same pattern via the controller-runtime library.
-
-This loop is *the* Kubernetes paradigm. Deployments, autoscalers, ingress controllers, cert-manager, ArgoCD — they are all the same algorithm applied to different desired-state schemas.
-
-### From Theory to the YAML/Commands Below
-
-The walkthrough that follows traces these abstractions through real artifacts:
-
-- The **High-Level Architecture** diagram shows the components from §A and §B as boxes.
-- **Control Plane Components** (§2) and **Node Components** (§3) are the watchers and reconcilers from §A and §D.
-- **API Request Lifecycle** (§4) is the path from kubectl through auth, admission, and validation into etcd via the linearizable write described in §B.
-- **etcd Data Model** (§5) shows the hierarchical key layout that holds the protobuf-encoded objects.
-- **Authentication and Authorization Flow** (§7) decomposes the gates a request passes before the etcd write is even attempted.
-- **Scheduler Algorithm** (§8) is the two-phase predicates+priorities pipeline from §C.
-- **Control Loops and Reconciliation** (§9) closes the loop by walking through the level-triggered algorithm from §D with concrete examples.
-
-Read the theory once; the rest of the lesson then reads as instances of these patterns rather than disconnected facts.
 
 ---
 
@@ -423,6 +326,19 @@ rules:
 ---
 
 ## 5. etcd Data Model
+
+### Theory: etcd and the Raft Consensus Algorithm
+
+Every Kubernetes object lives in **etcd**, a distributed key-value store that uses **Raft** for consensus. Raft is what makes etcd correct under partial failure: even if a control plane node crashes mid-write, you never get two API servers reporting different states for the same pod.
+
+Raft elects a single **leader** among (typically 3 or 5) etcd members. All writes go through the leader, which appends them to a replicated log. A write is only acknowledged after a **quorum** (majority) of members have persisted the log entry. This gives two key properties:
+
+- **Linearizability**: once a write is acknowledged, all subsequent reads see it. There are no stale reads from etcd's perspective.
+- **Split-brain immunity**: a minority partition cannot make progress (cannot reach quorum), so two halves of a partitioned cluster cannot both elect leaders and accept writes.
+
+Why an **odd** number of etcd members? A 3-member cluster tolerates 1 failure (2/3 still quorum). A 4-member cluster also tolerates only 1 failure (3/4 needed for majority) but doubles the write latency for the same fault tolerance. So odd numbers (3, 5, 7) are strictly better. Production clusters virtually always run 3 or 5.
+
+Inside etcd, Kubernetes objects are stored as protobuf-encoded values under hierarchical keys like `/registry/pods/default/my-pod`. The API server is the only client that talks to etcd; everyone else talks to the API server. This is the **single source of truth** principle made literal.
 
 ### 5.1 Key Structure
 
@@ -770,6 +686,28 @@ spec:
 
 ## 8. Scheduler Algorithm
 
+### Theory: The Scheduler: A Two-Phase Optimizer
+
+When you create a Pod with no `nodeName` set, it lands in etcd in a "Pending" state. The scheduler watches for these unscheduled pods and, for each one, runs a two-phase algorithm:
+
+**Phase 1 — Filtering (Predicates).** The scheduler evaluates each node against a series of hard constraints:
+- Does the node have enough CPU and memory for the pod's requests?
+- Does the pod tolerate the node's taints?
+- Does the pod's node selector / affinity match this node's labels?
+- Does the volume the pod claims actually attach to this node's zone?
+
+Nodes that fail any predicate are eliminated. If zero nodes survive filtering, the pod stays Pending and the scheduler logs `FailedScheduling`.
+
+**Phase 2 — Scoring (Priorities).** Surviving nodes are ranked by soft preferences:
+- `LeastAllocated`: prefer nodes with more free resources (spread).
+- `BalancedResourceAllocation`: prefer nodes where CPU and memory utilization are balanced.
+- `ImageLocality`: prefer nodes that already have the container image cached.
+- `InterPodAffinity`: prefer nodes that satisfy pod-affinity rules (e.g., place a cache pod near its app).
+
+Each scorer returns 0–100; the scheduler weights and sums them, then picks the highest-scoring node. The choice is committed by **binding** — a single API call (`POST /pods/{name}/binding`) that writes `spec.nodeName` to the pod object. The kubelet on that node sees the watch event and starts the containers.
+
+If a high-priority pod cannot be scheduled, **preemption** kicks in: the scheduler finds lower-priority pods to evict so the high-priority one fits. This is why pod priority classes matter for production — they govern who gets evicted under contention.
+
 ### 8.1 Overview
 
 The scheduler assigns pods to nodes in two phases:
@@ -895,6 +833,45 @@ spec:
 ---
 
 ## 9. Control Loops and Reconciliation
+
+### Theory: Watch, Don't Poll: How Components Talk Without Talking
+
+Naively, you might expect controllers and kubelets to constantly poll the API server: "any new pods for me?" That would not scale to thousands of nodes and millions of objects. Instead, every long-running Kubernetes component opens a single HTTP connection and issues a **watch** request:
+
+```
+GET /api/v1/pods?watch=1&resourceVersion=12345
+```
+
+The API server holds the connection open and streams **deltas** (`ADDED`, `MODIFIED`, `DELETED` events) every time something changes, starting just after `resourceVersion=12345`. The client maintains a local cache (the **informer**), updating it from the stream. This means:
+
+- The kubelet on every node has a real-time mirror of "the pods assigned to me" and reacts within milliseconds of an assignment.
+- The Deployment controller has a mirror of "all Deployments and their child ReplicaSets" and triggers reconciliation the moment a replica count changes.
+- Polling the API server is rare; it is mostly a one-time **list** (full snapshot) followed by an indefinite watch.
+
+If a watch breaks (network blip), the client lists again from the last known `resourceVersion`. This is how the cluster tolerates control plane disruptions — components rebuild their view from etcd's truth and continue without restart.
+
+### Theory: Controllers as Level-Triggered Reconciliation Loops
+
+Every controller in `kube-controller-manager` (Deployment, ReplicaSet, Node, Job, Endpoints, ...) implements the same loop:
+
+```
+loop forever:
+    desired = read from informer cache (mirrors API server / etcd)
+    actual  = observe the world (or read status fields)
+    if desired != actual:
+        take action to converge (create/update/delete objects)
+    else:
+        do nothing
+```
+
+Two properties make this robust:
+
+- **Level-triggered, not edge-triggered.** A controller does not say "I saw an event, I will react once." It says "the current state is X, the desired state is Y, I will act to make X = Y." If the controller crashes and restarts, it re-reads the state and resumes — no missed events to recover.
+- **Idempotent actions.** Asking "create ReplicaSet R if it does not exist" has no effect on the second call. So even if a controller's action is duplicated (because of a retry, restart, or split work queue), the system converges to the same state.
+
+The `controller-manager` typically runs all built-in controllers in a single process, but only **one replica is active at a time** thanks to a leader-election lease in etcd. Standby replicas wait for the lease to expire, then take over. Custom controllers (Operators, lesson 11) use the same pattern via the controller-runtime library.
+
+This loop is *the* Kubernetes paradigm. Deployments, autoscalers, ingress controllers, cert-manager, ArgoCD — they are all the same algorithm applied to different desired-state schemas.
 
 ### 9.1 The Reconciliation Pattern
 

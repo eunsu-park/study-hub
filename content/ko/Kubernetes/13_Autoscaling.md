@@ -16,8 +16,6 @@
 
 Kubernetes의 핵심 약속 중 하나는 탄력적 스케일링(elastic scaling) -- 수요에 따라 컴퓨팅 리소스를 자동으로 조정하는 능력입니다. 그러나 Kubernetes의 오토스케일링은 단일 기능이 아니라 서로 다른 수준에서 작동하는 세 가지 구별되는 구성 요소를 가진 계층형 시스템입니다. Horizontal Pod Autoscaling은 Pod 레플리카 수를 조정하고, Vertical Pod Autoscaling은 컨테이너별 리소스 요청과 제한을 조정하며, Cluster Autoscaling은 노드 수를 조정합니다. 이 계층들이 원활하게 함께 작동하도록 하는 것은 비용 효율성과 안정성 모두에 필수적입니다.
 
-YAML에 들어가기 전에, [**이론과 원리**](#이론과-원리) 섹션을 먼저 읽어보세요. 쿠버네티스가 스케일링을 세 독립 계층(HPA, VPA, Cluster Autoscaler)으로 분리한 이유, HPA가 15초마다 사용하는 폐루프 제어 공식, 메트릭 지연이 실세계 스케일링 lag을 지배하는 이유, 그리고 KEDA가 비-CPU 워크로드에 가져오는 이벤트 주도 확장을 다룹니다.
-
 ## 목차
 
 - [이론과 원리](#이론과-원리)
@@ -34,17 +32,9 @@ YAML에 들어가기 전에, [**이론과 원리**](#이론과-원리) 섹션을
 
 ---
 
-## 이론과 원리
+## 1. Horizontal Pod Autoscaler (HPA) v2
 
-쿠버네티스 오토스케일링은 단일 기능이 아닙니다 — 각각 자신의 측정·결정·액추에이션을 가진 **다른 계층에서 작동하는 세 개의 독립 제어 루프**입니다:
-
-- **HPA**(Horizontal Pod Autoscaler)는 파드별 메트릭에 기반하여 "이 Deployment의 레플리카가 몇 개여야 하는가"를 결정합니다.
-- **VPA**(Vertical Pod Autoscaler)는 과거 사용량에 기반하여 "각 파드가 얼마의 CPU/메모리를 요청해야 하는가"를 결정합니다.
-- **Cluster Autoscaler**는 pending 파드가 스케줄될 수 있는지에 기반하여 "클러스터에 몇 개의 노드가 있어야 하는가"를 결정합니다.
-
-이 계층들은 신중히 합성되어야 합니다 — HPA가 스케일 아웃, 더 많은 파드가 Pending이 됨, Cluster Autoscaler가 노드 추가, 새 파드 스케줄. 순서나 메트릭이 잘못되면 oscillation, 용량 손실, 또는 폭주 비용을 얻습니다. 이 섹션은 HPA 제어 공식, 반응성을 제한하는 메트릭 파이프라인 지연, 적정 사이징에서의 VPA 역할, Cluster Autoscaler의 노드 그룹 추상, 그리고 KEDA가 큐 바운드 워크로드에 추가하는 이벤트 주도 모델을 설명합니다.
-
-### A. HPA — 특정 공식을 가진 폐루프 컨트롤러
+### 이론: HPA — 특정 공식을 가진 폐루프 컨트롤러
 
 HPA는 15초마다(기본 `--horizontal-pod-autoscaler-sync-period`) 조정합니다. 각 사이클:
 
@@ -65,87 +55,6 @@ HPA는 15초마다(기본 `--horizontal-pod-autoscaler-sync-period`) 조정합�
 - **공식은 P-컨트롤러(비례만).** 자체적으로는 진동 워크로드를 예측하거나 평활할 수 없습니다. 날카로운 일일 패턴이 있는 워크로드는 변화율을 제한하기 위한 `behavior` 구성(HPA v2에서 도입)의 혜택을 봅니다.
 
 흔한 함정 — 병목이 다른 것(DB 연결, 큐 깊이)일 때 CPU로 스케일하면, HPA가 실제로 CPU 바운드가 아닌 파드를 스케일하여 용량을 낭비합니다. 커스텀 메트릭(§A 이어서)이나 KEDA(§D)가 이를 해결합니다.
-
-### B. 메트릭 파이프라인 — 반응성을 제한하는 지연
-
-HPA는 watch하는 메트릭만큼만 빠릅니다. 기본 파이프라인:
-
-```
-파드 cgroup → kubelet (10초마다, 기본 --housekeeping-interval)
-          → metrics-server (기본 60초마다 kubelet에서 스크랩)
-          → Metrics API (HPA가 aggregated API로 읽음)
-```
-
-따라서 HPA의 15초 조정에도 불구하고, HPA가 보는 가장 신선한 CPU 측정은 **60+초 오래된** 것일 수 있습니다. 기본 구성에서 종단 간 "부하 도착 → 파드 스케일 업" lag은 보통 60–120초이지 15초가 아닙니다.
-
-더 빡빡한 루프를 위해서는 metrics-server 스크랩 간격을 줄이지만(`--metric-resolution=15s`) API 서버 부하 비용을 치릅니다. 대안적으로, 커스텀 메트릭 어댑터(Prometheus Adapter, Datadog)는 모니터링 시스템에서 직접 읽으며, 그것은 이미 더 짧은 스크랩 간격을 가질 수 있습니다.
-
-외부 소스(큐 길이, DB 연결 수)에 대해서는 Custom Metrics API 또는 External Metrics API가 HPA에 노출합니다. Prometheus Adapter가 가장 흔한 브릿지입니다 — Prometheus에 메트릭을 쓰고, 어댑터를 `custom.metrics.k8s.io/v1beta1/<resource>/<metric>`으로 노출하도록 구성하고, HPA에서 참조. 이것이 파드당 초당 요청, 큐 깊이, P99 지연, 또는 어떤 비즈니스 KPI로든 스케일하는 방법입니다.
-
-### C. VPA와 Cluster Autoscaler — 다른 두 계층
-
-**VPA**는 과거 리소스 사용량을 관찰하고 컨테이너당 `requests`와 `limits`를 권장합니다. 세 모드:
-
-- `Off` — 권장만 계산(`vpa.status.recommendation`으로 표시); 사람이 읽음.
-- `Initial` — 파드 생성 시에만 권장 적용; 기존 파드는 설정 유지.
-- `Auto` — 새 권장을 적용하기 위해 파드 축출(PDB 존중). 파괴적이지만 완전 자동.
-
-같은 메트릭(CPU)을 사용하는 같은 워크로드의 VPA와 HPA는 알려진 함정입니다 — 서로 싸웁니다. 메모리에 VPA + CPU에 HPA를 사용하거나, HPA가 수평 스케일하는 동안 수동 사이징을 알리기 위해 `Off` 모드의 VPA를 사용하세요.
-
-VPA의 다른 역할은 수평 스케일할 수 없는 **배치 및 상태 워크로드 적정 사이징**입니다. 때로는 8GB, 야간 배치 동안 32GB가 필요한 데이터베이스는 완벽한 VPA 후보입니다(prod에서는 Off + 수동 모드, 또는 재시작이 허용되면 Initial 모드).
-
-**Cluster Autoscaler (CA)**는 unschedulable 파드를 watch합니다. 스케줄러가 어떤 노드에도 자리가 없어 `Pending`을 보고하면, CA는 시뮬레이트합니다 — "그룹 X의 노드를 추가하면, 이 파드가 맞을까?" 그러면 CA는 클라우드 프로바이더에 노드 프로비저닝을 요청합니다(클라우드의 auto-scaling group / managed node group / VM scale set을 통해). 노드가 `--scale-down-unneeded-time`(기본 10분) 동안 낮은 사용률을 가지고 그 파드들이 다른 곳에 맞을 수 있으면, CA는 cordon하고 drain한 다음 클라우드에 제거를 요청합니다.
-
-CA는 CPU나 메모리를 직접 보지 *않습니다* — *requests vs allocatable*을 봅니다. 따라서 파드의 CPU request가 낮지만 실제 사용이 높으면, CA는 노드를 추가하지 않습니다 — 그러나 파드는 과할당된 노드에 고정되어 throttle됩니다. **request의 적정 사이징이 CA를 동작하게 만듭니다.**
-
-### D. KEDA — HPA가 놓치는 케이스를 위한 이벤트 주도 스케일링
-
-HPA는 파드가 *노출하는* 메트릭(CPU, 메모리, 커스텀)에 기반하여 스케일합니다. 그러나 많은 워크로드는 파드가 모르는 **외부 이벤트**에 기반하여 스케일되어야 합니다:
-
-- 큐에 10,000개 메시지 → consumer를 띄움.
-- Kafka 토픽에 consumer lag → 더 많은 파티션 consumer 추가.
-- 02:00에 100개 파드가 필요한 스케줄된 배치 작업 → 작업 도착 전에 스케일.
-
-KEDA(Kubernetes Event-Driven Autoscaling)는 이러한 외부 소스를 HPA에 연결하는 CRD + 컨트롤러입니다. `ScaledObject`를 정의합니다:
-
-```yaml
-kind: ScaledObject
-metadata: { name: rabbitmq-consumer }
-spec:
-  scaleTargetRef: { name: my-consumer }
-  minReplicaCount: 0
-  maxReplicaCount: 100
-  triggers:
-    - type: rabbitmq
-      metadata:
-        host: amqp://...
-        queueName: jobs
-        queueLength: "5"     # 메시지 5개당 1개 파드
-```
-
-KEDA는 RabbitMQ를 폴링하고, `desiredReplicas = ceil(queueLength / 5)`를 계산하고, 이를 생성된 HPA에 노출합니다. 결정적 추가 능력 — **scale to zero**. HPA는 1 미만으로 스케일할 수 없습니다 — KEDA는 큐가 비어 있을 때 0으로 스케일하고 메시지가 도착하면 다시 위로(operator 패턴을 통해 첫 파드 생성). 이는 폭발적 워크로드에서 비용에 대해 거대합니다 — 작업이 실제 실행 중인 시간만 지불합니다.
-
-KEDA는 60+ 스케일러(RabbitMQ, Kafka, AWS SQS, Postgres 쿼리, Cron, Prometheus, ...)를 가집니다. 부하가 CPU 모양이 아니라 이벤트 모양인 워크로드에서, KEDA는 HPA-on-custom-metrics를 훨씬 단순한 구성으로 대체합니다.
-
-### 이론에서 아래의 YAML으로
-
-이제 레슨은 이 추상을 적용합니다:
-
-- **섹션 1 (HPA v2)**는 §A입니다 — 공식, 구성, behavior 정책.
-- **섹션 2 (커스텀과 외부 메트릭)**은 §B입니다 — Prometheus Adapter, 커스텀 어댑터, 비즈니스 KPI.
-- **섹션 3 (VPA)**는 §C입니다 — 모드와 운영 사용.
-- **섹션 4 (Cluster Autoscaler)**는 클라우드 프로바이더 통합과 함께한 §C의 노드 수준 루프입니다.
-- **섹션 5 (KEDA)**는 §D입니다 — `ScaledObject`, 스케일러, scale-to-zero.
-- **섹션 6 (Prometheus로 스케일링)**은 §B의 어댑터 패턴을 실세계 신호와 결합합니다.
-- **섹션 7 (예측 오토스케일링)**은 반응적(P-control)에서 예측적(이력으로부터 다음 N분 예측)으로 이동합니다.
-- **섹션 8 (비용 인식 스케일링)**은 spot/on-demand 믹스와 노드 그룹 선택을 스케일링 결정에 통합합니다.
-- **섹션 9 (모범 사례)**는 서로 싸우지 않으면서 §A와 §C의 세 계층을 운영적으로 합성하는 것입니다.
-
-HPA / VPA / CA를 다른 신호와 액추에이터를 가진 세 개의 독립 제어 루프로 보고 나면, "왜 내 파드가 스케일 업하지 않는가?"는 "어느 루프, 어느 메트릭, 어느 lag?"으로 환원됩니다.
-
----
-
-## 1. Horizontal Pod Autoscaler (HPA) v2
 
 ### 1.1 HPA 작동 방식
 
@@ -323,6 +232,22 @@ kubectl get hpa web-app-hpa -o jsonpath='{.status.conditions[*].type}'
 
 ## 2. 커스텀 메트릭과 외부 메트릭
 
+### 이론: 메트릭 파이프라인 — 반응성을 제한하는 지연
+
+HPA는 watch하는 메트릭만큼만 빠릅니다. 기본 파이프라인:
+
+```
+파드 cgroup → kubelet (10초마다, 기본 --housekeeping-interval)
+          → metrics-server (기본 60초마다 kubelet에서 스크랩)
+          → Metrics API (HPA가 aggregated API로 읽음)
+```
+
+따라서 HPA의 15초 조정에도 불구하고, HPA가 보는 가장 신선한 CPU 측정은 **60+초 오래된** 것일 수 있습니다. 기본 구성에서 종단 간 "부하 도착 → 파드 스케일 업" lag은 보통 60–120초이지 15초가 아닙니다.
+
+더 빡빡한 루프를 위해서는 metrics-server 스크랩 간격을 줄이지만(`--metric-resolution=15s`) API 서버 부하 비용을 치릅니다. 대안적으로, 커스텀 메트릭 어댑터(Prometheus Adapter, Datadog)는 모니터링 시스템에서 직접 읽으며, 그것은 이미 더 짧은 스크랩 간격을 가질 수 있습니다.
+
+외부 소스(큐 길이, DB 연결 수)에 대해서는 Custom Metrics API 또는 External Metrics API가 HPA에 노출합니다. Prometheus Adapter가 가장 흔한 브릿지입니다 — Prometheus에 메트릭을 쓰고, 어댑터를 `custom.metrics.k8s.io/v1beta1/<resource>/<metric>`으로 노출하도록 구성하고, HPA에서 참조. 이것이 파드당 초당 요청, 큐 깊이, P99 지연, 또는 어떤 비즈니스 KPI로든 스케일하는 방법입니다.
+
 ### 2.1 메트릭 API 아키텍처
 
 ```
@@ -409,6 +334,22 @@ kubectl get --raw /apis/external.metrics.k8s.io/v1beta1 | jq '.resources[].name'
 ---
 
 ## 3. Vertical Pod Autoscaler (VPA)
+
+### 이론: VPA와 Cluster Autoscaler — 다른 두 계층
+
+**VPA**는 과거 리소스 사용량을 관찰하고 컨테이너당 `requests`와 `limits`를 권장합니다. 세 모드:
+
+- `Off` — 권장만 계산(`vpa.status.recommendation`으로 표시); 사람이 읽음.
+- `Initial` — 파드 생성 시에만 권장 적용; 기존 파드는 설정 유지.
+- `Auto` — 새 권장을 적용하기 위해 파드 축출(PDB 존중). 파괴적이지만 완전 자동.
+
+같은 메트릭(CPU)을 사용하는 같은 워크로드의 VPA와 HPA는 알려진 함정입니다 — 서로 싸웁니다. 메모리에 VPA + CPU에 HPA를 사용하거나, HPA가 수평 스케일하는 동안 수동 사이징을 알리기 위해 `Off` 모드의 VPA를 사용하세요.
+
+VPA의 다른 역할은 수평 스케일할 수 없는 **배치 및 상태 워크로드 적정 사이징**입니다. 때로는 8GB, 야간 배치 동안 32GB가 필요한 데이터베이스는 완벽한 VPA 후보입니다(prod에서는 Off + 수동 모드, 또는 재시작이 허용되면 Initial 모드).
+
+**Cluster Autoscaler (CA)**는 unschedulable 파드를 watch합니다. 스케줄러가 어떤 노드에도 자리가 없어 `Pending`을 보고하면, CA는 시뮬레이트합니다 — "그룹 X의 노드를 추가하면, 이 파드가 맞을까?" 그러면 CA는 클라우드 프로바이더에 노드 프로비저닝을 요청합니다(클라우드의 auto-scaling group / managed node group / VM scale set을 통해). 노드가 `--scale-down-unneeded-time`(기본 10분) 동안 낮은 사용률을 가지고 그 파드들이 다른 곳에 맞을 수 있으면, CA는 cordon하고 drain한 다음 클라우드에 제거를 요청합니다.
+
+CA는 CPU나 메모리를 직접 보지 *않습니다* — *requests vs allocatable*을 봅니다. 따라서 파드의 CPU request가 낮지만 실제 사용이 높으면, CA는 노드를 추가하지 않습니다 — 그러나 파드는 과할당된 노드에 고정되어 throttle됩니다. **request의 적정 사이징이 CA를 동작하게 만듭니다.**
 
 ### 3.1 VPA란?
 
@@ -629,6 +570,35 @@ metadata:
 ---
 
 ## 5. KEDA (Kubernetes Event-Driven Autoscaling)
+
+### 이론: KEDA — HPA가 놓치는 케이스를 위한 이벤트 주도 스케일링
+
+HPA는 파드가 *노출하는* 메트릭(CPU, 메모리, 커스텀)에 기반하여 스케일합니다. 그러나 많은 워크로드는 파드가 모르는 **외부 이벤트**에 기반하여 스케일되어야 합니다:
+
+- 큐에 10,000개 메시지 → consumer를 띄움.
+- Kafka 토픽에 consumer lag → 더 많은 파티션 consumer 추가.
+- 02:00에 100개 파드가 필요한 스케줄된 배치 작업 → 작업 도착 전에 스케일.
+
+KEDA(Kubernetes Event-Driven Autoscaling)는 이러한 외부 소스를 HPA에 연결하는 CRD + 컨트롤러입니다. `ScaledObject`를 정의합니다:
+
+```yaml
+kind: ScaledObject
+metadata: { name: rabbitmq-consumer }
+spec:
+  scaleTargetRef: { name: my-consumer }
+  minReplicaCount: 0
+  maxReplicaCount: 100
+  triggers:
+    - type: rabbitmq
+      metadata:
+        host: amqp://...
+        queueName: jobs
+        queueLength: "5"     # 메시지 5개당 1개 파드
+```
+
+KEDA는 RabbitMQ를 폴링하고, `desiredReplicas = ceil(queueLength / 5)`를 계산하고, 이를 생성된 HPA에 노출합니다. 결정적 추가 능력 — **scale to zero**. HPA는 1 미만으로 스케일할 수 없습니다 — KEDA는 큐가 비어 있을 때 0으로 스케일하고 메시지가 도착하면 다시 위로(operator 패턴을 통해 첫 파드 생성). 이는 폭발적 워크로드에서 비용에 대해 거대합니다 — 작업이 실제 실행 중인 시간만 지불합니다.
+
+KEDA는 60+ 스케일러(RabbitMQ, Kafka, AWS SQS, Postgres 쿼리, Cron, Prometheus, ...)를 가집니다. 부하가 CPU 모양이 아니라 이벤트 모양인 워크로드에서, KEDA는 HPA-on-custom-metrics를 훨씬 단순한 구성으로 대체합니다.
 
 ### 5.1 KEDA란?
 

@@ -14,8 +14,6 @@
 
 Running Kubernetes in production requires mastery of operational tasks that go far beyond deploying workloads. Cluster upgrades must happen without downtime. etcd — the single source of truth — demands careful backup and maintenance. Nodes fail, certificates expire, and capacity must grow with demand. This lesson covers the operational disciplines that keep production Kubernetes clusters healthy, reliable, and performant.
 
-Before the runbooks, read [**Theory & Principles**](#theory--principles) — the version-skew rules that bound how upgrades must proceed, why etcd backup-and-restore is the only true disaster recovery, the certificate ecosystem that quietly expires and breaks clusters, and the SLO discipline that turns "is the cluster healthy?" from a vibes question into a measurable one.
-
 ## Table of Contents
 
 - [Theory & Principles](#theory--principles)
@@ -32,11 +30,9 @@ Before the runbooks, read [**Theory & Principles**](#theory--principles) — the
 
 ---
 
-## Theory & Principles
+## 1. Cluster Upgrade Strategies
 
-The architecture, networking, and workload chapters told you how Kubernetes works *when everything is normal*. Production operations is what you do when it isn't. Clusters need to upgrade across major versions without downtime; etcd needs backups that are actually restorable; certificates expire silently; nodes fail or need draining; capacity exhausts under traffic spikes. The discipline that separates working clusters from working *production* clusters is having tested procedures for each of these, before you need them. This section explains the version-skew constraints that bound upgrades, the etcd backup-and-restore that defines your real RPO/RTO, the certificate lifecycle that quietly underlies every TLS connection, and the SLO/SLI framing that makes "is the cluster healthy?" answerable.
-
-### A. Upgrades and the Version-Skew Policy
+### Theory: Upgrades and the Version-Skew Policy
 
 You cannot just upgrade etcd, then the API server, then nodes in any order. Kubernetes defines a strict **version skew policy** that bounds the version differences between components:
 
@@ -55,90 +51,6 @@ Two upgrade strategies dominate:
 **Blue-green** (provision a new cluster at the new version, migrate workloads, decommission old): zero-downtime by design; lets you test the new cluster before any workload moves. Cons: needs full second-cluster capacity; cross-cluster networking and stateful workload migration are nontrivial. Common in cloud setups using GitOps + multi-cluster service mesh.
 
 The decision is mostly about whether your stateful workloads can tolerate in-cluster restarts (favor in-place) or you need true zero-downtime even for those (favor blue-green).
-
-### B. etcd: The Only True Backup You Have
-
-Lose etcd, lose the cluster — every Kubernetes object lives there (lesson 01 §B). Backups are not optional, and **only restore-tested backups count.** A backup that has never been restored in a drill is a hope, not a backup.
-
-The mechanics are simple. etcd has a built-in snapshot command:
-
-```bash
-ETCDCTL_API=3 etcdctl --endpoints=https://127.0.0.1:2379 \
-  --cacert=/etc/kubernetes/pki/etcd/ca.crt \
-  --cert=/etc/kubernetes/pki/etcd/server.crt \
-  --key=/etc/kubernetes/pki/etcd/server.key \
-  snapshot save /backup/etcd-$(date +%Y%m%d-%H%M%S).db
-```
-
-Run this on a regular schedule (CronJob, systemd timer, cloud backup service); ship the snapshots somewhere etcd cannot reach (off-cluster S3, off-region storage). Test restore quarterly into a sandbox cluster — actually restore the snapshot, not just `etcdctl snapshot status`.
-
-Restore replaces the etcd data directory and restarts etcd as a new cluster (the old member IDs in the snapshot are different from the live members, so a fresh cluster is mandatory). For HA: restore on one member, then add the others fresh — they will sync from the restored member.
-
-Two operational knobs that affect backup quality:
-
-- **Defragmentation.** etcd accumulates fragmentation over time as keys are written and deleted; periodic `etcdctl defrag` reclaims space. Without it, etcd can OOM unexpectedly. Schedule monthly.
-- **Auto-compaction.** etcd retains revision history. The `--auto-compaction-retention=8h` flag prunes revisions older than 8 hours, bounding storage growth. Without it, etcd grows unboundedly until full.
-
-Your real **RPO** (max data loss) is the backup interval; your **RTO** (max time to restore) is the snapshot copy + restore + cluster rejoin time. Most well-run clusters target RPO ≤ 1 hour and RTO ≤ 30 minutes, both achievable with hourly snapshots and automated restore tooling.
-
-### C. Certificates: The Quiet Expiration
-
-A Kubernetes cluster runs ~20 certificates by default — API server cert, etcd peer/client certs, kubelet client cert, kubelet server cert, controller-manager cert, scheduler cert, front-proxy cert, ServiceAccount signing key, plus any certs for ingress and webhooks. Most are issued at cluster creation with a 1-year validity (kubeadm default). On the 366th day, they expire, and parts of the cluster stop talking to each other.
-
-The recovery is well-known but disruptive:
-
-```bash
-kubeadm certs renew all
-systemctl restart kubelet
-```
-
-But a much better discipline is to *not let it happen*:
-
-- **Monitor expiration.** `kubeadm certs check-expiration` lists every cert with its remaining validity. Run this in a CronJob; alert when any cert has < 30 days. Most production clusters integrate this into their observability stack.
-- **Rotate kubelet certs automatically.** `--rotate-certificates` and `--rotate-server-certificates` flags on the kubelet plus the `RotateKubeletClientCertificate` and `RotateKubeletServerCertificate` feature gates make kubelet certs rotate without manual action.
-- **Increase validity at creation time.** kubeadm allows custom validity (`--cert-validity-period`); some teams use 5-year certs to reduce rotation frequency, accepting the security trade-off.
-- **Use cert-manager for application TLS.** Automate everything user-facing (Ingress certs, webhook server certs); only the cluster-internal certs need the kubeadm/manual path.
-
-Cert expiry is the most preventable production incident in Kubernetes. The reason it happens is that the certs are invisible until they break — alerting on remaining lifetime makes them visible.
-
-### D. SLOs, SLIs, and the Discipline of Measuring Health
-
-"Is the cluster healthy?" without an operational definition is unanswerable. The SRE practice — **SLI** (Service Level Indicator), **SLO** (Service Level Objective), **error budget** — turns it into something you can manage.
-
-A typical Kubernetes-platform SLO set:
-
-| SLI | SLO | Why it matters |
-|-----|-----|----------------|
-| API server p99 GET latency | < 1s | Indicates etcd/apiserver health |
-| API server availability | > 99.95% | The plane controllers depend on |
-| Pod scheduling latency p95 (Pending → Bound) | < 10s | Indicates scheduler + admission health |
-| Container restart rate | < 0.1% per hour | Indicates workload health |
-| Successful upgrade rate | 100% within rollout window | Indicates change risk |
-| etcd read p99 latency | < 100ms | Indicates etcd disk + network |
-
-The **error budget** = `1 - SLO`. If your API availability SLO is 99.95%, your error budget is 0.05% = ~22 minutes per month. When the budget is exhausted (you've already lost 22 minutes this month), you stop deploying changes until the budget recovers — pushing more change while burning budget makes the next outage worse.
-
-The discipline this enforces: every change is risky, and you balance change velocity against reliability with quantitative limits. Platform teams that adopt SLOs find their incident count drops because the error budget makes "stop deploying" non-political.
-
-### From Theory to the Runbooks Below
-
-The lesson now applies these abstractions:
-
-- **Section 1 (Cluster Upgrade Strategies)** is §A — version skew, in-place vs blue-green, kubeadm upgrade flow, managed-cloud upgrades.
-- **Section 2 (etcd Operations)** is §B — backup, restore, defragmentation, compaction.
-- **Section 3 (Disaster Recovery Planning)** is the broader RPO/RTO + tested-restore + multi-region narrative.
-- **Section 4 (Capacity Planning and Right-Sizing)** is how you avoid both over-provisioning waste and under-provisioning incidents.
-- **Section 5 (Node Maintenance)** is the cordon/drain/uncordon dance, often automated by cluster-autoscaler or upgrade tooling.
-- **Section 6 (Certificate Management and Rotation)** is §C in operational detail.
-- **Section 7 (Troubleshooting Production Issues)** is the practical playbook — pod logs, events, kubelet logs, control-plane logs.
-- **Section 8 (Performance Tuning)** is the levers when SLOs (§D) start sliding.
-- **Section 9 (SLA and SLO for Kubernetes)** is §D codified — what to measure, how to express it, how to manage error budgets.
-
-Once you see operations as "tested procedures with measured SLOs," the discipline becomes "what could go wrong, what is the procedure, when did we last test it?" That mindset is what makes the difference between a cluster that has uptime by luck and one that has uptime by design.
-
----
-
-## 1. Cluster Upgrade Strategies
 
 ### 1.1 Kubernetes Version Policy
 
@@ -337,6 +249,31 @@ before each minor version upgrade.
 ---
 
 ## 2. etcd Operations
+
+### Theory: etcd: The Only True Backup You Have
+
+Lose etcd, lose the cluster — every Kubernetes object lives there (lesson 01 §B). Backups are not optional, and **only restore-tested backups count.** A backup that has never been restored in a drill is a hope, not a backup.
+
+The mechanics are simple. etcd has a built-in snapshot command:
+
+```bash
+ETCDCTL_API=3 etcdctl --endpoints=https://127.0.0.1:2379 \
+  --cacert=/etc/kubernetes/pki/etcd/ca.crt \
+  --cert=/etc/kubernetes/pki/etcd/server.crt \
+  --key=/etc/kubernetes/pki/etcd/server.key \
+  snapshot save /backup/etcd-$(date +%Y%m%d-%H%M%S).db
+```
+
+Run this on a regular schedule (CronJob, systemd timer, cloud backup service); ship the snapshots somewhere etcd cannot reach (off-cluster S3, off-region storage). Test restore quarterly into a sandbox cluster — actually restore the snapshot, not just `etcdctl snapshot status`.
+
+Restore replaces the etcd data directory and restarts etcd as a new cluster (the old member IDs in the snapshot are different from the live members, so a fresh cluster is mandatory). For HA: restore on one member, then add the others fresh — they will sync from the restored member.
+
+Two operational knobs that affect backup quality:
+
+- **Defragmentation.** etcd accumulates fragmentation over time as keys are written and deleted; periodic `etcdctl defrag` reclaims space. Without it, etcd can OOM unexpectedly. Schedule monthly.
+- **Auto-compaction.** etcd retains revision history. The `--auto-compaction-retention=8h` flag prunes revisions older than 8 hours, bounding storage growth. Without it, etcd grows unboundedly until full.
+
+Your real **RPO** (max data loss) is the backup interval; your **RTO** (max time to restore) is the snapshot copy + restore + cluster rejoin time. Most well-run clusters target RPO ≤ 1 hour and RTO ≤ 30 minutes, both achievable with hourly snapshots and automated restore tooling.
 
 ### 2.1 etcd Architecture in Kubernetes
 
@@ -909,6 +846,26 @@ spec:
 
 ## 6. Certificate Management and Rotation
 
+### Theory: Certificates: The Quiet Expiration
+
+A Kubernetes cluster runs ~20 certificates by default — API server cert, etcd peer/client certs, kubelet client cert, kubelet server cert, controller-manager cert, scheduler cert, front-proxy cert, ServiceAccount signing key, plus any certs for ingress and webhooks. Most are issued at cluster creation with a 1-year validity (kubeadm default). On the 366th day, they expire, and parts of the cluster stop talking to each other.
+
+The recovery is well-known but disruptive:
+
+```bash
+kubeadm certs renew all
+systemctl restart kubelet
+```
+
+But a much better discipline is to *not let it happen*:
+
+- **Monitor expiration.** `kubeadm certs check-expiration` lists every cert with its remaining validity. Run this in a CronJob; alert when any cert has < 30 days. Most production clusters integrate this into their observability stack.
+- **Rotate kubelet certs automatically.** `--rotate-certificates` and `--rotate-server-certificates` flags on the kubelet plus the `RotateKubeletClientCertificate` and `RotateKubeletServerCertificate` feature gates make kubelet certs rotate without manual action.
+- **Increase validity at creation time.** kubeadm allows custom validity (`--cert-validity-period`); some teams use 5-year certs to reduce rotation frequency, accepting the security trade-off.
+- **Use cert-manager for application TLS.** Automate everything user-facing (Ingress certs, webhook server certs); only the cluster-internal certs need the kubeadm/manual path.
+
+Cert expiry is the most preventable production incident in Kubernetes. The reason it happens is that the certs are invisible until they break — alerting on remaining lifetime makes them visible.
+
 ### 6.1 Kubernetes PKI Overview
 
 ```
@@ -1212,6 +1169,25 @@ fio --name=etcd-test --ioengine=sync --rw=write \
 ---
 
 ## 9. SLA and SLO for Kubernetes
+
+### Theory: SLOs, SLIs, and the Discipline of Measuring Health
+
+"Is the cluster healthy?" without an operational definition is unanswerable. The SRE practice — **SLI** (Service Level Indicator), **SLO** (Service Level Objective), **error budget** — turns it into something you can manage.
+
+A typical Kubernetes-platform SLO set:
+
+| SLI | SLO | Why it matters |
+|-----|-----|----------------|
+| API server p99 GET latency | < 1s | Indicates etcd/apiserver health |
+| API server availability | > 99.95% | The plane controllers depend on |
+| Pod scheduling latency p95 (Pending → Bound) | < 10s | Indicates scheduler + admission health |
+| Container restart rate | < 0.1% per hour | Indicates workload health |
+| Successful upgrade rate | 100% within rollout window | Indicates change risk |
+| etcd read p99 latency | < 100ms | Indicates etcd disk + network |
+
+The **error budget** = `1 - SLO`. If your API availability SLO is 99.95%, your error budget is 0.05% = ~22 minutes per month. When the budget is exhausted (you've already lost 22 minutes this month), you stop deploying changes until the budget recovers — pushing more change while burning budget makes the next outage worse.
+
+The discipline this enforces: every change is risky, and you balance change velocity against reliability with quantitative limits. Platform teams that adopt SLOs find their incident count drops because the error budget makes "stop deploying" non-political.
 
 ### 9.1 Defining Platform SLOs
 

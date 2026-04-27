@@ -17,10 +17,7 @@ of which must be managed separately from container images. Kubernetes provides
 ConfigMaps for non-sensitive data and Secrets for sensitive data, but production
 environments often require external secret management systems for proper security.
 
-Before the YAML, read [**Theory & Principles**](#theory--principles) — why ConfigMap and Secret share the same shape but differ in storage and threat model, the three injection mechanisms (env vars, command args, projected volumes) and their consistency trade-offs, why etcd encryption-at-rest matters, and how external secret stores reconcile against the in-cluster API.
-
 ## Table of Contents
-0. [Theory & Principles](#theory--principles)
 1. [ConfigMaps](#1-configmaps)
 2. [Secrets](#2-secrets)
 3. [Immutable ConfigMaps and Secrets](#3-immutable-configmaps-and-secrets)
@@ -32,98 +29,6 @@ Before the YAML, read [**Theory & Principles**](#theory--principles) — why Con
 9. [Environment-Specific Configuration](#9-environment-specific-configuration)
 10. [Encrypting Secrets at Rest (EncryptionConfiguration)](#10-encrypting-secrets-at-rest-encryptionconfiguration)
 11. [Exercises](#exercises)
-
----
-
-## Theory & Principles
-
-ConfigMaps and Secrets are the same idea — a small key/value bundle stored in etcd and projected into Pods — separated only by *threat model*. ConfigMaps are for non-sensitive configuration; Secrets are for credentials, certificates, and tokens that need additional handling (encryption-at-rest, RBAC tightening, never logged, never in plain `kubectl describe` output of generic objects). The interesting depth is not in the YAML but in (a) how data reaches the running process inside the container, and (b) how to keep secrets safe given that "something has to know the plaintext eventually."
-
-### A. The Same Object Shape, Different Storage Semantics
-
-Both objects look like this:
-
-```yaml
-apiVersion: v1
-kind: ConfigMap   # or Secret
-metadata:
-  name: my-config
-data:             # Secret: also stringData (auto-base64)
-  key1: value1
-  key2: value2
-```
-
-The differences:
-
-- **Encoding.** Secret values are base64-encoded in the API representation. **This is not encryption** — base64 is reversible by anyone with `kubectl get secret -o yaml`. The encoding exists so binary keys (TLS certificates, JKS files) can travel through YAML cleanly.
-- **etcd encryption.** Production clusters configure `EncryptionConfiguration` (lesson 06 §10) to encrypt Secrets (and optionally other resources) before they hit etcd disk. Without it, anyone with etcd backups has all your secrets in plaintext.
-- **RBAC defaults.** Recommended cluster RBAC restricts Secret read access more tightly than ConfigMap read access; many built-in roles can list ConfigMaps but not Secrets.
-- **Logging hygiene.** kubectl, audit logs, and most controllers redact Secret content (`****`) but not ConfigMap content. This is convention more than enforcement, but it is consistent.
-- **Size limit.** Both are capped at ~1MB per object (etcd value size limit). Large config goes in volumes, not ConfigMaps.
-
-So choose Secret when leaking the value would be a security incident; choose ConfigMap when leaking would just be embarrassing.
-
-### B. The Three Injection Mechanisms
-
-Once the data is in the API, there are three ways to get it into a process. Each has different update semantics:
-
-**1. Environment variables (`envFrom` / `env.valueFrom`).** Read at container start, baked into the process's `environ`. **They never update** — even if the ConfigMap changes, the process will see the old value until it restarts. This is fine for static config (database hostname) but disastrous for things you'd want to rotate without a restart.
-
-**2. Command-line arguments.** Same story — substituted at start, never updated. Used for tools that read all config from CLI flags.
-
-**3. Projected volumes (`volumeMounts` of `configMap` / `secret` / `projected`).** A tmpfs mount populated by the kubelet from the API server's view of the object. **The kubelet refreshes this volume periodically** (default ~60s) when the underlying ConfigMap/Secret changes. The application must re-read the file to pick up changes; this is fine for things like nginx (`-s reload`), bad for things that read on boot only.
-
-The injection mechanism is a hidden coupling between your "rotate the secret without a restart" requirement and the YAML you wrote three months ago.
-
-A subtle point: when you mount multiple ConfigMaps/Secrets through `projected`, the kubelet writes them as a single atomic symlink swap. Readers either see the entire old version or the entire new version — never a half-updated state. This is what makes hot reload safe in projected mode.
-
-### C. Encryption at Rest, in Transit, and in Use
-
-Three layers, each defending against a different attacker:
-
-- **In transit.** TLS between API server, etcd, kubelet, and CNI components. Mostly automatic in cluster bootstrap (kubeadm); managed for you on EKS/GKE/AKS. Defends against on-network eavesdropping.
-- **At rest in etcd.** `EncryptionConfiguration` enables an envelope-encryption scheme with KMS providers (AWS KMS, GCP KMS, Vault transit). Without this, any etcd backup is a credential dump. Defends against backup theft and physical disk theft.
-- **In use, inside the Pod.** Once the secret is mounted as a tmpfs file or env var, the running container has it in plaintext. Defenses here are workload-side — drop file permissions, use `readOnlyRootFilesystem`, never log the value, scrub memory after use. Kubernetes itself stops at the Pod boundary.
-
-A common architectural insight: **once a secret leaves the API server and enters a Pod, Kubernetes can no longer protect it.** The point of external secret stores (Vault, AWS Secrets Manager) is not magic — it's that you can rotate the upstream secret centrally, and the in-cluster reflection updates within minutes.
-
-### D. External Secret Stores: Reconciling from Outside the Cluster
-
-Native Secrets work for "developer creates a secret once, never rotates it" cases. Production demands more: rotation, audit, central management across many clusters, integration with HSMs. Three patterns:
-
-**External Secrets Operator (ESO).** A controller in the cluster watches `ExternalSecret` CRDs:
-
-```yaml
-kind: ExternalSecret
-spec:
-  refreshInterval: 1h
-  secretStoreRef: { name: aws-store, kind: ClusterSecretStore }
-  target: { name: db-credentials }
-  data:
-    - secretKey: password
-      remoteRef: { key: prod/db, property: password }
-```
-
-The controller reads from AWS Secrets Manager (or Vault, GCP Secret Manager, Azure Key Vault) every `refreshInterval`, materializes the value into a native Kubernetes `Secret` named `db-credentials`, and Pods consume it normally. The reconciliation loop is "make the cluster Secret match the upstream value." Rotation upstream propagates automatically.
-
-**Sealed Secrets.** A controller decrypts `SealedSecret` CRDs (encrypted with a public key whose private half lives only in the cluster) into native Secrets. Lets you commit `SealedSecret` YAML to git safely; only the cluster can decrypt. No external store needed; no auto-rotation either.
-
-**Vault Agent / CSI driver.** Vault Agent injects secrets into Pods via init containers and shared volumes; the Secrets Store CSI driver mounts secrets directly from Vault as a volume. Both bypass etcd entirely — no Kubernetes Secret object is created. This is the strongest model when etcd encryption is not enough.
-
-The choice matters for compliance: if "secrets must never be in etcd" is a requirement, pick CSI/Vault. If "secrets must rotate every 24h" is the requirement, pick ESO.
-
-### From Theory to the YAML Below
-
-The lesson now applies these abstractions:
-
-- **Sections 1–2 (ConfigMaps, Secrets)** show §A — same object shape, different storage hygiene.
-- **Section 3 (Immutable)** is a performance + safety knob: when set, the kubelet stops watching for changes (less API server load) and the object cannot be mutated (safer for production config).
-- **Sections 4–6 (External Secrets, Sealed Secrets, Vault)** are §D — three reconciliation strategies for getting secret material out of an external system into Pods.
-- **Section 7 (Rotation Patterns)** uses the consistency knowledge from §B — projected volumes can rotate; env vars cannot. So your rotation strategy depends on how you injected the secret.
-- **Sections 8–9 (Best Practices, Environment-Specific Config)** are operational application of §A and §B.
-- **Section 10 (EncryptionConfiguration)** is the §C "at rest" layer, configured at the API server.
-
-Once you see the three injection mechanisms in §B and the three storage layers in §C, every "how do I rotate this secret without downtime?" question reduces to "which mechanism + which layer am I using?"
 
 ---
 
@@ -314,6 +219,44 @@ kubectl create configmap app-config --from-literal=LOG_LEVEL=debug --dry-run=cli
 ---
 
 ## 2. Secrets
+
+### Theory: The Same Object Shape, Different Storage Semantics
+
+Both objects look like this:
+
+```yaml
+apiVersion: v1
+kind: ConfigMap   # or Secret
+metadata:
+  name: my-config
+data:             # Secret: also stringData (auto-base64)
+  key1: value1
+  key2: value2
+```
+
+The differences:
+
+- **Encoding.** Secret values are base64-encoded in the API representation. **This is not encryption** — base64 is reversible by anyone with `kubectl get secret -o yaml`. The encoding exists so binary keys (TLS certificates, JKS files) can travel through YAML cleanly.
+- **etcd encryption.** Production clusters configure `EncryptionConfiguration` (lesson 06 §10) to encrypt Secrets (and optionally other resources) before they hit etcd disk. Without it, anyone with etcd backups has all your secrets in plaintext.
+- **RBAC defaults.** Recommended cluster RBAC restricts Secret read access more tightly than ConfigMap read access; many built-in roles can list ConfigMaps but not Secrets.
+- **Logging hygiene.** kubectl, audit logs, and most controllers redact Secret content (`****`) but not ConfigMap content. This is convention more than enforcement, but it is consistent.
+- **Size limit.** Both are capped at ~1MB per object (etcd value size limit). Large config goes in volumes, not ConfigMaps.
+
+So choose Secret when leaking the value would be a security incident; choose ConfigMap when leaking would just be embarrassing.
+
+### Theory: The Three Injection Mechanisms
+
+Once the data is in the API, there are three ways to get it into a process. Each has different update semantics:
+
+**1. Environment variables (`envFrom` / `env.valueFrom`).** Read at container start, baked into the process's `environ`. **They never update** — even if the ConfigMap changes, the process will see the old value until it restarts. This is fine for static config (database hostname) but disastrous for things you'd want to rotate without a restart.
+
+**2. Command-line arguments.** Same story — substituted at start, never updated. Used for tools that read all config from CLI flags.
+
+**3. Projected volumes (`volumeMounts` of `configMap` / `secret` / `projected`).** A tmpfs mount populated by the kubelet from the API server's view of the object. **The kubelet refreshes this volume periodically** (default ~60s) when the underlying ConfigMap/Secret changes. The application must re-read the file to pick up changes; this is fine for things like nginx (`-s reload`), bad for things that read on boot only.
+
+The injection mechanism is a hidden coupling between your "rotate the secret without a restart" requirement and the YAML you wrote three months ago.
+
+A subtle point: when you mount multiple ConfigMaps/Secrets through `projected`, the kubelet writes them as a single atomic symlink swap. Readers either see the entire old version or the entire new version — never a half-updated state. This is what makes hot reload safe in projected mode.
 
 Secrets store sensitive data such as passwords, tokens, and TLS certificates.
 They are similar to ConfigMaps but with additional security considerations.
@@ -580,6 +523,31 @@ data:
 ---
 
 ## 4. External Secrets Operator
+
+### Theory: External Secret Stores: Reconciling from Outside the Cluster
+
+Native Secrets work for "developer creates a secret once, never rotates it" cases. Production demands more: rotation, audit, central management across many clusters, integration with HSMs. Three patterns:
+
+**External Secrets Operator (ESO).** A controller in the cluster watches `ExternalSecret` CRDs:
+
+```yaml
+kind: ExternalSecret
+spec:
+  refreshInterval: 1h
+  secretStoreRef: { name: aws-store, kind: ClusterSecretStore }
+  target: { name: db-credentials }
+  data:
+    - secretKey: password
+      remoteRef: { key: prod/db, property: password }
+```
+
+The controller reads from AWS Secrets Manager (or Vault, GCP Secret Manager, Azure Key Vault) every `refreshInterval`, materializes the value into a native Kubernetes `Secret` named `db-credentials`, and Pods consume it normally. The reconciliation loop is "make the cluster Secret match the upstream value." Rotation upstream propagates automatically.
+
+**Sealed Secrets.** A controller decrypts `SealedSecret` CRDs (encrypted with a public key whose private half lives only in the cluster) into native Secrets. Lets you commit `SealedSecret` YAML to git safely; only the cluster can decrypt. No external store needed; no auto-rotation either.
+
+**Vault Agent / CSI driver.** Vault Agent injects secrets into Pods via init containers and shared volumes; the Secrets Store CSI driver mounts secrets directly from Vault as a volume. Both bypass etcd entirely — no Kubernetes Secret object is created. This is the strongest model when etcd encryption is not enough.
+
+The choice matters for compliance: if "secrets must never be in etcd" is a requirement, pick CSI/Vault. If "secrets must rotate every 24h" is the requirement, pick ESO.
 
 The External Secrets Operator (ESO) synchronizes secrets from external secret
 management systems (AWS Secrets Manager, GCP Secret Manager, Azure Key Vault,
@@ -1339,6 +1307,16 @@ data:
 ---
 
 ## 10. Encrypting Secrets at Rest (EncryptionConfiguration)
+
+### Theory: Encryption at Rest, in Transit, and in Use
+
+Three layers, each defending against a different attacker:
+
+- **In transit.** TLS between API server, etcd, kubelet, and CNI components. Mostly automatic in cluster bootstrap (kubeadm); managed for you on EKS/GKE/AKS. Defends against on-network eavesdropping.
+- **At rest in etcd.** `EncryptionConfiguration` enables an envelope-encryption scheme with KMS providers (AWS KMS, GCP KMS, Vault transit). Without this, any etcd backup is a credential dump. Defends against backup theft and physical disk theft.
+- **In use, inside the Pod.** Once the secret is mounted as a tmpfs file or env var, the running container has it in plaintext. Defenses here are workload-side — drop file permissions, use `readOnlyRootFilesystem`, never log the value, scrub memory after use. Kubernetes itself stops at the Pod boundary.
+
+A common architectural insight: **once a secret leaves the API server and enters a Pod, Kubernetes can no longer protect it.** The point of external secret stores (Vault, AWS Secrets Manager) is not magic — it's that you can rotate the upstream secret centrally, and the in-cluster reflection updates within minutes.
 
 By default, Kubernetes stores Secrets in etcd as base64-encoded plain text.
 `EncryptionConfiguration` instructs the API server to encrypt Secret data

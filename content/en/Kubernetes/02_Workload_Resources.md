@@ -16,10 +16,7 @@ Kubernetes. From the atomic Pod to sophisticated StatefulSets, each resource
 type is designed for a specific operational pattern. This lesson covers every
 workload resource in detail with production-ready examples.
 
-Before the workload tour, read [**Theory & Principles**](#theory--principles) — why each workload kind exists as a different reconciler over the same Pod primitive, the rolling-update math behind Deployments, the ordered-stable-network identity guarantee of StatefulSets, and how requests/limits/QoS map to the Linux kernel's cgroup knobs.
-
 ## Table of Contents
-0. [Theory & Principles](#theory--principles)
 1. [Pods](#1-pods)
 2. [ReplicaSets](#2-replicasets)
 3. [Deployments](#3-deployments)
@@ -33,11 +30,9 @@ Before the workload tour, read [**Theory & Principles**](#theory--principles) �
 
 ---
 
-## Theory & Principles
+## 1. Pods
 
-Workload resources look like a long menu — Pod, ReplicaSet, Deployment, StatefulSet, DaemonSet, Job, CronJob — but they are all built from one primitive (the Pod) plus a single design pattern (a controller that watches a desired-state object and reconciles a set of child Pods). What changes between them is the *reconciliation policy*: how many replicas, in what order, with what identity guarantees, and what to do on failure. This section covers the four ideas that explain every workload kind plus the resource-management semantics that determine whether your pod gets killed under memory pressure.
-
-### A. Pod as the Atomic Scheduling Unit
+### Theory: Pod as the Atomic Scheduling Unit
 
 A Pod is one or more containers that **share fate** — same node, same network namespace (same IP, same `localhost`, same port space), optional shared volumes, scheduled together, killed together. The decision to make Pods (not containers) the atom enables three patterns that bare containers cannot model cleanly:
 
@@ -48,80 +43,6 @@ A Pod is one or more containers that **share fate** — same node, same network 
 For the common single-container case, the Pod adds essentially zero overhead. Crucially, **Pods are ephemeral and have ephemeral IPs.** They are not pets. A Pod's IP changes on restart, and a Pod that fails its liveness probe is replaced by a new Pod with a new IP. Anything that needs a stable network identity must use a Service (or a Headless Service + StatefulSet for per-pod identity).
 
 This ephemerality is what enables every higher-level workload: if Pods were precious, you could not safely roll, scale, or evict them. Because they are disposable, the controller above can always create more.
-
-### B. ReplicaSet → Deployment: The Rolling-Update Algorithm
-
-A **ReplicaSet** is the simplest reconciler over Pods: "I want N Pods matching this selector. Right now I see M. If M < N, create. If M > N, delete." That is the entire algorithm, expressed as a level-triggered loop. ReplicaSets handle scaling and self-healing, but they do *not* handle template changes — modifying the pod template does not update existing Pods.
-
-A **Deployment** wraps a ReplicaSet (actually two of them during a rollout) and adds the rolling-update algorithm. Given a new pod template:
-
-1. Create a new ReplicaSet RS-new with `replicas=0` and the new template.
-2. Repeat until RS-new has the target count and RS-old has 0:
-   - Scale RS-new up by `maxSurge` (default 25%).
-   - Wait for the new pods to become Ready.
-   - Scale RS-old down by `maxUnavailable` (default 25%).
-3. Keep RS-old around (with 0 replicas) for one-command rollback.
-
-The math: with `replicas=10`, `maxSurge=25%`, `maxUnavailable=25%`, you can have at most 13 pods total at any moment, and at least 7 must be Ready. This bounds both extra cost (the surge) and capacity loss (the unavailability) during the rollout. `recreate` strategy skips this and just kills everything before recreating — used when two versions cannot coexist (e.g., schema migrations).
-
-Rollback is just "set the deployment template back to the old ReplicaSet's pod-template-hash." The deployment controller then runs the same algorithm in reverse, scaling RS-old back up and RS-new down. This is why kept history (`revisionHistoryLimit`) matters.
-
-### C. StatefulSet: Order, Identity, Storage
-
-StatefulSets exist because some workloads (databases, message brokers, distributed consensus systems) need **stable identity per replica**. Three guarantees differ from Deployments:
-
-- **Ordered, stable network identity.** Pods are named `<set>-0`, `<set>-1`, ..., `<set>-(N-1)`. With a Headless Service, each pod gets a DNS name like `mysql-0.mysql.default.svc.cluster.local` that persists across restarts and reschedules.
-- **Ordered deployment and termination.** Pods come up one at a time in order (`-0`, then `-1`, then `-2`), each waiting for the previous to be Ready. Termination is reverse order. This matters for cluster bootstrap (e.g., the first replica is the seed; replica 1 joins by referencing replica 0's stable DNS name).
-- **Stable, per-replica storage via VolumeClaimTemplates.** Each pod gets its own PVC, with a name derived from the pod's ordinal. When pod `mysql-1` reschedules, it reattaches to the same PVC — same data. A Deployment cannot do this safely because it has no notion of "which pod is which."
-
-The cost of these guarantees is reduced agility: scaling a StatefulSet from 3 to 6 takes longer than scaling a Deployment because pods come up sequentially. Updates use either `RollingUpdate` (one pod at a time, reverse-ordinal) or `OnDelete` (operator-driven, when ordering is too dangerous to automate).
-
-### D. DaemonSet, Job, CronJob: Specialized Reconcilers
-
-Each of these is the same controller pattern with a different "what does desired state mean?":
-
-- **DaemonSet**: "one Pod per matching node." Reconciler watches both the DaemonSet and the Node list; it creates a Pod on every new node that matches the node selector and removes Pods from drained or deleted nodes. Used for log collectors, node exporters, CNI agents — anything that must run cluster-wide.
-- **Job**: "run N successful completions, with up to P running in parallel." Reconciler creates Pods, watches for completion, and stops when the success count is reached. `backoffLimit` caps retries on failure; `activeDeadlineSeconds` caps total wall-clock time. Critical for batch workloads.
-- **CronJob**: a Job factory. Reconciler reads the crontab-style schedule, and at each fire time creates a fresh Job from a template. `concurrencyPolicy` decides what happens if the previous Job is still running (`Allow`, `Forbid`, `Replace`).
-
-You write a Pod template; the controller decides how many, in what order, on which nodes, with what success criteria.
-
-### E. Requests, Limits, QoS: From YAML to cgroups
-
-Resource management has two numbers per container per resource (CPU, memory):
-
-- **`requests`**: the scheduler treats this as the pod's reservation. Sum of all pod requests on a node cannot exceed node allocatable. This is what determines *whether* the pod fits on a node.
-- **`limits`**: the kernel-enforced ceiling. CPU above the limit is throttled (cgroup `cpu.cfs_quota_us`); memory above the limit triggers OOM kill (cgroup `memory.limit_in_bytes`).
-
-Three QoS classes emerge automatically from the requests/limits combination:
-
-| Class | Condition | Eviction priority |
-|-------|-----------|-------------------|
-| `Guaranteed` | every container has `requests == limits` for both CPU and memory | last to be evicted |
-| `Burstable` | at least one request set, but not all `requests == limits` | middle |
-| `BestEffort` | no requests or limits set anywhere | first to be evicted |
-
-Under node memory pressure, the kubelet evicts BestEffort first, then Burstable in order of how far they exceed their requests, then Guaranteed only if absolutely necessary. So **`Guaranteed` is not just for resource budgeting — it is your eviction insurance.**
-
-CPU vs memory differ critically: CPU is **compressible** (you throttle the slow tenant and everyone keeps running), memory is **incompressible** (when it's gone, someone must die). This is why memory-OOM is sudden and fatal while CPU-throttle is gradual and recoverable.
-
-### From Theory to the YAML Below
-
-The lesson now walks you through these abstractions as concrete manifests:
-
-- **Section 1 (Pods)** demonstrates the atomic unit from §A — multi-container patterns, init containers, sidecars, lifecycle hooks.
-- **Section 2 (ReplicaSets)** shows the simplest reconciler from §B in isolation, before Deployments take over.
-- **Section 3 (Deployments)** is the rolling-update algorithm from §B applied to real services, with `maxSurge`/`maxUnavailable` knobs to tune.
-- **Section 4 (StatefulSets)** is §C, with VolumeClaimTemplates and Headless Services that give per-pod identity.
-- **Sections 5–6 (DaemonSets, Jobs, CronJobs)** are the specialized reconcilers from §D.
-- **Section 7 (PDB)** is a guardrail against the rolling-update algorithm — "don't ever take more than X pods down at once, even during voluntary disruption."
-- **Sections 8–9 (Requests/Limits, QoS)** translate §E into the YAML fields the kubelet feeds to cgroups.
-
-Once you see Pod-as-atom + reconciler-as-pattern, the difference between a DaemonSet and a Job is just two lines of pseudocode.
-
----
-
-## 1. Pods
 
 ### 1.1 Pod Fundamentals
 
@@ -500,6 +421,23 @@ kubectl get pods -l app=web,tier=frontend --show-labels
 
 ## 3. Deployments
 
+### Theory: ReplicaSet → Deployment: The Rolling-Update Algorithm
+
+A **ReplicaSet** is the simplest reconciler over Pods: "I want N Pods matching this selector. Right now I see M. If M < N, create. If M > N, delete." That is the entire algorithm, expressed as a level-triggered loop. ReplicaSets handle scaling and self-healing, but they do *not* handle template changes — modifying the pod template does not update existing Pods.
+
+A **Deployment** wraps a ReplicaSet (actually two of them during a rollout) and adds the rolling-update algorithm. Given a new pod template:
+
+1. Create a new ReplicaSet RS-new with `replicas=0` and the new template.
+2. Repeat until RS-new has the target count and RS-old has 0:
+   - Scale RS-new up by `maxSurge` (default 25%).
+   - Wait for the new pods to become Ready.
+   - Scale RS-old down by `maxUnavailable` (default 25%).
+3. Keep RS-old around (with 0 replicas) for one-command rollback.
+
+The math: with `replicas=10`, `maxSurge=25%`, `maxUnavailable=25%`, you can have at most 13 pods total at any moment, and at least 7 must be Ready. This bounds both extra cost (the surge) and capacity loss (the unavailability) during the rollout. `recreate` strategy skips this and just kills everything before recreating — used when two versions cannot coexist (e.g., schema migrations).
+
+Rollback is just "set the deployment template back to the old ReplicaSet's pod-template-hash." The deployment controller then runs the same algorithm in reverse, scaling RS-old back up and RS-new down. This is why kept history (`revisionHistoryLimit`) matters.
+
 Deployments manage ReplicaSets, which in turn manage Pods. When you perform a
 rolling update, the Deployment creates a new ReplicaSet and gradually shifts
 Pods from the old RS to the new one. Old ReplicaSets (scaled to 0) are kept for
@@ -725,6 +663,16 @@ kubectl patch service web-svc -p '{"spec":{"selector":{"version":"blue"}}}'
 
 ## 4. StatefulSets
 
+### Theory: StatefulSet: Order, Identity, Storage
+
+StatefulSets exist because some workloads (databases, message brokers, distributed consensus systems) need **stable identity per replica**. Three guarantees differ from Deployments:
+
+- **Ordered, stable network identity.** Pods are named `<set>-0`, `<set>-1`, ..., `<set>-(N-1)`. With a Headless Service, each pod gets a DNS name like `mysql-0.mysql.default.svc.cluster.local` that persists across restarts and reschedules.
+- **Ordered deployment and termination.** Pods come up one at a time in order (`-0`, then `-1`, then `-2`), each waiting for the previous to be Ready. Termination is reverse order. This matters for cluster bootstrap (e.g., the first replica is the seed; replica 1 joins by referencing replica 0's stable DNS name).
+- **Stable, per-replica storage via VolumeClaimTemplates.** Each pod gets its own PVC, with a name derived from the pod's ordinal. When pod `mysql-1` reschedules, it reattaches to the same PVC — same data. A Deployment cannot do this safely because it has no notion of "which pod is which."
+
+The cost of these guarantees is reduced agility: scaling a StatefulSet from 3 to 6 takes longer than scaling a Deployment because pods come up sequentially. Updates use either `RollingUpdate` (one pod at a time, reverse-ordinal) or `OnDelete` (operator-driven, when ordering is too dangerous to automate).
+
 StatefulSets manage stateful applications with guarantees about ordering, stable
 network identity, and persistent storage.
 
@@ -887,6 +835,16 @@ kubectl patch statefulset postgres -p '{"spec":{"updateStrategy":{"rollingUpdate
 ---
 
 ## 5. DaemonSets
+
+### Theory: DaemonSet, Job, CronJob: Specialized Reconcilers
+
+Each of these is the same controller pattern with a different "what does desired state mean?":
+
+- **DaemonSet**: "one Pod per matching node." Reconciler watches both the DaemonSet and the Node list; it creates a Pod on every new node that matches the node selector and removes Pods from drained or deleted nodes. Used for log collectors, node exporters, CNI agents — anything that must run cluster-wide.
+- **Job**: "run N successful completions, with up to P running in parallel." Reconciler creates Pods, watches for completion, and stops when the success count is reached. `backoffLimit` caps retries on failure; `activeDeadlineSeconds` caps total wall-clock time. Critical for batch workloads.
+- **CronJob**: a Job factory. Reconciler reads the crontab-style schedule, and at each fire time creates a fresh Job from a template. `concurrencyPolicy` decides what happens if the previous Job is still running (`Allow`, `Forbid`, `Replace`).
+
+You write a Pod template; the controller decides how many, in what order, on which nodes, with what success criteria.
 
 A DaemonSet ensures a copy of a pod runs on every (or selected) node.
 
@@ -1193,6 +1151,25 @@ PDB interaction during node drain:
 ---
 
 ## 8. Resource Requests and Limits
+
+### Theory: Requests, Limits, QoS: From YAML to cgroups
+
+Resource management has two numbers per container per resource (CPU, memory):
+
+- **`requests`**: the scheduler treats this as the pod's reservation. Sum of all pod requests on a node cannot exceed node allocatable. This is what determines *whether* the pod fits on a node.
+- **`limits`**: the kernel-enforced ceiling. CPU above the limit is throttled (cgroup `cpu.cfs_quota_us`); memory above the limit triggers OOM kill (cgroup `memory.limit_in_bytes`).
+
+Three QoS classes emerge automatically from the requests/limits combination:
+
+| Class | Condition | Eviction priority |
+|-------|-----------|-------------------|
+| `Guaranteed` | every container has `requests == limits` for both CPU and memory | last to be evicted |
+| `Burstable` | at least one request set, but not all `requests == limits` | middle |
+| `BestEffort` | no requests or limits set anywhere | first to be evicted |
+
+Under node memory pressure, the kubelet evicts BestEffort first, then Burstable in order of how far they exceed their requests, then Guaranteed only if absolutely necessary. So **`Guaranteed` is not just for resource budgeting — it is your eviction insurance.**
+
+CPU vs memory differ critically: CPU is **compressible** (you throttle the slow tenant and everyone keeps running), memory is **incompressible** (when it's gone, someone must die). This is why memory-OOM is sudden and fatal while CPU-throttle is gradual and recoverable.
 
 ### 8.1 CPU and Memory
 

@@ -17,10 +17,7 @@ that outlives individual containers and even pods. This lesson covers the full
 storage stack from basic volumes to production-grade dynamic provisioning with
 CSI drivers.
 
-Before the volume tour, read [**Theory & Principles**](#theory--principles) — why Kubernetes splits storage into PV (the supply side) and PVC (the demand side), how the binding algorithm matches them, what dynamic provisioning via StorageClass actually triggers under the hood, and why the CSI interface let storage vendors stop modifying Kubernetes core.
-
 ## Table of Contents
-0. [Theory & Principles](#theory--principles)
 1. [Volumes and Volume Types](#1-volumes-and-volume-types)
 2. [PersistentVolumes (PV)](#2-persistentvolumes-pv)
 3. [PersistentVolumeClaims (PVC)](#3-persistentvolumeclaims-pvc)
@@ -32,100 +29,6 @@ Before the volume tour, read [**Theory & Principles**](#theory--principles) — 
 9. [Ephemeral Volumes](#9-ephemeral-volumes)
 10. [StatefulSet Storage Patterns](#10-statefulset-storage-patterns)
 11. [Exercises](#exercises)
-
----
-
-## Theory & Principles
-
-Storage is the part of Kubernetes where two opposing concerns meet: containers want to be ephemeral and replaceable, while databases, queues, and caches insist on data outliving the process that wrote it. Kubernetes resolves this not by patching ephemerality away but by **separating storage from workloads**: a workload declares "I need this much storage with these properties," and a separate subsystem provides it, attaches it, mounts it, and reclaims it independently. This section explains the supply-and-demand model, the binding algorithm, dynamic provisioning, and the CSI plugin contract that makes the whole thing extensible.
-
-### A. PV / PVC: A Supply-and-Demand Decoupling
-
-Kubernetes models storage as a marketplace:
-
-- **PersistentVolume (PV)** is the *supply side* — a piece of storage that exists in the cluster, with attributes (capacity, access modes, reclaim policy, storage class, backing driver). PVs are cluster-scoped (not namespaced); they describe storage available somewhere in the infrastructure.
-- **PersistentVolumeClaim (PVC)** is the *demand side* — a namespaced request for storage with attributes (requested capacity, required access mode, optional storage class). PVCs are written by workload owners.
-- The **binding controller** matches PVCs to PVs.
-
-The decoupling matters because storage admins and app developers think on different timescales. The cluster operator pre-provisions a pool of PVs (or sets up dynamic provisioning, §C), and developers consume PVCs without knowing whether the underlying disk is EBS, Ceph RBD, NFS, or local SSD. The same PVC YAML works on every cloud and on-prem.
-
-A Pod references the **PVC by name**, never a PV directly. That indirection is what allows the same workload manifest to deploy across environments.
-
-### B. The Binding Algorithm
-
-When a PVC is created, the controller looks for a PV that satisfies all of:
-
-1. **Capacity ≥ requested.** A 5Gi PVC binds to a 10Gi PV (the difference is wasted; PVs are not subdivided).
-2. **AccessMode is in the PV's supported set.** RWO (ReadWriteOnce: one node), ROX (ReadOnlyMany), RWX (ReadWriteMany), RWOP (ReadWriteOncePod, single pod). Block storage is RWO; networked filesystems can be RWX.
-3. **StorageClass matches** (including the "" / nil case for static provisioning).
-4. **Selector / volumeName** match if specified by the PVC.
-
-If multiple PVs match, the controller picks the smallest one that fits to minimize waste. If none match and a StorageClass is set with a provisioner, dynamic provisioning kicks in (§C). Otherwise the PVC stays Pending.
-
-Once bound, PV and PVC are exclusive — the binding is 1:1 and stored in both objects' `spec.claimRef` / `spec.volumeName`. Even if the PVC is deleted and recreated with the same name, it gets a new PV (or stays Pending if the old one is still bound, depending on reclaim policy).
-
-The Pod scheduler is involved too: with `volumeBindingMode: WaitForFirstConsumer`, binding is deferred until a Pod actually uses the PVC, so the PV can be created in the same zone as the chosen node. Without it, you can end up with a PV in zone A and a Pod that the scheduler then must place in zone A — over-constrained.
-
-### C. Dynamic Provisioning via StorageClass
-
-Pre-provisioning PVs is operationally painful for any cluster that does not know its workload mix in advance. The **StorageClass** abstraction lets the cluster *create PVs on demand*:
-
-```yaml
-apiVersion: storage.k8s.io/v1
-kind: StorageClass
-metadata:
-  name: gp3
-provisioner: ebs.csi.aws.com
-parameters:
-  type: gp3
-  encrypted: "true"
-reclaimPolicy: Delete
-allowVolumeExpansion: true
-volumeBindingMode: WaitForFirstConsumer
-```
-
-When a PVC arrives with `storageClassName: gp3`, the controller asks the named provisioner ("the EBS CSI driver") to create a real EBS volume and a corresponding PV. The PVC then binds to that auto-generated PV. This converts storage from a static inventory problem to an on-demand utility.
-
-Multiple StorageClasses let you offer tiers (`gp3` for general workloads, `io2` for databases, `cold` for archive). One can be the default (`storageclass.kubernetes.io/is-default-class: "true"`) so PVCs without an explicit class still work.
-
-The reclaim policy decides what happens when the PVC is deleted: `Delete` (also delete the underlying volume — destructive!), `Retain` (keep the PV in `Released` state for manual cleanup, used for production data), `Recycle` (deprecated; basic scrub-and-reuse).
-
-### D. CSI: The Plugin Contract That Made Storage Extensible
-
-Pre-CSI, every storage driver (NFS, RBD, EBS, GCE PD, ...) was compiled into Kubernetes core. Adding a vendor required a Kubernetes release. **CSI (Container Storage Interface)** broke this by defining a standard gRPC interface that any vendor can implement out-of-tree.
-
-A CSI driver is two pieces:
-
-- **Controller plugin** (cluster-wide): handles `CreateVolume` / `DeleteVolume`, snapshot operations, and (on cloud providers) attach/detach to nodes. Runs as a Deployment in the kube-system namespace.
-- **Node plugin** (per-node DaemonSet): handles `NodeStageVolume` / `NodePublishVolume` — formats and mounts the device into the Pod's filesystem namespace.
-
-The kubelet does not know about EBS or RBD; it just calls CSI gRPC methods. This isolation is why modern storage vendors ship a single Helm chart and you get full Kubernetes integration without recompiling anything.
-
-The lifecycle of a Pod using a dynamically provisioned PVC:
-
-1. PVC created → external-provisioner sidecar calls CSI `CreateVolume` → cloud creates disk, provisioner creates PV, binding controller binds PVC↔PV.
-2. Pod scheduled to a node → external-attacher calls CSI `ControllerPublishVolume` → cloud attaches the disk to that node.
-3. kubelet on the node calls CSI `NodeStageVolume` (format if needed, mount to staging dir) and `NodePublishVolume` (bind-mount into Pod's filesystem).
-4. Pod runs.
-5. Pod deleted → reverse: `NodeUnpublish`, `NodeUnstage`, `ControllerUnpublish`. PVC deletion (with `Delete` reclaim) triggers `DeleteVolume`.
-
-Volume snapshots and clones are CSI optional capabilities (`VolumeSnapshot`, `VolumeSnapshotClass`) following the same pattern: a request object, a CSI call, and a controller that bridges the two.
-
-### From Theory to the YAML Below
-
-The lesson now walks through these abstractions:
-
-- **Section 1 (Volumes and Volume Types)** covers the lower-level Pod-scoped volumes that aren't PVs (emptyDir, configMap, projected, etc.) — useful before introducing the persistence model.
-- **Sections 2–3 (PV, PVC)** are §A: the supply and demand objects. Read both YAMLs side-by-side to see how `accessModes` and `storage` connect them.
-- **Section 4 (StorageClasses, Dynamic Provisioning)** is §C — see how `provisioner` and `parameters` map to a real cloud driver.
-- **Section 5 (Access Modes)** unpacks the binding-algorithm constraint from §B with concrete RWO/ROX/RWX examples.
-- **Section 6 (Reclaim Policies)** is the destructive vs. preserving choice from §C — pick wrong and you can lose data on PVC delete.
-- **Section 7 (CSI)** is §D — see the architecture diagram of controller + node plugins.
-- **Section 8 (Volume Snapshots)** uses the CSI snapshot capability for backup/restore patterns.
-- **Section 9 (Ephemeral Volumes)** is a related design — generic ephemeral volumes use the PVC machinery for short-lived storage.
-- **Section 10 (StatefulSet Storage Patterns)** ties storage back to the workloads that need per-replica identity (lesson 02 §C).
-
-Once you see PV/PVC as supply/demand and StorageClass as on-demand provisioning, every storage YAML is just specializing the four parts of §B's binding algorithm.
 
 ---
 
@@ -422,6 +325,33 @@ kubectl describe pv pv-nfs-data
 
 ## 3. PersistentVolumeClaims (PVC)
 
+### Theory: PV / PVC: A Supply-and-Demand Decoupling
+
+Kubernetes models storage as a marketplace:
+
+- **PersistentVolume (PV)** is the *supply side* — a piece of storage that exists in the cluster, with attributes (capacity, access modes, reclaim policy, storage class, backing driver). PVs are cluster-scoped (not namespaced); they describe storage available somewhere in the infrastructure.
+- **PersistentVolumeClaim (PVC)** is the *demand side* — a namespaced request for storage with attributes (requested capacity, required access mode, optional storage class). PVCs are written by workload owners.
+- The **binding controller** matches PVCs to PVs.
+
+The decoupling matters because storage admins and app developers think on different timescales. The cluster operator pre-provisions a pool of PVs (or sets up dynamic provisioning, §C), and developers consume PVCs without knowing whether the underlying disk is EBS, Ceph RBD, NFS, or local SSD. The same PVC YAML works on every cloud and on-prem.
+
+A Pod references the **PVC by name**, never a PV directly. That indirection is what allows the same workload manifest to deploy across environments.
+
+### Theory: The Binding Algorithm
+
+When a PVC is created, the controller looks for a PV that satisfies all of:
+
+1. **Capacity ≥ requested.** A 5Gi PVC binds to a 10Gi PV (the difference is wasted; PVs are not subdivided).
+2. **AccessMode is in the PV's supported set.** RWO (ReadWriteOnce: one node), ROX (ReadOnlyMany), RWX (ReadWriteMany), RWOP (ReadWriteOncePod, single pod). Block storage is RWO; networked filesystems can be RWX.
+3. **StorageClass matches** (including the "" / nil case for static provisioning).
+4. **Selector / volumeName** match if specified by the PVC.
+
+If multiple PVs match, the controller picks the smallest one that fits to minimize waste. If none match and a StorageClass is set with a provisioner, dynamic provisioning kicks in (§C). Otherwise the PVC stays Pending.
+
+Once bound, PV and PVC are exclusive — the binding is 1:1 and stored in both objects' `spec.claimRef` / `spec.volumeName`. Even if the PVC is deleted and recreated with the same name, it gets a new PV (or stays Pending if the old one is still bound, depending on reclaim policy).
+
+The Pod scheduler is involved too: with `volumeBindingMode: WaitForFirstConsumer`, binding is deferred until a Pod actually uses the PVC, so the PV can be created in the same zone as the chosen node. Without it, you can end up with a PV in zone A and a Pod that the scheduler then must place in zone A — over-constrained.
+
 A PVC is a request for storage by a user. It binds to a PV that satisfies the
 request based on capacity, access mode, and storage class.
 
@@ -538,6 +468,30 @@ kubectl describe pvc data-claim | grep -A 5 Conditions
 ---
 
 ## 4. StorageClasses and Dynamic Provisioning
+
+### Theory: Dynamic Provisioning via StorageClass
+
+Pre-provisioning PVs is operationally painful for any cluster that does not know its workload mix in advance. The **StorageClass** abstraction lets the cluster *create PVs on demand*:
+
+```yaml
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: gp3
+provisioner: ebs.csi.aws.com
+parameters:
+  type: gp3
+  encrypted: "true"
+reclaimPolicy: Delete
+allowVolumeExpansion: true
+volumeBindingMode: WaitForFirstConsumer
+```
+
+When a PVC arrives with `storageClassName: gp3`, the controller asks the named provisioner ("the EBS CSI driver") to create a real EBS volume and a corresponding PV. The PVC then binds to that auto-generated PV. This converts storage from a static inventory problem to an on-demand utility.
+
+Multiple StorageClasses let you offer tiers (`gp3` for general workloads, `io2` for databases, `cold` for archive). One can be the default (`storageclass.kubernetes.io/is-default-class: "true"`) so PVCs without an explicit class still work.
+
+The reclaim policy decides what happens when the PVC is deleted: `Delete` (also delete the underlying volume — destructive!), `Retain` (keep the PV in `Released` state for manual cleanup, used for production data), `Recycle` (deprecated; basic scrub-and-reuse).
 
 StorageClasses enable **dynamic provisioning**—PVs are created automatically when
 a PVC requests storage from a class.
@@ -754,6 +708,27 @@ kubectl get pv pv-nfs-data
 ---
 
 ## 7. CSI (Container Storage Interface)
+
+### Theory: CSI: The Plugin Contract That Made Storage Extensible
+
+Pre-CSI, every storage driver (NFS, RBD, EBS, GCE PD, ...) was compiled into Kubernetes core. Adding a vendor required a Kubernetes release. **CSI (Container Storage Interface)** broke this by defining a standard gRPC interface that any vendor can implement out-of-tree.
+
+A CSI driver is two pieces:
+
+- **Controller plugin** (cluster-wide): handles `CreateVolume` / `DeleteVolume`, snapshot operations, and (on cloud providers) attach/detach to nodes. Runs as a Deployment in the kube-system namespace.
+- **Node plugin** (per-node DaemonSet): handles `NodeStageVolume` / `NodePublishVolume` — formats and mounts the device into the Pod's filesystem namespace.
+
+The kubelet does not know about EBS or RBD; it just calls CSI gRPC methods. This isolation is why modern storage vendors ship a single Helm chart and you get full Kubernetes integration without recompiling anything.
+
+The lifecycle of a Pod using a dynamically provisioned PVC:
+
+1. PVC created → external-provisioner sidecar calls CSI `CreateVolume` → cloud creates disk, provisioner creates PV, binding controller binds PVC↔PV.
+2. Pod scheduled to a node → external-attacher calls CSI `ControllerPublishVolume` → cloud attaches the disk to that node.
+3. kubelet on the node calls CSI `NodeStageVolume` (format if needed, mount to staging dir) and `NodePublishVolume` (bind-mount into Pod's filesystem).
+4. Pod runs.
+5. Pod deleted → reverse: `NodeUnpublish`, `NodeUnstage`, `ControllerUnpublish`. PVC deletion (with `Delete` reclaim) triggers `DeleteVolume`.
+
+Volume snapshots and clones are CSI optional capabilities (`VolumeSnapshot`, `VolumeSnapshotClass`) following the same pattern: a request object, a CSI call, and a controller that bridges the two.
 
 CSI is the standard interface between Kubernetes and external storage systems.
 It replaced in-tree volume plugins with out-of-tree drivers.

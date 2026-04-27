@@ -14,8 +14,6 @@
 
 Kubernetes API 서버는 모든 클러스터의 중앙 허브입니다. 모든 `kubectl` 명령, 모든 컨트롤러, 모든 오퍼레이터(Operator)가 이 단일 RESTful 인터페이스를 통해 통신합니다. Kubernetes API에 대한 프로그래밍 방법을 이해하면 커스텀 자동화를 구축하고, 새로운 동작으로 플랫폼을 확장하며, Kubernetes를 더 큰 시스템에 통합할 수 있습니다. 이 레슨에서는 API 서버와 상호작용하는 Go 프로그램을 작성하는 방법을 배웁니다 -- 간단한 CRUD 작업부터 리소스를 감시하고 지속적으로 상태를 조정하는 본격적인 컨트롤러까지.
 
-Go 코드에 들어가기 전에, [**이론과 원리**](#이론과-원리) 섹션을 먼저 읽어보세요. 모든 쿠버네티스 리소스를 카탈로그화하는 GVR/GVK 시스템, client-go의 typed clientset과 dynamic client가 컴파일 시간 안전성과 일반성을 트레이드하는 이유, 모든 컨트롤러를 구동하는 informer + work queue 패턴, 그리고 실제 클러스터 없이 reconciliation 로직을 검증하게 해주는 테스팅 전략(envtest, fake client)을 다룹니다.
-
 ## 목차
 
 - [이론과 원리](#이론과-원리)
@@ -33,11 +31,9 @@ Go 코드에 들어가기 전에, [**이론과 원리**](#이론과-원리) 섹�
 
 ---
 
-## 이론과 원리
+## 1. Kubernetes API 구조
 
-Go에서 쿠버네티스 API를 프로그래밍하는 것은 당신이 사용한 모든 컨트롤러, operator, 플랫폼 도구(Argo CD, cert-manager, Prometheus Operator, ...)가 내부에서 하는 일입니다. API 서버 자체는 RESTful HTTP+JSON 서비스 — `curl`로 호출할 수 있습니다 — 그러나 프로덕션 코드는 typed 접근, 캐싱(informer), 효율적 변경 알림(watch), 그리고 재시작과 동시성 하에서 reconciliation을 정확하게 만드는 work-queue 패턴을 제공하므로 **client-go** 라이브러리를 사용합니다. 이 섹션은 리소스 분류(GVR/GVK), 클라이언트 선택, informer 아키텍처(11강의 operator-runtime의 기반이기도 함), 그리고 취미 코드와 프로덕션 컨트롤러를 구분하는 테스팅 접근을 설명합니다.
-
-### A. 리소스 분류 — GVR과 GVK
+### 이론: 리소스 분류 — GVR과 GVK
 
 모든 쿠버네티스 리소스는 두 평행 식별을 가집니다:
 
@@ -48,76 +44,6 @@ Go에서 쿠버네티스 API를 프로그래밍하는 것은 당신이 사용한
 둘 사이의 매핑은 API 서버의 **discovery** 엔드포인트를 통하며, 이는 등록된 모든 (group, version)과 그 안의 kind와 resource를 나열합니다. 라이브러리 `RESTMapper`가 이 조회를 대신 해주므로 `meta.RESTMapper.RESTMapping(GroupKind, version)`을 작성하고 올바른 URL fragment를 돌려받을 수 있습니다.
 
 왜 둘? 와이어 형식과 인메모리 표현이 독립적으로 진화하기 때문입니다. `Deployment` Kind는 항상 "동일한 개념적 객체"를 의미하지만, REST resource 경로는 (원칙적으로) API 버전 간에 변경될 수 있습니다. 대부분의 코드는 Go에서 Kind(`*appsv1.Deployment`)를 사용하고 RBAC와 dynamic-client 계층에서만 Resource를 다룹니다.
-
-### B. 세 가지 클라이언트 스타일 — Typed, Discovery, Dynamic
-
-client-go는 API 서버와 통신하는 세 가지 방법을 제공합니다:
-
-**1. Typed clientset (`kubernetes.Clientset`)** — 내장 리소스를 위한 Go 타입 인터페이스. `clientset.AppsV1().Deployments("default").Get(ctx, "my-app", metav1.GetOptions{})`를 작성하고 `*appsv1.Deployment`를 돌려받습니다. 컴파일 시간 안전성, IDE 자동 완성, 리팩토링 쉬움. **한계** — clientset 컴파일 시점에 타입이 알려진 리소스에만 동작 — 내장과 typed 클라이언트를 생성한 CRD.
-
-**2. Dynamic client (`dynamic.Interface`)** — `unstructured.Unstructured`(`map[string]interface{}`)에 동작합니다. GVR을 구성하고, `ResourceInterface`를 가져오고, `*unstructured.Unstructured` 객체에 작업합니다. 빌드 시점에 알려지지 않은 임의의 CRD를 코드 생성 없이 다룰 능력을 위해 컴파일 시간 안전성을 트레이드. **사용 시기** — 빌드 시점에 알려지지 않은 사용자 제공 CRD를 다루는 generic operator(Argo CD 같은) 작성.
-
-**3. controller-runtime client (`client.Client`)** — 11강에서 도입; clientset 위에 빌드되었지만 런타임 등록을 통해 내장과 커스텀 타입에 통합됨. Reconciler 패턴과 깔끔히 통합되므로 새 컨트롤러의 표준입니다.
-
-각각 뒤에는 HTTP, 인증, 콘텐츠 협상(JSON vs protobuf), rate limiting을 처리하는 `rest.RESTClient`가 있습니다. 이 계층과 직접 상호작용하는 일은 거의 없습니다 — 더 높은 수준의 클라이언트가 그것을 감쌉니다.
-
-**Discovery client** (`discovery.DiscoveryInterface`)는 네 번째, 특수 목적 클라이언트입니다 — 사용 가능한 group/version/resource의 API 서버 목록을 반환합니다. "이 클러스터에서 무엇과 작업할 수 있는가?"를 열거해야 하는 도구에 유용합니다.
-
-### C. Informer 아키텍처 — List-Watch + 캐시 + 인덱싱된 읽기
-
-모든 컨트롤러는 변경에 대해 리소스를 watch해야 합니다. 순진하게 하면(컨트롤러당 리소스당 watch HTTP 연결) 스케일하지 않습니다. **informer** 패턴이 이를 공유 캐시로 해결합니다:
-
-```
-API Server ←─watch─ Informer ─→ Indexer (캐시) ─→ Lister
-                       │
-                       └─→ Event Handler ─→ Work Queue ─→ Reconciler
-```
-
-**SharedInformerFactory**가 (resource, namespace)당 하나의 informer를 만들고 모든 consumer 간에 공유합니다. 따라서 operator가 Deployment를 watch하고 CRD 컨트롤러도 Deployment를 watch하면, 단 하나의 watch HTTP 연결만 열립니다. 팩토리는 참조 카운트를 추적하고 consumer가 남지 않으면 정리합니다.
-
-**Indexer**가 로컬 캐시입니다. 초기 list 결과와 모든 후속 watch 델타를 보관합니다. 읽기(Get, List)는 indexer를 히트 — API 서버가 아닙니다 — 즉, 컨트롤러는 멀티 메가바이트 API 서버 왕복 대신 마이크로초 안에 로컬에서 10,000개 파드를 list할 수 있습니다. 빠른 조회를 위해 레이블, 필드, 또는 임의 함수에 커스텀 인덱스를 빌드할 수 있습니다("스캔 없이 ReplicaSet X가 소유한 모든 파드 줘").
-
-**Event handler**는 `ADDED`/`MODIFIED`/`DELETED`에서 호출되는 사용자 제공 콜백입니다. 표준 패턴 — 핸들러는 일을 *하지 않습니다* — 키(`namespace/name`)를 추출하고 work queue에 `Add()`. 이는 이벤트 속도와 작업 속도를 분리합니다 — 폭발 이벤트는 큐에 흡수되고, 작업은 reconciler 페이스로 진행됩니다.
-
-**Work queue** (`workqueue.RateLimitingInterface`)는 정확한 컨트롤러에 중요한 세 속성을 제공합니다:
-- **중복 제거** — 같은 키에 대한 100개 이벤트는 하나의 reconcile이 됨.
-- **키별 직렬화** — 주어진 키에 대해 한 번에 하나의 worker만 reconcile.
-- **Rate limiting** — 실패한 reconcile은 exponentially backoff.
-
-**Reconciler**는 당신의 코드입니다. 큐에서 키를 가져오고, indexer에서 현재 객체를 가져오고, desired 상태를 계산하고, 행동합니다. 오류 시 키를 큐로 반환하여 재시도; 성공 시 잊습니다. 이는 11강과 동일한 패턴 — 여기서는 더 낮은 수준의 client-go 관점에서 봅니다.
-
-### D. 컨트롤러 테스팅 — envtest, Fake Client, 그리고 둘 다 존재하는 이유
-
-컨트롤러는 API 서버의 동작 — 어드미션, defaulting, status 업데이트, watch 시맨틱 — 에 의존하기에 악명 높게 테스트하기 어렵습니다. 두 보완적 접근:
-
-**Fake client** (`fake.NewSimpleClientset`) — 작업을 기록하고 미리 정해진 응답을 반환하는 clientset 인터페이스의 인메모리 구현. 장점 — 매우 빠름(작업당 마이크로초), 외부 의존성 없음, "컨트롤러가 X로 Update 호출했음"을 주장하기 쉬움. 단점 — 어드미션을 실행하지 않음, 스키마를 강제하지 않음, goroutine을 가로질러 watch 이벤트를 적절히 생성하지 않음. 순수 reconciler 로직의 단위 테스트에 가장 적합.
-
-**envtest** (controller-runtime) — 테스트 프로세스에서 실제 `etcd`와 `kube-apiserver` 바이너리를 부팅. 장점 — 어드미션, 검증, defaulting, watch를 포함한 실제 API 동작 행사. Reconciler가 실제 API 서버에 대해 실행됩니다. 단점 — 더 느림(약 5초 시작, 작업당 약 100ms); kubebuilder envtest 바이너리 설치 필요. 컨트롤러 동작의 종단 간 통합 테스트에 가장 적합.
-
-흔한 테스트 레이아웃 — fake client로 reconciler 로직에 대한 빠른 단위 테스트(CI에서 fail-fast), 더해 전체 reconciler-API 상호작용을 행사하는 envtest 기반 통합 테스트의 더 작은 모음(느리지만 높은 신뢰).
-
-미묘한 점 — fake-client 테스트는 통과하지만 envtest 테스트는 실패하는 컨트롤러는 보통 fake client가 시뮬레이트하지 않는 무언가(어드미션 웹훅, server-side apply 시맨틱, watch 이벤트 순서)에 의존하는 것입니다. "테스트에서는 동작, 클러스터에서는 실패" 디버깅 시, envtest가 진실에 더 가깝습니다.
-
-### 이론에서 아래의 코드로
-
-이제 레슨은 이 추상을 적용합니다:
-
-- **섹션 1 (Kubernetes API 구조)**는 §A입니다 — GVR/GVK, discovery, API 서버의 리소스 그래프.
-- **섹션 2 (client-go 라이브러리)**는 §B의 개요입니다 — 패키지 레이아웃과 상위 수준 설계.
-- **섹션 3 (REST 클라이언트와 Clientsets)**은 구체적 코드의 §B의 typed client.
-- **섹션 4 (다이나믹 클라이언트와 비구조화 객체)**는 generic 도구를 위한 §B의 dynamic client.
-- **섹션 5 (인포머와 캐싱)**은 코드의 `SharedInformerFactory`와 함께한 §C의 informer 아키텍처.
-- **섹션 6 (워크 큐)**는 rate limiting과 키별 직렬화를 가진 §C의 큐.
-- **섹션 7 (커스텀 컨트롤러 구축)**은 §C를 함께 꿰맵니다 — 실행 가능한 프로그램의 informer + 큐 + reconciler.
-- **섹션 8 (Controller-Runtime 라이브러리)**는 동일한 프리미티브 위의 더 높은 수준 추상(11강)입니다.
-- **섹션 9 (리소스 감시와 이벤트 처리)**는 event handler 패턴(필터, requeue, owner-reference watch)입니다.
-- **섹션 10 (컨트롤러 테스트)**는 §D입니다 — 실무의 fake client와 envtest.
-
-GVR/GVK를 리소스 분류로, 세 클라이언트 스타일을 일반성-vs-안전성 트레이드오프로, informer + 큐 + reconciler를 보편적 컨트롤러 패턴으로 보고 나면, 모든 쿠버네티스 인식 Go 프로그램은 동일한 빌딩 블록으로 분해됩니다.
-
----
-
-## 1. Kubernetes API 구조
 
 ### 1.1 API 그룹과 버전
 
@@ -243,6 +169,20 @@ metadata:
 ---
 
 ## 2. client-go 라이브러리
+
+### 이론: 세 가지 클라이언트 스타일 — Typed, Discovery, Dynamic
+
+client-go는 API 서버와 통신하는 세 가지 방법을 제공합니다:
+
+**1. Typed clientset (`kubernetes.Clientset`)** — 내장 리소스를 위한 Go 타입 인터페이스. `clientset.AppsV1().Deployments("default").Get(ctx, "my-app", metav1.GetOptions{})`를 작성하고 `*appsv1.Deployment`를 돌려받습니다. 컴파일 시간 안전성, IDE 자동 완성, 리팩토링 쉬움. **한계** — clientset 컴파일 시점에 타입이 알려진 리소스에만 동작 — 내장과 typed 클라이언트를 생성한 CRD.
+
+**2. Dynamic client (`dynamic.Interface`)** — `unstructured.Unstructured`(`map[string]interface{}`)에 동작합니다. GVR을 구성하고, `ResourceInterface`를 가져오고, `*unstructured.Unstructured` 객체에 작업합니다. 빌드 시점에 알려지지 않은 임의의 CRD를 코드 생성 없이 다룰 능력을 위해 컴파일 시간 안전성을 트레이드. **사용 시기** — 빌드 시점에 알려지지 않은 사용자 제공 CRD를 다루는 generic operator(Argo CD 같은) 작성.
+
+**3. controller-runtime client (`client.Client`)** — 11강에서 도입; clientset 위에 빌드되었지만 런타임 등록을 통해 내장과 커스텀 타입에 통합됨. Reconciler 패턴과 깔끔히 통합되므로 새 컨트롤러의 표준입니다.
+
+각각 뒤에는 HTTP, 인증, 콘텐츠 협상(JSON vs protobuf), rate limiting을 처리하는 `rest.RESTClient`가 있습니다. 이 계층과 직접 상호작용하는 일은 거의 없습니다 — 더 높은 수준의 클라이언트가 그것을 감쌉니다.
+
+**Discovery client** (`discovery.DiscoveryInterface`)는 네 번째, 특수 목적 클라이언트입니다 — 사용 가능한 group/version/resource의 API 서버 목록을 반환합니다. "이 클러스터에서 무엇과 작업할 수 있는가?"를 열거해야 하는 도구에 유용합니다.
 
 ### 2.1 개요
 
@@ -658,6 +598,29 @@ err := unstructured.SetNestedSlice(obj.Object, items, "spec", "containers")
 ---
 
 ## 5. 인포머와 캐싱
+
+### 이론: Informer 아키텍처 — List-Watch + 캐시 + 인덱싱된 읽기
+
+모든 컨트롤러는 변경에 대해 리소스를 watch해야 합니다. 순진하게 하면(컨트롤러당 리소스당 watch HTTP 연결) 스케일하지 않습니다. **informer** 패턴이 이를 공유 캐시로 해결합니다:
+
+```
+API Server ←─watch─ Informer ─→ Indexer (캐시) ─→ Lister
+                       │
+                       └─→ Event Handler ─→ Work Queue ─→ Reconciler
+```
+
+**SharedInformerFactory**가 (resource, namespace)당 하나의 informer를 만들고 모든 consumer 간에 공유합니다. 따라서 operator가 Deployment를 watch하고 CRD 컨트롤러도 Deployment를 watch하면, 단 하나의 watch HTTP 연결만 열립니다. 팩토리는 참조 카운트를 추적하고 consumer가 남지 않으면 정리합니다.
+
+**Indexer**가 로컬 캐시입니다. 초기 list 결과와 모든 후속 watch 델타를 보관합니다. 읽기(Get, List)는 indexer를 히트 — API 서버가 아닙니다 — 즉, 컨트롤러는 멀티 메가바이트 API 서버 왕복 대신 마이크로초 안에 로컬에서 10,000개 파드를 list할 수 있습니다. 빠른 조회를 위해 레이블, 필드, 또는 임의 함수에 커스텀 인덱스를 빌드할 수 있습니다("스캔 없이 ReplicaSet X가 소유한 모든 파드 줘").
+
+**Event handler**는 `ADDED`/`MODIFIED`/`DELETED`에서 호출되는 사용자 제공 콜백입니다. 표준 패턴 — 핸들러는 일을 *하지 않습니다* — 키(`namespace/name`)를 추출하고 work queue에 `Add()`. 이는 이벤트 속도와 작업 속도를 분리합니다 — 폭발 이벤트는 큐에 흡수되고, 작업은 reconciler 페이스로 진행됩니다.
+
+**Work queue** (`workqueue.RateLimitingInterface`)는 정확한 컨트롤러에 중요한 세 속성을 제공합니다:
+- **중복 제거** — 같은 키에 대한 100개 이벤트는 하나의 reconcile이 됨.
+- **키별 직렬화** — 주어진 키에 대해 한 번에 하나의 worker만 reconcile.
+- **Rate limiting** — 실패한 reconcile은 exponentially backoff.
+
+**Reconciler**는 당신의 코드입니다. 큐에서 키를 가져오고, indexer에서 현재 객체를 가져오고, desired 상태를 계산하고, 행동합니다. 오류 시 키를 큐로 반환하여 재시도; 성공 시 잊습니다. 이는 11강과 동일한 패턴 — 여기서는 더 낮은 수준의 client-go 관점에서 봅니다.
 
 ### 5.1 인포머가 필요한 이유
 
@@ -1420,6 +1383,18 @@ return ctrl.Result{}, fmt.Errorf("external API unavailable")
 ---
 
 ## 10. 컨트롤러 테스트
+
+### 이론: 컨트롤러 테스팅 — envtest, Fake Client, 그리고 둘 다 존재하는 이유
+
+컨트롤러는 API 서버의 동작 — 어드미션, defaulting, status 업데이트, watch 시맨틱 — 에 의존하기에 악명 높게 테스트하기 어렵습니다. 두 보완적 접근:
+
+**Fake client** (`fake.NewSimpleClientset`) — 작업을 기록하고 미리 정해진 응답을 반환하는 clientset 인터페이스의 인메모리 구현. 장점 — 매우 빠름(작업당 마이크로초), 외부 의존성 없음, "컨트롤러가 X로 Update 호출했음"을 주장하기 쉬움. 단점 — 어드미션을 실행하지 않음, 스키마를 강제하지 않음, goroutine을 가로질러 watch 이벤트를 적절히 생성하지 않음. 순수 reconciler 로직의 단위 테스트에 가장 적합.
+
+**envtest** (controller-runtime) — 테스트 프로세스에서 실제 `etcd`와 `kube-apiserver` 바이너리를 부팅. 장점 — 어드미션, 검증, defaulting, watch를 포함한 실제 API 동작 행사. Reconciler가 실제 API 서버에 대해 실행됩니다. 단점 — 더 느림(약 5초 시작, 작업당 약 100ms); kubebuilder envtest 바이너리 설치 필요. 컨트롤러 동작의 종단 간 통합 테스트에 가장 적합.
+
+흔한 테스트 레이아웃 — fake client로 reconciler 로직에 대한 빠른 단위 테스트(CI에서 fail-fast), 더해 전체 reconciler-API 상호작용을 행사하는 envtest 기반 통합 테스트의 더 작은 모음(느리지만 높은 신뢰).
+
+미묘한 점 — fake-client 테스트는 통과하지만 envtest 테스트는 실패하는 컨트롤러는 보통 fake client가 시뮬레이트하지 않는 무언가(어드미션 웹훅, server-side apply 시맨틱, watch 이벤트 순서)에 의존하는 것입니다. "테스트에서는 동작, 클러스터에서는 실패" 디버깅 시, envtest가 진실에 더 가깝습니다.
 
 ### 10.1 가짜 클라이언트(Fake Client)를 사용한 유닛 테스트
 

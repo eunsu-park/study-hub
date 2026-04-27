@@ -14,8 +14,6 @@
 
 머신러닝 워크로드는 고유한 인프라 요구사항을 가지고 있습니다: 학습을 위한 GPU, 효율적으로 로드해야 하는 대규모 데이터셋, 장기 실행되는 분산 학습 작업, 저지연 모델 서빙. Kubernetes는 표준화된 방식으로 스케줄링, 리소스 관리, 확장성을 제공하기 때문에 ML 인프라의 선택 플랫폼이 되었습니다. 이 레슨에서는 GPU 스케줄링부터 분산 학습, 프로덕션 모델 서빙까지 Kubernetes에서의 ML의 전체 라이프사이클을 다룹니다.
 
-구성에 들어가기 전에, [**이론과 원리**](#이론과-원리) 섹션을 먼저 읽어보세요. GPU가 "extended resource"인 이유와 그것이 스케줄링에 의미하는 바, kubelet이 native하게 이해하지 못하는 하드웨어를 보게 하는 device-plugin 인터페이스, 분산 학습을 웹 서비스와 다르게 만드는 gang-scheduling 문제, 그리고 모델 서빙 런타임 트레이드오프(KServe vs Seldon vs Triton)를 다룹니다.
-
 ## 목차
 
 - [이론과 원리](#이론과-원리)
@@ -31,11 +29,9 @@
 
 ---
 
-## 이론과 원리
+## 1. Kubernetes에서의 GPU 스케줄링
 
-ML 워크로드는 웹 서비스가 하지 않는 방식으로 쿠버네티스를 압박합니다 — 희소 리소스로서의 GPU, 한 번에 *조정된 파드 집합*을 시작해야 하는 학습 작업, 컨테이너 이미지에 너무 큰 데이터셋, 버전 관리된 서빙이 필요한 모델 산출물, 그리고 모든 것을 spot 용량으로 미는 비용 규율. 쿠버네티스 자체는 GPU를 native하게 알지 못합니다 — **device plugin** 인터페이스를 통해 그것들을 발견하고 extended resource로 취급합니다. 이 섹션은 device-plugin 모델, 분산 학습에 필요한 gang scheduling, 모델 서빙 시스템(KServe, Seldon, Triton) 아키텍처, 그리고 GPU 시간 예산을 지속 가능하게 만드는 spot 인식 패턴을 설명합니다.
-
-### A. Extended Resource로서의 GPU — Device Plugin 인터페이스
+### 이론: Extended Resource로서의 GPU — Device Plugin 인터페이스
 
 GPU는 kubelet의 프리미티브가 아닙니다. kubelet은 CPU와 메모리를 압니다 — 리눅스 cgroup의 일급 개념이기 때문. 그 외 모든 것 — GPU, FPGA, SR-IOV 있는 NIC, RDMA 디바이스 — 에 대해 쿠버네티스는 **device plugin** 메커니즘을 가집니다.
 
@@ -60,67 +56,6 @@ resources:
 
 - **클러스터는 디바이스를 native하게 이해하지 않습니다.** 분수 GPU 없음, GPU 메모리 추적 없음, GPU 간 NVLink 토폴로지 없음 — 이들 모두 device-plugin 또는 생태계 도구의 관심사. NVIDIA GPU Operator는 드라이버, 컨테이너 런타임 훅, device plugin, 모니터링 exporter 등을 설치하는 완전한 패키지로, 단일 CR로 관리됩니다.
 - **Multi-instance GPU (MIG)와 time-slicing.** A100/H100 GPU는 device plugin이 별도로 광고하는 더 작은 논리적 GPU로 파티션(MIG)될 수 있습니다. Time-slicing은 단일 GPU를 여러 "가상" 디바이스로 제시하며, 각각 전체 GPU가 필요 없는 추론 파드에 유용합니다. 둘 다 device-plugin 확장이지 쿠버네티스 코어 기능이 아닙니다.
-
-### B. Gang Scheduling — 분산 학습을 위한 all-or-nothing
-
-분산 학습 작업(PyTorch DDP, Horovod, Megatron)은 N개 파드가 모두 한 번에 시작하여 함께 실행되어야 합니다. 8개 중 7개를 시작했는데 8번째가 한 시간 동안 GPU를 못 받으면, 그 7개는 비싼 GPU 시간을 태우며 idle 상태로 대기합니다. 기본 스케줄러는 이를 조정하지 않습니다 — 한 번에 한 파드씩 스케줄합니다.
-
-**Gang scheduling**(co-scheduling이라고도)은 "N개 파드를 모두 함께 스케줄하거나 어느 것도 안 한다"는 속성입니다. 기본 스케줄러는 이를 하지 않습니다 — 플러그인이나 대체 스케줄러가 필요합니다:
-
-- **Kueue** (더 새로움, 권장) — 큐에 Job을 보유하고 전체 워크로드를 위한 용량이 가용할 때만 admission하는 쿠버네티스 native job 큐잉 시스템. 표준 스케줄러와 통합.
-- **Volcano** — ML 워크로드를 위해 특별히 설계된 batch 스케줄러 — kube-scheduler를 대체하거나 보완.
-- **YuniKorn** — quota와 큐 관리를 갖춘 또 다른 batch 인식 스케줄러.
-
-Gang scheduling 없이는 큰 분산 학습 작업이 운영적으로 고통스럽습니다 — 부분 스케줄로 갇히고, GPU를 낭비하며, 유일한 수정은 수동 정리. Gang scheduling이 있으면, 큐가 스케줄링 제약을 흡수하고 작업은 완전히 실행되거나 정중히 대기합니다.
-
-같은 문제가 **다중 파드 추론**(예: tensor-parallel 서빙 설정에서 8개 GPU에 걸쳐 분할된 모델)에도 나타납니다 — 모델이 트래픽을 서비스하려면 8개 파드가 모두 함께 올라와야 합니다. 같은 gang-scheduling 해결책.
-
-### C. 모델 서빙 — KServe, Seldon, Triton — 세 가지 아키텍처 선택
-
-모델이 학습되면, 프로덕션 트래픽으로 서빙하려면 HTTP/gRPC ingress, 배칭, scale-to-zero, 다중 모델 버전, 그리고 (종종) GPU 공유를 처리하는 런타임이 필요합니다. 세 가지 주류 선택:
-
-**KServe** (이전 KFServing). CRD `InferenceService`가 "이 스토리지 URL에서 이 런타임으로 이 모델을 서빙"이라 선언하게 합니다. KServe가 나머지를 처리 — 모델 풀링, Knative Serving(요청 비율에 기반한 scale-to-zero를 줌)을 통한 배포, 라우팅, canary 트래픽. 강점 — 가장 단순한 CRD 주도 모델 배포, 오토스케일링을 위한 native Knative 통합. 약점 — Knative 설치 필요; 복잡한 스택.
-
-**Seldon Core / Seldon V2.** 비슷한 개념(배포를 기술하는 CRD)이지만 다중 모델 그래프(`ModelChain`, `ModelEnsemble`)와 설명 가능성/모니터링 통합에 강한 지원. 강점 — 복잡한 추론 파이프라인 — A/B 테스팅 내장. 약점 — 더 많은 개념적 표면.
-
-**NVIDIA Triton.** 쿠버네티스 특화가 아님 — 많은 백엔드(TensorFlow, PyTorch, ONNX, TensorRT, custom)를 지원하고 동적 배칭으로 한 GPU에서 여러 모델을 서빙할 수 있는 모델 서버. 종종 KServe나 Seldon *내부에* 런타임으로 배포됩니다. 강점 — 동급 최고의 GPU 효율성, 동적 배칭이 지연-처리량 트레이드오프 감소. 약점 — 자체로 배포 시스템이 아님 — 주변에 K8s 매니페스트가 필요.
-
-흔한 프로덕션 스택 — 배포 라이프사이클에 KServe, 그 아래 런타임으로 Triton, scale-to-zero를 제공하는 Knative Serving. 각 계층이 한 가지를 잘합니다.
-
-이 모든 것이 공유하는 미묘한 속성 — **요청 배칭.** 배칭하면 요청당 추론 비용이 극적으로 떨어집니다(16개 요청에 대한 한 번의 GPU forward pass가 16번의 별개 pass보다 훨씬 저렴). Triton이 구성 가능한 max-wait-time으로 자동으로 이를 합니다. 지연 SLO에 대해 배치 크기를 튜닝하는 것이 중심 성능 lever입니다.
-
-### D. Spot 용량과 학습의 경제학
-
-GPU 인스턴스는 비쌉니다 — 8×A100 노드는 on-demand로 시간당 $30+. **Spot 인스턴스**(preemptible/low-priority라고도)는 50-90% 저렴하지만 클라우드 프로바이더가 30초만의 통지로 회수할 수 있습니다. 긴 학습 실행에 이는 근본적 도전입니다 — 에폭 중간에 노드를 그냥 잃을 수는 없습니다.
-
-해결책은 체크포인팅 + 재시작 친화적 학습입니다:
-
-- **빈번한 체크포인트.** 학습이 N 단계마다(예: 1000 배치마다 또는 10분마다, 먼저 오는 것) 모델 상태를 영속 스토리지(S3, GCS, NFS, PVC)에 씁니다.
-- **Spot 인식 종료 처리.** 작은 사이드카가 클라우드의 preemption 신호(AWS Spot Interruption notice, GCP Preemption, Azure Eviction Notice)를 listen하고 파드 kill 전에 최종 체크포인트를 트리거.
-- **자동 재시작.** Spot 노드용 toleration과 함께 `restartPolicy: OnFailure`인 Job을 사용. Spot 노드가 죽으면, Job이 새 파드를 만들고, 그것이 최신 체크포인트를 로드하고 계속.
-
-PyTorch의 `torch.save`/`torch.load`와 **PyTorchJob** CRD(Kubeflow Training Operator)와 결합하여, 이 패턴은 70% 비용 감소로 spot에서 학습할 수 있게 하면서도 작업의 99%를 완료합니다(일부는 체크포인트 사이에 떨어진 kill에 < 10분 진행을 잃을 것).
-
-추론에는 spot이 더 어렵습니다 — 요청 중간에 서빙 용량을 잃고 싶지 않습니다. 패턴 — 학습은 spot, 서빙은 on-demand나 savings-plan, HPA(13강)가 on-demand fleet 사이징. 쿠버네티스는 노드 풀과 toleration이 다른 워크로드를 다른 비용 티어로 스케줄하게 하기에 이 합성을 다룰 만하게 만듭니다.
-
-### 이론에서 아래의 구성으로
-
-이제 레슨은 이 추상을 적용합니다:
-
-- **섹션 1 (GPU 스케줄링)**은 §A입니다 — device plugin 모델, 파드 spec에서 GPU 요청, MIG, time-slicing.
-- **섹션 2 (NVIDIA GPU Operator)**는 드라이버 + 플러그인 + exporter의 §A "all-in-one" 설치입니다.
-- **섹션 3 (Kubeflow 컴포넌트)**는 ML 특화 플랫폼입니다 — 개발용 Notebook, 오케스트레이션용 Pipeline, 분산 학습용 Training Operator(gang-scheduling 통합 포함).
-- **섹션 4 (분산 학습)**은 §B입니다 — PyTorchJob, MPIJob, Kueue/Volcano로 gang scheduling.
-- **섹션 5 (모델 서빙)**은 §C입니다 — 구체적 예제로 비교된 KServe, Seldon, Triton.
-- **섹션 6 (실험 추적)**은 학습과 함께 살며 무엇이 동작했는지 기억하는 데이터 계층입니다 — MLflow, Weights & Biases.
-- **섹션 7 (스팟 및 선점형 인스턴스)**는 §D입니다 — 체크포인팅 패턴, preemption 처리, 재시도 시맨틱을 위한 JobSet.
-- **섹션 8 (ML 팀을 위한 리소스 쿼터)**는 다중 테넌트 비용 통제 — 네임스페이스별 quota, 공정성을 중재하는 KEDA + Kueue.
-
-GPU를 extended resource로, 분산 학습을 gang-scheduling 문제로, 모델 서빙을 "Triton급 런타임 + scale-to-zero 래퍼"로 보고 나면, 쿠버네티스의 ML 스택은 다른 모든 것과 동일한 빌딩 블록으로 분해됩니다 — 단지 하드웨어 인식 스케줄링과 체크포인트에 대한 강한 의견과 함께.
-
----
-
-## 1. Kubernetes에서의 GPU 스케줄링
 
 ### 1.1 GPU 스케줄링 작동 방식
 
@@ -808,6 +743,20 @@ spec:
 
 ## 4. Kubernetes에서의 분산 학습
 
+### 이론: Gang Scheduling — 분산 학습을 위한 all-or-nothing
+
+분산 학습 작업(PyTorch DDP, Horovod, Megatron)은 N개 파드가 모두 한 번에 시작하여 함께 실행되어야 합니다. 8개 중 7개를 시작했는데 8번째가 한 시간 동안 GPU를 못 받으면, 그 7개는 비싼 GPU 시간을 태우며 idle 상태로 대기합니다. 기본 스케줄러는 이를 조정하지 않습니다 — 한 번에 한 파드씩 스케줄합니다.
+
+**Gang scheduling**(co-scheduling이라고도)은 "N개 파드를 모두 함께 스케줄하거나 어느 것도 안 한다"는 속성입니다. 기본 스케줄러는 이를 하지 않습니다 — 플러그인이나 대체 스케줄러가 필요합니다:
+
+- **Kueue** (더 새로움, 권장) — 큐에 Job을 보유하고 전체 워크로드를 위한 용량이 가용할 때만 admission하는 쿠버네티스 native job 큐잉 시스템. 표준 스케줄러와 통합.
+- **Volcano** — ML 워크로드를 위해 특별히 설계된 batch 스케줄러 — kube-scheduler를 대체하거나 보완.
+- **YuniKorn** — quota와 큐 관리를 갖춘 또 다른 batch 인식 스케줄러.
+
+Gang scheduling 없이는 큰 분산 학습 작업이 운영적으로 고통스럽습니다 — 부분 스케줄로 갇히고, GPU를 낭비하며, 유일한 수정은 수동 정리. Gang scheduling이 있으면, 큐가 스케줄링 제약을 흡수하고 작업은 완전히 실행되거나 정중히 대기합니다.
+
+같은 문제가 **다중 파드 추론**(예: tensor-parallel 서빙 설정에서 8개 GPU에 걸쳐 분할된 모델)에도 나타납니다 — 모델이 트래픽을 서비스하려면 8개 파드가 모두 함께 올라와야 합니다. 같은 gang-scheduling 해결책.
+
 ### 4.1 PyTorchJob을 사용한 분산 학습
 
 ```yaml
@@ -1171,6 +1120,20 @@ kubectl describe vcjob pytorch-dist-train -n ml-workloads
 
 ## 5. 모델 서빙
 
+### 이론: 모델 서빙 — KServe, Seldon, Triton — 세 가지 아키텍처 선택
+
+모델이 학습되면, 프로덕션 트래픽으로 서빙하려면 HTTP/gRPC ingress, 배칭, scale-to-zero, 다중 모델 버전, 그리고 (종종) GPU 공유를 처리하는 런타임이 필요합니다. 세 가지 주류 선택:
+
+**KServe** (이전 KFServing). CRD `InferenceService`가 "이 스토리지 URL에서 이 런타임으로 이 모델을 서빙"이라 선언하게 합니다. KServe가 나머지를 처리 — 모델 풀링, Knative Serving(요청 비율에 기반한 scale-to-zero를 줌)을 통한 배포, 라우팅, canary 트래픽. 강점 — 가장 단순한 CRD 주도 모델 배포, 오토스케일링을 위한 native Knative 통합. 약점 — Knative 설치 필요; 복잡한 스택.
+
+**Seldon Core / Seldon V2.** 비슷한 개념(배포를 기술하는 CRD)이지만 다중 모델 그래프(`ModelChain`, `ModelEnsemble`)와 설명 가능성/모니터링 통합에 강한 지원. 강점 — 복잡한 추론 파이프라인 — A/B 테스팅 내장. 약점 — 더 많은 개념적 표면.
+
+**NVIDIA Triton.** 쿠버네티스 특화가 아님 — 많은 백엔드(TensorFlow, PyTorch, ONNX, TensorRT, custom)를 지원하고 동적 배칭으로 한 GPU에서 여러 모델을 서빙할 수 있는 모델 서버. 종종 KServe나 Seldon *내부에* 런타임으로 배포됩니다. 강점 — 동급 최고의 GPU 효율성, 동적 배칭이 지연-처리량 트레이드오프 감소. 약점 — 자체로 배포 시스템이 아님 — 주변에 K8s 매니페스트가 필요.
+
+흔한 프로덕션 스택 — 배포 라이프사이클에 KServe, 그 아래 런타임으로 Triton, scale-to-zero를 제공하는 Knative Serving. 각 계층이 한 가지를 잘합니다.
+
+이 모든 것이 공유하는 미묘한 속성 — **요청 배칭.** 배칭하면 요청당 추론 비용이 극적으로 떨어집니다(16개 요청에 대한 한 번의 GPU forward pass가 16번의 별개 pass보다 훨씬 저렴). Triton이 구성 가능한 max-wait-time으로 자동으로 이를 합니다. 지연 SLO에 대해 배치 크기를 튜닝하는 것이 중심 성능 lever입니다.
+
 ### 5.1 KServe InferenceService
 
 ```yaml
@@ -1429,6 +1392,20 @@ with mlflow.start_run(run_name="gpu-training-v2"):
 ---
 
 ## 7. 학습을 위한 스팟 및 선점형 인스턴스
+
+### 이론: Spot 용량과 학습의 경제학
+
+GPU 인스턴스는 비쌉니다 — 8×A100 노드는 on-demand로 시간당 $30+. **Spot 인스턴스**(preemptible/low-priority라고도)는 50-90% 저렴하지만 클라우드 프로바이더가 30초만의 통지로 회수할 수 있습니다. 긴 학습 실행에 이는 근본적 도전입니다 — 에폭 중간에 노드를 그냥 잃을 수는 없습니다.
+
+해결책은 체크포인팅 + 재시작 친화적 학습입니다:
+
+- **빈번한 체크포인트.** 학습이 N 단계마다(예: 1000 배치마다 또는 10분마다, 먼저 오는 것) 모델 상태를 영속 스토리지(S3, GCS, NFS, PVC)에 씁니다.
+- **Spot 인식 종료 처리.** 작은 사이드카가 클라우드의 preemption 신호(AWS Spot Interruption notice, GCP Preemption, Azure Eviction Notice)를 listen하고 파드 kill 전에 최종 체크포인트를 트리거.
+- **자동 재시작.** Spot 노드용 toleration과 함께 `restartPolicy: OnFailure`인 Job을 사용. Spot 노드가 죽으면, Job이 새 파드를 만들고, 그것이 최신 체크포인트를 로드하고 계속.
+
+PyTorch의 `torch.save`/`torch.load`와 **PyTorchJob** CRD(Kubeflow Training Operator)와 결합하여, 이 패턴은 70% 비용 감소로 spot에서 학습할 수 있게 하면서도 작업의 99%를 완료합니다(일부는 체크포인트 사이에 떨어진 kill에 < 10분 진행을 잃을 것).
+
+추론에는 spot이 더 어렵습니다 — 요청 중간에 서빙 용량을 잃고 싶지 않습니다. 패턴 — 학습은 spot, 서빙은 on-demand나 savings-plan, HPA(13강)가 on-demand fleet 사이징. 쿠버네티스는 노드 풀과 toleration이 다른 워크로드를 다른 비용 티어로 스케줄하게 하기에 이 합성을 다룰 만하게 만듭니다.
 
 ### 7.1 ML에 스팟 인스턴스를 사용하는 이유
 
@@ -2098,7 +2075,6 @@ def preprocess(
     train_df.to_parquet(train_split.path, index=False)
     val_df.to_parquet(val_split.path, index=False)
 
-
 @dsl.component(base_image="nvcr.io/nvidia/pytorch:24.01-py3")
 def train_model(
     train_data: Input[Dataset],
@@ -2111,7 +2087,6 @@ def train_model(
     accuracy = 0.962  # placeholder
     torch.save({}, model_output.path + "/model.pt")
     return accuracy
-
 
 @dsl.component(
     base_image="python:3.11",
@@ -2134,7 +2109,6 @@ def evaluate_and_log(
     metrics_output.log_metric("accuracy", accuracy)
     return accuracy
 
-
 @dsl.component(
     base_image="python:3.11",
     packages_to_install=["kubernetes", "kserve"]
@@ -2148,7 +2122,6 @@ def deploy_model(
     from kubernetes import client, config
     config.load_incluster_config()
     # InferenceService 생성/업데이트 로직...
-
 
 @dsl.component(
     base_image="python:3.11",
@@ -2165,7 +2138,6 @@ def send_notification(
     status = "DEPLOYED" if deployed else "NOT DEPLOYED (accuracy < 95%)"
     message = {"text": f"ML Pipeline Complete\nModel: {model_name}\nAccuracy: {accuracy:.4f}\nStatus: {status}"}
     requests.post(slack_webhook_url, json=message)
-
 
 @dsl.pipeline(
     name="e2e-ml-pipeline",

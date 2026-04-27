@@ -18,8 +18,6 @@ Kubernetes 클러스터는 다양한 팀, 서비스, 신뢰 수준의 워크로�
 
 > **심층 방어(Defense in Depth):** Kubernetes 보안은 단일 기능이 아니라 계층화된 접근 방식입니다. 인증(Authentication)은 신원을 확인하고, 인가(Authorization)는 접근을 제어하며, 어드미션 제어(Admission Control)는 정책을 적용하고, 런타임 보안은 파드가 할 수 있는 일을 제한합니다. 각 계층은 다른 계층의 실패를 보완합니다.
 
-매니페스트에 들어가기 전에, [**이론과 원리**](#이론과-원리) 섹션을 먼저 읽어보세요. 모든 API 요청이 통과하는 4단계 게이트(authn → authz → admission → schema validation), RBAC가 순수 가산형(additive)인 이유, Role/ClusterRole + Binding 조합 모델, 그리고 Pod Security Standards가 RBAC가 아닌 admission에 위치하는 이유를 다룹니다.
-
 ## 목차
 
 - [이론과 원리](#이론과-원리)
@@ -61,11 +59,9 @@ Kubernetes 클러스터는 다양한 팀, 서비스, 신뢰 수준의 워크로�
 
 ---
 
-## 이론과 원리
+## 1. 인증 방법
 
-쿠버네티스 보안은 **독립적 게이트의 파이프라인**으로 이해하는 것이 가장 정확합니다 — 요청은 인증(authn), 인가(authz), 어드미션, 스키마 검증을 차례로 통과해야 비로소 etcd에 저장됩니다. 각 게이트는 다른 일, 다른 실패 모드, 다른 확장 지점을 가집니다. 이를 혼동하는 것("RBAC가 내 파드를 거부했다")은 가장 흔한 디버깅 실수입니다. 이 섹션은 4-게이트 파이프라인, RBAC의 가산형 모델, 그리고 더 깊은 보안 통제(Pod Security Standards, OPA, network policy)가 인가 계층이 아니라 어드미션과 런타임에 위치하는 이유를 설명합니다.
-
-### A. 4단계 요청 파이프라인
+### 이론: 4단계 요청 파이프라인
 
 모든 API 요청 — `kubectl apply`, 컨트롤러 호출, 사이드카 GET, 대시보드 클릭 — 은 API 서버 내부에서 동일한 체인을 통과합니다:
 
@@ -77,89 +73,6 @@ Kubernetes 클러스터는 다양한 팀, 서비스, 신뢰 수준의 워크로�
 네 게이트를 모두 통과해야 객체가 존재합니다. 어느 게이트의 실패든 요청이 영속화되지 않음을 의미합니다. 어느 게이트가 거부 중인지 아는 것("forbidden" → authz, "denied by webhook" → admission, "invalid schema" → 4단계)이 디버깅을 다루기 쉽게 만듭니다.
 
 이 파이프라인은 또한 "사용자에게 모든 권한을 줬는데도 privileged 파드를 만들 수 없다"가 버그가 아닌 이유입니다 — RBAC는 yes라 했지만 Pod Security Admission이 no라 했기 때문입니다.
-
-### B. 순수 허용 목록으로서의 RBAC
-
-RBAC는 범위별로 네 가지 객체 종류를 가집니다:
-
-| Kind | 정의 | 범위 |
-|------|------|------|
-| `Role` | `(verb, resource)` 권한 집합 | 네임스페이스 |
-| `ClusterRole` | 동일하지만 클러스터 전역 | 클러스터 |
-| `RoleBinding` | `Role`(또는 `ClusterRole`)을 한 네임스페이스의 주체에 부여 | 네임스페이스 |
-| `ClusterRoleBinding` | `ClusterRole`을 클러스터 전역 주체에 부여 | 클러스터 |
-
-주체는 user, group, ServiceAccount입니다.
-
-이 모델에는 세 가지 핵심 속성이 있습니다:
-
-- **가산형(additive only).** RBAC에는 "거부" 규칙이 없습니다. role을 바인딩하여 권한을 누적합니다. 권한을 빼앗으려면 바인딩을 제거합니다 — 사용자 X에게 시크릿 읽기를 부여하는 role이 있는 상태에서 "사용자 X는 시크릿을 읽을 수 없다"라고 쓸 방법은 없습니다. 이는 시스템을 추론하기 쉽게 만들지만(규칙 우선순위 퍼즐 없음) 최소 권한은 패치가 아니라 신중한 role 구성을 필요로 합니다.
-- **verb-resource 단위.** 권한은 `(verb, resource)` 수준입니다 — `get pods`, `list deployments`, `create configmaps/myconfig`(리소스 이름 선택). 하위 리소스는 별개(`pods/exec`, `pods/log`). 와일드카드 존재(`verbs: ["*"]`, `resources: ["*"]`)하지만 프로덕션 role에서는 피해야 합니다.
-- **데이터 필터링 없음.** RBAC는 네임스페이스에서 *시크릿을 list할 수 있는지*를 통제하지, *어느 시크릿을 보는지*를 통제하지 않습니다. list할 수 있다면 모두 list할 수 있습니다. 행 단위 필터링은 어드미션 웹훅이나 외부 정책 엔진을 필요로 합니다.
-
-Role/ClusterRole + Binding 분리는 동일한 `ClusterRole`("view")을 재사용할 수 있게 합니다 — 사용자 A에게 `dev` 네임스페이스에서, 사용자 B에게 `prod` 네임스페이스에서, 그룹 `oncall`에게 클러스터 전역으로 바인딩 — 세 바인딩, 하나의 role 정의.
-
-### C. 워크로드를 위한 식별 — ServiceAccount와 토큰 투영
-
-인간 사용자는 인증서나 OIDC로 인증합니다. 파드는 **ServiceAccount 토큰**으로 인증합니다 — API 서버가 서명한 JWT가 자동으로 `/var/run/secrets/kubernetes.io/serviceaccount/token`에 마운트됩니다. 모든 네임스페이스의 `default` ServiceAccount가 구성되지 않은 파드가 받는 것입니다.
-
-현대 클러스터는 **bound ServiceAccount 토큰**(BoundServiceAccountTokenVolume, 1.21부터 기본 활성)을 사용합니다:
-
-- 토큰은 파드별로 생성됩니다(Secret 객체에 저장되지 않음).
-- 특정 파드의 UID와 audience에 바인딩됩니다 — 파드가 삭제되면 토큰은 무효화됩니다.
-- kubelet이 만료 전에 토큰을 회전합니다(기본 1시간).
-
-이는 "etcd에 영구 ServiceAccount 토큰이 앉아 있어 Secret read 권한이 있는 누구나 가져갈 수 있다"는 옛 실패 모드를 제거합니다. 외부 시스템에 대해서는 TokenRequest API로 자체 토큰을 발급하고 특정 audience(예: 내부 Vault에 대해서만 유효한 토큰)로 범위를 지정할 수 있습니다.
-
-**자동 마운트(auto-mounting)**는 기본 활성이지만, API가 필요 없는 파드는 끄는 것이 좋습니다(`automountServiceAccountToken: false`를 Pod 또는 SA 수준에서). API 서버와 통신할 필요 없는 파드가 API 자격 증명을 가지고 다닐 이유가 없습니다.
-
-### D. 심층 방어 — Pod Security Standards, NetworkPolicy, OPA
-
-RBAC는 API 접근을 통제합니다 — 실행 중인 컨테이너가 무엇을 할 수 있는지는 *통제하지 않습니다*. `privileged: true`와 `hostNetwork: true`인 컨테이너는 노드의 모든 시크릿을 읽고 클러스터를 피벗할 수 있습니다 — ServiceAccount의 RBAC 권한이 0이라도. 그래서 쿠버네티스는 추가 통제를 계층화합니다:
-
-**Pod Security Standards (PSS)**는 **Pod Security Admission** 컨트롤러가 강제하는 세 프로파일을 정의합니다:
-
-| 프로파일 | 허용 사항 | 사용 시기 |
-|---------|---------|---------|
-| `privileged` | 모든 것 | 신뢰 시스템 워크로드(CNI, 스토리지 드라이버) |
-| `baseline` | 최소 컨테이너 위생; `privileged`, hostNetwork, hostPath 차단 | 대부분의 사용자 워크로드 |
-| `restricted` | 엄격한 강화; non-root, 모든 capability drop, seccomp RuntimeDefault | 특별 요구 없는 앱 |
-
-강제는 레이블을 통한 네임스페이스 단위:
-
-```yaml
-metadata:
-  labels:
-    pod-security.kubernetes.io/enforce: restricted
-    pod-security.kubernetes.io/enforce-version: v1.29
-```
-
-이는 **어드미션 시점** 강제입니다 — 위반하는 파드는 §A의 게이트 3에서 거부됩니다.
-
-**NetworkPolicy**는 L3/L4 수준에서 파드-파드 트래픽을 제한합니다. 기본 쿠버네티스 네트워킹은 "어떤 파드든 어떤 파드와도 통신 가능"입니다(3강 §A). NetworkPolicy로 "`tier=backend` 레이블의 파드는 `tier=frontend` 레이블의 파드로부터 8080 포트 트래픽만 허용"이라 말할 수 있습니다. 구현은 CNI 플러그인에 위임됩니다(8강).
-
-**OPA Gatekeeper / Kyverno**는 웹훅을 통해 어드미션(게이트 3)에 플러그인하는 정책 엔진입니다. "모든 네임스페이스는 cost-center 레이블을 가져야 한다"나 "컨테이너 이미지는 내부 레지스트리에서 와야 한다" 같은 규칙을 도메인 특화 언어(OPA는 Rego, Kyverno는 YAML)로 작성하게 해줍니다. Pod Security Standards로 부족할 때의 다음 단계입니다.
-
-멘탈 모델: **RBAC는 API 접근을 통제하고, PSS + NetworkPolicy + OPA는 워크로드 동작을 통제합니다.** 둘 다 필요합니다. 엄격한 RBAC를 가졌지만 `privileged` 어드미션이 허용된 잘못 구성된 클러스터는 컨테이너 하나만에 전체 침해됩니다.
-
-### 이론에서 아래의 YAML으로
-
-이제 레슨은 이 추상을 구체화합니다:
-
-- **섹션 1 (인증)**은 §A의 게이트 1입니다 — 네 가지 자격 증명 유형과 API 서버가 각각을 검증하는 방법.
-- **섹션 2 (인가 모드)**는 게이트 2의 플러그인을 소개합니다 — 보통 RBAC(§B)와 고급 케이스에는 Webhook을 사용합니다.
-- **섹션 3 (RBAC 심층 분석)**은 §B의 4객체 모델을 구체적 YAML과 role 합성을 가능하게 하는 aggregation 패턴으로 다룹니다.
-- **섹션 4 (서비스 어카운트)**는 §C입니다 — 파드가 식별을 얻는 방법과 자동 마운트를 잠그는 방법.
-- **섹션 5 (Pod Security Standards)**는 어드미션 레이블로 강제되는 §D의 PSS 계층입니다.
-- **섹션 6–7 (Security Contexts, Seccomp/AppArmor)**는 PSS가 강제하는 워크로드 측 강화입니다.
-- **섹션 8 (OPA Gatekeeper)**는 §D의 어드미션 제어 정책 엔진 확장입니다.
-- **섹션 9 (Network Policies)**는 §D의 L3/L4 계층입니다.
-
-§A의 4-게이트 파이프라인을 보고 나면, "왜 거부됐나?" 질문은 특정 게이트와 특정 확장 지점으로 매핑됩니다.
-
----
-
-## 1. 인증 방법
 
 Kubernetes API 서버에 대한 모든 요청은 인증되어야 합니다. Kubernetes에는 내장 사용자 데이터베이스가 없으며, 대신 플러그인 아키텍처를 통해 외부 시스템에 인증을 위임합니다.
 
@@ -359,6 +272,27 @@ contexts:
 
 ## 3. RBAC 심층 분석
 
+### 이론: 순수 허용 목록으로서의 RBAC
+
+RBAC는 범위별로 네 가지 객체 종류를 가집니다:
+
+| Kind | 정의 | 범위 |
+|------|------|------|
+| `Role` | `(verb, resource)` 권한 집합 | 네임스페이스 |
+| `ClusterRole` | 동일하지만 클러스터 전역 | 클러스터 |
+| `RoleBinding` | `Role`(또는 `ClusterRole`)을 한 네임스페이스의 주체에 부여 | 네임스페이스 |
+| `ClusterRoleBinding` | `ClusterRole`을 클러스터 전역 주체에 부여 | 클러스터 |
+
+주체는 user, group, ServiceAccount입니다.
+
+이 모델에는 세 가지 핵심 속성이 있습니다:
+
+- **가산형(additive only).** RBAC에는 "거부" 규칙이 없습니다. role을 바인딩하여 권한을 누적합니다. 권한을 빼앗으려면 바인딩을 제거합니다 — 사용자 X에게 시크릿 읽기를 부여하는 role이 있는 상태에서 "사용자 X는 시크릿을 읽을 수 없다"라고 쓸 방법은 없습니다. 이는 시스템을 추론하기 쉽게 만들지만(규칙 우선순위 퍼즐 없음) 최소 권한은 패치가 아니라 신중한 role 구성을 필요로 합니다.
+- **verb-resource 단위.** 권한은 `(verb, resource)` 수준입니다 — `get pods`, `list deployments`, `create configmaps/myconfig`(리소스 이름 선택). 하위 리소스는 별개(`pods/exec`, `pods/log`). 와일드카드 존재(`verbs: ["*"]`, `resources: ["*"]`)하지만 프로덕션 role에서는 피해야 합니다.
+- **데이터 필터링 없음.** RBAC는 네임스페이스에서 *시크릿을 list할 수 있는지*를 통제하지, *어느 시크릿을 보는지*를 통제하지 않습니다. list할 수 있다면 모두 list할 수 있습니다. 행 단위 필터링은 어드미션 웹훅이나 외부 정책 엔진을 필요로 합니다.
+
+Role/ClusterRole + Binding 분리는 동일한 `ClusterRole`("view")을 재사용할 수 있게 합니다 — 사용자 A에게 `dev` 네임스페이스에서, 사용자 B에게 `prod` 네임스페이스에서, 그룹 `oncall`에게 클러스터 전역으로 바인딩 — 세 바인딩, 하나의 role 정의.
+
 RBAC에는 함께 작동하는 네 가지 리소스 유형이 있습니다:
 
 ```
@@ -536,6 +470,20 @@ kubectl get pods -n dev --as=jane --as-group=dev-team
 
 ## 4. 서비스 어카운트(Service Accounts)
 
+### 이론: 워크로드를 위한 식별 — ServiceAccount와 토큰 투영
+
+인간 사용자는 인증서나 OIDC로 인증합니다. 파드는 **ServiceAccount 토큰**으로 인증합니다 — API 서버가 서명한 JWT가 자동으로 `/var/run/secrets/kubernetes.io/serviceaccount/token`에 마운트됩니다. 모든 네임스페이스의 `default` ServiceAccount가 구성되지 않은 파드가 받는 것입니다.
+
+현대 클러스터는 **bound ServiceAccount 토큰**(BoundServiceAccountTokenVolume, 1.21부터 기본 활성)을 사용합니다:
+
+- 토큰은 파드별로 생성됩니다(Secret 객체에 저장되지 않음).
+- 특정 파드의 UID와 audience에 바인딩됩니다 — 파드가 삭제되면 토큰은 무효화됩니다.
+- kubelet이 만료 전에 토큰을 회전합니다(기본 1시간).
+
+이는 "etcd에 영구 ServiceAccount 토큰이 앉아 있어 Secret read 권한이 있는 누구나 가져갈 수 있다"는 옛 실패 모드를 제거합니다. 외부 시스템에 대해서는 TokenRequest API로 자체 토큰을 발급하고 특정 audience(예: 내부 Vault에 대해서만 유효한 토큰)로 범위를 지정할 수 있습니다.
+
+**자동 마운트(auto-mounting)**는 기본 활성이지만, API가 필요 없는 파드는 끄는 것이 좋습니다(`automountServiceAccountToken: false`를 Pod 또는 SA 수준에서). API 서버와 통신할 필요 없는 파드가 API 자격 증명을 가지고 다닐 이유가 없습니다.
+
 서비스 어카운트는 파드의 ID 메커니즘입니다. 모든 네임스페이스에는 `default` 서비스 어카운트가 있으며, 별도로 지정하지 않으면 파드가 이를 사용합니다.
 
 ### 4.1 서비스 어카운트 기초
@@ -619,6 +567,35 @@ spec:
 ---
 
 ## 5. 파드 보안 표준(Pod Security Standards)
+
+### 이론: 심층 방어 — Pod Security Standards, NetworkPolicy, OPA
+
+RBAC는 API 접근을 통제합니다 — 실행 중인 컨테이너가 무엇을 할 수 있는지는 *통제하지 않습니다*. `privileged: true`와 `hostNetwork: true`인 컨테이너는 노드의 모든 시크릿을 읽고 클러스터를 피벗할 수 있습니다 — ServiceAccount의 RBAC 권한이 0이라도. 그래서 쿠버네티스는 추가 통제를 계층화합니다:
+
+**Pod Security Standards (PSS)**는 **Pod Security Admission** 컨트롤러가 강제하는 세 프로파일을 정의합니다:
+
+| 프로파일 | 허용 사항 | 사용 시기 |
+|---------|---------|---------|
+| `privileged` | 모든 것 | 신뢰 시스템 워크로드(CNI, 스토리지 드라이버) |
+| `baseline` | 최소 컨테이너 위생; `privileged`, hostNetwork, hostPath 차단 | 대부분의 사용자 워크로드 |
+| `restricted` | 엄격한 강화; non-root, 모든 capability drop, seccomp RuntimeDefault | 특별 요구 없는 앱 |
+
+강제는 레이블을 통한 네임스페이스 단위:
+
+```yaml
+metadata:
+  labels:
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/enforce-version: v1.29
+```
+
+이는 **어드미션 시점** 강제입니다 — 위반하는 파드는 §A의 게이트 3에서 거부됩니다.
+
+**NetworkPolicy**는 L3/L4 수준에서 파드-파드 트래픽을 제한합니다. 기본 쿠버네티스 네트워킹은 "어떤 파드든 어떤 파드와도 통신 가능"입니다(3강 §A). NetworkPolicy로 "`tier=backend` 레이블의 파드는 `tier=frontend` 레이블의 파드로부터 8080 포트 트래픽만 허용"이라 말할 수 있습니다. 구현은 CNI 플러그인에 위임됩니다(8강).
+
+**OPA Gatekeeper / Kyverno**는 웹훅을 통해 어드미션(게이트 3)에 플러그인하는 정책 엔진입니다. "모든 네임스페이스는 cost-center 레이블을 가져야 한다"나 "컨테이너 이미지는 내부 레지스트리에서 와야 한다" 같은 규칙을 도메인 특화 언어(OPA는 Rego, Kyverno는 YAML)로 작성하게 해줍니다. Pod Security Standards로 부족할 때의 다음 단계입니다.
+
+멘탈 모델: **RBAC는 API 접근을 통제하고, PSS + NetworkPolicy + OPA는 워크로드 동작을 통제합니다.** 둘 다 필요합니다. 엄격한 RBAC를 가졌지만 `privileged` 어드미션이 허용된 잘못 구성된 클러스터는 컨테이너 하나만에 전체 침해됩니다.
 
 파드 보안 표준(PSS, Pod Security Standards)은 파드가 할 수 있는 일을 제어하는 세 가지 점진적 프로파일을 정의합니다. 더 이상 사용되지 않는 PodSecurityPolicy를 대체합니다.
 

@@ -14,11 +14,8 @@
 
 구성 관리(Configuration Management)는 Kubernetes에서 핵심적인 운영 관심사입니다. 애플리케이션은 데이터베이스 URL, 기능 플래그(feature flag), API 키, TLS 인증서 등이 필요하며, 이 모든 것은 컨테이너 이미지와 별도로 관리해야 합니다. Kubernetes는 민감하지 않은 데이터를 위한 ConfigMap과 민감한 데이터를 위한 Secret을 제공하지만, 프로덕션 환경에서는 적절한 보안을 위해 외부 시크릿 관리 시스템이 필요한 경우가 많습니다.
 
-YAML에 들어가기 전에, [**이론과 원리**](#이론과-원리) 섹션을 먼저 읽어보세요. ConfigMap과 Secret이 동일한 형태를 공유하면서도 저장과 위협 모델에서 다른 이유, 세 가지 주입 메커니즘(환경 변수, 명령 인자, projected 볼륨)과 그 일관성 트레이드오프, etcd 저장 시 암호화가 중요한 이유, 그리고 외부 시크릿 저장소가 클러스터 내 API에 대해 어떻게 조정하는지를 다룹니다.
-
 ## 목차
 
-0. [이론과 원리](#이론과-원리)
 1. [ConfigMap](#1-configmap)
 2. [시크릿(Secrets)](#2-시크릿secrets)
 3. [불변 ConfigMap과 Secret](#3-불변-configmap과-secret)
@@ -30,98 +27,6 @@ YAML에 들어가기 전에, [**이론과 원리**](#이론과-원리) 섹션을
 9. [환경별 구성](#9-환경별-구성)
 10. [저장 시 시크릿 암호화(EncryptionConfiguration)](#10-저장-시-시크릿-암호화encryptionconfiguration)
 11. [연습문제](#연습문제)
-
----
-
-## 이론과 원리
-
-ConfigMap과 Secret은 동일한 아이디어입니다 — etcd에 저장되어 Pod로 투영되는 작은 키/값 번들 — 차이는 오직 *위협 모델*뿐입니다. ConfigMap은 비민감 구성용이고, Secret은 추가 처리(저장 시 암호화, RBAC 강화, 절대 로깅 금지, 일반 객체의 plain `kubectl describe` 출력에 노출 금지)가 필요한 자격 증명, 인증서, 토큰을 위한 것입니다. 흥미로운 깊이는 YAML이 아니라 (a) 데이터가 컨테이너 내부의 실행 프로세스에 어떻게 도달하는지, (b) "결국 누군가는 평문을 알아야 한다"는 사실을 두고 시크릿을 어떻게 안전하게 유지할지에 있습니다.
-
-### A. 동일한 객체 형태, 다른 저장 시맨틱
-
-두 객체 모두 다음과 같습니다:
-
-```yaml
-apiVersion: v1
-kind: ConfigMap   # 또는 Secret
-metadata:
-  name: my-config
-data:             # Secret: stringData도 가능 (자동 base64)
-  key1: value1
-  key2: value2
-```
-
-차이는:
-
-- **인코딩.** Secret 값은 API 표현에서 base64 인코딩됩니다. **이는 암호화가 아닙니다** — `kubectl get secret -o yaml` 권한이 있는 누구나 base64를 되돌릴 수 있습니다. 인코딩은 바이너리 키(TLS 인증서, JKS 파일)를 YAML로 깔끔히 운반하기 위함입니다.
-- **etcd 암호화.** 프로덕션 클러스터는 `EncryptionConfiguration`(6강 §10)을 구성하여 Secret(과 선택적으로 다른 리소스)이 etcd 디스크에 닿기 전에 암호화합니다. 없으면 etcd 백업을 가진 누구든 모든 시크릿을 평문으로 가집니다.
-- **RBAC 기본값.** 권장 클러스터 RBAC는 ConfigMap 읽기 권한보다 Secret 읽기 권한을 더 엄격히 제한합니다 — 많은 내장 role이 ConfigMap은 list할 수 있지만 Secret은 안 됩니다.
-- **로깅 위생.** kubectl, audit log, 대부분의 컨트롤러는 Secret 내용을 redact(`****`)하지만 ConfigMap 내용은 그렇지 않습니다. 이는 강제보다는 관습이지만, 일관됩니다.
-- **크기 제한.** 둘 다 객체당 약 1MB로 제한됩니다(etcd 값 크기 제한). 큰 구성은 ConfigMap이 아니라 볼륨에 둡니다.
-
-따라서 값이 새는 것이 보안 사고일 때 Secret을, 새는 것이 그저 부끄러운 일일 때 ConfigMap을 선택하세요.
-
-### B. 세 가지 주입 메커니즘
-
-데이터가 API에 들어간 뒤, 프로세스로 전달하는 방법은 세 가지입니다. 각각 다른 업데이트 시맨틱을 가집니다:
-
-**1. 환경 변수(`envFrom` / `env.valueFrom`).** 컨테이너 시작 시점에 읽어 프로세스의 `environ`에 구워집니다. **절대 갱신되지 않습니다** — ConfigMap이 바뀌어도 프로세스는 재시작 전까지 옛 값을 봅니다. 정적 구성(데이터베이스 호스트명)에는 적합하지만, 재시작 없이 회전하고 싶은 것에는 치명적입니다.
-
-**2. 명령 인자(command-line arguments).** 동일 — 시작 시 치환되고 절대 갱신되지 않습니다. 모든 구성을 CLI 플래그로 읽는 도구에 사용됩니다.
-
-**3. Projected 볼륨(`volumeMounts`로 `configMap` / `secret` / `projected`).** kubelet이 API 서버의 객체 뷰로부터 채우는 tmpfs 마운트. **kubelet은 기저 ConfigMap/Secret이 변경될 때 이 볼륨을 주기적으로(기본 약 60초) 갱신합니다.** 변경 사항을 반영하려면 애플리케이션이 파일을 다시 읽어야 합니다 — nginx(`-s reload`) 같은 것에는 적합하지만, 부팅 시에만 읽는 것에는 부적합.
-
-주입 메커니즘은 "재시작 없이 이 시크릿을 회전하라"는 요구사항과 3개월 전에 작성한 YAML 사이의 숨은 결합입니다.
-
-미묘한 점 — 여러 ConfigMap/Secret을 `projected`로 마운트하면, kubelet은 이들을 단일 원자적 심볼릭 링크 swap으로 씁니다. Reader는 전체 옛 버전이나 전체 새 버전 중 하나만 봅니다 — 절반 갱신된 상태는 절대 보지 않습니다. 이것이 projected 모드에서 hot reload를 안전하게 만듭니다.
-
-### C. 저장 시·전송 중·사용 중 암호화
-
-세 계층, 각각 다른 공격자에 대한 방어:
-
-- **전송 중(in transit).** API 서버, etcd, kubelet, CNI 컴포넌트 간 TLS. 클러스터 부트스트랩(kubeadm)에서 대부분 자동, EKS/GKE/AKS에서 관리형. 네트워크상의 도청에 대한 방어.
-- **etcd에 저장 시(at rest).** `EncryptionConfiguration`이 KMS 프로바이더(AWS KMS, GCP KMS, Vault transit)와 함께 envelope 암호화 스킴을 활성화합니다. 이것이 없으면 어떤 etcd 백업이든 자격 증명 덤프입니다. 백업 도난과 물리적 디스크 도난에 대한 방어.
-- **사용 중(in use), Pod 내부.** 시크릿이 tmpfs 파일이나 환경 변수로 마운트되면, 실행 중인 컨테이너는 평문으로 가집니다. 여기서의 방어는 워크로드 측입니다 — 파일 권한 강화, `readOnlyRootFilesystem` 사용, 절대 값 로깅 금지, 사용 후 메모리 스크럽. Kubernetes 자체는 Pod 경계에서 멈춥니다.
-
-흔한 아키텍처 통찰: **시크릿이 API 서버를 떠나 Pod에 들어가는 순간, Kubernetes는 더 이상 보호할 수 없습니다.** 외부 시크릿 저장소(Vault, AWS Secrets Manager)의 핵심은 마법이 아닙니다 — 상위 시크릿을 중앙에서 회전할 수 있고, 클러스터 내 반영이 분 단위로 갱신된다는 것입니다.
-
-### D. 외부 시크릿 저장소 — 클러스터 외부에서 조정
-
-네이티브 Secret은 "개발자가 한 번 시크릿을 만들고 절대 회전하지 않는" 케이스에 적합합니다. 프로덕션은 더 많이 요구합니다 — 회전, 감사, 다중 클러스터 중앙 관리, HSM 통합. 세 가지 패턴:
-
-**External Secrets Operator (ESO).** 클러스터 내 컨트롤러가 `ExternalSecret` CRD를 watch합니다:
-
-```yaml
-kind: ExternalSecret
-spec:
-  refreshInterval: 1h
-  secretStoreRef: { name: aws-store, kind: ClusterSecretStore }
-  target: { name: db-credentials }
-  data:
-    - secretKey: password
-      remoteRef: { key: prod/db, property: password }
-```
-
-컨트롤러는 매 `refreshInterval`마다 AWS Secrets Manager(또는 Vault, GCP Secret Manager, Azure Key Vault)에서 읽고, 값을 `db-credentials`라는 네이티브 Kubernetes `Secret`으로 구체화하고, Pod는 평소처럼 소비합니다. 조정 루프는 "클러스터 Secret을 상위 값과 일치시켜라"입니다. 상위에서의 회전이 자동으로 전파됩니다.
-
-**Sealed Secrets.** 컨트롤러가 `SealedSecret` CRD(공개 키로 암호화되며, 비공개 짝은 클러스터에만 존재)를 네이티브 Secret으로 복호화합니다. `SealedSecret` YAML을 git에 안전하게 커밋할 수 있게 해줍니다 — 클러스터만 복호화 가능. 외부 저장소 불필요; 자동 회전도 없음.
-
-**Vault Agent / CSI driver.** Vault Agent는 init 컨테이너와 공유 볼륨을 통해 시크릿을 Pod에 주입합니다 — Secrets Store CSI 드라이버는 Vault의 시크릿을 볼륨으로 직접 마운트합니다. 둘 다 etcd를 완전히 우회합니다 — Kubernetes Secret 객체가 만들어지지 않습니다. etcd 암호화로 충분치 않을 때 가장 강력한 모델입니다.
-
-선택은 컴플라이언스에 중요합니다 — "시크릿이 절대 etcd에 있어서는 안 된다"가 요구사항이면 CSI/Vault. "시크릿이 24시간마다 회전되어야 한다"가 요구사항이면 ESO.
-
-### 이론에서 아래의 YAML으로
-
-이제 레슨은 이 추상을 적용합니다:
-
-- **섹션 1–2 (ConfigMap, Secret)**은 §A를 보여줍니다 — 동일 객체 형태, 다른 저장 위생.
-- **섹션 3 (불변)**은 성능 + 안전 노브입니다 — 설정되면 kubelet이 변경 watch를 멈추고(API 서버 부하 감소) 객체를 변경할 수 없음(프로덕션 구성에 더 안전).
-- **섹션 4–6 (External Secrets, Sealed Secrets, Vault)**은 §D입니다 — 외부 시스템에서 시크릿 자료를 Pod로 가져오는 세 가지 조정 전략.
-- **섹션 7 (회전 패턴)**은 §B의 일관성 지식을 사용합니다 — projected 볼륨은 회전 가능, 환경 변수는 불가능. 따라서 회전 전략은 시크릿을 어떻게 주입했는지에 달려 있습니다.
-- **섹션 8–9 (모범 사례, 환경별 구성)**은 §A와 §B의 운영적 적용입니다.
-- **섹션 10 (EncryptionConfiguration)**은 API 서버에 구성되는 §C "저장 시" 계층입니다.
-
-§B의 세 가지 주입 메커니즘과 §C의 세 가지 저장 계층을 보고 나면, "다운타임 없이 이 시크릿을 어떻게 회전하나?" 질문은 "어떤 메커니즘 + 어떤 계층을 쓰고 있나?"로 환원됩니다.
 
 ---
 
@@ -310,6 +215,44 @@ kubectl create configmap app-config --from-literal=LOG_LEVEL=debug --dry-run=cli
 ---
 
 ## 2. 시크릿(Secrets)
+
+### 이론: 동일한 객체 형태, 다른 저장 시맨틱
+
+두 객체 모두 다음과 같습니다:
+
+```yaml
+apiVersion: v1
+kind: ConfigMap   # 또는 Secret
+metadata:
+  name: my-config
+data:             # Secret: stringData도 가능 (자동 base64)
+  key1: value1
+  key2: value2
+```
+
+차이는:
+
+- **인코딩.** Secret 값은 API 표현에서 base64 인코딩됩니다. **이는 암호화가 아닙니다** — `kubectl get secret -o yaml` 권한이 있는 누구나 base64를 되돌릴 수 있습니다. 인코딩은 바이너리 키(TLS 인증서, JKS 파일)를 YAML로 깔끔히 운반하기 위함입니다.
+- **etcd 암호화.** 프로덕션 클러스터는 `EncryptionConfiguration`(6강 §10)을 구성하여 Secret(과 선택적으로 다른 리소스)이 etcd 디스크에 닿기 전에 암호화합니다. 없으면 etcd 백업을 가진 누구든 모든 시크릿을 평문으로 가집니다.
+- **RBAC 기본값.** 권장 클러스터 RBAC는 ConfigMap 읽기 권한보다 Secret 읽기 권한을 더 엄격히 제한합니다 — 많은 내장 role이 ConfigMap은 list할 수 있지만 Secret은 안 됩니다.
+- **로깅 위생.** kubectl, audit log, 대부분의 컨트롤러는 Secret 내용을 redact(`****`)하지만 ConfigMap 내용은 그렇지 않습니다. 이는 강제보다는 관습이지만, 일관됩니다.
+- **크기 제한.** 둘 다 객체당 약 1MB로 제한됩니다(etcd 값 크기 제한). 큰 구성은 ConfigMap이 아니라 볼륨에 둡니다.
+
+따라서 값이 새는 것이 보안 사고일 때 Secret을, 새는 것이 그저 부끄러운 일일 때 ConfigMap을 선택하세요.
+
+### 이론: 세 가지 주입 메커니즘
+
+데이터가 API에 들어간 뒤, 프로세스로 전달하는 방법은 세 가지입니다. 각각 다른 업데이트 시맨틱을 가집니다:
+
+**1. 환경 변수(`envFrom` / `env.valueFrom`).** 컨테이너 시작 시점에 읽어 프로세스의 `environ`에 구워집니다. **절대 갱신되지 않습니다** — ConfigMap이 바뀌어도 프로세스는 재시작 전까지 옛 값을 봅니다. 정적 구성(데이터베이스 호스트명)에는 적합하지만, 재시작 없이 회전하고 싶은 것에는 치명적입니다.
+
+**2. 명령 인자(command-line arguments).** 동일 — 시작 시 치환되고 절대 갱신되지 않습니다. 모든 구성을 CLI 플래그로 읽는 도구에 사용됩니다.
+
+**3. Projected 볼륨(`volumeMounts`로 `configMap` / `secret` / `projected`).** kubelet이 API 서버의 객체 뷰로부터 채우는 tmpfs 마운트. **kubelet은 기저 ConfigMap/Secret이 변경될 때 이 볼륨을 주기적으로(기본 약 60초) 갱신합니다.** 변경 사항을 반영하려면 애플리케이션이 파일을 다시 읽어야 합니다 — nginx(`-s reload`) 같은 것에는 적합하지만, 부팅 시에만 읽는 것에는 부적합.
+
+주입 메커니즘은 "재시작 없이 이 시크릿을 회전하라"는 요구사항과 3개월 전에 작성한 YAML 사이의 숨은 결합입니다.
+
+미묘한 점 — 여러 ConfigMap/Secret을 `projected`로 마운트하면, kubelet은 이들을 단일 원자적 심볼릭 링크 swap으로 씁니다. Reader는 전체 옛 버전이나 전체 새 버전 중 하나만 봅니다 — 절반 갱신된 상태는 절대 보지 않습니다. 이것이 projected 모드에서 hot reload를 안전하게 만듭니다.
 
 시크릿(Secret)은 비밀번호, 토큰, TLS 인증서와 같은 민감한 데이터를 저장합니다. ConfigMap과 유사하지만 추가적인 보안 고려사항이 있습니다.
 
@@ -573,6 +516,31 @@ data:
 ---
 
 ## 4. External Secrets Operator
+
+### 이론: 외부 시크릿 저장소 — 클러스터 외부에서 조정
+
+네이티브 Secret은 "개발자가 한 번 시크릿을 만들고 절대 회전하지 않는" 케이스에 적합합니다. 프로덕션은 더 많이 요구합니다 — 회전, 감사, 다중 클러스터 중앙 관리, HSM 통합. 세 가지 패턴:
+
+**External Secrets Operator (ESO).** 클러스터 내 컨트롤러가 `ExternalSecret` CRD를 watch합니다:
+
+```yaml
+kind: ExternalSecret
+spec:
+  refreshInterval: 1h
+  secretStoreRef: { name: aws-store, kind: ClusterSecretStore }
+  target: { name: db-credentials }
+  data:
+    - secretKey: password
+      remoteRef: { key: prod/db, property: password }
+```
+
+컨트롤러는 매 `refreshInterval`마다 AWS Secrets Manager(또는 Vault, GCP Secret Manager, Azure Key Vault)에서 읽고, 값을 `db-credentials`라는 네이티브 Kubernetes `Secret`으로 구체화하고, Pod는 평소처럼 소비합니다. 조정 루프는 "클러스터 Secret을 상위 값과 일치시켜라"입니다. 상위에서의 회전이 자동으로 전파됩니다.
+
+**Sealed Secrets.** 컨트롤러가 `SealedSecret` CRD(공개 키로 암호화되며, 비공개 짝은 클러스터에만 존재)를 네이티브 Secret으로 복호화합니다. `SealedSecret` YAML을 git에 안전하게 커밋할 수 있게 해줍니다 — 클러스터만 복호화 가능. 외부 저장소 불필요; 자동 회전도 없음.
+
+**Vault Agent / CSI driver.** Vault Agent는 init 컨테이너와 공유 볼륨을 통해 시크릿을 Pod에 주입합니다 — Secrets Store CSI 드라이버는 Vault의 시크릿을 볼륨으로 직접 마운트합니다. 둘 다 etcd를 완전히 우회합니다 — Kubernetes Secret 객체가 만들어지지 않습니다. etcd 암호화로 충분치 않을 때 가장 강력한 모델입니다.
+
+선택은 컴플라이언스에 중요합니다 — "시크릿이 절대 etcd에 있어서는 안 된다"가 요구사항이면 CSI/Vault. "시크릿이 24시간마다 회전되어야 한다"가 요구사항이면 ESO.
 
 External Secrets Operator(ESO)는 외부 시크릿 관리 시스템(AWS Secrets Manager, GCP Secret Manager, Azure Key Vault, HashiCorp Vault)의 시크릿을 Kubernetes Secret으로 동기화합니다.
 
@@ -1904,6 +1872,16 @@ rm -rf /tmp/kustomize-exercise
 ---
 
 ## 10. 저장 시 시크릿 암호화(EncryptionConfiguration)
+
+### 이론: 저장 시·전송 중·사용 중 암호화
+
+세 계층, 각각 다른 공격자에 대한 방어:
+
+- **전송 중(in transit).** API 서버, etcd, kubelet, CNI 컴포넌트 간 TLS. 클러스터 부트스트랩(kubeadm)에서 대부분 자동, EKS/GKE/AKS에서 관리형. 네트워크상의 도청에 대한 방어.
+- **etcd에 저장 시(at rest).** `EncryptionConfiguration`이 KMS 프로바이더(AWS KMS, GCP KMS, Vault transit)와 함께 envelope 암호화 스킴을 활성화합니다. 이것이 없으면 어떤 etcd 백업이든 자격 증명 덤프입니다. 백업 도난과 물리적 디스크 도난에 대한 방어.
+- **사용 중(in use), Pod 내부.** 시크릿이 tmpfs 파일이나 환경 변수로 마운트되면, 실행 중인 컨테이너는 평문으로 가집니다. 여기서의 방어는 워크로드 측입니다 — 파일 권한 강화, `readOnlyRootFilesystem` 사용, 절대 값 로깅 금지, 사용 후 메모리 스크럽. Kubernetes 자체는 Pod 경계에서 멈춥니다.
+
+흔한 아키텍처 통찰: **시크릿이 API 서버를 떠나 Pod에 들어가는 순간, Kubernetes는 더 이상 보호할 수 없습니다.** 외부 시크릿 저장소(Vault, AWS Secrets Manager)의 핵심은 마법이 아닙니다 — 상위 시크릿을 중앙에서 회전할 수 있고, 클러스터 내 반영이 분 단위로 갱신된다는 것입니다.
 
 기본적으로 Kubernetes는 etcd에 시크릿(Secret)을 base64로 인코딩된 평문으로 저장합니다.
 `EncryptionConfiguration`은 API 서버가 etcd에 쓰기 전에 시크릿 데이터를 암호화하도록 지시하여,

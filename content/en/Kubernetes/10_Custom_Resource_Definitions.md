@@ -18,8 +18,6 @@ One of Kubernetes' most powerful features is its extensibility. While the core A
 
 > **The Extension Spectrum:** CRDs are the simplest way to extend the Kubernetes API. They require no Go code to define -- just a YAML manifest. For more complex needs (custom storage backends, authentication, or API aggregation), you can build aggregated API servers. Most use cases are well-served by CRDs combined with a controller (covered in the Operators lesson).
 
-Before the schema syntax, read [**Theory & Principles**](#theory--principles) — why CRDs let you extend the API server without recompiling Kubernetes, the OpenAPI v3 + CEL validation pipeline that catches errors at admission time, the storage-version + conversion-webhook mechanism that makes API evolution safe, and when to choose CRDs versus aggregated API servers.
-
 ## Table of Contents
 
 - [Theory & Principles](#theory--principles)
@@ -55,11 +53,9 @@ Before the schema syntax, read [**Theory & Principles**](#theory--principles) �
 
 ---
 
-## Theory & Principles
+## 1. Extending the Kubernetes API
 
-A Custom Resource Definition (CRD) is the mechanism that lets you teach the Kubernetes API server about a new resource type — `Database`, `Certificate`, `Workflow`, anything — without writing any Go, recompiling Kubernetes, or running a separate API process. The CRD itself is just a *schema declaration*; once accepted, the API server begins serving REST endpoints (`/apis/<group>/<version>/<plural>`) for that kind, persisting instances to etcd, and applying RBAC, admission, and watch semantics to them — exactly as if they were built-in resources. This section explains *why* this works, the schema-and-validation machinery, the version-evolution model, and the much narrower case for the heavier alternative (aggregated API servers).
-
-### A. Why CRDs Exist: The Extensibility Tax
+### Theory: Why CRDs Exist: The Extensibility Tax
 
 A platform that wants long-term adoption faces a fundamental choice. Either:
 
@@ -74,113 +70,6 @@ Kubernetes chose the second. The two extension mechanisms are:
 CRDs cover ~95% of real use cases. Cert-manager's `Certificate`, ArgoCD's `Application`, Knative's `Service`, Istio's `VirtualService`, every CNCF operator's resources — all CRDs. Aggregated API servers exist mostly for cases where you need custom storage (not etcd), custom auth, or pre-CRD historical reasons (the metrics API server is a famous example).
 
 The "tax" of CRDs is that anything beyond a strict request/response schema (custom storage, transactional semantics across multiple objects) requires code in the form of a controller (lesson 11). The CRD gives you the *shape* of the resource; the controller gives it *meaning*.
-
-### B. The Schema Pipeline: OpenAPI v3 + CEL
-
-A CRD without validation is a typed name for a free-form blob of JSON. That is rarely what you want. Modern CRDs embed an **OpenAPI v3 schema** that the API server uses to validate every create/update at admission time:
-
-```yaml
-apiVersion: apiextensions.k8s.io/v1
-kind: CustomResourceDefinition
-metadata:
-  name: databases.example.com
-spec:
-  group: example.com
-  names: { kind: Database, listKind: DatabaseList, plural: databases, singular: database }
-  scope: Namespaced
-  versions:
-    - name: v1
-      served: true
-      storage: true
-      schema:
-        openAPIV3Schema:
-          type: object
-          properties:
-            spec:
-              type: object
-              required: [engine, version, replicas]
-              properties:
-                engine:
-                  type: string
-                  enum: [postgres, mysql]
-                version:
-                  type: string
-                  pattern: '^[0-9]+\.[0-9]+$'
-                replicas:
-                  type: integer
-                  minimum: 1
-                  maximum: 100
-              x-kubernetes-validations:
-                - rule: "self.engine == 'postgres' || self.replicas <= 10"
-                  message: "MySQL clusters limited to 10 replicas"
-```
-
-The schema enforces:
-
-- **Type structure** (`type`, `properties`, `required`, `additionalProperties`): standard JSON Schema. Required properties, type checks, nested object shapes.
-- **Pattern and bound constraints** (`pattern`, `minimum`, `maximum`, `enum`, `minLength`): catches simple data-quality errors at admission time, not at runtime when your controller crashes.
-- **CEL validation rules** (`x-kubernetes-validations`): the **Common Expression Language** lets you express constraints that span multiple fields, such as the `engine == 'postgres' || replicas <= 10` example. CEL also has access to the *old* object (`oldSelf`) for transition rules ("the version field can only increase").
-- **Defaulting** (`default: ...`): the API server fills in missing fields, so your controller can assume they're set.
-
-This is a major reason to use CRDs over generic ConfigMaps to model domain objects: you get validation, defaulting, and IDE autocomplete (because the schema is published in the cluster) for free.
-
-**Subresources** (`/status`, `/scale`) split a single object into multiple endpoints with different RBAC and update semantics. The `/status` subresource lets controllers update status without permission to mutate the spec, which prevents controller bugs from accidentally overwriting user intent. The `/scale` subresource lets the HPA scale your custom resource without knowing its internal shape — `scale.spec.replicas` is the standard place.
-
-### C. Version Evolution: Storage Version, Served Versions, Conversion Webhooks
-
-CRDs evolve. You release v1alpha1, then v1beta1, then v1. Each version may add fields, remove fields, restructure subobjects. Three concepts make this safe:
-
-**Served versions vs storage version.** A CRD lists multiple versions; each is `served: true/false` (whether the API serves it) and exactly one is `storage: true` (the canonical version actually in etcd). When a client GETs a resource at v1beta1 but the storage is v1, the API server returns the etcd object converted to v1beta1 on the fly. Conversely, a POST at v1beta1 is converted to v1 before storage.
-
-**No-op conversion** (the default) requires every served version to be structurally compatible — adding optional fields is fine, but renaming or restructuring is not. For larger evolutions, you provide a **conversion webhook**:
-
-```yaml
-spec:
-  conversion:
-    strategy: Webhook
-    webhook:
-      conversionReviewVersions: [v1]
-      clientConfig:
-        service: { name: my-converter, namespace: example, path: /convert }
-        caBundle: <base64-cert>
-```
-
-The webhook receives objects in any served version and returns them in the requested version. This lets you do real refactoring (split a field into two, change an enum's representation) while old clients keep working.
-
-**Migrating the storage version.** If you change `storage: true` to a new version, the API server begins writing in the new version, but existing etcd objects stay in the old format. A separate "storage version migrator" (or a one-shot `kubectl get ... | kubectl apply -f -` round-trip) re-stores them in the new format. Once everything is migrated, you can drop the old version from `served`.
-
-This three-part dance (served, storage, conversion) is what allows CRDs to evolve over years without breaking existing deployments — the same technique Kubernetes itself uses for built-in resources.
-
-### D. CRDs vs Aggregated API Servers
-
-When does CRD stop being enough? Three cases push you toward aggregated API servers:
-
-- **Non-etcd storage.** All CRDs persist to the cluster's etcd. If you need to back the resource with a relational database, an external service, or generated-on-read data (like the metrics API server, which exposes node/pod metrics that are not stored anywhere — they are computed live from kubelet), CRDs are wrong. You need to implement the API surface yourself.
-- **Custom protocols beyond JSON CRUD.** Streaming subresources (think `kubectl exec`), arbitrary HTTP semantics, or non-Kubernetes-conformant request bodies require an aggregated server.
-- **Historical or organizational reasons.** Some Kubernetes core APIs that pre-date CRDs (apiregistration, certificates) are aggregated for legacy compatibility.
-
-The cost of aggregated API servers is significant: you run a real HTTPS server (with auth, audit, watch implementation), maintain its own RBAC, handle the operational burden of another control-plane component. So unless you hit one of the cases above, CRDs win on simplicity.
-
-A common pattern: ship a CRD for the user-facing object plus a **controller** (lesson 11) that does the actual work. The CRD makes the object first-class in `kubectl`; the controller turns user intent into reality.
-
-### From Theory to the YAML Below
-
-The lesson now applies these abstractions:
-
-- **Section 1 (Extending the Kubernetes API)** is §A — when CRDs make sense and the alternatives.
-- **Section 2 (CRD Specification)** is the basic CRD object structure from §B.
-- **Section 3 (Structural Schemas and Validation)** is the OpenAPI + CEL pipeline from §B in depth.
-- **Section 4 (CRD Versioning)** is §C — multiple versions, storage version, conversion webhooks.
-- **Section 5 (Subresources)** is the `/status` and `/scale` mechanisms that integrate your CRD with built-in patterns like HPA.
-- **Sections 6–7 (Printer Columns, Categories, Short Names)** are the kubectl ergonomics that make CRDs feel native (`kubectl get db` instead of full kind names).
-- **Section 8 (Best Practices)** is operational guidance from §B and §C.
-- **Section 9 (Aggregated API Servers vs CRDs)** is §D — when CRDs are not enough.
-
-Once you see the CRD as "schema + dynamic registration + storage" and the controller (lesson 11) as the part that gives the schema meaning, every operator pattern you encounter decomposes into the same two pieces.
-
----
-
-## 1. Extending the Kubernetes API
 
 ### 1.1 Why Extend Kubernetes?
 
@@ -382,6 +271,57 @@ kubectl get db -n production -w
 ---
 
 ## 3. Structural Schemas and Validation
+
+### Theory: The Schema Pipeline: OpenAPI v3 + CEL
+
+A CRD without validation is a typed name for a free-form blob of JSON. That is rarely what you want. Modern CRDs embed an **OpenAPI v3 schema** that the API server uses to validate every create/update at admission time:
+
+```yaml
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: databases.example.com
+spec:
+  group: example.com
+  names: { kind: Database, listKind: DatabaseList, plural: databases, singular: database }
+  scope: Namespaced
+  versions:
+    - name: v1
+      served: true
+      storage: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              required: [engine, version, replicas]
+              properties:
+                engine:
+                  type: string
+                  enum: [postgres, mysql]
+                version:
+                  type: string
+                  pattern: '^[0-9]+\.[0-9]+$'
+                replicas:
+                  type: integer
+                  minimum: 1
+                  maximum: 100
+              x-kubernetes-validations:
+                - rule: "self.engine == 'postgres' || self.replicas <= 10"
+                  message: "MySQL clusters limited to 10 replicas"
+```
+
+The schema enforces:
+
+- **Type structure** (`type`, `properties`, `required`, `additionalProperties`): standard JSON Schema. Required properties, type checks, nested object shapes.
+- **Pattern and bound constraints** (`pattern`, `minimum`, `maximum`, `enum`, `minLength`): catches simple data-quality errors at admission time, not at runtime when your controller crashes.
+- **CEL validation rules** (`x-kubernetes-validations`): the **Common Expression Language** lets you express constraints that span multiple fields, such as the `engine == 'postgres' || replicas <= 10` example. CEL also has access to the *old* object (`oldSelf`) for transition rules ("the version field can only increase").
+- **Defaulting** (`default: ...`): the API server fills in missing fields, so your controller can assume they're set.
+
+This is a major reason to use CRDs over generic ConfigMaps to model domain objects: you get validation, defaulting, and IDE autocomplete (because the schema is published in the cluster) for free.
+
+**Subresources** (`/status`, `/scale`) split a single object into multiple endpoints with different RBAC and update semantics. The `/status` subresource lets controllers update status without permission to mutate the spec, which prevents controller bugs from accidentally overwriting user intent. The `/scale` subresource lets the HPA scale your custom resource without knowing its internal shape — `scale.spec.replicas` is the standard place.
 
 ### 3.1 OpenAPI v3 Schema
 
@@ -615,6 +555,31 @@ properties:
 ---
 
 ## 4. CRD Versioning
+
+### Theory: Version Evolution: Storage Version, Served Versions, Conversion Webhooks
+
+CRDs evolve. You release v1alpha1, then v1beta1, then v1. Each version may add fields, remove fields, restructure subobjects. Three concepts make this safe:
+
+**Served versions vs storage version.** A CRD lists multiple versions; each is `served: true/false` (whether the API serves it) and exactly one is `storage: true` (the canonical version actually in etcd). When a client GETs a resource at v1beta1 but the storage is v1, the API server returns the etcd object converted to v1beta1 on the fly. Conversely, a POST at v1beta1 is converted to v1 before storage.
+
+**No-op conversion** (the default) requires every served version to be structurally compatible — adding optional fields is fine, but renaming or restructuring is not. For larger evolutions, you provide a **conversion webhook**:
+
+```yaml
+spec:
+  conversion:
+    strategy: Webhook
+    webhook:
+      conversionReviewVersions: [v1]
+      clientConfig:
+        service: { name: my-converter, namespace: example, path: /convert }
+        caBundle: <base64-cert>
+```
+
+The webhook receives objects in any served version and returns them in the requested version. This lets you do real refactoring (split a field into two, change an enum's representation) while old clients keep working.
+
+**Migrating the storage version.** If you change `storage: true` to a new version, the API server begins writing in the new version, but existing etcd objects stay in the old format. A separate "storage version migrator" (or a one-shot `kubectl get ... | kubectl apply -f -` round-trip) re-stores them in the new format. Once everything is migrated, you can drop the old version from `served`.
+
+This three-part dance (served, storage, conversion) is what allows CRDs to evolve over years without breaking existing deployments — the same technique Kubernetes itself uses for built-in resources.
 
 ### 4.1 Multiple Versions
 
@@ -1208,6 +1173,18 @@ kubectl get db -A -o json | wc -c
 ---
 
 ## 9. Aggregated API Servers vs CRDs
+
+### Theory: CRDs vs Aggregated API Servers
+
+When does CRD stop being enough? Three cases push you toward aggregated API servers:
+
+- **Non-etcd storage.** All CRDs persist to the cluster's etcd. If you need to back the resource with a relational database, an external service, or generated-on-read data (like the metrics API server, which exposes node/pod metrics that are not stored anywhere — they are computed live from kubelet), CRDs are wrong. You need to implement the API surface yourself.
+- **Custom protocols beyond JSON CRUD.** Streaming subresources (think `kubectl exec`), arbitrary HTTP semantics, or non-Kubernetes-conformant request bodies require an aggregated server.
+- **Historical or organizational reasons.** Some Kubernetes core APIs that pre-date CRDs (apiregistration, certificates) are aggregated for legacy compatibility.
+
+The cost of aggregated API servers is significant: you run a real HTTPS server (with auth, audit, watch implementation), maintain its own RBAC, handle the operational burden of another control-plane component. So unless you hit one of the cases above, CRDs win on simplicity.
+
+A common pattern: ship a CRD for the user-facing object plus a **controller** (lesson 11) that does the actual work. The CRD makes the object first-class in `kubectl`; the controller turns user intent into reality.
 
 ### 9.1 When to Use Each
 

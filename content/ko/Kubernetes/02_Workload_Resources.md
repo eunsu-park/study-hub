@@ -16,10 +16,7 @@
 특정 운영 패턴을 위해 설계되었습니다. 이 레슨에서는 모든 워크로드 리소스를
 프로덕션에 바로 사용할 수 있는 예제와 함께 상세히 다룹니다.
 
-워크로드 투어에 들어가기 전에, [**이론과 원리**](#이론과-원리) 섹션을 먼저 읽어보세요. 각 워크로드 종류가 동일한 Pod 프리미티브 위에서 서로 다른 reconciler로 존재하는 이유, Deployment의 롤링 업데이트 수식, StatefulSet의 순서·안정 네트워크 식별 보장, requests/limits/QoS가 리눅스 커널 cgroup 노브로 어떻게 매핑되는지를 다룹니다.
-
 ## 목차
-0. [이론과 원리](#이론과-원리)
 1. [파드](#1-파드)
 2. [레플리카셋](#2-레플리카셋)
 3. [디플로이먼트](#3-디플로이먼트)
@@ -33,11 +30,9 @@
 
 ---
 
-## 이론과 원리
+## 1. 파드
 
-워크로드 리소스는 긴 메뉴처럼 보입니다 — Pod, ReplicaSet, Deployment, StatefulSet, DaemonSet, Job, CronJob — 그러나 모두 하나의 프리미티브(Pod)와 하나의 설계 패턴(원하는 상태 객체를 watch하고 자식 Pod 집합을 조정하는 컨트롤러) 위에 세워져 있습니다. 차이는 *조정 정책(reconciliation policy)*에 있습니다: 레플리카 수, 순서, 식별 보장, 실패 시 대응. 이 섹션은 모든 워크로드 종류를 설명하는 네 가지 아이디어와, 메모리 압박 상황에서 파드가 죽을지를 결정하는 리소스 관리 시맨틱을 다룹니다.
-
-### A. 원자적 스케줄링 단위로서의 Pod
+### 이론: 원자적 스케줄링 단위로서의 Pod
 
 Pod는 **운명을 공유(shared fate)**하는 하나 이상의 컨테이너입니다 — 같은 노드, 같은 네트워크 네임스페이스(같은 IP, 같은 `localhost`, 같은 포트 공간), 선택적 공유 볼륨, 함께 스케줄, 함께 종료. Pod(컨테이너가 아닌)를 원자 단위로 정한 결정은 단일 컨테이너로는 깔끔히 모델링할 수 없는 세 가지 패턴을 가능하게 합니다:
 
@@ -48,80 +43,6 @@ Pod는 **운명을 공유(shared fate)**하는 하나 이상의 컨테이너입�
 흔한 단일 컨테이너 케이스에서는 Pod의 오버헤드가 사실상 0입니다. 핵심적으로, **Pod는 일시적이며 IP도 일시적입니다.** 반려동물(pet)이 아닙니다. 재시작 시 IP가 바뀌고, liveness probe에 실패한 Pod는 새 IP를 가진 새 Pod로 대체됩니다. 안정적 네트워크 식별이 필요한 모든 것은 Service(또는 Pod별 식별이 필요하면 Headless Service + StatefulSet)를 거쳐야 합니다.
 
 이 일시성이야말로 모든 상위 워크로드를 가능하게 합니다 — Pod가 소중한 존재였다면 안전하게 롤링·스케일링·축출할 수 없을 것입니다. Pod가 일회용이기에, 위 컨트롤러는 언제든 더 만들 수 있습니다.
-
-### B. ReplicaSet → Deployment — 롤링 업데이트 알고리즘
-
-**ReplicaSet**은 Pod 위의 가장 단순한 reconciler입니다: "이 셀렉터에 매치되는 N개의 Pod를 원한다. 지금 M개가 보인다. M < N이면 생성, M > N이면 삭제." 이 전체가 알고리즘이며, 레벨 트리거 루프로 표현됩니다. ReplicaSet은 스케일링과 자가 치유를 처리하지만, 템플릿 변경은 처리하지 *않습니다* — 파드 템플릿을 수정해도 기존 Pod는 갱신되지 않습니다.
-
-**Deployment**는 ReplicaSet을 감싸고(롤아웃 중에는 실제로 두 개를) 롤링 업데이트 알고리즘을 추가합니다. 새 파드 템플릿이 주어지면:
-
-1. 새 ReplicaSet RS-new를 `replicas=0`과 새 템플릿으로 생성.
-2. RS-new가 목표 수에 도달하고 RS-old가 0이 될 때까지 반복:
-   - RS-new를 `maxSurge`(기본 25%)만큼 스케일 업.
-   - 새 파드가 Ready가 될 때까지 대기.
-   - RS-old를 `maxUnavailable`(기본 25%)만큼 스케일 다운.
-3. 원커맨드 롤백을 위해 RS-old를 `replicas=0`으로 보존.
-
-수식: `replicas=10`, `maxSurge=25%`, `maxUnavailable=25%`이면 어느 순간 최대 13개의 파드가 존재할 수 있고, 최소 7개는 Ready여야 합니다. 이는 롤아웃 중 추가 비용(서지)과 용량 손실(불가용)을 모두 제한합니다. `recreate` 전략은 이를 건너뛰고 모두 죽인 뒤 재생성합니다 — 두 버전이 공존할 수 없을 때 사용(예: 스키마 마이그레이션).
-
-롤백은 단순히 "디플로이먼트 템플릿을 이전 ReplicaSet의 pod-template-hash로 되돌리기"입니다. 디플로이먼트 컨트롤러는 동일한 알고리즘을 역방향으로 실행하여 RS-old를 다시 스케일 업하고 RS-new를 스케일 다운합니다. 이 때문에 보존된 이력(`revisionHistoryLimit`)이 중요합니다.
-
-### C. StatefulSet — 순서, 식별, 스토리지
-
-StatefulSet은 일부 워크로드(데이터베이스, 메시지 브로커, 분산 합의 시스템)가 **레플리카별 안정 식별(stable identity per replica)**을 필요로 하기 때문에 존재합니다. Deployment와 다른 세 가지 보장:
-
-- **순서 있는, 안정적 네트워크 식별.** Pod는 `<set>-0`, `<set>-1`, ..., `<set>-(N-1)`로 명명됩니다. Headless Service와 함께 각 파드는 `mysql-0.mysql.default.svc.cluster.local` 같은 DNS 이름을 받고, 재시작·재스케줄을 거쳐도 유지됩니다.
-- **순서 있는 배포와 종료.** 파드는 한 번에 하나씩 순서대로(`-0`, 그다음 `-1`, 그다음 `-2`) 올라오며, 각각 이전 파드가 Ready가 될 때까지 대기합니다. 종료는 역순. 클러스터 부트스트랩에 중요합니다(예: 첫 레플리카가 시드, 1번 레플리카는 0번의 안정 DNS 이름을 참조해 합류).
-- **VolumeClaimTemplate을 통한 안정적·레플리카별 스토리지.** 각 파드는 자신의 PVC를 가지며, 이름은 파드 ordinal에서 파생됩니다. `mysql-1`이 재스케줄되면 동일한 PVC에 다시 attach됩니다 — 동일한 데이터. Deployment는 "어느 파드가 누구인지" 개념이 없으므로 이를 안전히 할 수 없습니다.
-
-이 보장의 비용은 민첩성 감소입니다 — StatefulSet을 3에서 6으로 스케일하는 것은 파드가 순차적으로 올라오기 때문에 Deployment보다 오래 걸립니다. 업데이트는 `RollingUpdate`(한 번에 한 파드, 역 ordinal) 또는 `OnDelete`(자동화하기에 너무 위험할 때 운영자 주도) 중 하나를 사용합니다.
-
-### D. DaemonSet, Job, CronJob — 특화된 reconciler들
-
-각각은 동일한 컨트롤러 패턴을 "원하는 상태가 무엇을 의미하는가?"만 달리한 것입니다:
-
-- **DaemonSet**: "매치되는 노드마다 Pod 하나." Reconciler는 DaemonSet과 Node 목록을 모두 watch하며, 노드 셀렉터에 매치되는 새 노드마다 Pod를 생성하고 드레인되거나 삭제된 노드에서 Pod를 제거합니다. 로그 수집기, node exporter, CNI 에이전트 등 클러스터 전역에서 실행되어야 하는 모든 것에 사용됩니다.
-- **Job**: "최대 P개를 병렬로 실행하면서 N번의 성공적 완료를 달성하라." Reconciler는 Pod를 생성하고 완료를 watch하며, 성공 횟수에 도달하면 멈춥니다. `backoffLimit`이 실패 시 재시도를 제한하고, `activeDeadlineSeconds`가 총 벽시계 시간을 제한합니다. 배치 워크로드에 핵심적입니다.
-- **CronJob**: Job 팩토리. Reconciler는 crontab 스타일 스케줄을 읽고, 발화 시점마다 템플릿에서 새 Job을 생성합니다. `concurrencyPolicy`가 이전 Job이 아직 실행 중일 때의 동작을 결정합니다(`Allow`, `Forbid`, `Replace`).
-
-당신은 Pod 템플릿을 작성하고, 컨트롤러는 몇 개를·어떤 순서로·어느 노드에·어떤 성공 기준으로 실행할지 결정합니다.
-
-### E. Requests, Limits, QoS — YAML에서 cgroup으로
-
-리소스 관리에는 컨테이너당 리소스(CPU, 메모리)별로 두 숫자가 있습니다:
-
-- **`requests`**: 스케줄러가 파드의 예약(reservation)으로 취급하는 값. 노드 위 모든 파드 requests의 합은 노드 allocatable을 초과할 수 없습니다. 파드가 노드에 *적합한지* 여부를 결정합니다.
-- **`limits`**: 커널이 강제하는 상한. 한도를 넘는 CPU는 스로틀되고(cgroup `cpu.cfs_quota_us`), 한도를 넘는 메모리는 OOM kill을 트리거합니다(cgroup `memory.limit_in_bytes`).
-
-requests/limits 조합으로부터 세 가지 QoS 클래스가 자동으로 결정됩니다:
-
-| 클래스 | 조건 | 축출 우선순위 |
-|-------|------|--------------|
-| `Guaranteed` | 모든 컨테이너가 CPU·메모리에 대해 `requests == limits` | 가장 마지막에 축출 |
-| `Burstable` | 적어도 하나의 request 설정, 그러나 모두 `requests == limits`은 아님 | 중간 |
-| `BestEffort` | 어디에도 requests나 limits 미설정 | 가장 먼저 축출 |
-
-노드 메모리 압박 시, kubelet은 BestEffort를 먼저 축출하고, 그다음 Burstable을 자신의 request 초과 정도 순으로 축출하며, Guaranteed는 정말 필요한 경우에만 축출합니다. 따라서 **`Guaranteed`는 단순한 리소스 예산이 아니라 축출 보험입니다.**
-
-CPU와 메모리는 결정적으로 다릅니다 — CPU는 **압축 가능(compressible)**(느린 테넌트를 스로틀하면 모두가 계속 동작), 메모리는 **압축 불가능(incompressible)**(다 쓰면 누군가는 죽어야 함). 이 때문에 메모리 OOM은 갑작스럽고 치명적인 반면, CPU 스로틀은 점진적이고 회복 가능합니다.
-
-### 이론에서 아래의 YAML으로
-
-이제 레슨은 이러한 추상을 구체적인 매니페스트로 안내합니다:
-
-- **섹션 1 (파드)**는 §A의 원자 단위를 시연합니다 — 멀티컨테이너 패턴, 초기화 컨테이너, 사이드카, 라이프사이클 훅.
-- **섹션 2 (ReplicaSet)**은 Deployment가 인계받기 전에 §B의 가장 단순한 reconciler를 단독으로 보여줍니다.
-- **섹션 3 (Deployment)**는 실제 서비스에 적용된 §B의 롤링 업데이트 알고리즘이며, `maxSurge`/`maxUnavailable` 노브를 조정합니다.
-- **섹션 4 (StatefulSet)**은 §C이며, 파드별 식별을 부여하는 VolumeClaimTemplate과 Headless Service를 다룹니다.
-- **섹션 5–6 (DaemonSet, Job, CronJob)**은 §D의 특화 reconciler들입니다.
-- **섹션 7 (PDB)**는 롤링 업데이트 알고리즘에 대한 가드레일입니다 — "자발적 중단(voluntary disruption) 중에도 동시에 X개 이상 다운시키지 마라."
-- **섹션 8–9 (Requests/Limits, QoS)**는 §E를 kubelet이 cgroup에 전달하는 YAML 필드로 옮깁니다.
-
-Pod-as-atom + reconciler-as-pattern을 보고 나면, DaemonSet과 Job의 차이는 의사코드 두 줄에 불과합니다.
-
----
-
-## 1. 파드
 
 ### 1.1 파드 기본 사항
 
@@ -490,6 +411,23 @@ kubectl get pods -l app=web,tier=frontend --show-labels
 
 ## 3. 디플로이먼트
 
+### 이론: ReplicaSet → Deployment — 롤링 업데이트 알고리즘
+
+**ReplicaSet**은 Pod 위의 가장 단순한 reconciler입니다: "이 셀렉터에 매치되는 N개의 Pod를 원한다. 지금 M개가 보인다. M < N이면 생성, M > N이면 삭제." 이 전체가 알고리즘이며, 레벨 트리거 루프로 표현됩니다. ReplicaSet은 스케일링과 자가 치유를 처리하지만, 템플릿 변경은 처리하지 *않습니다* — 파드 템플릿을 수정해도 기존 Pod는 갱신되지 않습니다.
+
+**Deployment**는 ReplicaSet을 감싸고(롤아웃 중에는 실제로 두 개를) 롤링 업데이트 알고리즘을 추가합니다. 새 파드 템플릿이 주어지면:
+
+1. 새 ReplicaSet RS-new를 `replicas=0`과 새 템플릿으로 생성.
+2. RS-new가 목표 수에 도달하고 RS-old가 0이 될 때까지 반복:
+   - RS-new를 `maxSurge`(기본 25%)만큼 스케일 업.
+   - 새 파드가 Ready가 될 때까지 대기.
+   - RS-old를 `maxUnavailable`(기본 25%)만큼 스케일 다운.
+3. 원커맨드 롤백을 위해 RS-old를 `replicas=0`으로 보존.
+
+수식: `replicas=10`, `maxSurge=25%`, `maxUnavailable=25%`이면 어느 순간 최대 13개의 파드가 존재할 수 있고, 최소 7개는 Ready여야 합니다. 이는 롤아웃 중 추가 비용(서지)과 용량 손실(불가용)을 모두 제한합니다. `recreate` 전략은 이를 건너뛰고 모두 죽인 뒤 재생성합니다 — 두 버전이 공존할 수 없을 때 사용(예: 스키마 마이그레이션).
+
+롤백은 단순히 "디플로이먼트 템플릿을 이전 ReplicaSet의 pod-template-hash로 되돌리기"입니다. 디플로이먼트 컨트롤러는 동일한 알고리즘을 역방향으로 실행하여 RS-old를 다시 스케일 업하고 RS-new를 스케일 다운합니다. 이 때문에 보존된 이력(`revisionHistoryLimit`)이 중요합니다.
+
 디플로이먼트는 레플리카셋을 관리하고, 레플리카셋은 파드를 관리합니다. 롤링 업데이트를 수행하면 디플로이먼트가 새 레플리카셋을 생성하고 이전 RS에서 새 RS로 파드를 점진적으로 이동시킵니다. 0으로 스케일된 이전 레플리카셋은 `revisionHistoryLimit`에 의해 제어되는 롤백을 위해 보관됩니다.
 
 ```
@@ -712,6 +650,16 @@ kubectl patch service web-svc -p '{"spec":{"selector":{"version":"blue"}}}'
 
 ## 4. 스테이트풀셋
 
+### 이론: StatefulSet — 순서, 식별, 스토리지
+
+StatefulSet은 일부 워크로드(데이터베이스, 메시지 브로커, 분산 합의 시스템)가 **레플리카별 안정 식별(stable identity per replica)**을 필요로 하기 때문에 존재합니다. Deployment와 다른 세 가지 보장:
+
+- **순서 있는, 안정적 네트워크 식별.** Pod는 `<set>-0`, `<set>-1`, ..., `<set>-(N-1)`로 명명됩니다. Headless Service와 함께 각 파드는 `mysql-0.mysql.default.svc.cluster.local` 같은 DNS 이름을 받고, 재시작·재스케줄을 거쳐도 유지됩니다.
+- **순서 있는 배포와 종료.** 파드는 한 번에 하나씩 순서대로(`-0`, 그다음 `-1`, 그다음 `-2`) 올라오며, 각각 이전 파드가 Ready가 될 때까지 대기합니다. 종료는 역순. 클러스터 부트스트랩에 중요합니다(예: 첫 레플리카가 시드, 1번 레플리카는 0번의 안정 DNS 이름을 참조해 합류).
+- **VolumeClaimTemplate을 통한 안정적·레플리카별 스토리지.** 각 파드는 자신의 PVC를 가지며, 이름은 파드 ordinal에서 파생됩니다. `mysql-1`이 재스케줄되면 동일한 PVC에 다시 attach됩니다 — 동일한 데이터. Deployment는 "어느 파드가 누구인지" 개념이 없으므로 이를 안전히 할 수 없습니다.
+
+이 보장의 비용은 민첩성 감소입니다 — StatefulSet을 3에서 6으로 스케일하는 것은 파드가 순차적으로 올라오기 때문에 Deployment보다 오래 걸립니다. 업데이트는 `RollingUpdate`(한 번에 한 파드, 역 ordinal) 또는 `OnDelete`(자동화하기에 너무 위험할 때 운영자 주도) 중 하나를 사용합니다.
+
 스테이트풀셋(StatefulSets)은 순서, 안정적인 네트워크 정체성, 영속 스토리지에 대한
 보장과 함께 상태 저장 애플리케이션을 관리합니다.
 
@@ -874,6 +822,16 @@ kubectl patch statefulset postgres -p '{"spec":{"updateStrategy":{"rollingUpdate
 ---
 
 ## 5. 데몬셋
+
+### 이론: DaemonSet, Job, CronJob — 특화된 reconciler들
+
+각각은 동일한 컨트롤러 패턴을 "원하는 상태가 무엇을 의미하는가?"만 달리한 것입니다:
+
+- **DaemonSet**: "매치되는 노드마다 Pod 하나." Reconciler는 DaemonSet과 Node 목록을 모두 watch하며, 노드 셀렉터에 매치되는 새 노드마다 Pod를 생성하고 드레인되거나 삭제된 노드에서 Pod를 제거합니다. 로그 수집기, node exporter, CNI 에이전트 등 클러스터 전역에서 실행되어야 하는 모든 것에 사용됩니다.
+- **Job**: "최대 P개를 병렬로 실행하면서 N번의 성공적 완료를 달성하라." Reconciler는 Pod를 생성하고 완료를 watch하며, 성공 횟수에 도달하면 멈춥니다. `backoffLimit`이 실패 시 재시도를 제한하고, `activeDeadlineSeconds`가 총 벽시계 시간을 제한합니다. 배치 워크로드에 핵심적입니다.
+- **CronJob**: Job 팩토리. Reconciler는 crontab 스타일 스케줄을 읽고, 발화 시점마다 템플릿에서 새 Job을 생성합니다. `concurrencyPolicy`가 이전 Job이 아직 실행 중일 때의 동작을 결정합니다(`Allow`, `Forbid`, `Replace`).
+
+당신은 Pod 템플릿을 작성하고, 컨트롤러는 몇 개를·어떤 순서로·어느 노드에·어떤 성공 기준으로 실행할지 결정합니다.
 
 데몬셋(DaemonSet)은 모든 (또는 선택된) 노드에서 파드의 복사본이 실행되도록 보장합니다.
 
@@ -1180,6 +1138,25 @@ kubectl drain node-1 --ignore-daemonsets --delete-emptydir-data
 ---
 
 ## 8. 리소스 요청과 제한
+
+### 이론: Requests, Limits, QoS — YAML에서 cgroup으로
+
+리소스 관리에는 컨테이너당 리소스(CPU, 메모리)별로 두 숫자가 있습니다:
+
+- **`requests`**: 스케줄러가 파드의 예약(reservation)으로 취급하는 값. 노드 위 모든 파드 requests의 합은 노드 allocatable을 초과할 수 없습니다. 파드가 노드에 *적합한지* 여부를 결정합니다.
+- **`limits`**: 커널이 강제하는 상한. 한도를 넘는 CPU는 스로틀되고(cgroup `cpu.cfs_quota_us`), 한도를 넘는 메모리는 OOM kill을 트리거합니다(cgroup `memory.limit_in_bytes`).
+
+requests/limits 조합으로부터 세 가지 QoS 클래스가 자동으로 결정됩니다:
+
+| 클래스 | 조건 | 축출 우선순위 |
+|-------|------|--------------|
+| `Guaranteed` | 모든 컨테이너가 CPU·메모리에 대해 `requests == limits` | 가장 마지막에 축출 |
+| `Burstable` | 적어도 하나의 request 설정, 그러나 모두 `requests == limits`은 아님 | 중간 |
+| `BestEffort` | 어디에도 requests나 limits 미설정 | 가장 먼저 축출 |
+
+노드 메모리 압박 시, kubelet은 BestEffort를 먼저 축출하고, 그다음 Burstable을 자신의 request 초과 정도 순으로 축출하며, Guaranteed는 정말 필요한 경우에만 축출합니다. 따라서 **`Guaranteed`는 단순한 리소스 예산이 아니라 축출 보험입니다.**
+
+CPU와 메모리는 결정적으로 다릅니다 — CPU는 **압축 가능(compressible)**(느린 테넌트를 스로틀하면 모두가 계속 동작), 메모리는 **압축 불가능(incompressible)**(다 쓰면 누군가는 죽어야 함). 이 때문에 메모리 OOM은 갑작스럽고 치명적인 반면, CPU 스로틀은 점진적이고 회복 가능합니다.
 
 ### 8.1 CPU와 메모리
 

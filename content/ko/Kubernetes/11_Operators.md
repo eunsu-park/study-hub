@@ -16,8 +16,6 @@
 
 Kubernetes에서 무상태(stateless) 워크로드를 실행하는 것은 간단합니다 -- Deployment, Service, Ingress가 대부분의 작업을 처리합니다. 하지만 상태 유지(stateful), 도메인별 애플리케이션(데이터베이스, 메시지 큐, ML 파이프라인)은 설치, 구성, 스케일링, 업그레이드, 복구에 사람의 전문 지식이 필요합니다. 오퍼레이터 패턴(Operator pattern)은 이러한 인간의 지식을 클러스터 내부에서 실행되는 소프트웨어로 인코딩하여 시스템을 지속적으로 원하는 상태(desired state)로 이끕니다. 이 레슨에서는 Kubernetes 오퍼레이터의 구축, 배포, 유지보수의 전체 라이프사이클을 다룹니다.
 
-스캐폴딩에 들어가기 전에, [**이론과 원리**](#이론과-원리) 섹션을 먼저 읽어보세요. Operator 패턴이 도메인 지식에 적용된 CRD + controller-runtime일 뿐인 이유, 컨트롤러의 심장 박동인 informer + work queue + reconcile 루프, finalizer와 owner reference가 소유권을 명시적으로 만드는 이유, 그리고 leader election이 두 operator의 경쟁을 막는 방법을 다룹니다.
-
 ## 목차
 
 - [이론과 원리](#이론과-원리)
@@ -35,11 +33,9 @@ Kubernetes에서 무상태(stateless) 워크로드를 실행하는 것은 간단
 
 ---
 
-## 이론과 원리
+## 1. 오퍼레이터 패턴
 
-Operator 패턴은 반복되는 관찰에 대한 답입니다 — 상태 시스템(데이터베이스, 메시지 브로커, ML 파이프라인)은 대부분 사람이 runbook을 따라 운영합니다. "클러스터 초기화, 그다음 레플리카 추가, 그다음 따라잡기를 기다리고, 그다음 승격..." 각 단계는 기계적이지만 *이 특정 시스템*에 대한 도메인 지식을 필요로 합니다. **Operator**는 그 runbook을 클러스터 내에서 실행되는 컨트롤러로 인코딩합니다. 커스텀 리소스(`PostgresCluster`, 10강)를 정의하고 Postgres를 설치·업그레이드·복구하는 방법을 아는 컨트롤러를 작성하면, `kubectl apply -f cluster.yaml`이 관리되는 데이터베이스를 만들게 한 것입니다. 이 섹션은 거의 모든 operator가 기반으로 하는 controller-runtime 아키텍처, 조정을 효율적으로 만드는 work-queue 패턴, 정리와 소유권을 위한 finalizer와 owner reference, 그리고 HA operator 배포를 위한 leader election을 설명합니다.
-
-### A. Operator = 커스텀 리소스 + 도메인 인식 컨트롤러
+### 이론: Operator = 커스텀 리소스 + 도메인 인식 컨트롤러
 
 Operator는 이미 알고 있는 두 가지의 합성입니다:
 
@@ -51,108 +47,6 @@ CRD 자체는 etcd에 저장된 타입화된 형태일 뿐입니다. 컨트롤�
 패턴의 우아함은 내장 쿠버네티스(Deployment, ReplicaSet, ...)와 동일한 *모델*을 따르되 쿠버네티스 자체가 모르는 도메인 객체에 대해 그렇게 한다는 것입니다. 이 패턴을 채택하면 플랫폼 어휘가 확장됩니다 — "StatefulSet 만들고, 그다음 복제 구성, 그다음 ..." 대신 `kubectl apply -f my-database.yaml`이라 말합니다.
 
 Operator 패턴은 마법이 *아닙니다* — 10강의 CRD에 **controller-runtime**을 사용하는 Go(또는 쿠버네티스 API를 직접 사용하는 어떤 언어든, 그러나 Go가 최고의 생태계를 가짐)로 작성된 컨트롤러를 더한 것일 뿐입니다. operator를 강력하게 만드는 것은 새 프레임워크 기능이 아니라 *전문성의 인코딩*입니다.
-
-### B. 컨트롤러의 심장 박동 — Informer + Work Queue + Reconcile
-
-모든 operator(그리고 모든 내장 컨트롤러)는 **controller-runtime**이 제공하는 동일한 아키텍처를 실행합니다:
-
-```
-Watch → Informer (캐시) → Event Handler → Work Queue → Reconciler
-```
-
-**Informer**는 로컬 캐시를 유지하는 리소스 유형에 대한 장기 watch입니다. 왜 캐시? 대안 — 모든 reconcile이 API 서버에서 읽는 것 — 은 감당할 수 없기 때문입니다. Informer는 한 번의 초기 list를 하고 그다음 델타를 스트리밍합니다(1강 §A) — 읽기는 로컬이고 빠릅니다.
-
-**Event Handler**는 informer로부터 `ADDED`/`MODIFIED`/`DELETED` 이벤트를 보고 무엇을 할지 결정합니다. 보통 — 객체의 namespace/name을 추출하고 그것에 대한 *reconcile request*를 enqueue. 주의 — 핸들러는 작업을 하지 않고 enqueue합니다.
-
-**Work Queue**는 이벤트 생산과 조정 사이의 버퍼입니다. 중복 제거(같은 객체에 대한 100개 이벤트가 도착하면 reconcile은 한 번만), rate limiting 지원(오류에 대한 exponential backoff), 키별 순차 처리 강제(`default/my-cluster`에 대해 한 번에 하나의 reconcile, 경쟁 없음). controller-runtime이 합리적 기본값을 제공합니다 — 오류에 대한 exponential-backoff를 가진 rate-limited 큐.
-
-**Reconciler**는 당신이 작성하는 함수입니다. 시그니처는:
-
-```go
-func (r *PostgresReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error)
-```
-
-내부에서 다음을 합니다:
-1. 원하는 상태 가져오기 — 캐시에서 CR 읽기.
-2. 실제 상태 가져오기 — 자식 리소스(StatefulSet, Service)와 그 status 읽기.
-3. diff 계산 후 행동 — 필요에 따라 생성/업데이트/삭제.
-4. 반환 — 즉시 돌아오려면 `Result{Requeue: true}`, 주기적 검사를 위해 `Result{RequeueAfter: 30s}`, 또는 backoff 재시도를 트리거하려면 `error`.
-
-이 패턴과 함께 무료로 오는 두 속성:
-
-- **기본 멱등(idempotence by default).** Reconciler는 같은 객체에 대해 여러 번 호출됩니다 — 초기 생성, 모든 변경, 재동기화 간격, 재시도 시. 코드는 매번 같은 결과를 만들어야 합니다. 패턴은 "create"가 아니라 "create-or-update" — 보통 `controllerutil.CreateOrUpdate`를 사용.
-- **레벨 트리거, 엣지 트리거 아님.** *현재 상태*에 반응합니다 — 이벤트가 아닙니다. reconcile 도중 컨트롤러가 크래시해도, 다음 시작은 같은 상태를 보고 계속합니다 — 복구할 놓친 이벤트 없음.
-
-이 루프가 쿠버네티스 확장을 위한 *바로 그* 프로그래밍 모델입니다. 다른 모든 것(finalizer, owner reference, status 업데이트)은 그 위의 정제입니다.
-
-### C. Owner Reference와 Finalizer — 소유권을 명시적으로
-
-`PostgresCluster` 리소스는 자식 객체를 소유합니다 — StatefulSet, 여러 Service, 자격 증명용 Secret, 스토리지용 PVC. 두 메커니즘이 그것들을 묶습니다:
-
-**Owner Reference**는 자식에서 부모를 가리키는 메타데이터입니다:
-
-```yaml
-metadata:
-  name: my-cluster-sts
-  ownerReferences:
-    - apiVersion: example.com/v1
-      kind: PostgresCluster
-      name: my-cluster
-      uid: 12345...
-      controller: true
-      blockOwnerDeletion: true
-```
-
-`PostgresCluster`를 삭제하면, **garbage collector** 컨트롤러(kube-controller-manager에 내장)가 매달린 owner reference를 보고 자식을 cascade-delete합니다. StatefulSet에 대한 삭제 로직을 작성하지 않습니다 — 생성 시 `ownerReferences`를 설정했기 때문에 GC가 처리합니다. 이것이 Deployment가 ReplicaSet을 삭제하고 ReplicaSet이 Pod를 삭제하는 방법입니다 — 모두 "무료로".
-
-**Finalizer**는 그 반대입니다 — `metadata.finalizers` 아래의 문자열 목록이 제거될 때까지 삭제를 차단합니다. 사용자가 `kubectl delete postgrescluster my-cluster`를 실행하면:
-
-1. 쿠버네티스가 `metadata.deletionTimestamp`(소프트 삭제 마커)를 설정.
-2. Garbage collection이 알아차리지만 finalizer 목록이 비어 있지 않으므로 대기.
-3. 컨트롤러의 reconciler가 `deletionTimestamp != nil`을 보고 정리 실행(예: 최종 백업 수행, 모니터링에서 등록 해제, 클라우드 관리 디스크 해제).
-4. 정리 후, 컨트롤러가 목록에서 자신의 finalizer 제거.
-5. Finalizer가 비어 있으면, GC가 실제로 객체를 삭제.
-
-Finalizer는 "삭제 전 동기 정리"를 하는 유일한 올바른 방법입니다 — 그것 없이는 객체가 반응할 기회를 얻기 전에 사라집니다.
-
-흔한 패턴 — 첫 reconcile에서 finalizer를 등록(업데이트를 통해)하고, 모든 reconcile의 맨 위에서 `deletionTimestamp`를 검사하여 delete-handling으로 분기.
-
-### D. Leader Election — 하나가 활성, 여럿이 대기
-
-Operator는 HA를 위해 여러 레플리카로 실행되어야 하지만, 한 번에 **하나만** 조정해야 합니다 — 그렇지 않으면 두 레플리카가 같은 StatefulSet을 만들려고 경쟁합니다. controller-runtime의 해결책은 **leader election**입니다 — 레플리카들이 클러스터의 `Lease` 객체를 두고 경쟁하고, Lease를 가진 자가 리더이며 reconcile 루프를 실행합니다. 대기는 Lease를 watch하다가 만료되면 인계받습니다(기본 15초 TTL, 10초 갱신, 2초 재시도).
-
-```go
-mgr, _ := manager.New(cfg, manager.Options{
-    LeaderElection:   true,
-    LeaderElectionID: "my-operator-lock",
-    LeaderElectionNamespace: "my-operator-system",
-})
-```
-
-Lease 객체는 etcd에 살므로, etcd를 안전하게 만드는 동일한 합의(1강 §B)가 leader election을 안전하게 만듭니다 — 네트워크 파티션 하에서 etcd 멤버 쿼럼에 도달할 수 있는 측만 lease를 가질 수 있습니다.
-
-이는 kube-controller-manager가 자신에 대해 사용하는 동일한 패턴입니다. Deployment 컨트롤러는 고가용성입니다 — 세 controller-manager 레플리카, 한 명의 선출된 리더가 reconcile 루프 실행, 두 개의 warm 대기.
-
-### 이론에서 아래의 코드로
-
-이제 레슨은 이 추상을 적용합니다:
-
-- **섹션 1 (Operator 패턴)**은 §A입니다 — 패턴이 존재하는 이유와 정전 예시.
-- **섹션 2 (Operator Framework, operator-sdk)**는 controller-runtime 주변의 더 높은 수준 스캐폴딩입니다.
-- **섹션 3 (Kubebuilder)**는 Go 기반 operator를 위한 표준 프로젝트 레이아웃과 코드 생성입니다.
-- **섹션 4 (Controller-Runtime 라이브러리)**는 Go의 §B입니다 — Manager, Reconciler, Builder, Client.
-- **섹션 5 (조정 루프 구현)**은 적절한 Result 반환 값, 오류 처리, requeue 전략을 가진 §B reconciler 패턴입니다.
-- **섹션 6 (리더 선출)**은 코드의 §D입니다.
-- **섹션 7 (파이널라이저)**는 `deletionTimestamp` 분기를 가진 §C의 finalizer 흐름입니다.
-- **섹션 8 (소유자 참조)**는 `SetControllerReference`로 §C의 부모-자식 배선입니다.
-- **섹션 9 (OLM)**는 카탈로그를 통해 operator를 배포하는 라이프사이클 계층입니다.
-- **섹션 10 (모범 사례와 안티패턴)**은 프로덕션 operator로부터 얻은 운영 교훈입니다.
-
-operator를 "CRD + watch/queue/reconcile 루프를 실행하는 컨트롤러"로 보고 나면, 프레임워크 선택(Kubebuilder vs operator-sdk vs Java Operator SDK)은 구문 세부사항이 됩니다. 어려운 부분은 boilerplate가 아니라 도메인 지식입니다.
-
----
-
-## 1. 오퍼레이터 패턴
 
 ### 1.1 오퍼레이터란?
 
@@ -560,6 +454,39 @@ err := r.Status().Patch(ctx, instance, patch)
 
 ## 5. 조정 루프 구현
 
+### 이론: 컨트롤러의 심장 박동 — Informer + Work Queue + Reconcile
+
+모든 operator(그리고 모든 내장 컨트롤러)는 **controller-runtime**이 제공하는 동일한 아키텍처를 실행합니다:
+
+```
+Watch → Informer (캐시) → Event Handler → Work Queue → Reconciler
+```
+
+**Informer**는 로컬 캐시를 유지하는 리소스 유형에 대한 장기 watch입니다. 왜 캐시? 대안 — 모든 reconcile이 API 서버에서 읽는 것 — 은 감당할 수 없기 때문입니다. Informer는 한 번의 초기 list를 하고 그다음 델타를 스트리밍합니다(1강 §A) — 읽기는 로컬이고 빠릅니다.
+
+**Event Handler**는 informer로부터 `ADDED`/`MODIFIED`/`DELETED` 이벤트를 보고 무엇을 할지 결정합니다. 보통 — 객체의 namespace/name을 추출하고 그것에 대한 *reconcile request*를 enqueue. 주의 — 핸들러는 작업을 하지 않고 enqueue합니다.
+
+**Work Queue**는 이벤트 생산과 조정 사이의 버퍼입니다. 중복 제거(같은 객체에 대한 100개 이벤트가 도착하면 reconcile은 한 번만), rate limiting 지원(오류에 대한 exponential backoff), 키별 순차 처리 강제(`default/my-cluster`에 대해 한 번에 하나의 reconcile, 경쟁 없음). controller-runtime이 합리적 기본값을 제공합니다 — 오류에 대한 exponential-backoff를 가진 rate-limited 큐.
+
+**Reconciler**는 당신이 작성하는 함수입니다. 시그니처는:
+
+```go
+func (r *PostgresReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error)
+```
+
+내부에서 다음을 합니다:
+1. 원하는 상태 가져오기 — 캐시에서 CR 읽기.
+2. 실제 상태 가져오기 — 자식 리소스(StatefulSet, Service)와 그 status 읽기.
+3. diff 계산 후 행동 — 필요에 따라 생성/업데이트/삭제.
+4. 반환 — 즉시 돌아오려면 `Result{Requeue: true}`, 주기적 검사를 위해 `Result{RequeueAfter: 30s}`, 또는 backoff 재시도를 트리거하려면 `error`.
+
+이 패턴과 함께 무료로 오는 두 속성:
+
+- **기본 멱등(idempotence by default).** Reconciler는 같은 객체에 대해 여러 번 호출됩니다 — 초기 생성, 모든 변경, 재동기화 간격, 재시도 시. 코드는 매번 같은 결과를 만들어야 합니다. 패턴은 "create"가 아니라 "create-or-update" — 보통 `controllerutil.CreateOrUpdate`를 사용.
+- **레벨 트리거, 엣지 트리거 아님.** *현재 상태*에 반응합니다 — 이벤트가 아닙니다. reconcile 도중 컨트롤러가 크래시해도, 다음 시작은 같은 상태를 보고 계속합니다 — 복구할 놓친 이벤트 없음.
+
+이 루프가 쿠버네티스 확장을 위한 *바로 그* 프로그래밍 모델입니다. 다른 모든 것(finalizer, owner reference, status 업데이트)은 그 위의 정제입니다.
+
 ### 5.1 Reconciler 인터페이스
 
 모든 컨트롤러는 `Reconciler` 인터페이스를 구현해야 합니다:
@@ -834,6 +761,22 @@ func (r *MemcachedReconciler) SetupWithManager(mgr ctrl.Manager) error {
 
 ## 6. 리더 선출
 
+### 이론: Leader Election — 하나가 활성, 여럿이 대기
+
+Operator는 HA를 위해 여러 레플리카로 실행되어야 하지만, 한 번에 **하나만** 조정해야 합니다 — 그렇지 않으면 두 레플리카가 같은 StatefulSet을 만들려고 경쟁합니다. controller-runtime의 해결책은 **leader election**입니다 — 레플리카들이 클러스터의 `Lease` 객체를 두고 경쟁하고, Lease를 가진 자가 리더이며 reconcile 루프를 실행합니다. 대기는 Lease를 watch하다가 만료되면 인계받습니다(기본 15초 TTL, 10초 갱신, 2초 재시도).
+
+```go
+mgr, _ := manager.New(cfg, manager.Options{
+    LeaderElection:   true,
+    LeaderElectionID: "my-operator-lock",
+    LeaderElectionNamespace: "my-operator-system",
+})
+```
+
+Lease 객체는 etcd에 살므로, etcd를 안전하게 만드는 동일한 합의(1강 §B)가 leader election을 안전하게 만듭니다 — 네트워크 파티션 하에서 etcd 멤버 쿼럼에 도달할 수 있는 측만 lease를 가질 수 있습니다.
+
+이는 kube-controller-manager가 자신에 대해 사용하는 동일한 패턴입니다. Deployment 컨트롤러는 고가용성입니다 — 세 controller-manager 레플리카, 한 명의 선출된 리더가 reconcile 루프 실행, 두 개의 warm 대기.
+
 ### 6.1 왜 리더 선출이 필요한가?
 
 고가용성을 위해 여러 오퍼레이터 레플리카(replica)를 실행할 때, 한 번에 하나의 인스턴스만 능동적으로 조정해야 합니다. 리더 선출(leader election)은 Kubernetes Lease 객체를 사용하여 단일 쓰기(single-writer) 의미를 보장합니다.
@@ -911,6 +854,38 @@ spec:
 ---
 
 ## 7. 파이널라이저
+
+### 이론: Owner Reference와 Finalizer — 소유권을 명시적으로
+
+`PostgresCluster` 리소스는 자식 객체를 소유합니다 — StatefulSet, 여러 Service, 자격 증명용 Secret, 스토리지용 PVC. 두 메커니즘이 그것들을 묶습니다:
+
+**Owner Reference**는 자식에서 부모를 가리키는 메타데이터입니다:
+
+```yaml
+metadata:
+  name: my-cluster-sts
+  ownerReferences:
+    - apiVersion: example.com/v1
+      kind: PostgresCluster
+      name: my-cluster
+      uid: 12345...
+      controller: true
+      blockOwnerDeletion: true
+```
+
+`PostgresCluster`를 삭제하면, **garbage collector** 컨트롤러(kube-controller-manager에 내장)가 매달린 owner reference를 보고 자식을 cascade-delete합니다. StatefulSet에 대한 삭제 로직을 작성하지 않습니다 — 생성 시 `ownerReferences`를 설정했기 때문에 GC가 처리합니다. 이것이 Deployment가 ReplicaSet을 삭제하고 ReplicaSet이 Pod를 삭제하는 방법입니다 — 모두 "무료로".
+
+**Finalizer**는 그 반대입니다 — `metadata.finalizers` 아래의 문자열 목록이 제거될 때까지 삭제를 차단합니다. 사용자가 `kubectl delete postgrescluster my-cluster`를 실행하면:
+
+1. 쿠버네티스가 `metadata.deletionTimestamp`(소프트 삭제 마커)를 설정.
+2. Garbage collection이 알아차리지만 finalizer 목록이 비어 있지 않으므로 대기.
+3. 컨트롤러의 reconciler가 `deletionTimestamp != nil`을 보고 정리 실행(예: 최종 백업 수행, 모니터링에서 등록 해제, 클라우드 관리 디스크 해제).
+4. 정리 후, 컨트롤러가 목록에서 자신의 finalizer 제거.
+5. Finalizer가 비어 있으면, GC가 실제로 객체를 삭제.
+
+Finalizer는 "삭제 전 동기 정리"를 하는 유일한 올바른 방법입니다 — 그것 없이는 객체가 반응할 기회를 얻기 전에 사라집니다.
+
+흔한 패턴 — 첫 reconcile에서 finalizer를 등록(업데이트를 통해)하고, 모든 reconcile의 맨 위에서 `deletionTimestamp`를 검사하여 delete-handling으로 분기.
 
 ### 7.1 파이널라이저란?
 

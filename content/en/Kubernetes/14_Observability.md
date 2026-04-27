@@ -16,8 +16,6 @@ After completing this lesson, you will be able to:
 
 You cannot operate what you cannot observe. Kubernetes clusters generate enormous amounts of data -- metrics from every pod, node, and control plane component; logs from every container; traces from every request. The challenge is not collecting data but building a coherent observability system that lets you answer questions about your system's health, performance, and behavior. This lesson covers the three pillars of observability -- metrics, logs, and traces -- along with health checks, alerting, and debugging techniques.
 
-Before the manifests, read [**Theory & Principles**](#theory--principles) — the three signal types (metrics, logs, traces) and what each is good and bad at, the pull vs push trade-off that defines Prometheus, why high-cardinality logging breaks index-based stores like Elasticsearch but works for Loki, and how OpenTelemetry standardizes instrumentation across all three pillars.
-
 ## Table of Contents
 
 - [Theory & Principles](#theory--principles)
@@ -33,11 +31,9 @@ Before the manifests, read [**Theory & Principles**](#theory--principles) — th
 
 ---
 
-## Theory & Principles
+## 1. The Three Pillars of Observability
 
-Observability is the practice of being able to *ask new questions* about your system without having to deploy new code. The three pillars — **metrics**, **logs**, **traces** — exist because each is good at different questions, and no single one suffices. Metrics tell you *what is happening at scale* (numerics aggregated across many sources, fast to query, weak on context). Logs tell you *what specifically happened* in one request (rich context, expensive to scan, slow to aggregate). Traces tell you *how requests flowed across services* (causality, latency breakdown, narrow temporal scope). This section explains what each is and is not good for, the pull-vs-push architectural split, the cardinality issue that drove the Prometheus/Loki style of "label-indexed, content-scanned," and how OpenTelemetry unifies the three.
-
-### A. Metrics: Aggregated Time Series, Cheap to Store, Lossy by Design
+### Theory: Metrics: Aggregated Time Series, Cheap to Store, Lossy by Design
 
 A metric is a numeric value with labels, sampled at regular intervals: `http_requests_total{status="200", path="/api"} 12345`. The fundamental property is **aggregation by design**: you don't store one value per request, you store one counter per unique label combination, incremented on each request.
 
@@ -51,67 +47,6 @@ Four metric types in Prometheus convention:
 - **Summary**: like histogram but computes percentiles client-side. Cheaper to query but cannot aggregate across pods (the math doesn't work for percentiles).
 
 The "right" metric type matters for what queries you can answer later. Once you've chosen a counter, you can't recover individual durations — pick histogram for anything you'll want percentiles on.
-
-### B. Pull vs Push: Why Prometheus Pulls
-
-Two architectural philosophies for getting metrics into a store:
-
-**Push** (StatsD, InfluxDB original): the application sends each metric value to a central collector. Pros: simple to write the client, supports short-lived processes (CronJobs, batch). Cons: every app needs to know the collector address, congestion or backpressure on the collector affects every app, harder to know if an app is healthy (no metrics could mean "no requests" or "app down").
-
-**Pull** (Prometheus): the application exposes `/metrics` HTTP endpoint; the collector scrapes it on a schedule. Pros: scrapes themselves are a health check (failed scrape = target down); central collector controls scrape rate to manage its own load; service discovery (lesson 03 §D) gives the collector a current list of targets without app changes. Cons: short-lived processes (Jobs) finish before the next scrape — Prometheus solves this with a separate `pushgateway` for that case.
-
-For Kubernetes, pull-based works exquisitely well because Service discovery already knows where every pod is — Prometheus uses Kubernetes service discovery to enumerate scrape targets automatically. The `ServiceMonitor` and `PodMonitor` CRDs (from prometheus-operator) declaratively describe "scrape pods matching this label, on port `metrics`, every 30s." That's the entire integration.
-
-The mental model: **Prometheus is a pull-based time-series database with a query language (PromQL) and a scraper that uses Kubernetes service discovery.** Everything else (Alertmanager, Grafana, Thanos for long-term storage) is composed around that core.
-
-### C. Logs: High Cardinality, Indexed by What?
-
-Logs are records of events — typically free-form text plus structured fields. The challenge: a busy service produces millions of log lines per minute, and you want to be able to search them.
-
-Two indexing strategies, with very different cost profiles:
-
-**Index everything (Elasticsearch / EFK).** Tokenize the log body, build an inverted index over every word, indexed on every field. Pros: arbitrary search is fast (`error AND timeout AND user_id:42`). Cons: extremely expensive at scale — index storage is often 5-10× the raw log volume; high-cardinality fields (user IDs, request IDs, IPs) blow up the index; ingestion is slow because every word must be indexed.
-
-**Index labels only (Loki / Grafana).** Build inverted indexes only on a small set of high-level labels (`namespace`, `pod`, `app`, `level`). Store the raw log body as a compressed blob. Pros: ingestion is cheap (no full-text indexing); storage is ~10× cheaper than ES. Cons: queries that aren't on labels become full-scans of the log body within a label-narrowed time range — fast for `{app="api"} |= "error"` (label narrows then text-grep), slow for "search all logs for `user_id=42`" without a label.
-
-Loki was designed explicitly for the cardinality of cloud-native logs. Prometheus-style labels (low cardinality, ~tens of values per label) work; per-request unique IDs do not. The architectural lesson: **store logs cheaply by being conservative with what you index, then use traces (§D) for the "look at one specific request" use case where Loki is weakest.**
-
-EFK still has its place — when you need full-text search regardless of cost (security forensics, compliance audit logs). For typical app/infra logs, Loki's economics win.
-
-### D. Traces and OpenTelemetry: Causality Across Services
-
-A distributed system handles a single user request via many service calls: Ingress → API → Auth → DB. **Distributed tracing** captures this graph: each service emits a "span" recording its work; spans share a `trace_id` (the request) and have a parent `span_id` (causality). Visualized, you get a flame graph showing where time was spent.
-
-Three properties of traces:
-
-- **Sampled by default.** Storing a trace per request is impractical for high-volume systems. Typical sampling: 1% head sampling (decision at root), or tail sampling (keep slow/error traces, drop normal ones). Sampled-out traces are gone — you cannot retroactively trace a request that wasn't sampled.
-- **Cross-service propagation requires the W3C Trace Context standard.** Every service in the chain must read and write the `traceparent` header. One service that doesn't propagate breaks the chain.
-- **Useful only with instrumentation.** Just collecting traces from the network shows infrastructure-level spans (HTTP request in, HTTP request out). Useful application spans (DB query, cache hit, business logic) require code-level instrumentation.
-
-**OpenTelemetry (OTel)** is the unification: a vendor-neutral SDK + protocol (OTLP) + collector that handles all three pillars. Same library can emit metrics, logs, traces; same collector receives all three; you point the collector at your backend (Prometheus, Loki, Jaeger, Datadog, ...). This kills the old "different SDK per tool" pain.
-
-For Kubernetes, OTel's **auto-instrumentation operators** can inject Java/Python/Node agents into pods via mutating webhook (lesson 12), so you get traces and metrics without changing app code. The collector typically runs as a DaemonSet (one per node) or a Deployment, scraping metrics and receiving OTLP from local pods.
-
-The end state: one set of SDKs in your apps emit everything, one collector pipeline routes each signal to its appropriate store. This is the modern architecture; legacy "one tool per signal" deployments are slowly migrating.
-
-### From Theory to the Configuration Below
-
-The lesson now applies these abstractions:
-
-- **Section 1 (The Three Pillars)** is §A–§D's overview made concrete with examples of when each signal helps.
-- **Section 2 (Metrics with Prometheus and Grafana)** is §A and §B — Prometheus install, ServiceMonitor, PromQL, Grafana dashboards.
-- **Section 3 (Kubernetes Metrics Pipeline)** is the metrics-server + Prometheus + Grafana stack with kube-state-metrics for Kubernetes object state.
-- **Section 4 (Logging with EFK and Loki)** is §C's two indexing strategies side by side.
-- **Section 5 (Distributed Tracing)** is §D — Jaeger, OpenTelemetry, instrumentation.
-- **Section 6 (Health Checks)** is the workload-level signals (liveness/readiness/startup) that feed the metrics pipeline.
-- **Section 7 (Alerting with Alertmanager)** is the rule-based escalation that turns metrics into pages — what to alert on, how to avoid noise.
-- **Section 8 (Debugging Techniques)** is the practical tour of using the three pillars together to find a problem.
-
-Once you see the three pillars as "metrics for scale, logs for context, traces for causality" and OpenTelemetry as the unifying instrumentation, every "we need to monitor X" question maps to "which pillar(s), what cardinality, what backend?"
-
----
-
-## 1. The Three Pillars of Observability
 
 ### 1.1 Overview
 
@@ -147,6 +82,18 @@ Once you see the three pillars as "metrics for scale, logs for context, traces f
 ---
 
 ## 2. Metrics with Prometheus and Grafana
+
+### Theory: Pull vs Push: Why Prometheus Pulls
+
+Two architectural philosophies for getting metrics into a store:
+
+**Push** (StatsD, InfluxDB original): the application sends each metric value to a central collector. Pros: simple to write the client, supports short-lived processes (CronJobs, batch). Cons: every app needs to know the collector address, congestion or backpressure on the collector affects every app, harder to know if an app is healthy (no metrics could mean "no requests" or "app down").
+
+**Pull** (Prometheus): the application exposes `/metrics` HTTP endpoint; the collector scrapes it on a schedule. Pros: scrapes themselves are a health check (failed scrape = target down); central collector controls scrape rate to manage its own load; service discovery (lesson 03 §D) gives the collector a current list of targets without app changes. Cons: short-lived processes (Jobs) finish before the next scrape — Prometheus solves this with a separate `pushgateway` for that case.
+
+For Kubernetes, pull-based works exquisitely well because Service discovery already knows where every pod is — Prometheus uses Kubernetes service discovery to enumerate scrape targets automatically. The `ServiceMonitor` and `PodMonitor` CRDs (from prometheus-operator) declaratively describe "scrape pods matching this label, on port `metrics`, every 30s." That's the entire integration.
+
+The mental model: **Prometheus is a pull-based time-series database with a query language (PromQL) and a scraper that uses Kubernetes service discovery.** Everything else (Alertmanager, Grafana, Thanos for long-term storage) is composed around that core.
 
 ### 2.1 Prometheus Architecture
 
@@ -390,6 +337,20 @@ rate(node_network_transmit_bytes_total{device="eth0"}[5m])
 
 ## 4. Logging with EFK and Loki
 
+### Theory: Logs: High Cardinality, Indexed by What?
+
+Logs are records of events — typically free-form text plus structured fields. The challenge: a busy service produces millions of log lines per minute, and you want to be able to search them.
+
+Two indexing strategies, with very different cost profiles:
+
+**Index everything (Elasticsearch / EFK).** Tokenize the log body, build an inverted index over every word, indexed on every field. Pros: arbitrary search is fast (`error AND timeout AND user_id:42`). Cons: extremely expensive at scale — index storage is often 5-10× the raw log volume; high-cardinality fields (user IDs, request IDs, IPs) blow up the index; ingestion is slow because every word must be indexed.
+
+**Index labels only (Loki / Grafana).** Build inverted indexes only on a small set of high-level labels (`namespace`, `pod`, `app`, `level`). Store the raw log body as a compressed blob. Pros: ingestion is cheap (no full-text indexing); storage is ~10× cheaper than ES. Cons: queries that aren't on labels become full-scans of the log body within a label-narrowed time range — fast for `{app="api"} |= "error"` (label narrows then text-grep), slow for "search all logs for `user_id=42`" without a label.
+
+Loki was designed explicitly for the cardinality of cloud-native logs. Prometheus-style labels (low cardinality, ~tens of values per label) work; per-request unique IDs do not. The architectural lesson: **store logs cheaply by being conservative with what you index, then use traces (§D) for the "look at one specific request" use case where Loki is weakest.**
+
+EFK still has its place — when you need full-text search regardless of cost (security forensics, compliance audit logs). For typical app/infra logs, Loki's economics win.
+
 ### 4.1 EFK Stack Architecture
 
 ```
@@ -620,6 +581,22 @@ sum by (namespace) (rate({job="kubernetes-pods"}[5m]))
 ---
 
 ## 5. Distributed Tracing
+
+### Theory: Traces and OpenTelemetry: Causality Across Services
+
+A distributed system handles a single user request via many service calls: Ingress → API → Auth → DB. **Distributed tracing** captures this graph: each service emits a "span" recording its work; spans share a `trace_id` (the request) and have a parent `span_id` (causality). Visualized, you get a flame graph showing where time was spent.
+
+Three properties of traces:
+
+- **Sampled by default.** Storing a trace per request is impractical for high-volume systems. Typical sampling: 1% head sampling (decision at root), or tail sampling (keep slow/error traces, drop normal ones). Sampled-out traces are gone — you cannot retroactively trace a request that wasn't sampled.
+- **Cross-service propagation requires the W3C Trace Context standard.** Every service in the chain must read and write the `traceparent` header. One service that doesn't propagate breaks the chain.
+- **Useful only with instrumentation.** Just collecting traces from the network shows infrastructure-level spans (HTTP request in, HTTP request out). Useful application spans (DB query, cache hit, business logic) require code-level instrumentation.
+
+**OpenTelemetry (OTel)** is the unification: a vendor-neutral SDK + protocol (OTLP) + collector that handles all three pillars. Same library can emit metrics, logs, traces; same collector receives all three; you point the collector at your backend (Prometheus, Loki, Jaeger, Datadog, ...). This kills the old "different SDK per tool" pain.
+
+For Kubernetes, OTel's **auto-instrumentation operators** can inject Java/Python/Node agents into pods via mutating webhook (lesson 12), so you get traces and metrics without changing app code. The collector typically runs as a DaemonSet (one per node) or a Deployment, scraping metrics and receiving OTLP from local pods.
+
+The end state: one set of SDKs in your apps emit everything, one collector pipeline routes each signal to its appropriate store. This is the modern architecture; legacy "one tool per signal" deployments are slowly migrating.
 
 ### 5.1 OpenTelemetry Architecture
 

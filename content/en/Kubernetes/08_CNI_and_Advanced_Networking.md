@@ -18,8 +18,6 @@ Kubernetes networking is deceptively simple at the surface -- every pod gets an 
 
 > **The Kubernetes Network Model:** Kubernetes imposes three fundamental requirements: (1) every pod gets a unique IP, (2) pods can communicate with any other pod without NAT, and (3) agents on a node can communicate with all pods on that node. How this is achieved is entirely up to the CNI plugin.
 
-Before the configuration, read [**Theory & Principles**](#theory--principles) — the CNI plugin contract that every Kubernetes network must implement, the four families of data-plane technique (overlay, underlay/BGP, eBPF, IPVS), why eBPF is replacing iptables for networking, and how NetworkPolicy semantics get compiled to kernel rules.
-
 ## Table of Contents
 
 - [Theory & Principles](#theory--principles)
@@ -59,11 +57,9 @@ Before the configuration, read [**Theory & Principles**](#theory--principles) �
 
 ---
 
-## Theory & Principles
+## 1. CNI Specification
 
-Lesson 03 stated the four invariants of Kubernetes networking but treated them as axioms. This lesson opens the box: *who* implements those invariants, *how*, and what the trade-offs are. The answer is **CNI plugins** — the kubelet does not know how to give a Pod an IP, attach it to a network, or enforce policy. It hands that off to whatever plugin is installed. Calico, Cilium, Flannel, AWS VPC CNI, Azure CNI — each implements the same CNI contract differently, with consequences for performance, scalability, and policy expressiveness. This section explains the contract, the four families of implementation, and the eBPF revolution that is reshaping the data plane.
-
-### A. The CNI Contract: A Minimal Plugin Interface
+### Theory: The CNI Contract: A Minimal Plugin Interface
 
 CNI is not a Kubernetes-specific spec — it is a CNCF project used by Kubernetes, Mesos, podman, and others. The interface is deliberately small: a CNI plugin is just an executable that the container runtime invokes with three commands and a JSON config:
 
@@ -83,93 +79,6 @@ When the kubelet creates a Pod, the runtime (containerd/CRI-O) calls the configu
 That's it. The kubelet, kube-proxy, and the rest of Kubernetes are completely insulated from *how* the network works. This minimal contract is what enabled the rich ecosystem — adding a new networking model means writing a binary that handles `ADD`/`DEL`/`CHECK`, not patching Kubernetes core.
 
 The trade-off is that some advanced features (NetworkPolicy enforcement, service load balancing, observability) are not part of the CNI spec — they are plugin extensions. So "CNI plugin" in practice means "the binary that does CNI plus a daemon that does everything else the plugin author wanted to add."
-
-### B. Four Families of Data Plane
-
-Pod-to-Pod traffic across nodes has to physically get from node A's network to node B's network. The four mainstream approaches:
-
-**1. Overlay (encapsulation): VXLAN, Geneve.** The Pod packet is wrapped in a UDP packet whose destination is the *node's* IP. The receiving node unwraps and delivers to the correct Pod. Works on any L3 network without special config; the price is ~50 bytes per packet of overhead and double the kernel work. Flannel (default mode), Calico (VXLAN mode), Weave use this. **Best for: getting started, multi-cloud, restricted networks.**
-
-**2. Underlay / BGP: Calico (BGP mode), Cilium (BGP).** Each node advertises its Pod CIDR to neighboring routers (or directly to top-of-rack switches) via BGP. Packets travel native, no encapsulation. Wire-line performance, but requires control of the L3 routing fabric — usually only feasible on-prem or in cloud setups that explicitly support it (e.g., AWS with the VPC CNI). **Best for: bare-metal, high-throughput workloads, when you control the network.**
-
-**3. eBPF: Cilium.** Instead of iptables rules in the kernel netfilter chain, Cilium attaches eBPF programs to network interfaces. Packets are inspected and forwarded by these programs *before* hitting the iptables stack at all, often with just a TC ingress hook. This bypasses much of the Linux network stack and is dramatically faster for large clusters; it also enables L7 awareness (HTTP/gRPC parsing) and rich observability (Hubble). **Best for: large clusters, performance-sensitive workloads, modern distros.**
-
-**4. Cloud-native: AWS VPC CNI, GCP Netd, Azure CNI.** Each Pod gets a real cloud VPC IP (an ENI secondary IP on AWS, an alias IP on GCP). No overlay, no BGP — the cloud's underlying SDN handles delivery. Limits: you exhaust real IPs faster, and cross-cluster routing requires VPC peering. **Best for: cloud-native deployments where cluster size fits IP budget.**
-
-The choice has nontrivial consequences: encrypted overlay (WireGuard mode in Calico/Cilium) for cluster-mesh privacy, eBPF for kube-proxy-replacement (no iptables at all), BGP for sub-millisecond pod-to-pod latency. Picking a CNI is one of the few cluster decisions that is hard to reverse later.
-
-### C. eBPF: Programs in the Kernel, Not Kernel Patches
-
-eBPF (extended Berkeley Packet Filter) is the most disruptive technology in Linux networking in years, and Cilium is its flagship Kubernetes implementation. The basic idea: instead of **modifying the kernel** to add new networking behavior, you compile **small verified bytecode programs** that the kernel runs at well-defined hook points (incoming packet, outgoing packet, system call, tracepoint).
-
-Key properties:
-
-- **In-kernel, no context switches.** A user-space proxy needs each packet to cross kernel↔user boundary twice. eBPF runs in the kernel, with packet data already there. This eliminates the biggest cost of user-space data-plane proxies.
-- **Verified for safety.** A kernel-side verifier rejects programs that could loop forever, dereference invalid pointers, or exceed bounded stack usage. This is what makes "running arbitrary code in your kernel" not insane.
-- **Hot-loadable.** No reboot, no recompile. Cilium pushes new policy as a new eBPF program; old packets in flight get the old program until they complete.
-
-For Kubernetes networking, eBPF replaces three things at once:
-
-- **iptables for kube-proxy** (Service VIP rewriting): O(1) hash lookup vs O(N) linear chain.
-- **iptables for NetworkPolicy** (allow/deny rules): policy compiled to an in-kernel table rather than a long iptables chain.
-- **Add NEW capabilities** that iptables fundamentally cannot: L7 HTTP-aware policies, service-to-service identity, transparent encryption, deep observability (Hubble shows pod-to-pod flows in real time).
-
-This is why "Cilium with kube-proxy replacement" is the modern default for clusters that prioritize performance and observability. iptables is not going away tomorrow but is being relegated to compatibility mode.
-
-### D. NetworkPolicy: Declarative Allow Lists, Compiled Differently by Each CNI
-
-A `NetworkPolicy` is a declarative statement of allowed pod-to-pod and pod-to-external traffic:
-
-```yaml
-apiVersion: networking.k8s.io/v1
-kind: NetworkPolicy
-spec:
-  podSelector: { matchLabels: { app: db } }
-  policyTypes: [Ingress, Egress]
-  ingress:
-    - from:
-        - podSelector: { matchLabels: { app: api } }
-      ports:
-        - port: 5432
-          protocol: TCP
-  egress:
-    - to:
-        - namespaceSelector: { matchLabels: { name: kube-system } }
-          podSelector: { matchLabels: { k8s-app: kube-dns } }
-      ports:
-        - port: 53
-          protocol: UDP
-```
-
-Two semantic rules everyone gets wrong at first:
-
-- **Default is allow-all.** Until the *first* NetworkPolicy selects a pod, all traffic is permitted. Once any policy selects a pod, it becomes default-deny for the policyTypes listed, and only explicitly allowed traffic gets through.
-- **Policies are additive within the same direction.** If two ingress policies select the same pod, the union of their `from` lists is allowed. There is no "deny" rule — like RBAC.
-
-The CNI plugin compiles these YAML rules to its native enforcement mechanism:
-
-- iptables-based CNIs (Calico iptables mode) generate iptables chains per policy.
-- IPVS-based mode generates IPVS rules.
-- eBPF-based (Cilium) compiles to eBPF programs attached to interfaces.
-
-This is why two clusters with the same NetworkPolicy YAML can have very different performance and behavior: the rule semantics are standard, the enforcement implementation is per-CNI. Some CNIs add proprietary CRDs (Cilium's `CiliumNetworkPolicy`, Calico's `GlobalNetworkPolicy`) for L7 rules, FQDN-based egress, or cluster-wide policies that the spec doesn't cover.
-
-### From Theory to the Configuration Below
-
-The lesson now applies these abstractions:
-
-- **Section 1 (CNI Specification)** is §A — the actual `ADD`/`DEL`/`CHECK` interface and config format.
-- **Sections 2 (Calico) and 3 (Cilium)** show the §B/§C implementation choices in concrete plugin form.
-- **Section 4 (eBPF Fundamentals)** unpacks §C with examples of programs and hooks.
-- **Section 5 (Advanced NetworkPolicy)** uses the §D rules in non-trivial scenarios — egress, CIDR, port range, DNS-aware (Cilium).
-- **Section 6 (Service Mesh Overview)** is the L7 layer above the CNI — Istio, Linkerd, Cilium Service Mesh — built on top of pod-to-pod connectivity from §A–§C.
-- **Sections 7–9 (Bandwidth, IPv6, Troubleshooting)** are operational overlays on the data-plane choice.
-
-Once you see CNI as a contract, eBPF as the modern data plane, and NetworkPolicy as compile-time rules, every "why is my pod's traffic dropping?" question maps to a specific layer.
-
----
-
-## 1. CNI Specification
 
 The Container Network Interface (CNI) is a specification that defines how container runtimes configure networking for containers. Kubernetes uses CNI plugins to assign IP addresses, configure routes, and set up network namespaces for pods.
 
@@ -333,6 +242,20 @@ ssh node01 "ls /opt/cni/bin/"
 
 ## 2. Calico
 
+### Theory: Four Families of Data Plane
+
+Pod-to-Pod traffic across nodes has to physically get from node A's network to node B's network. The four mainstream approaches:
+
+**1. Overlay (encapsulation): VXLAN, Geneve.** The Pod packet is wrapped in a UDP packet whose destination is the *node's* IP. The receiving node unwraps and delivers to the correct Pod. Works on any L3 network without special config; the price is ~50 bytes per packet of overhead and double the kernel work. Flannel (default mode), Calico (VXLAN mode), Weave use this. **Best for: getting started, multi-cloud, restricted networks.**
+
+**2. Underlay / BGP: Calico (BGP mode), Cilium (BGP).** Each node advertises its Pod CIDR to neighboring routers (or directly to top-of-rack switches) via BGP. Packets travel native, no encapsulation. Wire-line performance, but requires control of the L3 routing fabric — usually only feasible on-prem or in cloud setups that explicitly support it (e.g., AWS with the VPC CNI). **Best for: bare-metal, high-throughput workloads, when you control the network.**
+
+**3. eBPF: Cilium.** Instead of iptables rules in the kernel netfilter chain, Cilium attaches eBPF programs to network interfaces. Packets are inspected and forwarded by these programs *before* hitting the iptables stack at all, often with just a TC ingress hook. This bypasses much of the Linux network stack and is dramatically faster for large clusters; it also enables L7 awareness (HTTP/gRPC parsing) and rich observability (Hubble). **Best for: large clusters, performance-sensitive workloads, modern distros.**
+
+**4. Cloud-native: AWS VPC CNI, GCP Netd, Azure CNI.** Each Pod gets a real cloud VPC IP (an ENI secondary IP on AWS, an alias IP on GCP). No overlay, no BGP — the cloud's underlying SDN handles delivery. Limits: you exhaust real IPs faster, and cross-cluster routing requires VPC peering. **Best for: cloud-native deployments where cluster size fits IP budget.**
+
+The choice has nontrivial consequences: encrypted overlay (WireGuard mode in Calico/Cilium) for cluster-mesh privacy, eBPF for kube-proxy-replacement (no iptables at all), BGP for sub-millisecond pod-to-pod latency. Picking a CNI is one of the few cluster decisions that is hard to reverse later.
+
 Calico is one of the most widely deployed CNI plugins. It provides networking and network policy enforcement using BGP routing, IP-in-IP tunneling, or VXLAN overlays.
 
 ### 2.1 Architecture
@@ -481,6 +404,24 @@ spec:
 ---
 
 ## 3. Cilium
+
+### Theory: eBPF: Programs in the Kernel, Not Kernel Patches
+
+eBPF (extended Berkeley Packet Filter) is the most disruptive technology in Linux networking in years, and Cilium is its flagship Kubernetes implementation. The basic idea: instead of **modifying the kernel** to add new networking behavior, you compile **small verified bytecode programs** that the kernel runs at well-defined hook points (incoming packet, outgoing packet, system call, tracepoint).
+
+Key properties:
+
+- **In-kernel, no context switches.** A user-space proxy needs each packet to cross kernel↔user boundary twice. eBPF runs in the kernel, with packet data already there. This eliminates the biggest cost of user-space data-plane proxies.
+- **Verified for safety.** A kernel-side verifier rejects programs that could loop forever, dereference invalid pointers, or exceed bounded stack usage. This is what makes "running arbitrary code in your kernel" not insane.
+- **Hot-loadable.** No reboot, no recompile. Cilium pushes new policy as a new eBPF program; old packets in flight get the old program until they complete.
+
+For Kubernetes networking, eBPF replaces three things at once:
+
+- **iptables for kube-proxy** (Service VIP rewriting): O(1) hash lookup vs O(N) linear chain.
+- **iptables for NetworkPolicy** (allow/deny rules): policy compiled to an in-kernel table rather than a long iptables chain.
+- **Add NEW capabilities** that iptables fundamentally cannot: L7 HTTP-aware policies, service-to-service identity, transparent encryption, deep observability (Hubble shows pod-to-pod flows in real time).
+
+This is why "Cilium with kube-proxy replacement" is the modern default for clusters that prioritize performance and observability. iptables is not going away tomorrow but is being relegated to compatibility mode.
 
 Cilium is a CNI plugin that uses eBPF to provide networking, security, and observability. It operates at the kernel level without iptables, delivering better performance and richer features.
 
@@ -709,6 +650,44 @@ sudo bpftool map show
 ---
 
 ## 5. Advanced NetworkPolicy
+
+### Theory: NetworkPolicy: Declarative Allow Lists, Compiled Differently by Each CNI
+
+A `NetworkPolicy` is a declarative statement of allowed pod-to-pod and pod-to-external traffic:
+
+```yaml
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+spec:
+  podSelector: { matchLabels: { app: db } }
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - from:
+        - podSelector: { matchLabels: { app: api } }
+      ports:
+        - port: 5432
+          protocol: TCP
+  egress:
+    - to:
+        - namespaceSelector: { matchLabels: { name: kube-system } }
+          podSelector: { matchLabels: { k8s-app: kube-dns } }
+      ports:
+        - port: 53
+          protocol: UDP
+```
+
+Two semantic rules everyone gets wrong at first:
+
+- **Default is allow-all.** Until the *first* NetworkPolicy selects a pod, all traffic is permitted. Once any policy selects a pod, it becomes default-deny for the policyTypes listed, and only explicitly allowed traffic gets through.
+- **Policies are additive within the same direction.** If two ingress policies select the same pod, the union of their `from` lists is allowed. There is no "deny" rule — like RBAC.
+
+The CNI plugin compiles these YAML rules to its native enforcement mechanism:
+
+- iptables-based CNIs (Calico iptables mode) generate iptables chains per policy.
+- IPVS-based mode generates IPVS rules.
+- eBPF-based (Cilium) compiles to eBPF programs attached to interfaces.
+
+This is why two clusters with the same NetworkPolicy YAML can have very different performance and behavior: the rule semantics are standard, the enforcement implementation is per-CNI. Some CNIs add proprietary CRDs (Cilium's `CiliumNetworkPolicy`, Calico's `GlobalNetworkPolicy`) for L7 rules, FQDN-based egress, or cluster-wide policies that the spec doesn't cover.
 
 ### 5.1 Egress Policies
 

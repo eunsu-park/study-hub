@@ -17,10 +17,7 @@
 네트워킹을 설계의 핵심에 둡니다. 이 레슨에서는 네트워킹 모델, 서비스 추상화,
 DNS, 프록시 모드, 디버깅 기법을 다룹니다.
 
-매니페스트에 들어가기 전에, [**이론과 원리**](#이론과-원리) 섹션을 먼저 읽어보세요. 쿠버네티스 네트워크 모델의 네 가지 불변 조건, 어떤 프로세스도 bind하지 않는 안정 가상 IP로서의 Service, kube-proxy가 데이터 경로에 앉지 않으면서 Service VIP를 iptables/IPVS 규칙으로 바꾸는 방법, 그리고 DNS가 모든 것을 묶어주는 방식을 다룹니다.
-
 ## 목차
-0. [이론과 원리](#이론과-원리)
 1. [쿠버네티스 네트워킹 모델](#1-쿠버네티스-네트워킹-모델)
 2. [서비스 유형](#2-서비스-유형)
 3. [쿠버네티스의 DNS (CoreDNS)](#3-쿠버네티스의-dns-coredns)
@@ -33,11 +30,9 @@ DNS, 프록시 모드, 디버깅 기법을 다룹니다.
 
 ---
 
-## 이론과 원리
+## 1. 쿠버네티스 네트워킹 모델
 
-쿠버네티스 네트워킹은 플랫폼에서 가장 직관에 반하는 부분 중 하나입니다 — 핵심 트릭을 깨닫기 전까지는. 그 트릭은 **Service IP는 가상이라는 것**입니다. Service의 `ClusterIP`를 실제로 listen하는 프로세스는 없습니다. 그 IP는 모든 노드에서 커널 수준 패킷 재작성(iptables, IPVS, eBPF) 대상으로만 존재하며, 재작성은 트래픽을 Service의 백엔드 Pod IP 중 하나로 리디렉션합니다. 이를 내재화하면, 쿠버네티스 네트워킹의 나머지 — DNS, EndpointSlice, traffic policy, kube-proxy 모드 — 는 동일한 주제의 작은 변주들로 보이게 됩니다.
-
-### A. 네트워크 모델의 네 가지 불변 조건
+### 이론: 네트워크 모델의 네 가지 불변 조건
 
 모든 CNI 플러그인은 네 가지 속성을 보장해야 합니다. 이들은 쿠버네티스의 나머지가 네트워크를 블랙박스로 취급할 수 있게 해주는 계약입니다:
 
@@ -47,79 +42,6 @@ DNS, 프록시 모드, 디버깅 기법을 다룹니다.
 4. **Pod가 자신을 보는 IP가 다른 사람이 그 Pod를 보는 IP와 같다.** (1)·(2)와 중복처럼 들리지만, 이는 특정하게 "Pod가 한 주소에 바인딩되었지만 다른 주소로 광고되는" 설계를 금지합니다 — 그런 설계는 로깅, 분산 추적, 대부분의 서비스 디스커버리 라이브러리를 깨뜨립니다.
 
 이 불변 조건들은 *어떻게(how)*에 대해서는 의도적으로 약합니다 — 오버레이(VXLAN), BGP 라우팅, eBPF 리디렉트, 선택은 CNI 플러그인의 몫입니다. 그러나 *무엇(what)*(평면적·NAT 없는 Pod 네트워크)은 고정되어 있습니다. 모든 상위 추상(Service, NetworkPolicy, Ingress)은 이 계약이 지켜진다고 가정하고 만들어졌습니다.
-
-### B. Service — 일시적인 Pod 집합에 대한 안정 가상 IP
-
-Pod는 일시적이고 IP도 일시적입니다(2강 §A). 클라이언트에게 Pod IP를 줄 수는 없습니다 — 바뀌니까요. **Service** 추상은 세 가지 부분으로 이를 해결합니다:
-
-1. 클러스터 전역 범위에서 할당된 **안정 가상 IP**(`ClusterIP`). 이 IP는 Service의 수명 동안 절대 바뀌지 않습니다.
-2. 백엔드 Pod를 선택하는 **레이블 셀렉터**(`spec.selector: {app: web}`).
-3. Endpoints / EndpointSlice 컨트롤러가 셀렉터에 매치되고 Ready인 Pod IP 목록을 지속적으로 갱신.
-
-핵심 통찰: **어떤 프로세스도 ClusterIP를 `bind()`하지 않습니다.** 그것은 라우팅 픽션입니다. 클라이언트가 `10.96.0.42:80`(ClusterIP)으로 패킷을 보내면, 송신자 노드의 커널이 패킷을 가로채(kube-proxy가 프로그래밍한 iptables/IPVS/eBPF 규칙을 통해), EndpointSlice에서 백엔드 Pod IP 하나를 골라, 목적지를 재작성하고 전달합니다. Pod는 자신의 IP를 destination으로 보지, ClusterIP를 보지 않습니다.
-
-이것이 Service가 시작 시간이 0이고, 싱글톤으로서 "과부하"되는 일이 없으며, kube-proxy가 크래시해도 계속 동작하는(iptables 규칙은 그대로 프로그래밍되어 있음) 이유입니다. Service는 단지 클러스터의 "이 패킷에 커널이 무엇을 해야 하는가?" 테이블의 항목일 뿐입니다.
-
-네 가지 service 유형은 앞단에 무엇을 두느냐의 변주입니다:
-
-- **`ClusterIP`** (기본): 클러스터 내부에서만 도달 가능. 위에서 설명한 순수 형태.
-- **`NodePort`**: 모든 노드에서 high port(30000–32767)도 개방; 외부 트래픽이 `<any-node-IP>:<nodeport>`로 와도 동일한 iptables 재작성으로 백엔드 Pod에 도달.
-- **`LoadBalancer`**: NodePort + 클라우드 프로바이더가 모든 노드 NodePort를 가리키는 외부 L4 로드 밸런서를 프로비저닝(cloud-controller-manager).
-- **`ExternalName`**: IP 없음, 프록시 없음 — CoreDNS의 CNAME일 뿐. 외부 시스템에 클러스터 내 DNS 이름을 부여할 때 사용.
-
-### C. kube-proxy — 커널을 프로그래밍, 데이터 경로에 앉지 않음
-
-이름과 달리, kube-proxy는 **자신을 통과시켜 패킷을 전달하는** 의미의 프록시가 **아닙니다**. **규칙 설치자(rule installer)**입니다. Service와 EndpointSlice를 watch하며, 각 Service에 대해 "ClusterIP X 목적지의 패킷은 다음 백엔드 Pod IP 중 하나로 재작성하라"는 커널 수준 규칙을 프로그래밍합니다.
-
-세 모드가 있습니다:
-
-| 모드 | 메커니즘 | 패킷당 조회 비용 | 비고 |
-|------|---------|----------------|------|
-| `iptables` (기본) | iptables 규칙의 선형 체인; 백엔드 Pod당 한 매치 | O(N) | 단순·성숙; service 수가 많아질수록 규칙 reload 시간 증가 |
-| `IPVS` | 해시 테이블 조회를 사용하는 in-kernel L4 LB | O(1) | 수천 개 service 클러스터에 우수; 더 많은 LB 알고리즘 지원(rr, lc, dh) |
-| `nftables` | iptables의 후속자, 집합 기반 조회 | O(log N) | 현대 배포판에서 iptables를 대체 중 |
-
-핵심 속성은 **kube-proxy가 컨트롤 경로에 있지, 데이터 경로에는 없다는 것**입니다. 데이터 패킷은 클라이언트에서 백엔드 Pod로 직접 가며, 커널 규칙만을 통과합니다. 이것이 Service 처리량이 클러스터가 얼마나 바쁘든 상관없이 Pod 처리량에서 규칙 조회 마이크로초 몇 개를 뺀 값과 같은 이유입니다.
-
-백엔드 Pod 선택은 무작위화됩니다(iptables는 `--probability`, IPVS는 round-robin 또는 `lc` 사용). L7 인식은 없습니다 — 순수 L4 로드 밸런싱입니다. HTTP 인식 라우팅은 Ingress(7강) 또는 service mesh로 가야 합니다.
-
-### D. 디스커버리 계층으로서의 DNS (CoreDNS)
-
-클라이언트 설정에 ClusterIP를 하드코드하면 의미가 없습니다 — IP는 Service 생성 시점에 할당되니까요. 그래서 쿠버네티스는 결정적 명명 스킴을 해석해주는 클러스터 서비스로 CoreDNS를 운영합니다:
-
-```
-<service>.<namespace>.svc.cluster.local
-```
-
-모든 Pod의 `/etc/resolv.conf`는 자동으로 CoreDNS를 리졸버로, search path를 베어 이름이 동작하도록 구성됩니다:
-
-```
-search default.svc.cluster.local svc.cluster.local cluster.local
-nameserver 10.96.0.10
-```
-
-따라서 `default` 네임스페이스의 Pod는 `redis`(search path를 통해 `redis.default.svc.cluster.local`로 해석)나 `redis.cache`(`redis.cache.svc.cluster.local`로 해석)를 ClusterIP를 모르고도 호출할 수 있습니다. CoreDNS 자체는 Kubernetes API에서 Service와 Endpoint 객체를 watch하고 인메모리 미러에서 응답을 제공합니다 — 해석 핫 패스에서 etcd 읽기 없음.
-
-**Headless Service**(`clusterIP: None`)는 가상 IP 할당 자체를 건너뜁니다. CoreDNS는 대신 *모든* 백엔드 Pod IP를 A 레코드로 반환합니다. 이것이 StatefulSet이 각 파드에 안정 DNS 이름(`mysql-0.mysql.default.svc.cluster.local`이 직접 mysql-0의 Pod IP로 해석)을 부여하는 데 사용하는 메커니즘입니다. 클라이언트가 LB 스타일 round-robin 대신 파드 수준 주소 지정(샤딩, 가십 프로토콜)을 원할 때 유용합니다.
-
-### 이론에서 아래의 YAML/명령으로
-
-뒤따르는 워크스루는 이 추상을 적용합니다:
-
-- **섹션 1 (네트워킹 모델)**은 §A의 네 불변 조건을 구현 예제로 풀어냅니다.
-- **섹션 2 (서비스 유형)**은 §B의 네 변주를 구체적 YAML로 보여줍니다 — 어느 유형이 ClusterIP를 할당하고 어느 유형이 외부 도달성을 추가하는지에 주목하세요.
-- **섹션 3 (DNS / CoreDNS)**은 §D입니다 — 이를 구현하는 리졸버 설정과 Corefile을 봅니다.
-- **섹션 4 (kube-proxy 모드)**는 §C입니다 — iptables / IPVS / nftables를 측정 가능한 트레이드오프로 비교합니다.
-- **섹션 5 (Endpoints / EndpointSlices)**는 kube-proxy가 "이 Service를 어느 Pod IP들이 받쳐주는지" 알기 위해 읽는 자료구조를 보여줍니다. EndpointSlice가 구 Endpoints 객체를 대체한 이유는 정확히 1,000 백엔드 너머로 확장하기 위함입니다.
-- **섹션 6 (서비스 토폴로지 / 트래픽 정책)**은 *어느* 백엔드 Pod가 선택되는지를 제어합니다 — local-only, zone-aware 등. §C의 로드 밸런싱 프리미티브 위에 얹힙니다.
-- **섹션 7 (헤드리스 서비스)**는 직접 파드 주소 지정을 위한 §D의 탈출구입니다.
-- **섹션 8 (디버깅)**은 §A–§D 중 어디가 깨졌는지 보는 렌즈를 줍니다 — DNS? iptables? CNI? kube-proxy?
-
-Service를 "레이블 셀렉터를 watch하는 컨트롤러가 백엔드 목록을 갱신하는, 커널 NAT 테이블의 한 항목"으로 보고 나면, 전체 모델이 몇 개의 움직이는 부품으로 압축됩니다.
-
----
-
-## 1. 쿠버네티스 네트워킹 모델
 
 쿠버네티스는 세 가지 기본 네트워킹 요구사항을 부과합니다:
 
@@ -216,6 +138,25 @@ print('Network namespace:', data['info']['runtimeSpec']['linux']['namespaces'])
 ---
 
 ## 2. 서비스 유형
+
+### 이론: Service — 일시적인 Pod 집합에 대한 안정 가상 IP
+
+Pod는 일시적이고 IP도 일시적입니다(2강 §A). 클라이언트에게 Pod IP를 줄 수는 없습니다 — 바뀌니까요. **Service** 추상은 세 가지 부분으로 이를 해결합니다:
+
+1. 클러스터 전역 범위에서 할당된 **안정 가상 IP**(`ClusterIP`). 이 IP는 Service의 수명 동안 절대 바뀌지 않습니다.
+2. 백엔드 Pod를 선택하는 **레이블 셀렉터**(`spec.selector: {app: web}`).
+3. Endpoints / EndpointSlice 컨트롤러가 셀렉터에 매치되고 Ready인 Pod IP 목록을 지속적으로 갱신.
+
+핵심 통찰: **어떤 프로세스도 ClusterIP를 `bind()`하지 않습니다.** 그것은 라우팅 픽션입니다. 클라이언트가 `10.96.0.42:80`(ClusterIP)으로 패킷을 보내면, 송신자 노드의 커널이 패킷을 가로채(kube-proxy가 프로그래밍한 iptables/IPVS/eBPF 규칙을 통해), EndpointSlice에서 백엔드 Pod IP 하나를 골라, 목적지를 재작성하고 전달합니다. Pod는 자신의 IP를 destination으로 보지, ClusterIP를 보지 않습니다.
+
+이것이 Service가 시작 시간이 0이고, 싱글톤으로서 "과부하"되는 일이 없으며, kube-proxy가 크래시해도 계속 동작하는(iptables 규칙은 그대로 프로그래밍되어 있음) 이유입니다. Service는 단지 클러스터의 "이 패킷에 커널이 무엇을 해야 하는가?" 테이블의 항목일 뿐입니다.
+
+네 가지 service 유형은 앞단에 무엇을 두느냐의 변주입니다:
+
+- **`ClusterIP`** (기본): 클러스터 내부에서만 도달 가능. 위에서 설명한 순수 형태.
+- **`NodePort`**: 모든 노드에서 high port(30000–32767)도 개방; 외부 트래픽이 `<any-node-IP>:<nodeport>`로 와도 동일한 iptables 재작성으로 백엔드 Pod에 도달.
+- **`LoadBalancer`**: NodePort + 클라우드 프로바이더가 모든 노드 NodePort를 가리키는 외부 L4 로드 밸런서를 프로비저닝(cloud-controller-manager).
+- **`ExternalName`**: IP 없음, 프록시 없음 — CoreDNS의 CNAME일 뿐. 외부 시스템에 클러스터 내 DNS 이름을 부여할 때 사용.
 
 서비스(Services)는 파드 집합에 대한 안정적인 네트워킹을 제공합니다. 고정된 가상
 IP(ClusterIP)를 할당하여 파드 IP의 변동성을 추상화합니다.
@@ -371,6 +312,25 @@ kubectl run dns-test --rm -it --image=busybox:1.36 --restart=Never -- \
 
 ## 3. 쿠버네티스의 DNS (CoreDNS)
 
+### 이론: 디스커버리 계층으로서의 DNS (CoreDNS)
+
+클라이언트 설정에 ClusterIP를 하드코드하면 의미가 없습니다 — IP는 Service 생성 시점에 할당되니까요. 그래서 쿠버네티스는 결정적 명명 스킴을 해석해주는 클러스터 서비스로 CoreDNS를 운영합니다:
+
+```
+<service>.<namespace>.svc.cluster.local
+```
+
+모든 Pod의 `/etc/resolv.conf`는 자동으로 CoreDNS를 리졸버로, search path를 베어 이름이 동작하도록 구성됩니다:
+
+```
+search default.svc.cluster.local svc.cluster.local cluster.local
+nameserver 10.96.0.10
+```
+
+따라서 `default` 네임스페이스의 Pod는 `redis`(search path를 통해 `redis.default.svc.cluster.local`로 해석)나 `redis.cache`(`redis.cache.svc.cluster.local`로 해석)를 ClusterIP를 모르고도 호출할 수 있습니다. CoreDNS 자체는 Kubernetes API에서 Service와 Endpoint 객체를 watch하고 인메모리 미러에서 응답을 제공합니다 — 해석 핫 패스에서 etcd 읽기 없음.
+
+**Headless Service**(`clusterIP: None`)는 가상 IP 할당 자체를 건너뜁니다. CoreDNS는 대신 *모든* 백엔드 Pod IP를 A 레코드로 반환합니다. 이것이 StatefulSet이 각 파드에 안정 DNS 이름(`mysql-0.mysql.default.svc.cluster.local`이 직접 mysql-0의 Pod IP로 해석)을 부여하는 데 사용하는 메커니즘입니다. 클라이언트가 LB 스타일 round-robin 대신 파드 수준 주소 지정(샤딩, 가십 프로토콜)을 원할 때 유용합니다.
+
 ### 3.1 CoreDNS 아키텍처
 
 CoreDNS는 쿠버네티스의 기본 DNS 서버입니다. `kube-system` 네임스페이스에서
@@ -521,6 +481,22 @@ dnsConfig:
 ---
 
 ## 4. kube-proxy 모드
+
+### 이론: kube-proxy — 커널을 프로그래밍, 데이터 경로에 앉지 않음
+
+이름과 달리, kube-proxy는 **자신을 통과시켜 패킷을 전달하는** 의미의 프록시가 **아닙니다**. **규칙 설치자(rule installer)**입니다. Service와 EndpointSlice를 watch하며, 각 Service에 대해 "ClusterIP X 목적지의 패킷은 다음 백엔드 Pod IP 중 하나로 재작성하라"는 커널 수준 규칙을 프로그래밍합니다.
+
+세 모드가 있습니다:
+
+| 모드 | 메커니즘 | 패킷당 조회 비용 | 비고 |
+|------|---------|----------------|------|
+| `iptables` (기본) | iptables 규칙의 선형 체인; 백엔드 Pod당 한 매치 | O(N) | 단순·성숙; service 수가 많아질수록 규칙 reload 시간 증가 |
+| `IPVS` | 해시 테이블 조회를 사용하는 in-kernel L4 LB | O(1) | 수천 개 service 클러스터에 우수; 더 많은 LB 알고리즘 지원(rr, lc, dh) |
+| `nftables` | iptables의 후속자, 집합 기반 조회 | O(log N) | 현대 배포판에서 iptables를 대체 중 |
+
+핵심 속성은 **kube-proxy가 컨트롤 경로에 있지, 데이터 경로에는 없다는 것**입니다. 데이터 패킷은 클라이언트에서 백엔드 Pod로 직접 가며, 커널 규칙만을 통과합니다. 이것이 Service 처리량이 클러스터가 얼마나 바쁘든 상관없이 Pod 처리량에서 규칙 조회 마이크로초 몇 개를 뺀 값과 같은 이유입니다.
+
+백엔드 Pod 선택은 무작위화됩니다(iptables는 `--probability`, IPVS는 round-robin 또는 `lc` 사용). L7 인식은 없습니다 — 순수 L4 로드 밸런싱입니다. HTTP 인식 라우팅은 Ingress(7강) 또는 service mesh로 가야 합니다.
 
 kube-proxy는 각 노드에서 데이터 플레인 규칙을 프로그래밍하여 서비스(Service)
 추상화를 구현합니다. 서비스와 엔드포인트슬라이스(EndpointSlice) 오브젝트를 감시하고

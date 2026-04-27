@@ -16,8 +16,6 @@
 
 단일 Kubernetes 클러스터에는 확실한 한계가 있습니다 -- etcd 성능은 약 5,000노드를 초과하면 저하되고, 컨트롤 플레인(Control Plane) 장애의 영향 범위가 모든 워크로드에 미치며, 규정 요건에 따라 지리적 데이터 상주가 요구될 수 있습니다. 멀티 클러스터 아키텍처는 워크로드를 독립적인 클러스터에 분산하여 이러한 제약을 해결합니다. 하지만 멀티 클러스터는 자체적인 복잡성을 도입합니다: 서비스 디스커버리, 크로스 클러스터 네트워킹, 일관된 구성, 통합 옵저버빌리티. 이 레슨에서는 멀티 클러스터 규모에서 Kubernetes를 운영하기 위한 아키텍처, 도구, 패턴을 다룹니다.
 
-구성에 들어가기 전에, [**이론과 원리**](#이론과-원리) 섹션을 먼저 읽어보세요. 클러스터가 늘어나는 네 가지 이유(스케일, blast radius, 지리, 규제), 일관성 트레이드오프를 가진 토폴로지 선택(replicated, federated, hub-spoke), 클러스터 간 service discovery가 근본적으로 DNS + identity 문제인 이유, 그리고 그것들을 소유하는 컨트롤 플레인 없이 하나의 config가 많은 클러스터를 구동하게 하는 GitOps 모델을 다룹니다.
-
 ## 목차
 
 - [이론과 원리](#이론과-원리)
@@ -33,11 +31,9 @@
 
 ---
 
-## 이론과 원리
+## 1. 멀티 클러스터 아키텍처
 
-단일 쿠버네티스 클러스터는 가장 단순한 배포 대상입니다 — 하나의 API, 하나의 자격 증명 집합, 하나의 관측 가능성 스택. 그래서 첫 질문은 — *왜 둘 이상을 운영해야 하는가?* 이 섹션은 그 답과 그것들을 연결하기 위한 아키텍처 선택을 설명합니다. 트레이드오프는 미묘합니다 — federation은 일관성 복잡성의 비용으로 통합 API를 줍니다 — service mesh 기반 연결성은 클러스터 간 트래픽을 주지만 신뢰 경계를 확장합니다 — GitOps는 런타임 컨트롤 플레인 없이 통합 배포 모델을 줍니다. 올바른 선택은 어떤 제약이 지배적인지 — 스케일, blast radius, 지리, 규제 — 에 달려 있습니다.
-
-### A. 클러스터가 늘어나는 이유
+### 이론: 클러스터가 늘어나는 이유
 
 조직을 한 클러스터 너머로 미는 네 압력:
 
@@ -48,7 +44,7 @@
 
 흔한 경로 — 한 클러스터로 시작, 업그레이드가 잘못되어 blast radius 고통을 겪고, "prod" + "staging" + "dev"로 분할. 그다음 지연을 위해 prod를 지역별로 분할. 그다음 공유 서비스(로깅, 모니터링, 내부 도구)를 위한 hub 추가. 계획하기 전에 다섯 클러스터가 됩니다.
 
-### B. 세 토폴로지 — Replicated, Federated, Hub-Spoke
+### 이론: 세 토폴로지 — Replicated, Federated, Hub-Spoke
 
 클러스터 간 연결 모델은 세 가지 원형을 가집니다:
 
@@ -59,51 +55,6 @@
 **Hub-Spoke.** 한 "hub" 클러스터가 공유 플랫폼 서비스(CI/CD 오케스트레이션, 관측 가능성 집계, 중앙 정책 강제)를 실행 — 워크로드 "spoke" 클러스터는 애플리케이션 워크로드만 실행. Hub는 작지만 중요 — spoke는 크지만 플랫폼 관점에서 stateless. 이 모델은 벤더가 hub를 제공하는 OpenShift / Rancher / Anthos / EKS Anywhere를 채택하는 엔터프라이즈에서 지배적입니다.
 
 올바른 선택은 무엇을 공유하는지에 달려 있습니다 — 클러스터 간 아무것도 → replicated; 클러스터 간 동기화된 리소스 → federated; 클러스터 간 플랫폼 서비스 → hub-spoke.
-
-### C. 클러스터 간 서비스 디스커버리 — DNS + Identity 문제
-
-한 클러스터 내에서 Pod는 `redis.cache.svc.cluster.local`을 호출하고 CoreDNS가 해석합니다(3강 §D). 클러스터 간에는 이것이 깨집니다 — `cluster.local`은 클러스터별. 이를 동작하게 만드는 세 패턴:
-
-**1. Multi-Cluster Services API (KEP-1645).** 표준 CRD `ServiceExport`가 Service를 export 가능으로 표시 — 각 클러스터의 컨트롤러가 그것을 `redis.cache.svc.clusterset.local` 같은 글로벌 DNS 이름 아래로 미러링. clusterset의 어떤 클러스터의 Pod든 해석하고 도달 가능. 구현 — AWS Cloud Map, GKE Multi-cluster Services, Submariner.
-
-**2. Service Mesh Multi-Cluster (Istio, Linkerd, Cilium Cluster Mesh).** 각 클러스터의 사이드카나 eBPF 프로그램이 *모든* 피어 클러스터의 Service를 압니다. `redis.cache.svc.cluster.local`로의 호출이 투명하게 원격 클러스터의 Pod에 도달할 수 있습니다. 강한 식별(사이드카 간 mTLS)이 게이트 — 데이터 플레인이 연결성을 처리합니다. 운영적으로 무겁지만 가장 강력 — 클러스터를 가로지르는 트래픽 분할, 페일오버, 위치 인식 라우팅을 얻습니다.
-
-**3. 클러스터 인식 DNS + 평면 L3 (Submariner).** Submariner가 클러스터 노드 간 암호화된 IPsec 터널을 빌드하여, 클러스터 A의 Pod가 클러스터 B의 Pod IP에서 직접 도달 가능(NAT 없음). 다중 클러스터 DNS 뷰(Lighthouse)와 결합하여, 클러스터 간 클러스터 내 경험을 얻습니다. Service mesh보다 가벼움 — mTLS나 L7 기능을 주지 않음.
-
-근본 통찰 — 클러스터 간 연결성은 **단순한 네트워킹 문제가 아닙니다.** 식별(누가 호출자, 누가 callee), DNS(서로를 어떻게 찾는지), 신뢰(서로를 검증하는지) 모두 필요합니다. Service mesh는 셋 모두를 묶고, 다른 것들은 조각으로부터 합성합니다.
-
-### D. 멀티 클러스터를 위한 GitOps — Pull 모델이 Hub로부터 당신을 구합니다
-
-GitOps 모델(Argo CD, Flux)에서, 각 클러스터는 Git 리포지토리에서 자신의 desired 상태를 pull하는 에이전트를 실행합니다. Git repo가 진실의 원천 — 에이전트가 매치되도록 클러스터를 조정합니다.
-
-멀티 클러스터에 대해 이는 아름답게 스케일됩니다:
-
-- **하나의 repo, 여러 클러스터.** `clusters/` 디렉토리가 클러스터당 하나의 하위 디렉토리를 가짐 — 각 에이전트는 자기 디렉토리만 pull. 클러스터 추가 = 디렉토리 추가 + 에이전트 부트스트랩.
-- **실패할 중앙 컨트롤 플레인 없음.** Hub 클러스터가 다운되어도, spoke 에이전트는 독립적으로 HA인 Git에 대해 계속 조정합니다. 이는 Federation v2의 push 모델에 대한 근본적 이점입니다.
-- **Argo CD ApplicationSet**이 템플릿 + 생성기(클러스터 목록, Git 디렉토리, pull request)로부터 많은 클러스터의 Argo `Application` 리소스를 생성. 하나의 템플릿, N 클러스터, 자동 멤버십 추적.
-
-멘탈 모델 — GitOps는 "중앙 컨트롤러가 spoke에 config를 푸시"(Federation v2) 패턴을 "spoke가 공유 소스로부터 config를 pull"(Argo)로 대체합니다. 같은 최종 상태, 매우 다른 실패 모드 — pull 모델은 Git 서버 너머의 중앙 단일 실패 지점이 없습니다.
-
-배포뿐 아니라 클러스터 간 *연결성*이 필요한 워크로드에 대해, GitOps는 service mesh와 합성됩니다 — GitOps가 메시 + 워크로드를 각 클러스터에 배포 — 메시가 클러스터 간 트래픽을 처리합니다.
-
-### 이론에서 아래의 구성으로
-
-이제 레슨은 이 추상을 적용합니다:
-
-- **섹션 1 (멀티 클러스터 아키텍처)**는 §A와 §B입니다 — 이유와 구체적 트레이드오프를 가진 세 토폴로지.
-- **섹션 2 (Federation v2)**는 §B의 federated 토폴로지를 상세히.
-- **섹션 3 (멀티 클러스터 서비스 디스커버리)**는 §C입니다 — 표준화된 CRD 기반 접근.
-- **섹션 4 (Submariner)**는 §C의 평면-L3 구현.
-- **섹션 5 (Liqo)**는 클러스터 A의 Pod가 가상 노드인 것처럼 클러스터 B에서 실행되게 하는 더 새로운 "클러스터 공유" 모델.
-- **섹션 6 (Istio로 멀티 클러스터 서비스 메시)**는 §C의 가장 무겁고 가장 많은 기능의 옵션.
-- **섹션 7 (ArgoCD ApplicationSet으로 멀티 클러스터 GitOps)**는 §D를 상세히.
-- **섹션 8 (멀티 클러스터 보안)**은 횡단 관심사 — identity 페더레이션, 시크릿 배포, RBAC 일관성.
-
-클러스터를 실패 격리 단위로, §D의 pull 기반 GitOps를 배포 접착제로 보고 나면, 멀티 클러스터 이야기는 "무엇을 공유해야 하는가?" — config(GitOps), 트래픽(service mesh), identity(페더레이션), 또는 아무것도 아님(replicated) — 으로 분해됩니다.
-
----
-
-## 1. 멀티 클러스터 아키텍처
 
 ### 1.1 왜 멀티 클러스터인가?
 
@@ -140,7 +91,6 @@ GitOps 모델(Argo CD, Flux)에서, 각 클러스터는 Git 리포지토리에�
                     │  (DNS/Anycast) │
                     └───────────────┘
 
-
 패턴 2: 페더레이션 (Federated)
 ====================
 컨트롤 플레인이 멤버 클러스터에 리소스를 분배.
@@ -155,7 +105,6 @@ GitOps 모델(Argo CD, Flux)에서, 각 클러스터는 Git 리포지토리에�
        ┌──────────┐  ┌──────────┐  ┌──────────┐
        │ Cluster A │  │ Cluster B │  │ Cluster C │
        └──────────┘  └──────────┘  └──────────┘
-
 
 패턴 3: 허브-스포크 (Hub-Spoke)
 ====================
@@ -431,6 +380,18 @@ EOF
 ---
 
 ## 3. 멀티 클러스터 서비스 디스커버리
+
+### 이론: 클러스터 간 서비스 디스커버리 — DNS + Identity 문제
+
+한 클러스터 내에서 Pod는 `redis.cache.svc.cluster.local`을 호출하고 CoreDNS가 해석합니다(3강 §D). 클러스터 간에는 이것이 깨집니다 — `cluster.local`은 클러스터별. 이를 동작하게 만드는 세 패턴:
+
+**1. Multi-Cluster Services API (KEP-1645).** 표준 CRD `ServiceExport`가 Service를 export 가능으로 표시 — 각 클러스터의 컨트롤러가 그것을 `redis.cache.svc.clusterset.local` 같은 글로벌 DNS 이름 아래로 미러링. clusterset의 어떤 클러스터의 Pod든 해석하고 도달 가능. 구현 — AWS Cloud Map, GKE Multi-cluster Services, Submariner.
+
+**2. Service Mesh Multi-Cluster (Istio, Linkerd, Cilium Cluster Mesh).** 각 클러스터의 사이드카나 eBPF 프로그램이 *모든* 피어 클러스터의 Service를 압니다. `redis.cache.svc.cluster.local`로의 호출이 투명하게 원격 클러스터의 Pod에 도달할 수 있습니다. 강한 식별(사이드카 간 mTLS)이 게이트 — 데이터 플레인이 연결성을 처리합니다. 운영적으로 무겁지만 가장 강력 — 클러스터를 가로지르는 트래픽 분할, 페일오버, 위치 인식 라우팅을 얻습니다.
+
+**3. 클러스터 인식 DNS + 평면 L3 (Submariner).** Submariner가 클러스터 노드 간 암호화된 IPsec 터널을 빌드하여, 클러스터 A의 Pod가 클러스터 B의 Pod IP에서 직접 도달 가능(NAT 없음). 다중 클러스터 DNS 뷰(Lighthouse)와 결합하여, 클러스터 간 클러스터 내 경험을 얻습니다. Service mesh보다 가벼움 — mTLS나 L7 기능을 주지 않음.
+
+근본 통찰 — 클러스터 간 연결성은 **단순한 네트워킹 문제가 아닙니다.** 식별(누가 호출자, 누가 callee), DNS(서로를 어떻게 찾는지), 신뢰(서로를 검증하는지) 모두 필요합니다. Service mesh는 셋 모두를 묶고, 다른 것들은 조각으로부터 합성합니다.
 
 ### 3.1 디스커버리 문제
 
@@ -957,6 +918,20 @@ spec:
 ---
 
 ## 7. 멀티 클러스터 GitOps (ArgoCD ApplicationSets)
+
+### 이론: 멀티 클러스터를 위한 GitOps — Pull 모델이 Hub로부터 당신을 구합니다
+
+GitOps 모델(Argo CD, Flux)에서, 각 클러스터는 Git 리포지토리에서 자신의 desired 상태를 pull하는 에이전트를 실행합니다. Git repo가 진실의 원천 — 에이전트가 매치되도록 클러스터를 조정합니다.
+
+멀티 클러스터에 대해 이는 아름답게 스케일됩니다:
+
+- **하나의 repo, 여러 클러스터.** `clusters/` 디렉토리가 클러스터당 하나의 하위 디렉토리를 가짐 — 각 에이전트는 자기 디렉토리만 pull. 클러스터 추가 = 디렉토리 추가 + 에이전트 부트스트랩.
+- **실패할 중앙 컨트롤 플레인 없음.** Hub 클러스터가 다운되어도, spoke 에이전트는 독립적으로 HA인 Git에 대해 계속 조정합니다. 이는 Federation v2의 push 모델에 대한 근본적 이점입니다.
+- **Argo CD ApplicationSet**이 템플릿 + 생성기(클러스터 목록, Git 디렉토리, pull request)로부터 많은 클러스터의 Argo `Application` 리소스를 생성. 하나의 템플릿, N 클러스터, 자동 멤버십 추적.
+
+멘탈 모델 — GitOps는 "중앙 컨트롤러가 spoke에 config를 푸시"(Federation v2) 패턴을 "spoke가 공유 소스로부터 config를 pull"(Argo)로 대체합니다. 같은 최종 상태, 매우 다른 실패 모드 — pull 모델은 Git 서버 너머의 중앙 단일 실패 지점이 없습니다.
+
+배포뿐 아니라 클러스터 간 *연결성*이 필요한 워크로드에 대해, GitOps는 service mesh와 합성됩니다 — GitOps가 메시 + 워크로드를 각 클러스터에 배포 — 메시가 클러스터 간 트래픽을 처리합니다.
 
 ### 7.1 ArgoCD 멀티 클러스터 아키텍처
 

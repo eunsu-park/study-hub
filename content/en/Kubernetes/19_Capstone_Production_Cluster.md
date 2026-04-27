@@ -14,8 +14,6 @@
 
 This capstone project brings together everything from the previous 18 lessons into a single, cohesive exercise: designing, deploying, and validating a production-grade Kubernetes cluster. You will work through requirements gathering, architecture design, security hardening, observability, CI/CD integration, disaster recovery, and cost optimization. Each section builds on the last, culminating in a complete production platform.
 
-Before the design walkthrough, read [**Theory & Principles**](#theory--principles) — how a production cluster is the *composition* of every prior lesson rather than a new technology, the layered design model (foundations → workloads → platform services), why every architectural choice has a reciprocal compromise, and the operational lens (cost, blast radius, change velocity) that decides between technically equivalent options.
-
 ## Table of Contents
 
 - [Theory & Principles](#theory--principles)
@@ -33,53 +31,9 @@ Before the design walkthrough, read [**Theory & Principles**](#theory--principle
 
 ---
 
-## Theory & Principles
+## 1. Requirements Gathering
 
-A production Kubernetes cluster is not a single artifact you build once. It is a *layered composition* of architecture (lessons 01–05), policy (06, 12), networking (03, 07, 08), platform services (09, 11, 13, 14), and operations (15, 17). The capstone's purpose is to integrate these into one coherent design — not to introduce new technology. The hard part of "designing a production cluster" is not picking components; it is **the trade-offs you make between them under your specific constraints** (cost, team size, compliance, traffic shape). This section explains the layered design model, the universal trade-off triangle (cost / availability / change velocity), the reciprocal-compromise principle that says every design decision has hidden costs, and the diagnostic lens that lets you stress-test a design before committing to it.
-
-### A. The Layered Design Model
-
-Production clusters decompose into four layers, each built on the one below:
-
-**Layer 1: Foundations.** The cluster itself — control plane HA (lesson 17), node pools, networking model (lesson 08), storage classes (lesson 04), DNS, ingress controllers (lesson 07). This is your "OS" — you should rarely change it after rollout, and changes here have the broadest blast radius.
-
-**Layer 2: Platform services.** What runs *for* every workload — observability (lesson 14), GitOps controller (lesson 15), secret management (lesson 05), policy enforcement (lesson 12), backup/restore tooling (lesson 17). These are the inner-platform that workload teams consume but don't operate.
-
-**Layer 3: Workloads.** Application Deployments, StatefulSets, Jobs (lesson 02), exposed via Services and Ingresses (lessons 03, 07). The user-visible value of the cluster lives here.
-
-**Layer 4: Day-2 operations.** SLO definitions, runbooks, on-call rotations, capacity planning, change management (lesson 17). Not in YAML but every bit as critical to whether the cluster is "production."
-
-The reason this layering matters: **changes at lower layers have larger blast radius**, and you should design accordingly. A workload deployment going wrong takes down one app; a CNI upgrade going wrong takes down everything. Plan layer-1 changes with multi-cluster strategies (lesson 15), test in lower environments first, accept slower iteration in exchange for safety.
-
-### B. The Trade-Off Triangle: Cost, Availability, Change Velocity
-
-Every design decision sits in a three-way trade-off:
-
-- **Cost.** Cluster spend per month — node hours, storage, observability ingest, managed-service fees.
-- **Availability.** Effective uptime — multi-AZ, multi-region, redundancy at every layer.
-- **Change velocity.** Rate at which you can ship safely — CI/CD throughput, time-from-commit-to-prod, test coverage.
-
-You can optimize for any two, but not all three:
-
-- **Cost + Availability** without velocity: a small, hyper-stable platform team that approves every change manually. Banks. Slow but cheap and reliable.
-- **Cost + Velocity** without availability: minimal redundancy, ship fast, accept incidents. Early-stage startups.
-- **Availability + Velocity** without low cost: full multi-region active-active, automated canary everything, robust observability. Modern SaaS.
-
-Recognizing this triangle prevents arguments. "Why don't we just deploy multi-region?" → "Because that doubles cost and we've prioritized velocity." "Why is the deploy pipeline so slow?" → "Because we prioritized availability and added approvals." Make the trade-off explicit; let leadership pick the corner.
-
-The triangle plays out concretely:
-
-| Decision | Cost ↑ | Availability ↑ | Velocity ↑ |
-|----------|--------|----------------|------------|
-| Multi-region cluster | + + + | + + + | – |
-| Spot-only nodes | – – | – | 0 |
-| Service mesh | + | + + | – |
-| Strict admission policies | 0 | + | – – |
-| Autoscaling everywhere | – | + + | + |
-
-There is no universally right cell; there is the cell that fits *your* constraints.
-
-### C. Reciprocal Compromise: Every Choice Has a Hidden Cost
+### Theory: Reciprocal Compromise: Every Choice Has a Hidden Cost
 
 Each technical decision creates a reciprocal demand somewhere else:
 
@@ -91,7 +45,7 @@ Each technical decision creates a reciprocal demand somewhere else:
 
 The "no free lunch" property means every design review should ask: *what does this choice cost us elsewhere?* If the answer is "nothing," you haven't looked hard enough. Production-quality designs are honest about the costs and explicit about why the chosen trade-off is correct *for this organization*.
 
-### D. The Diagnostic Lens: Stress-Test Before Committing
+### Theory: The Diagnostic Lens: Stress-Test Before Committing
 
 A good design survives questioning. Before signing off on an architecture, walk through these scenarios:
 
@@ -107,27 +61,6 @@ A good design survives questioning. Before signing off on an architecture, walk 
 Each "what if" stress-tests one assumption. A design that has answers — even imperfect ones — to all of them is production-grade. A design that says "we'll figure that out later" has hidden risk that will surface at the worst possible moment.
 
 The lens for the capstone exercise: every section of the design (HA control plane, node pools, networking, security, observability, CI/CD, DR, cost) should be defensible against this kind of questioning.
-
-### From Theory to the Design Below
-
-The lesson now applies these abstractions:
-
-- **Section 1 (Requirements Gathering)** is where you translate business inputs into the trade-off priorities of §B.
-- **Section 2 (Architecture Design)** is the §A layered model made concrete for the case study.
-- **Section 3 (HA Control Plane)** is the layer-1 foundation choice from §A.
-- **Section 4 (Node Pool Design)** balances cost (§B) against workload diversity (general pool, GPU pool, spot pool).
-- **Section 5 (Networking Architecture)** is the CNI + ingress + service mesh decisions, each with reciprocal costs (§C).
-- **Section 6 (Security Hardening)** is the layered defense-in-depth from lesson 06 §D.
-- **Section 7 (Observability Stack)** is lesson 14's three pillars deployed at production scale.
-- **Section 8 (CI/CD Pipeline Integration)** is the velocity corner of §B's triangle, mediated by GitOps (lesson 15 §D).
-- **Section 9 (Disaster Recovery Setup)** is §D's "what if" stress test made real with backup, restore drills, and multi-region failover.
-- **Section 10 (Cost Optimization)** is the cost corner of §B — spot strategies (lesson 18 §D), right-sizing (lesson 13 §C), namespace quotas, FinOps practices.
-
-The capstone's lesson is not "build the perfect cluster" — there is no such thing. It is "build the cluster that is honest about its trade-offs, defensible against stress questions, and operable by your actual team." Everything in the prior 18 lessons exists to give you the vocabulary for that conversation.
-
----
-
-## 1. Requirements Gathering
 
 ### 1.1 Stakeholder Questions
 
@@ -213,6 +146,48 @@ budget:
 ---
 
 ## 2. Architecture Design
+
+### Theory: The Layered Design Model
+
+Production clusters decompose into four layers, each built on the one below:
+
+**Layer 1: Foundations.** The cluster itself — control plane HA (lesson 17), node pools, networking model (lesson 08), storage classes (lesson 04), DNS, ingress controllers (lesson 07). This is your "OS" — you should rarely change it after rollout, and changes here have the broadest blast radius.
+
+**Layer 2: Platform services.** What runs *for* every workload — observability (lesson 14), GitOps controller (lesson 15), secret management (lesson 05), policy enforcement (lesson 12), backup/restore tooling (lesson 17). These are the inner-platform that workload teams consume but don't operate.
+
+**Layer 3: Workloads.** Application Deployments, StatefulSets, Jobs (lesson 02), exposed via Services and Ingresses (lessons 03, 07). The user-visible value of the cluster lives here.
+
+**Layer 4: Day-2 operations.** SLO definitions, runbooks, on-call rotations, capacity planning, change management (lesson 17). Not in YAML but every bit as critical to whether the cluster is "production."
+
+The reason this layering matters: **changes at lower layers have larger blast radius**, and you should design accordingly. A workload deployment going wrong takes down one app; a CNI upgrade going wrong takes down everything. Plan layer-1 changes with multi-cluster strategies (lesson 15), test in lower environments first, accept slower iteration in exchange for safety.
+
+### Theory: The Trade-Off Triangle: Cost, Availability, Change Velocity
+
+Every design decision sits in a three-way trade-off:
+
+- **Cost.** Cluster spend per month — node hours, storage, observability ingest, managed-service fees.
+- **Availability.** Effective uptime — multi-AZ, multi-region, redundancy at every layer.
+- **Change velocity.** Rate at which you can ship safely — CI/CD throughput, time-from-commit-to-prod, test coverage.
+
+You can optimize for any two, but not all three:
+
+- **Cost + Availability** without velocity: a small, hyper-stable platform team that approves every change manually. Banks. Slow but cheap and reliable.
+- **Cost + Velocity** without availability: minimal redundancy, ship fast, accept incidents. Early-stage startups.
+- **Availability + Velocity** without low cost: full multi-region active-active, automated canary everything, robust observability. Modern SaaS.
+
+Recognizing this triangle prevents arguments. "Why don't we just deploy multi-region?" → "Because that doubles cost and we've prioritized velocity." "Why is the deploy pipeline so slow?" → "Because we prioritized availability and added approvals." Make the trade-off explicit; let leadership pick the corner.
+
+The triangle plays out concretely:
+
+| Decision | Cost ↑ | Availability ↑ | Velocity ↑ |
+|----------|--------|----------------|------------|
+| Multi-region cluster | + + + | + + + | – |
+| Spot-only nodes | – – | – | 0 |
+| Service mesh | + | + + | – |
+| Strict admission policies | 0 | + | – – |
+| Autoscaling everywhere | – | + + | + |
+
+There is no universally right cell; there is the cell that fits *your* constraints.
 
 ### 2.1 High-Level Architecture
 
@@ -1651,6 +1626,7 @@ Given the TechCorp requirements in Section 1.2, produce an architecture decision
 # ADR-001: Kubernetes Platform Architecture
 
 ## Status: Accepted
+
 ## Date: 2025-01-15
 
 ## Context
