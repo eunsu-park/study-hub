@@ -1140,6 +1140,9 @@ class FaceFilter:
 def realtime_face_filter():
     """Real-time face filter"""
 
+    # Download the predictor file from:
+    # http://dlib.net/files/shape_predictor_68_face_landmarks.dat.bz2
+    # then bunzip2 it to obtain the .dat file used here.
     filter_app = FaceFilter('shape_predictor_68_face_landmarks.dat')
 
     # Load filters (transparent PNG recommended)
@@ -1227,6 +1230,8 @@ class KalmanTracker:
 
         # Constant velocity model: next_pos = current_pos + velocity
         # Simple but effective for short prediction horizons (a few frames)
+        # Row 1 encodes x_new = x + vx*dt (with dt=1 frame); row 2 the same for y.
+        # vx, vy are not measured directly — they are inferred from successive (x, y) updates.
         self.kalman.transitionMatrix = np.array([
             [1, 0, 1, 0],
             [0, 1, 0, 1],
