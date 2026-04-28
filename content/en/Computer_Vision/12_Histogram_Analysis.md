@@ -49,7 +49,7 @@ The **normalized histogram** `p(r) = h(r) / N` is a proper probability mass func
 
 and can be interpreted as: "the probability that a randomly chosen pixel has intensity `r`". The histogram discards all spatial information — any spatial rearrangement of the pixels produces the same histogram — so it captures only the image's tonal character, not its content. This is both its strength (invariance to spatial shifts) and its limitation (cannot distinguish two different scenes with similar tone distributions).
 
-#### A.1 What histogram shape tells you
+#### What histogram shape tells you
 
 Reading a histogram diagnoses exposure issues at a glance:
 
@@ -304,7 +304,7 @@ histogram_with_mask('image.jpg')
 
 **Goal**: redistribute pixel intensities so the output histogram is (approximately) **uniform** — every intensity level is used equally often. A uniform distribution is the maximum-entropy distribution on a bounded range, which corresponds to "maximum information per pixel" and, in practice, maximum contrast.
 
-#### B.1 The derivation
+#### The derivation
 
 Let `r` be the original intensity (random variable with pdf `p_r(r)`) and `s` the equalized intensity. We want `s = T(r)` for some transform `T` such that `p_s(s)` is uniform on `[0, L-1]`. A theorem from probability says that if `T(r)` equals the **cumulative distribution function** of `r` (scaled to `[0, L-1]`), then `T(r)` has a uniform distribution:
 
@@ -324,7 +324,7 @@ So the equalization procedure is just three steps:
 2. Compute its CDF (cumulative sum, then scale so `CDF(L-1) = 1`).
 3. Use `(L - 1) · CDF` as a lookup table to remap each pixel.
 
-#### B.2 Why it works and when it fails
+#### Why it works and when it fails
 
 Because the CDF is non-decreasing, the transform is order-preserving — pixel `A` brighter than pixel `B` stays brighter after equalization. Because the CDF stretches regions of high density and compresses regions of low density, densely populated tonal ranges get spread out while sparse ranges get merged. This enhances contrast in the parts of the histogram with the most pixels.
 
@@ -448,11 +448,11 @@ equalize_color_image('dark_color.jpg')
 
 CLAHE addresses both of global equalization's main failures:
 
-#### C.1 "Adaptive" — local histograms
+#### "Adaptive" — local histograms
 
 Divide the image into a grid of **tiles** (typically 8×8). Compute a separate histogram and equalization LUT for each tile. For each output pixel, use the LUT of its tile — **but bilinear-interpolate between the four nearest tile LUTs** to avoid visible boundaries at tile edges. This means local contrast is optimized separately in each region: a dark corner gets its own stretch, a bright center gets its own.
 
-#### C.2 "Contrast Limited" — clipping the histogram
+#### "Contrast Limited" — clipping the histogram
 
 Before computing the CDF of each tile's histogram, **clip** any bin that exceeds a threshold (the `clipLimit` parameter), and redistribute the clipped excess equally across all bins. This matters because in near-flat regions, the histogram has a tall spike that would produce a very steep local transform — amplifying noise dramatically. Clipping the spike keeps the CDF slope bounded, which bounds noise amplification.
 
