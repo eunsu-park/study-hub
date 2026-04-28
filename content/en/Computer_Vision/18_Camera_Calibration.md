@@ -1229,6 +1229,7 @@ import time
 
 last_capture_time = 0
 min_interval = 2.0  # Minimum capture interval (seconds)
+captured_images = []
 
 # Blur detection
 def is_blurry(img, threshold=100):
@@ -1240,7 +1241,9 @@ def is_blurry(img, threshold=100):
 if (found and
     time.time() - last_capture_time > min_interval and
     not is_blurry(frame)):
-    # Capture
+    captured_images.append(frame.copy())
+    cv2.imwrite(f'capture_{len(captured_images):03d}.png', frame)
+    last_capture_time = time.time()
 ```
 
 </details>
@@ -1361,12 +1364,24 @@ Create a tool to comprehensively evaluate calibration results quality.
 
 ```python
 class CalibrationEvaluator:
+    def compute_per_point_errors(self, result, obj_points, img_points):
+        """Per-point reprojection error across all calibration views."""
+        errors = []
+        for obj, img, rvec, tvec in zip(
+                obj_points, img_points, result['rvecs'], result['tvecs']):
+            projected, _ = cv2.projectPoints(
+                obj, rvec, tvec, result['camera_matrix'], result['dist_coeffs'])
+            errors.append(np.linalg.norm(
+                projected.squeeze() - img.squeeze(), axis=1))
+        return np.concatenate(errors)
+
     def evaluate(self, result, obj_points, img_points):
         # Reprojection error distribution
-        errors = self.compute_per_point_errors(...)
+        errors = self.compute_per_point_errors(result, obj_points, img_points)
 
         # Outlier detection (beyond 2 standard deviations)
-        outliers = errors > np.mean(errors) + 2*np.std(errors)
+        outliers = errors > np.mean(errors) + 2 * np.std(errors)
+        outlier_ratio = float(np.mean(outliers))
 
         # Distortion coefficient analysis
         k1, k2, p1, p2, k3 = result['dist_coeffs'].ravel()
@@ -1376,7 +1391,11 @@ class CalibrationEvaluator:
         score -= min(50, result['reprojection_error'] * 50)  # Error penalty
         score -= min(30, outlier_ratio * 100)  # Outlier penalty
 
-        return {'score': score, ...}
+        return {
+            'score': score,
+            'outlier_ratio': outlier_ratio,
+            'distortion': {'k1': k1, 'k2': k2, 'p1': p1, 'p2': p2, 'k3': k3},
+        }
 
 # Usage
 evaluator = CalibrationEvaluator()
