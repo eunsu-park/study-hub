@@ -1,4 +1,4 @@
-[이전: 3D Gaussian Splatting](./29_3D_Gaussian_Splatting.md)
+[이전: 3D Gaussian Splatting](./29_3D_Gaussian_Splatting.md) | [다음: 옵티컬 플로우](./31_Optical_Flow.md)
 
 ---
 
@@ -120,13 +120,13 @@ class TwoStreamNetwork(nn.Module):
 
     def __init__(self, n_classes, n_flow_frames=10):
         super().__init__()
-        # 공간 스트림: 단일 RGB 프레임
+        # Spatial stream: single RGB frame
         self.spatial = models.resnet50(pretrained=True)
         self.spatial.fc = nn.Linear(2048, n_classes)
 
-        # 시간 스트림: 쌓인 Optical Flow
+        # Temporal stream: stacked optical flow
         self.temporal = models.resnet50(pretrained=True)
-        # Flow 입력을 위해 첫 번째 conv 수정 (2*n_flow_frames 채널)
+        # Modify first conv for flow input (2*n_flow_frames channels)
         self.temporal.conv1 = nn.Conv2d(
             2 * n_flow_frames, 64, kernel_size=7, stride=2, padding=3
         )
@@ -143,7 +143,7 @@ class TwoStreamNetwork(nn.Module):
         spatial_logits = self.spatial(rgb_frame)
         temporal_logits = self.temporal(flow_stack)
 
-        # 후기 융합: 로짓 평균
+        # Late fusion: average logits
         return 0.5 * spatial_logits + 0.5 * temporal_logits
 ```
 
@@ -225,7 +225,7 @@ class SimpleI3D(nn.Module):
         self.classifier = nn.Linear(512, n_classes)
 
     def forward(self, x):
-        # x: (B, 3, T, H, W) - 비디오 클립
+        # x: (B, 3, T, H, W) - video clip
         x = self.features(x)
         x = self.pool(x).flatten(1)
         return self.classifier(x)
@@ -279,24 +279,24 @@ class SlowFastNetwork(nn.Module):
 
     def __init__(self, n_classes=400, alpha=8, beta=8):
         super().__init__()
-        self.alpha = alpha  # 프레임 속도 비율 (fast/slow)
-        self.beta = beta    # 채널 비율 (slow/fast)
+        self.alpha = alpha  # Frame rate ratio (fast/slow)
+        self.beta = beta    # Channel ratio (slow/fast)
 
-        # Slow 경로
+        # Slow pathway
         self.slow_conv1 = nn.Conv3d(3, 64, (1, 7, 7), stride=(1, 2, 2), padding=(0, 3, 3))
         self.slow_pool = nn.MaxPool3d((1, 3, 3), stride=(1, 2, 2), padding=(0, 1, 1))
         self.slow_res = self._make_layer(64 + 64 // beta, 256, n_blocks=3)
 
-        # Fast 경로
+        # Fast pathway
         self.fast_conv1 = nn.Conv3d(3, 64 // beta, (5, 7, 7), stride=(1, 2, 2), padding=(2, 3, 3))
         self.fast_pool = nn.MaxPool3d((1, 3, 3), stride=(1, 2, 2), padding=(0, 1, 1))
         self.fast_res = self._make_layer(64 // beta, 256 // beta, n_blocks=3)
 
-        # 측면 연결 (fast → slow)
+        # Lateral connection (fast → slow)
         self.lateral = nn.Conv3d(64 // beta, 64 // beta, (5, 1, 1),
                                 stride=(alpha, 1, 1), padding=(2, 0, 0))
 
-        # 분류기
+        # Classifier
         self.pool = nn.AdaptiveAvgPool3d(1)
         self.fc = nn.Linear(256 + 256 // beta, n_classes)
 
@@ -313,26 +313,26 @@ class SlowFastNetwork(nn.Module):
         Returns:
             logits: (B, n_classes)
         """
-        # Slow 경로를 위한 서브샘플링
-        slow_input = video[:, :, ::self.alpha]  # alpha번째 프레임마다
+        # Subsample for slow pathway
+        slow_input = video[:, :, ::self.alpha]  # Every alpha-th frame
 
-        # Slow 경로
+        # Slow pathway
         slow = self.slow_conv1(slow_input)
         slow = self.slow_pool(slow)
 
-        # Fast 경로
+        # Fast pathway
         fast = self.fast_conv1(video)
         fast = self.fast_pool(fast)
 
-        # 측면 연결: fast → slow
+        # Lateral connection: fast → slow
         lateral = self.lateral(fast)
         slow = torch.cat([slow, lateral], dim=1)
 
-        # 계속 처리
+        # Continue processing
         slow = self.slow_res(slow)
         fast = self.fast_res(fast)
 
-        # 병합 및 분류
+        # Merge and classify
         slow = self.pool(slow).flatten(1)
         fast = self.pool(fast).flatten(1)
         x = torch.cat([slow, fast], dim=1)
@@ -365,11 +365,11 @@ class TimeSformerBlock(nn.Module):
 
     def __init__(self, d_model=768, n_heads=12):
         super().__init__()
-        # 시간 어텐션 (동일 공간 위치에서 시간에 걸쳐 어텐션)
+        # Temporal attention (attend across time at same spatial position)
         self.temporal_attn = nn.MultiheadAttention(d_model, n_heads, batch_first=True)
         self.temporal_norm = nn.LayerNorm(d_model)
 
-        # 공간 어텐션 (동일 시간 단계에서 공간에 걸쳐 어텐션)
+        # Spatial attention (attend across space at same time step)
         self.spatial_attn = nn.MultiheadAttention(d_model, n_heads, batch_first=True)
         self.spatial_norm = nn.LayerNorm(d_model)
 
@@ -390,14 +390,14 @@ class TimeSformerBlock(nn.Module):
         """
         B, N, D = x.shape
 
-        # 1. 시간 어텐션
-        x_t = x.reshape(B * S, T, D)  # 공간 위치별 그룹화
+        # 1. Temporal attention
+        x_t = x.reshape(B * S, T, D)  # Group by spatial position
         attn_out, _ = self.temporal_attn(x_t, x_t, x_t)
         x = x + attn_out.reshape(B, N, D)
         x = self.temporal_norm(x)
 
-        # 2. 공간 어텐션
-        x_s = x.reshape(B * T, S, D)  # 시간 단계별 그룹화
+        # 2. Spatial attention
+        x_s = x.reshape(B * T, S, D)  # Group by time step
         attn_out, _ = self.spatial_attn(x_s, x_s, x_s)
         x = x + attn_out.reshape(B, N, D)
         x = self.spatial_norm(x)
@@ -434,10 +434,10 @@ def temporal_action_detection(video_features, model, threshold=0.5):
 
     출력: (행동_클래스, 시작_시간, 종료_시간, 신뢰도) 리스트
     """
-    # 1. 시간적 후보 생성 (후보 구간)
+    # 1. Generate temporal proposals (candidate segments)
     proposals = generate_proposals(video_features)
 
-    # 2. 각 후보 분류
+    # 2. Classify each proposal
     detections = []
     for start, end in proposals:
         segment_features = video_features[start:end]
@@ -455,7 +455,7 @@ def temporal_action_detection(video_features, model, threshold=0.5):
                 'confidence': confidence,
             })
 
-    # 3. 비최대 억제
+    # 3. Non-maximum suppression
     detections = temporal_nms(detections, iou_threshold=0.5)
 
     return detections
@@ -484,16 +484,16 @@ class VideoDataset(Dataset):
         self.transform = transform
 
     def __getitem__(self, idx):
-        # 비디오 로드
+        # Load video
         cap = cv2.VideoCapture(self.videos[idx])
         total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
         video_fps = cap.get(cv2.CAP_PROP_FPS)
 
-        # 대상 속도로 프레임 샘플링
+        # Sample frames at target rate
         sample_interval = max(1, int(video_fps / self.frame_rate))
         frame_indices = list(range(0, total_frames, sample_interval))
 
-        # 랜덤 시간적 크롭
+        # Random temporal crop
         if len(frame_indices) > self.clip_length:
             start = np.random.randint(0, len(frame_indices) - self.clip_length)
             frame_indices = frame_indices[start:start + self.clip_length]
@@ -507,7 +507,7 @@ class VideoDataset(Dataset):
                 frames.append(frame)
         cap.release()
 
-        # 필요 시 패딩
+        # Pad if needed
         while len(frames) < self.clip_length:
             frames.append(frames[-1])
 
