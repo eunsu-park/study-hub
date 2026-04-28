@@ -119,11 +119,11 @@ The gradient vector (∂f/∂x, ∂f/∂y) always points in the direction of ste
 
 ### Theory: First-Order Operators: Sobel and Its Relatives
 
-#### B.1 The naïve forward difference and why it isn't used
+#### The naïve forward difference and why it isn't used
 
 The simplest discrete derivative is `I'(x) ≈ I(x+1) - I(x-1)` (central difference). Implemented as a 1×3 kernel `[-1 0 1]`. It gives the right answer on a clean ramp, but it is extremely sensitive to noise — each output pixel depends on only two input pixels.
 
-#### B.2 Sobel: gradient with built-in smoothing
+#### Sobel: gradient with built-in smoothing
 
 Sobel combines differentiation with low-pass smoothing in the perpendicular direction. The horizontal Sobel kernel is:
 
@@ -139,7 +139,7 @@ The vertical Sobel is its transpose. This smooth-then-differentiate structure ma
 
 Why the specific `[1, 2, 1]` smoother? It is a 3-tap approximation to a Gaussian (it equals `[1,1] * [1,1]`, the first step of binomial approximation to Gaussian). The derivative `[-1, 0, +1]` is a centered difference.
 
-#### B.3 Scharr: a more isotropic Sobel
+#### Scharr: a more isotropic Sobel
 
 Sobel's isotropy — whether it responds equally to edges at all angles — is imperfect for 3×3 kernels. Scharr optimizes the 3×3 coefficients specifically for isotropy:
 
@@ -151,7 +151,7 @@ Sc_x = [ -3   0   +3]
 
 For 3×3 kernels, Scharr is what you want if angle accuracy matters (e.g. gradient orientation histograms for HOG features). For larger kernels, Sobel-3 is close enough.
 
-#### B.4 Gradient magnitude and direction
+#### Gradient magnitude and direction
 
 Sobel gives `G_x = ∂I/∂x` and `G_y = ∂I/∂y` separately. Combine via:
 
@@ -160,7 +160,7 @@ Sobel gives `G_x = ∂I/∂x` and `G_y = ∂I/∂y` separately. Combine via:
 θ    = atan2(G_y, G_x)           (direction, perpendicular to edge)
 ```
 
-For speed, `|∇I| ≈ |G_x| + |G_y|` is often used — it is not rotationally symmetric but fast. The proper `sqrt` form is essential when the magnitude is used downstream (e.g. by Canny or HOG).
+For speed, `|∇I| ≈ |G_x| + |G_y|` (the L1 approximation) is sometimes used in environments where a square root is expensive — for example embedded vision or mobile SoC pipelines. It is not rotationally symmetric but is faster. The proper `sqrt` form is essential when the magnitude is used downstream (e.g. by Canny or HOG).
 
 ### Concept
 
@@ -407,11 +407,11 @@ L = [ 0  1  0]     or    [ 1  1  1]     (with diagonals, marginally less isotrop
 
 At an ideal step edge, `∇²I` changes sign — it is positive just before the edge, zero at the edge, negative just after (or vice versa). Edges are **zero-crossings** of `∇²I`, *not* extrema.
 
-#### C.1 Why Laplacian is noisy
+#### Why Laplacian is noisy
 
 The second derivative amplifies noise even more than the first. A single-pixel random fluctuation gets four times the weight of its neighbors in the kernel. Using the raw Laplacian on a noisy image produces a sea of spurious zero-crossings.
 
-#### C.2 Laplacian-of-Gaussian (LoG)
+#### Laplacian-of-Gaussian (LoG)
 
 Fix the noise problem by smoothing first:
 
@@ -421,7 +421,7 @@ LoG(x, y; σ) = ∇²[G(x, y; σ) * I](x, y)  =  [∇²G(x, y; σ)] * I(x, y)
 
 The Laplacian commutes with linear convolution, so it can be baked into the smoothing kernel. The LoG kernel has a characteristic "Mexican hat" shape — positive in the center, negative in a ring around it, approaching zero at the edges. Zero-crossings of the LoG-filtered image are the edges at scale `σ`.
 
-#### C.3 Difference-of-Gaussians (DoG) ≈ LoG
+#### Difference-of-Gaussians (DoG) ≈ LoG
 
 LoG is expensive to compute directly. A key approximation:
 
@@ -576,19 +576,19 @@ John Canny (1986) derived his algorithm from three optimality criteria:
 
 Optimizing these criteria under a Gaussian noise model leads to a specific filter shape — which, remarkably, is very close to `∂G/∂x` — and a specific post-processing pipeline. The five steps:
 
-#### D.1 Gaussian smoothing
+#### Gaussian smoothing
 
 Blur with `GaussianBlur(σ)` to suppress high-frequency noise before differentiation (the reason Sobel already partially does this, but Canny does it explicitly at the chosen scale).
 
-#### D.2 Gradient computation
+#### Gradient computation
 
 Apply Sobel to get `G_x`, `G_y`, then compute magnitude `|∇I|` and direction `θ`. Quantize `θ` to four bins: 0° (horizontal), 45°, 90° (vertical), 135°.
 
-#### D.3 Non-maximum suppression
+#### Non-maximum suppression
 
 Thin the edges. For each pixel, look at its two neighbors along the gradient direction (perpendicular to the edge). If the pixel's magnitude is not the maximum of those three, zero it out. This addresses the "single response" criterion — without this step, a strong edge produces a wide ridge of high magnitudes.
 
-#### D.4 Double threshold
+#### Double threshold
 
 Classify each surviving pixel into:
 
@@ -598,11 +598,11 @@ Classify each surviving pixel into:
 
 Canny's empirical guidance: `T_high ≈ 2 · T_low` is a good starting point. The two thresholds are what give Canny its robust behavior on both strong clear edges and subtle continuations.
 
-#### D.5 Hysteresis tracking
+#### Hysteresis tracking
 
-Turn weak pixels into strong ones if and only if they are connected (8-neighborhood) to a strong pixel, possibly transitively. The final edge map contains the original strong pixels plus all weak pixels reachable from them. This is the same hysteresis idea as §07.E.3 — deciding middle cases based on neighbors.
+Turn weak pixels into strong ones if and only if they are connected (8-neighborhood) to a strong pixel, possibly transitively. The final edge map contains the original strong pixels plus all weak pixels reachable from them. This is the same hysteresis idea covered in §07 Thresholding — deciding middle cases based on neighbors.
 
-The result: edges that are thin (thanks to §D.3), near the true edge locations (thanks to the optimized filter), and connected through noisy regions (thanks to §D.5).
+The result: edges that are thin (thanks to non-maximum suppression), near the true edge locations (thanks to the optimized filter), and connected through noisy regions (thanks to hysteresis tracking).
 
 ### Concept
 
