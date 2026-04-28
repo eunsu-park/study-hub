@@ -1,4 +1,4 @@
-[이전: Neural Radiance Fields](./28_Neural_Radiance_Fields.md)
+[이전: Neural Radiance Fields](./28_Neural_Radiance_Fields.md) | [다음: 비디오 이해](./30_Video_Understanding.md)
 
 ---
 
@@ -49,7 +49,7 @@ NeRF (암시적):
 3D Gaussian Splatting (명시적):
   장면 = 3D 가우시안의 집합 {μᵢ, Σᵢ, cᵢ, αᵢ}
   렌더링: 래스터라이제이션 (투영 + 정렬 + 알파 블렌딩)
-  속도: 1080p에서 ~100+ FPS (실시간!)
+  속도: 1080p에서 ~100+ FPS (현대 컨슈머 GPU 기준; 실시간!)
   학습: ~10-30분
 
 핵심 통찰: 미분 가능한 래스터라이제이션을 사용한 점 기반 렌더링.
@@ -66,7 +66,7 @@ NeRF (암시적):
 
 - **위치** `μ ∈ ℝ³`: 공간 내 위치.
 - **공분산** `Σ ∈ ℝ³×³`: 모양 — 방향과 축별 스케일(비등방 blob).
-- **색상**(또는 시점 의존 색상을 위한 spherical harmonics, §E).
+- **색상**(또는 시점 의존 색상을 위한 spherical harmonics — 본 절 다음 소단원에서 다룸).
 - **불투명도** `α ∈ [0, 1]`.
 
 `Σ`를 학습 가능하게 유지하면서 유효(positive semi-definite)하도록, `Σ = R · S · Sᵀ · Rᵀ`로 매개변수화 — `R`은 회전(쿼터니언에서), `S = diag(s_x, s_y, s_z)`는 축별 스케일. 쿼터니언 + 3 스케일 = 모양에 가우시안당 7 숫자.
@@ -98,13 +98,13 @@ class GaussianModel(nn.Module):
 
     def __init__(self, n_points=100000):
         super().__init__()
-        # 각 가우시안은 다음을 가짐:
+        # Each Gaussian has:
         self.positions = nn.Parameter(torch.randn(n_points, 3) * 0.5)
-        self.scales = nn.Parameter(torch.ones(n_points, 3) * -3.0)  # log 스케일
-        self.rotations = nn.Parameter(torch.zeros(n_points, 4))  # 쿼터니언
-        self.rotations.data[:, 0] = 1.0  # 항등 회전
-        self.opacities = nn.Parameter(torch.zeros(n_points, 1))  # 로짓
-        self.sh_coeffs = nn.Parameter(torch.zeros(n_points, 48))  # 구면 조화 함수
+        self.scales = nn.Parameter(torch.ones(n_points, 3) * -3.0)  # log scale
+        self.rotations = nn.Parameter(torch.zeros(n_points, 4))  # quaternion
+        self.rotations.data[:, 0] = 1.0  # identity rotation
+        self.opacities = nn.Parameter(torch.zeros(n_points, 1))  # logit
+        self.sh_coeffs = nn.Parameter(torch.zeros(n_points, 48))  # spherical harmonics
 
     @property
     def get_scales(self):
@@ -137,7 +137,7 @@ class GaussianModel(nn.Module):
 
     def get_colors(self, viewdir=None):
         """구면 조화 함수에서 색상 가져오기."""
-        # 0차 (상수): 기본 색상만
+        # Degree 0 (constant): just the base color
         base_color = self.sh_coeffs[:, :3]  # RGB
         return torch.sigmoid(base_color)
 ```
@@ -196,18 +196,18 @@ def render_gaussians(gaussians, camera, H, W):
     간소화된 Gaussian Splatting 렌더러.
     실제 구현은 타일 기반 래스터라이제이션에 CUDA 사용.
     """
-    # 1. 2D로 투영
+    # 1. Project to 2D
     positions_3d = gaussians.positions
     means_2d, depths = project_points(positions_3d, camera)
 
-    # 2. 2D 공분산 계산
+    # 2. Compute 2D covariance
     cov_3d = gaussians.get_covariance()
     cov_2d = project_covariance(cov_3d, camera, positions_3d)
 
-    # 3. 깊이 기준 정렬
+    # 3. Sort by depth
     sorted_indices = depths.argsort()
 
-    # 4. 래스터라이즈 (알파 합성)
+    # 4. Rasterize (alpha compositing)
     image = torch.zeros(H, W, 3, device=positions_3d.device)
     accumulated_alpha = torch.zeros(H, W, 1, device=positions_3d.device)
 
@@ -216,17 +216,17 @@ def render_gaussians(gaussians, camera, H, W):
 
     for idx in sorted_indices:
         if accumulated_alpha.max() > 0.99:
-            break  # 조기 종료
+            break  # Early termination
 
-        mu = means_2d[idx]  # 2D 중심
-        cov = cov_2d[idx]   # 2x2 공분산
+        mu = means_2d[idx]  # 2D center
+        cov = cov_2d[idx]   # 2x2 covariance
         color = colors[idx]  # RGB
         opacity = opacities[idx]
 
-        # 각 픽셀에서 가우시안 평가
+        # Evaluate Gaussian at each pixel
         alpha = evaluate_2d_gaussian(mu, cov, opacity, H, W)
 
-        # 알파 합성
+        # Alpha compositing
         weight = alpha * (1 - accumulated_alpha)
         image += weight * color.unsqueeze(0).unsqueeze(0)
         accumulated_alpha += weight
@@ -242,10 +242,10 @@ def evaluate_2d_gaussian(mean, cov, opacity, H, W):
     diff = coords - mean  # (H, W, 2)
     cov_inv = torch.inverse(cov)  # (2, 2)
 
-    # 마할라노비스 거리
+    # Mahalanobis distance
     exponent = -0.5 * torch.sum(diff @ cov_inv * diff, dim=-1)
 
-    # 가우시안 값 * 불투명도
+    # Gaussian value * opacity
     alpha = opacity * torch.exp(exponent)
     return alpha.unsqueeze(-1)  # (H, W, 1)
 ```
@@ -307,16 +307,16 @@ def train_gaussian_splatting(model, images, cameras, n_iterations=30000,
     n_images = len(images)
 
     for iteration in range(n_iterations):
-        # 랜덤 시점
+        # Random view
         idx = np.random.randint(n_images)
         gt_image = images[idx]
         camera = cameras[idx]
         H, W = gt_image.shape[:2]
 
-        # 렌더링
+        # Render
         rendered = render_gaussians(model, camera, H, W)
 
-        # L1 + SSIM 손실
+        # L1 + SSIM loss
         l1_loss = torch.abs(rendered - gt_image).mean()
         ssim_loss = 1 - compute_ssim(rendered, gt_image)
         loss = 0.8 * l1_loss + 0.2 * ssim_loss
@@ -325,7 +325,7 @@ def train_gaussian_splatting(model, images, cameras, n_iterations=30000,
         loss.backward()
         optimizer.step()
 
-        # 적응적 밀도 제어
+        # Adaptive density control
         if iteration > 500 and iteration % 100 == 0:
             densify_and_prune(model, iteration)
 

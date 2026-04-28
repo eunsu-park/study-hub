@@ -49,7 +49,7 @@ NeRF (Implicit):
 3D Gaussian Splatting (Explicit):
   Scene = Collection of 3D Gaussians {μᵢ, Σᵢ, cᵢ, αᵢ}
   Rendering: Rasterization (project + sort + alpha blend)
-  Speed: ~100+ FPS at 1080p (real-time!)
+  Speed: ~100+ FPS at 1080p (modern consumer GPU; real-time!)
   Training: ~10-30 minutes
 
 Key insight: Use point-based rendering with differentiable rasterization.
@@ -66,7 +66,7 @@ Each Gaussian has parameters:
 
 - **Position** `μ ∈ ℝ³`: where it is in space.
 - **Covariance** `Σ ∈ ℝ³×³`: its shape — orientation and per-axis scale (an anisotropic blob).
-- **Color** (or spherical harmonics for view-dependent color, §E).
+- **Color** (or spherical harmonics for view-dependent color — covered in the next subsection).
 - **Opacity** `α ∈ [0, 1]`.
 
 To make `Σ` learnable while staying valid (positive semi-definite), it is parameterized as `Σ = R · S · Sᵀ · Rᵀ` where `R` is rotation (from a quaternion) and `S = diag(s_x, s_y, s_z)` is per-axis scale. Quaternion + 3 scales = 7 numbers per Gaussian for shape.
