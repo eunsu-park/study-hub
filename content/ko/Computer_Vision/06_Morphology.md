@@ -49,16 +49,7 @@ A = { (x, y) : I(x, y) = 1 }
 
 이 틀은 컨볼루션과의 결정적 차이를 분명히 합니다. 컨볼루션은 평균을 계산합니다 — 각 픽셀의 결과는 이웃의 *모든* 값에 의존합니다. 모폴로지는 기하학적 질문을 합니다 — 주어진 위치에서 `B`가 `A` 내에 *들어가는가*, 또는 `B`가 `A`를 *건드리는가*. 답은 이진이고, 연산은 **비선형**입니다: 05 레슨의 LSI 도구들은 여기서 적용되지 않습니다.
 
-### 이론: 그레이스케일 모폴로지
-
-그레이스케일 이미지의 경우 집합론적 관점이 일반화됩니다: 이미지를 3D 속의 *표면* `I(x, y)`로 보고, 구조 요소가 이 표면을 아래에서 떠받치거나(침식) 위에서 덮어씌웁니다(팽창). 실용적 정의는 §B의 국소 최소/최대 형식입니다:
-
-```
-(I ⊖ B)(x, y) = min_{(i,j) ∈ B}  I(x + i, y + j)
-(I ⊕ B)(x, y) = max_{(i,j) ∈ B}  I(x + i, y + j)
-```
-
-이것들을 때로 "min 필터", "max 필터"라 부릅니다. §B–§C의 모든 내용이 그대로 이어집니다. 열기는 여전히 `B`보다 작은 밝은 구조를 제거하고, 닫기는 `B`보다 작은 어두운 구조를 채우며, 둘 다 멱등입니다.
+이 레슨은 이진 이미지를 기준으로 설명을 전개합니다. 그레이스케일 이미지로의 일반화는 침식·팽창을 정의한 직후(§4)에 다룹니다.
 
 ### 모폴로지란?
 
@@ -159,6 +150,7 @@ custom_kernel = np.array([
     [1, 1, 1],
     [0, 1, 0]
 ], dtype=np.uint8)
+print("\nCUSTOM (3x3):\n", custom_kernel)
 ```
 
 ### 구조 요소 시각화
@@ -195,9 +187,7 @@ plt.show()
 
 침식(Erosion)은 "전경이 이 커널 형태의 영역을 완전히 덮는가?"라는 질문에 답합니다. 그렇지 않으면 해당 픽셀은 제거됩니다. 이 덕분에 커널을 완전히 덮을 수 없는 고립된 노이즈 점을 제거하고, 접촉된 객체들 사이의 얇은 연결을 끊어 개별 계수가 가능하도록 만드는 데 최적의 도구입니다.
 
-### 이론: 침식과 팽창: 기본 연산
-
-#### B.1 침식 (`⊖`)
+### 이론: 침식의 정의
 
 ```
 A ⊖ B = { x : B_x ⊆ A }
@@ -218,36 +208,6 @@ A ⊖ B = { x : B_x ⊆ A }
 ```
 
 구조 요소 아래의 모든 픽셀이 1일 때만 출력 픽셀이 1 — `min`이 바로 이를 포착합니다.
-
-#### B.2 팽창 (`⊕`)
-
-```
-A ⊕ B = { x : B̂_x ∩ A ≠ ∅ }
-```
-
-여기서 `B̂`은 `B`의 반사(대칭 구조 요소에서는 `B`와 같음, 일반적인 경우). 말로 풀면: 팽창은 `B`가 `A`를 *건드리는* 위치의 집합 — `B`의 구성원 중 적어도 하나가 `A` 내부에 놓이는 곳.
-
-기하학적 직관:
-
-- 팽창은 객체를 `B`의 반지름만큼 **성장**시킵니다.
-- 객체 내부의 작은 구멍이 `B`보다 작으면 **채워집니다**.
-- 객체 간 좁은 간격이 **메워집니다**.
-
-침식과 마찬가지로 국소 최댓값 형식:
-
-```
-(A ⊕ B)(x) = max_{b ∈ B}  A(x - b)
-```
-
-#### B.3 쌍대성 (Duality)
-
-침식과 팽창은 독립적이지 않습니다 — 여집합 아래에서 **쌍대**입니다:
-
-```
-(A ⊖ B)ᶜ = Aᶜ ⊕ B̂
-```
-
-전경을 침식하는 것은 배경을 팽창하는 것과 같습니다. 그래서 팽창은 반전 → 침식 → 반전으로 구현할 수 있습니다. 또한 침식으로 만든 모든 형태 제거 기법은 팽창을 이용한 형태 채움 대응물을 가진다는 의미이기도 합니다.
 
 ### 침식 연산 원리
 
@@ -303,8 +263,9 @@ _, binary = cv2.threshold(img, 127, 255, cv2.THRESH_BINARY)
 kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (3, 3))
 
 # erode(src, kernel, iterations=1)
-# Why iterations: repeating erosion N times is equivalent to eroding with a larger
-# kernel but cheaper to compute — use iterations to tune removal strength incrementally
+# Why iterations: for flat symmetric kernels (e.g. RECT), eroding N times equals
+# eroding once with a kernel grown by dilating B with itself N-1 times — usually
+# cheaper than building a large kernel up front, and lets you tune strength gradually
 eroded_1 = cv2.erode(binary, kernel, iterations=1)
 eroded_2 = cv2.erode(binary, kernel, iterations=2)
 eroded_3 = cv2.erode(binary, kernel, iterations=3)
@@ -322,6 +283,10 @@ cv2.destroyAllWindows()
 ```python
 import cv2
 import numpy as np
+
+# Why np.random.seed: keeps the test image identical across runs so readers
+# can compare their output to the lesson screenshots
+np.random.seed(0)
 
 # Create test image
 img = np.zeros((300, 400), dtype=np.uint8)
@@ -353,6 +318,42 @@ cv2.destroyAllWindows()
 ## 4. 팽창 - dilate()
 
 팽창(Dilation)은 침식의 쌍대(Dual) 연산입니다. "전경이 이 커널 영역의 어느 부분이라도 닿는가?"라고 묻습니다. 그렇다면 픽셀이 설정됩니다. 따라서 끊어진 획을 다시 연결하고 작은 틈을 채우는 데 이상적입니다. 전체 객체 크기가 유지되도록 항상 침식과 짝을 이루어 사용합니다(열기 또는 닫기 형태로).
+
+### 이론: 팽창의 정의
+
+```
+A ⊕ B = { x : B̂_x ∩ A ≠ ∅ }
+```
+
+여기서 `B̂`은 `B`의 반사(대칭 구조 요소에서는 `B`와 같음, 일반적인 경우). 말로 풀면: 팽창은 `B`가 `A`를 *건드리는* 위치의 집합 — `B`의 구성원 중 적어도 하나가 `A` 내부에 놓이는 곳.
+
+기하학적 직관:
+
+- 팽창은 객체를 `B`의 반지름만큼 **성장**시킵니다.
+- 객체 내부의 작은 구멍이 `B`보다 작으면 **채워집니다**.
+- 객체 간 좁은 간격이 **메워집니다**.
+
+침식과 마찬가지로 국소 최댓값 형식:
+
+```
+(A ⊕ B)(x) = max_{b ∈ B}  A(x - b)
+```
+
+### 이론: 침식·팽창의 쌍대성
+
+침식과 팽창은 독립적이지 않습니다 — 여집합 아래에서 **쌍대**입니다:
+
+```
+(A ⊖ B)ᶜ = Aᶜ ⊕ B̂
+```
+
+전경을 침식하는 것은 배경을 팽창하는 것과 같습니다. 그래서 팽창은 반전 → 침식 → 반전으로 구현할 수 있습니다. 또한 침식으로 만든 모든 형태 제거 기법은 팽창을 이용한 형태 채움 대응물을 가진다는 의미이기도 합니다.
+
+### 이론: 그레이스케일로의 일반화
+
+지금까지의 정의는 이진 이미지를 가정했지만, 그레이스케일에서도 같은 연산자가 자연스럽게 일반화됩니다. 이미지를 3D 속의 *표면* `I(x, y)`로 보면, 구조 요소가 표면을 아래에서 떠받치거나(침식) 위에서 덮어씌우는(팽창) 그림이 됩니다. 위에서 적은 국소 최소/최대 형식이 그대로 정의가 되며, 이를 각각 "min 필터", "max 필터"라고도 부릅니다.
+
+이 일반화 덕분에 이후 다룰 열기·닫기·그래디언트·탑햇·블랙햇 등 모든 복합 연산자가 별도 정의 없이 그레이스케일 이미지에 그대로 적용됩니다. 멱등성 같은 구조적 성질도 보존됩니다.
 
 ### 팽창 연산 원리
 
@@ -458,11 +459,11 @@ plt.show()
 
 단순 침식은 객체를 영구적으로 축소하고, 단순 팽창은 객체를 팽창시킵니다. 열기(Opening)와 닫기(Closing)는 두 연산을 결합하여 객체 크기를 대략 유지하면서 *특정 유형의 결함*(노이즈 점 또는 홀)만을 대상으로 합니다. 이 대칭성 때문에 실제 처리 파이프라인에서는 단독 침식/팽창보다 열기/닫기가 선호됩니다.
 
-### 이론: 열기와 닫기: 대개 진짜 원하는 것
+### 이론: 왜 단독 침식·팽창보다 열기·닫기인가
 
 원시 침식은 모든 것을 줄이고, 원시 팽창은 모든 것을 키웁니다. 둘 중 어느 것도 대개 단독으로는 원하는 것이 아닙니다. *큰* 객체(실제 특징)를 줄이지 않고 *작은* 객체(노이즈)만 제거하거나, 객체를 키우지 않으면서 *작은* 구멍만 채우길 원합니다. 그것이 복합 연산자가 하는 일입니다.
 
-#### C.1 열기 (`∘`)
+### 이론: 열기 (`∘`)의 정의
 
 ```
 A ∘ B = (A ⊖ B) ⊕ B
@@ -476,7 +477,7 @@ A ∘ B = (A ⊖ B) ⊕ B
 
 순 효과: **작은 객체는 사라지고, 큰 객체는 보존(경계는 매끄럽게)**. 소금 노이즈 제거와 분할 마스크 정리를 위한 표준 도구. 수학적으로 `A ∘ B`는 `B`의 평행이동 복사본들의 합집합으로 쓸 수 있는 `A`의 가장 큰 부분집합 — `A`의 "`B`를 존중하는" 부분.
 
-#### C.2 닫기 (`•`)
+### 이론: 닫기 (`•`)의 정의
 
 ```
 A • B = (A ⊕ B) ⊖ B
@@ -489,7 +490,7 @@ A • B = (A ⊕ B) ⊖ B
 
 순 효과: **객체 내부의 작은 구멍은 채워지고, 객체 간 좁은 간격은 닫히며, 주요 형태는 보존**. 후추 노이즈 제거와 조각난 객체를 잇기 위한 표준 도구. 닫기와 열기도 쌍대입니다: `(A ∘ B)ᶜ = Aᶜ • B̂`.
 
-#### C.3 반복과 멱등성 (Idempotence)
+### 이론: 반복과 멱등성 (Idempotence)
 
 핵심 성질: `(A ∘ B) ∘ B = A ∘ B`. 열기를 두 번 적용해도 한 번과 같은 결과 — **멱등**합니다. 닫기도 마찬가지. 이 성질 덕분에 한 번이면 충분하고, 반복은 도움이 되지 않는다는 것을 알 수 있습니다.
 
@@ -588,6 +589,8 @@ import cv2
 import numpy as np
 import matplotlib.pyplot as plt
 
+np.random.seed(0)  # reproducible noise/hole positions
+
 # Test image: Rectangle with noise + holes
 img = np.zeros((200, 200), dtype=np.uint8)
 cv2.rectangle(img, (50, 50), (150, 150), 255, -1)
@@ -638,11 +641,11 @@ plt.show()
 
 ## 6. 그래디언트, 탑햇, 블랙햇
 
-### 이론: 그래디언트, 탑햇, 블랙햇: 파생 연산자
+### 이론: 기본 연산에서 파생되는 세 연산자
 
-기본 연산으로 만든 세 복합 연산자가 특정 구조 특징을 추출합니다:
+기본 연산으로 만든 세 복합 연산자가 특정 구조 특징을 추출합니다.
 
-#### E.1 모폴로지 그래디언트
+### 이론: 모폴로지 그래디언트
 
 ```
 gradient(A) = (A ⊕ B) - (A ⊖ B)
@@ -650,7 +653,7 @@ gradient(A) = (A ⊕ B) - (A ⊖ B)
 
 팽창이 객체를 "두껍게", 침식이 "얇게" 하고, 그 차이가 정확히 경계층입니다. 이진 이미지에서는 에지 픽셀을 주고, 그레이스케일에서는 대략적인 기울기 크기를 줍니다. 균일한 배경 위의 날카로운 경계라는 특정 경우에 Sobel 기반 에지의 더 단순한 대안으로 유용합니다.
 
-#### E.2 탑햇 (white top-hat)
+### 이론: 탑햇 (white top-hat)
 
 ```
 tophat(A) = A - (A ∘ B)
@@ -658,7 +661,7 @@ tophat(A) = A - (A ∘ B)
 
 원본 이미지에서 그 열기를 뺀 것. 열기가 작은 밝은 특징을 제거하므로, 이 차이는 **작은 밝은 특징 자체를 분리**합니다 — 열기가 버린 것들. 탑햇은 구조 요소보다 작은 밝은 객체를 검출하는 데 이상적입니다(종이 위 글자, 이미지 속 별, 어두운 배경 위 밝은 점). 특히 배경이 균일하지 않을 때 — 탑햇이 암묵적으로 배경 변화를 정규화합니다.
 
-#### E.3 블랙햇
+### 이론: 블랙햇
 
 ```
 blackhat(A) = (A • B) - A
@@ -727,26 +730,20 @@ import matplotlib.pyplot as plt
 img = cv2.imread('image.jpg', cv2.IMREAD_GRAYSCALE)
 kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (9, 9))
 
-# Morphological gradient
+# Morphological gradient (= dilate - erode)
 gradient = cv2.morphologyEx(img, cv2.MORPH_GRADIENT, kernel)
 
-# Top-hat
+# Top-hat (= original - opening) — small bright features
 tophat = cv2.morphologyEx(img, cv2.MORPH_TOPHAT, kernel)
 
-# Black-hat
+# Black-hat (= closing - original) — small dark features
 blackhat = cv2.morphologyEx(img, cv2.MORPH_BLACKHAT, kernel)
 
-# Manual calculation (for verification)
-dilated = cv2.dilate(img, kernel)
-eroded = cv2.erode(img, kernel)
-opening = cv2.morphologyEx(img, cv2.MORPH_OPEN, kernel)
-closing = cv2.morphologyEx(img, cv2.MORPH_CLOSE, kernel)
+# Why cv2.add / cv2.subtract over raw +/-: both saturate at [0, 255] and avoid
+# uint8 overflow/underflow that np arithmetic would silently wrap
+enhanced = cv2.subtract(cv2.add(img, tophat), blackhat)
 
-gradient_manual = dilated - eroded
-tophat_manual = img - opening
-blackhat_manual = closing - img
-
-# Visualization
+# Visualization (2x3 — every cell used)
 fig, axes = plt.subplots(2, 3, figsize=(15, 10))
 
 axes[0, 0].imshow(img, cmap='gray')
@@ -755,21 +752,24 @@ axes[0, 0].set_title('Original')
 axes[0, 1].imshow(gradient, cmap='gray')
 axes[0, 1].set_title('Gradient (Edge)')
 
-axes[0, 2].imshow(tophat, cmap='gray')
-axes[0, 2].set_title('Top Hat (Bright spots)')
+axes[0, 2].imshow(enhanced, cmap='gray')
+axes[0, 2].set_title('Enhanced (img + TopHat - BlackHat)')
 
-axes[1, 0].imshow(blackhat, cmap='gray')
-axes[1, 0].set_title('Black Hat (Dark spots)')
+axes[1, 0].imshow(tophat, cmap='gray')
+axes[1, 0].set_title('Top Hat (Bright spots)')
 
-# Enhance contrast using top-hat + black-hat
-enhanced = cv2.add(img, tophat)
-enhanced = cv2.subtract(enhanced, blackhat)
-axes[1, 1].imshow(enhanced, cmap='gray')
-axes[1, 1].set_title('Enhanced (Top+Black Hat)')
+axes[1, 1].imshow(blackhat, cmap='gray')
+axes[1, 1].set_title('Black Hat (Dark spots)')
+
+# Side-by-side check: morphologyEx(MORPH_GRADIENT) should equal dilate - erode
+gradient_check = cv2.subtract(
+    cv2.dilate(img, kernel), cv2.erode(img, kernel)
+)
+axes[1, 2].imshow(gradient_check, cmap='gray')
+axes[1, 2].set_title('Gradient (manual = MORPH_GRADIENT)')
 
 for ax in axes.flatten():
     ax.axis('off')
-axes[1, 2].axis('off')
 
 plt.tight_layout()
 plt.show()
@@ -838,15 +838,21 @@ _, binary = cv2.threshold(img, 127, 255, cv2.THRESH_BINARY_INV)
 cleaned = remove_noise_morphology(binary, noise_size=2)
 ```
 
-### 객체 분리
+### Watershed 마커 생성 (객체 분리 전처리)
+
+붙어있는 객체를 모폴로지만으로 완전 분리하기는 어렵습니다. 실무에서는 침식으로 *중심을 가까이* 가져온 뒤 거리 변환과 임계값으로 *확실한 전경* 마커를 만들고, 이를 watershed에 넘기는 흐름을 씁니다. 아래 함수는 그 마커 생성 단계입니다.
 
 ```python
 import cv2
 import numpy as np
 
-def separate_objects(binary_img, erosion_iterations=3):
+def make_watershed_markers(binary_img, erosion_iterations=3):
     """
-    Separate connected objects
+    Generate sure-foreground markers for watershed segmentation.
+
+    Returns:
+    - eroded: morphologically peeled mask (sure foreground proxy)
+    - sure_fg: distance-transform-based confident object cores
     """
     kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
 
@@ -855,8 +861,8 @@ def separate_objects(binary_img, erosion_iterations=3):
     # the structuring element; each pass peels off one layer from every boundary
     eroded = cv2.erode(binary_img, kernel, iterations=erosion_iterations)
 
-    # Distance transform to find center points — the peak of the distance map is
-    # the point farthest from any background pixel, i.e., the object center
+    # Distance transform: each foreground pixel is replaced with its distance
+    # to the nearest background pixel — peaks sit at object centers
     dist_transform = cv2.distanceTransform(eroded, cv2.DIST_L2, 5)
     # Why 0.5 * max: keeps only the top half of distance values, retaining confident
     # object cores while discarding ambiguous border regions
@@ -871,7 +877,7 @@ def separate_objects(binary_img, erosion_iterations=3):
 # Usage example
 img = cv2.imread('connected_circles.png', cv2.IMREAD_GRAYSCALE)
 _, binary = cv2.threshold(img, 127, 255, cv2.THRESH_BINARY)
-separated, centers = separate_objects(binary)
+peeled, centers = make_watershed_markers(binary)
 ```
 
 ### 문서 이미지 전처리
@@ -882,31 +888,37 @@ import numpy as np
 
 def preprocess_document(img):
     """
-    Document image preprocessing (shadow removal + binarization)
+    Document image preprocessing.
+
+    Strategy: estimate the (uneven) background with a large closing — the kernel
+    is bigger than any glyph, so closing wipes the dark text and leaves just the
+    slowly-varying illumination. Dividing the original by this background
+    flattens the lighting; adaptive threshold then handles any residual variation.
     """
-    # Grayscale conversion
     if len(img.shape) == 3:
         gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
     else:
         gray = img
 
-    # Top-hat to extract bright background
+    # Why a 15x15 RECT kernel: must span across the largest glyph stroke so
+    # closing fully fills text into the background; tune up for larger fonts
     kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (15, 15))
+    background = cv2.morphologyEx(gray, cv2.MORPH_CLOSE, kernel)
 
-    # Black-hat to correct shadows/dark areas
-    blackhat = cv2.morphologyEx(gray, cv2.MORPH_BLACKHAT, kernel)
+    # Why divide and rescale to 255: ratio of pixel to local background is
+    # ~1.0 on background and <1.0 on text, so multiplying by 255 maps background
+    # to white while preserving relative text darkness — robust to global lighting
+    normalized = cv2.divide(gray, background, scale=255)
 
-    # Subtract black-hat from original (shadow removal effect)
-    no_shadow = cv2.add(gray, blackhat)
-
-    # Adaptive binarization
+    # Why THRESH_BINARY_INV: foreground (text) becomes 255 in the mask, which is
+    # the conventional polarity for downstream contour/blob analysis
     binary = cv2.adaptiveThreshold(
-        no_shadow, 255,
+        normalized, 255,
         cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
-        cv2.THRESH_BINARY, 21, 15
+        cv2.THRESH_BINARY_INV, 21, 15
     )
 
-    # Noise removal
+    # Cleanup: open removes salt noise, close repairs broken glyph strokes
     kernel_small = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
     binary = cv2.morphologyEx(binary, cv2.MORPH_OPEN, kernel_small)
     binary = cv2.morphologyEx(binary, cv2.MORPH_CLOSE, kernel_small)
@@ -927,7 +939,11 @@ import numpy as np
 
 def skeletonize(img):
     """
-    Extract skeleton using morphological operations
+    Extract skeleton using morphological operations.
+
+    Educational implementation of the classical Lantuejoul skeleton.
+    For production use cv2.ximgproc.thinning (Zhang-Suen / Guo-Hall),
+    which is faster and produces 1-pixel-wide skeletons reliably.
     """
     skeleton = np.zeros_like(img)
     temp = img.copy()

@@ -49,16 +49,7 @@ A **structuring element** `B` is a small set (typically 3×3 or 5×5) representi
 
 This framing makes a crucial distinction from convolution clear. Convolution computes an average — the result at each pixel depends on *all* values in the neighborhood. Morphology asks a geometric question — whether `B` *fits inside* `A` at a given location, or whether `B` *hits* `A`. The answer is binary, and the operation is **non-linear**: the set of LSI tools from lesson 05 does not apply here.
 
-### Theory: Grayscale Morphology
-
-For grayscale images, the set-theoretic view generalizes: the image is viewed as a *surface* `I(x, y)` in 3D, and the structuring element either supports this surface from below (erosion) or from above (dilation). The operational definitions are the local-min and local-max forms from §B:
-
-```
-(I ⊖ B)(x, y) = min_{(i,j) ∈ B}  I(x + i, y + j)
-(I ⊕ B)(x, y) = max_{(i,j) ∈ B}  I(x + i, y + j)
-```
-
-These are sometimes called "min filter" and "max filter". Everything from §B–§C carries over: opening still removes bright structures smaller than `B`, closing fills dark structures smaller than `B`, both are idempotent.
+This lesson develops everything for binary images first; the generalization to grayscale appears immediately after erosion and dilation are defined (§4).
 
 ### What is Morphology?
 
@@ -159,6 +150,7 @@ custom_kernel = np.array([
     [1, 1, 1],
     [0, 1, 0]
 ], dtype=np.uint8)
+print("\nCUSTOM (3x3):\n", custom_kernel)
 ```
 
 ### Visualizing Structuring Elements
@@ -195,9 +187,7 @@ plt.show()
 
 Erosion answers the question "does the foreground completely cover this kernel-shaped region?" — if not, the pixel is eliminated. This makes it the go-to tool for removing isolated noise dots (which can never fully cover the kernel) and for breaking thin bridges between touching objects before counting them separately.
 
-### Theory: Erosion and Dilation: the Primitives
-
-#### B.1 Erosion (`⊖`)
+### Theory: Definition of Erosion
 
 ```
 A ⊖ B = { x : B_x ⊆ A }
@@ -218,36 +208,6 @@ A second equivalent definition ties erosion directly to OpenCV's local-minimum i
 ```
 
 The output pixel is 1 only if every pixel under the structuring element is 1 — the `min` captures exactly this.
-
-#### B.2 Dilation (`⊕`)
-
-```
-A ⊕ B = { x : B̂_x ∩ A ≠ ∅ }
-```
-
-where `B̂` is the reflection of `B` (for symmetric structuring elements this is the same as `B`, which is the typical case). In words: dilation is the set of positions where `B` *touches* `A` — where at least one of `B`'s members lies inside `A`.
-
-Geometric intuition:
-
-- Dilation **grows** objects by the radius of `B`.
-- Small holes inside objects **get filled** if they are smaller than `B`.
-- Narrow gaps between objects **close up**.
-
-As with erosion, an equivalent local-maximum form:
-
-```
-(A ⊕ B)(x) = max_{b ∈ B}  A(x - b)
-```
-
-#### B.3 The duality
-
-Erosion and dilation are not independent — they are **dual** under complementation:
-
-```
-(A ⊖ B)ᶜ = Aᶜ ⊕ B̂
-```
-
-Eroding the foreground is the same as dilating the background. This is why you can implement dilation by inverting, eroding, and inverting again. It also means that every shape-removal technique built from erosion has a shape-filling counterpart using dilation.
 
 ### Erosion Operation Principle
 
@@ -303,8 +263,9 @@ _, binary = cv2.threshold(img, 127, 255, cv2.THRESH_BINARY)
 kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (3, 3))
 
 # erode(src, kernel, iterations=1)
-# Why iterations: repeating erosion N times is equivalent to eroding with a larger
-# kernel but cheaper to compute — use iterations to tune removal strength incrementally
+# Why iterations: for flat symmetric kernels (e.g. RECT), eroding N times equals
+# eroding once with a kernel grown by dilating B with itself N-1 times — usually
+# cheaper than building a large kernel up front, and lets you tune strength gradually
 eroded_1 = cv2.erode(binary, kernel, iterations=1)
 eroded_2 = cv2.erode(binary, kernel, iterations=2)
 eroded_3 = cv2.erode(binary, kernel, iterations=3)
@@ -322,6 +283,10 @@ cv2.destroyAllWindows()
 ```python
 import cv2
 import numpy as np
+
+# Why np.random.seed: keeps the test image identical across runs so readers
+# can compare their output to the lesson screenshots
+np.random.seed(0)
 
 # Create test image
 img = np.zeros((300, 400), dtype=np.uint8)
@@ -353,6 +318,42 @@ cv2.destroyAllWindows()
 ## 4. Dilation - dilate()
 
 Dilation is the dual of erosion: it asks "does the foreground touch any part of this kernel region?" If yes, the pixel is set. This makes it ideal for reconnecting broken strokes and filling small gaps, and it is always paired with erosion (as opening or closing) so the overall object size is preserved.
+
+### Theory: Definition of Dilation
+
+```
+A ⊕ B = { x : B̂_x ∩ A ≠ ∅ }
+```
+
+where `B̂` is the reflection of `B` (for symmetric structuring elements this is the same as `B`, which is the typical case). In words: dilation is the set of positions where `B` *touches* `A` — where at least one of `B`'s members lies inside `A`.
+
+Geometric intuition:
+
+- Dilation **grows** objects by the radius of `B`.
+- Small holes inside objects **get filled** if they are smaller than `B`.
+- Narrow gaps between objects **close up**.
+
+As with erosion, an equivalent local-maximum form:
+
+```
+(A ⊕ B)(x) = max_{b ∈ B}  A(x - b)
+```
+
+### Theory: Duality of Erosion and Dilation
+
+Erosion and dilation are not independent — they are **dual** under complementation:
+
+```
+(A ⊖ B)ᶜ = Aᶜ ⊕ B̂
+```
+
+Eroding the foreground is the same as dilating the background. This is why you can implement dilation by inverting, eroding, and inverting again. It also means that every shape-removal technique built from erosion has a shape-filling counterpart using dilation.
+
+### Theory: Generalization to Grayscale
+
+The definitions so far assumed binary images, but the same operators generalize naturally to grayscale. Picture the image as a *surface* `I(x, y)` in 3D: the structuring element either supports the surface from below (erosion) or covers it from above (dilation). The local-min and local-max forms given above become the operational definitions, and these are sometimes called the "min filter" and "max filter".
+
+This generalization is why every compound operator we'll build later — opening, closing, gradient, top-hat, black-hat — applies to grayscale images without any extra work. Structural properties like idempotence carry over too.
 
 ### Dilation Operation Principle
 
@@ -458,11 +459,11 @@ plt.show()
 
 Raw erosion shrinks objects permanently; raw dilation expands them. Opening and closing combine both operations so the net effect targets a *specific defect type* (noise dots or holes) while keeping object size approximately the same — this symmetry is why they are preferred over bare erosion/dilation in almost every practical pipeline.
 
-### Theory: Opening and Closing: What You Usually Want
+### Theory: Why Compound Operators Beat Raw Erosion/Dilation
 
 Raw erosion shrinks everything; raw dilation grows everything. Neither is usually what you want on its own — you want to remove *small* objects (noise) without shrinking *large* ones (real features), or fill *small* holes without growing objects. That is what the compound operators do.
 
-#### C.1 Opening (`∘`)
+### Theory: Definition of Opening (`∘`)
 
 ```
 A ∘ B = (A ⊖ B) ⊕ B
@@ -476,7 +477,7 @@ A ∘ B = (A ⊖ B) ⊕ B
 
 Net effect: **small objects vanish; large objects are preserved (with their boundaries smoothed)**. This is the standard tool for removing salt noise and cleaning up segmentation masks. Mathematically, `A ∘ B` is the largest subset of `A` that can be written as a union of translated copies of `B` — the "`B`-respecting" part of `A`.
 
-#### C.2 Closing (`•`)
+### Theory: Definition of Closing (`•`)
 
 ```
 A • B = (A ⊕ B) ⊖ B
@@ -489,7 +490,7 @@ A • B = (A ⊕ B) ⊖ B
 
 Net effect: **small holes inside objects are filled; narrow gaps between objects are closed; main shape is preserved**. This is the standard tool for removing pepper noise and joining fragmented objects. Closing and opening are themselves dual: `(A ∘ B)ᶜ = Aᶜ • B̂`.
 
-#### C.3 Iteration and idempotence
+### Theory: Iteration and Idempotence
 
 A key property: `(A ∘ B) ∘ B = A ∘ B`. Applying opening twice gives the same result as once — it is **idempotent**. Same for closing. This is useful because it tells you a single pass is enough; repeating does not help.
 
@@ -588,6 +589,8 @@ import cv2
 import numpy as np
 import matplotlib.pyplot as plt
 
+np.random.seed(0)  # reproducible noise/hole positions
+
 # Test image: Rectangle with noise + holes
 img = np.zeros((200, 200), dtype=np.uint8)
 cv2.rectangle(img, (50, 50), (150, 150), 255, -1)
@@ -638,11 +641,11 @@ plt.show()
 
 ## 6. Gradient, Top-hat, Black-hat
 
-### Theory: Gradient, Top-hat, Black-hat: Derived Operators
+### Theory: Three Operators Derived from the Primitives
 
-Three compound operators built from the primitives pick out specific structural features:
+Three compound operators built from the primitives pick out specific structural features.
 
-#### E.1 Morphological gradient
+### Theory: Morphological Gradient
 
 ```
 gradient(A) = (A ⊕ B) - (A ⊖ B)
@@ -650,7 +653,7 @@ gradient(A) = (A ⊕ B) - (A ⊖ B)
 
 Dilation "thickens" the object, erosion "thins" it, and the difference is exactly the boundary layer. For binary images this gives edge pixels; for grayscale it gives a rough gradient magnitude. Often useful as a simpler alternative to Sobel-based edges for the specific case of sharp boundaries on uniform backgrounds.
 
-#### E.2 Top-hat (white top-hat)
+### Theory: Top-hat (white top-hat)
 
 ```
 tophat(A) = A - (A ∘ B)
@@ -658,7 +661,7 @@ tophat(A) = A - (A ∘ B)
 
 The original image minus its opening. Since opening removes small bright features, this difference **isolates the small bright features themselves** — the things opening threw away. Top-hat is ideal for detecting bright objects smaller than the structuring element (text on a page, stars in an image, bright specks on a dark background), especially when the background is non-uniform — top-hat implicitly normalizes away the background variation.
 
-#### E.3 Black-hat
+### Theory: Black-hat
 
 ```
 blackhat(A) = (A • B) - A
@@ -727,26 +730,20 @@ import matplotlib.pyplot as plt
 img = cv2.imread('image.jpg', cv2.IMREAD_GRAYSCALE)
 kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (9, 9))
 
-# Morphological gradient
+# Morphological gradient (= dilate - erode)
 gradient = cv2.morphologyEx(img, cv2.MORPH_GRADIENT, kernel)
 
-# Top-hat
+# Top-hat (= original - opening) — small bright features
 tophat = cv2.morphologyEx(img, cv2.MORPH_TOPHAT, kernel)
 
-# Black-hat
+# Black-hat (= closing - original) — small dark features
 blackhat = cv2.morphologyEx(img, cv2.MORPH_BLACKHAT, kernel)
 
-# Manual calculation (for verification)
-dilated = cv2.dilate(img, kernel)
-eroded = cv2.erode(img, kernel)
-opening = cv2.morphologyEx(img, cv2.MORPH_OPEN, kernel)
-closing = cv2.morphologyEx(img, cv2.MORPH_CLOSE, kernel)
+# Why cv2.add / cv2.subtract over raw +/-: both saturate at [0, 255] and avoid
+# uint8 overflow/underflow that np arithmetic would silently wrap
+enhanced = cv2.subtract(cv2.add(img, tophat), blackhat)
 
-gradient_manual = dilated - eroded
-tophat_manual = img - opening
-blackhat_manual = closing - img
-
-# Visualization
+# Visualization (2x3 — every cell used)
 fig, axes = plt.subplots(2, 3, figsize=(15, 10))
 
 axes[0, 0].imshow(img, cmap='gray')
@@ -755,21 +752,24 @@ axes[0, 0].set_title('Original')
 axes[0, 1].imshow(gradient, cmap='gray')
 axes[0, 1].set_title('Gradient (Edge)')
 
-axes[0, 2].imshow(tophat, cmap='gray')
-axes[0, 2].set_title('Top Hat (Bright spots)')
+axes[0, 2].imshow(enhanced, cmap='gray')
+axes[0, 2].set_title('Enhanced (img + TopHat - BlackHat)')
 
-axes[1, 0].imshow(blackhat, cmap='gray')
-axes[1, 0].set_title('Black Hat (Dark spots)')
+axes[1, 0].imshow(tophat, cmap='gray')
+axes[1, 0].set_title('Top Hat (Bright spots)')
 
-# Enhance contrast using top-hat + black-hat
-enhanced = cv2.add(img, tophat)
-enhanced = cv2.subtract(enhanced, blackhat)
-axes[1, 1].imshow(enhanced, cmap='gray')
-axes[1, 1].set_title('Enhanced (Top+Black Hat)')
+axes[1, 1].imshow(blackhat, cmap='gray')
+axes[1, 1].set_title('Black Hat (Dark spots)')
+
+# Side-by-side check: morphologyEx(MORPH_GRADIENT) should equal dilate - erode
+gradient_check = cv2.subtract(
+    cv2.dilate(img, kernel), cv2.erode(img, kernel)
+)
+axes[1, 2].imshow(gradient_check, cmap='gray')
+axes[1, 2].set_title('Gradient (manual = MORPH_GRADIENT)')
 
 for ax in axes.flatten():
     ax.axis('off')
-axes[1, 2].axis('off')
 
 plt.tight_layout()
 plt.show()
@@ -838,15 +838,21 @@ _, binary = cv2.threshold(img, 127, 255, cv2.THRESH_BINARY_INV)
 cleaned = remove_noise_morphology(binary, noise_size=2)
 ```
 
-### Object Separation
+### Watershed Marker Generation (Object-Separation Preprocessing)
+
+Morphology alone rarely separates touching objects cleanly. The practical pattern is to use erosion to *pull centers apart*, then run a distance transform + threshold to obtain *sure-foreground* markers and feed them to watershed. The function below produces those markers.
 
 ```python
 import cv2
 import numpy as np
 
-def separate_objects(binary_img, erosion_iterations=3):
+def make_watershed_markers(binary_img, erosion_iterations=3):
     """
-    Separate connected objects
+    Generate sure-foreground markers for watershed segmentation.
+
+    Returns:
+    - eroded: morphologically peeled mask (sure foreground proxy)
+    - sure_fg: distance-transform-based confident object cores
     """
     kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
 
@@ -855,8 +861,8 @@ def separate_objects(binary_img, erosion_iterations=3):
     # the structuring element; each pass peels off one layer from every boundary
     eroded = cv2.erode(binary_img, kernel, iterations=erosion_iterations)
 
-    # Distance transform to find center points — the peak of the distance map is
-    # the point farthest from any background pixel, i.e., the object center
+    # Distance transform: each foreground pixel is replaced with its distance
+    # to the nearest background pixel — peaks sit at object centers
     dist_transform = cv2.distanceTransform(eroded, cv2.DIST_L2, 5)
     # Why 0.5 * max: keeps only the top half of distance values, retaining confident
     # object cores while discarding ambiguous border regions
@@ -871,7 +877,7 @@ def separate_objects(binary_img, erosion_iterations=3):
 # Usage example
 img = cv2.imread('connected_circles.png', cv2.IMREAD_GRAYSCALE)
 _, binary = cv2.threshold(img, 127, 255, cv2.THRESH_BINARY)
-separated, centers = separate_objects(binary)
+peeled, centers = make_watershed_markers(binary)
 ```
 
 ### Document Image Preprocessing
@@ -882,31 +888,37 @@ import numpy as np
 
 def preprocess_document(img):
     """
-    Document image preprocessing (shadow removal + binarization)
+    Document image preprocessing.
+
+    Strategy: estimate the (uneven) background with a large closing — the kernel
+    is bigger than any glyph, so closing wipes the dark text and leaves just the
+    slowly-varying illumination. Dividing the original by this background
+    flattens the lighting; adaptive threshold then handles any residual variation.
     """
-    # Grayscale conversion
     if len(img.shape) == 3:
         gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
     else:
         gray = img
 
-    # Top-hat to extract bright background
+    # Why a 15x15 RECT kernel: must span across the largest glyph stroke so
+    # closing fully fills text into the background; tune up for larger fonts
     kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (15, 15))
+    background = cv2.morphologyEx(gray, cv2.MORPH_CLOSE, kernel)
 
-    # Black-hat to correct shadows/dark areas
-    blackhat = cv2.morphologyEx(gray, cv2.MORPH_BLACKHAT, kernel)
+    # Why divide and rescale to 255: ratio of pixel to local background is
+    # ~1.0 on background and <1.0 on text, so multiplying by 255 maps background
+    # to white while preserving relative text darkness — robust to global lighting
+    normalized = cv2.divide(gray, background, scale=255)
 
-    # Subtract black-hat from original (shadow removal effect)
-    no_shadow = cv2.add(gray, blackhat)
-
-    # Adaptive binarization
+    # Why THRESH_BINARY_INV: foreground (text) becomes 255 in the mask, which is
+    # the conventional polarity for downstream contour/blob analysis
     binary = cv2.adaptiveThreshold(
-        no_shadow, 255,
+        normalized, 255,
         cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
-        cv2.THRESH_BINARY, 21, 15
+        cv2.THRESH_BINARY_INV, 21, 15
     )
 
-    # Noise removal
+    # Cleanup: open removes salt noise, close repairs broken glyph strokes
     kernel_small = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
     binary = cv2.morphologyEx(binary, cv2.MORPH_OPEN, kernel_small)
     binary = cv2.morphologyEx(binary, cv2.MORPH_CLOSE, kernel_small)
@@ -927,7 +939,11 @@ import numpy as np
 
 def skeletonize(img):
     """
-    Extract skeleton using morphological operations
+    Extract skeleton using morphological operations.
+
+    Educational implementation of the classical Lantuejoul skeleton.
+    For production use cv2.ximgproc.thinning (Zhang-Suen / Guo-Hall),
+    which is faster and produces 1-pixel-wide skeletons reliably.
     """
     skeleton = np.zeros_like(img)
     temp = img.copy()
