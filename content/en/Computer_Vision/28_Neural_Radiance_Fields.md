@@ -386,7 +386,7 @@ For each training image:
 
 **Why does this learn the 3D geometry?** Because the MLP has to explain **all views simultaneously**. A single view could be explained by many different density distributions — but only the correct 3D geometry is consistent with all views. Multi-view consistency is the implicit supervision that forces the density field to match actual scene geometry.
 
-Training requires **camera poses**, which must be known. Typically these are computed with COLMAP (SFM, §22.F) before NeRF training.
+Training requires **camera poses**, which must be known. Typically these are computed with COLMAP (SfM) before NeRF training.
 
 ### 6.1 Training NeRF
 
@@ -399,6 +399,8 @@ def train_nerf(model, images, poses, intrinsics, n_iterations=200000,
 
     H, W = images.shape[1:3]
     n_images = len(images)
+
+    np.random.seed(0)  # Reproducibility for sampling
 
     for iteration in range(n_iterations):
         # Sample random image and random pixels

@@ -1,4 +1,4 @@
-[이전: 파놉틱 세그멘테이션](./27_Panoptic_Segmentation.md)
+[이전: 파놉틱 세그멘테이션](./27_Panoptic_Segmentation.md) | [다음: 3D Gaussian Splatting](./29_3D_Gaussian_Splatting.md)
 
 ---
 
@@ -145,7 +145,7 @@ def positional_encoding(x, L=10):
         encodings.append(torch.sin(freq * x))
         encodings.append(torch.cos(freq * x))
     return torch.cat(encodings, dim=-1)
-    # 입력 차원 d → 출력 차원 d(1 + 2L)
+    # Input dim d → Output dim d(1 + 2L)
 ```
 
 ---
@@ -215,36 +215,36 @@ def render_rays(network, rays_o, rays_d, near=2.0, far=6.0,
     N = rays_o.shape[0]
     device = rays_o.device
 
-    # 1. 레이를 따라 점 샘플링 (층화 샘플링)
+    # 1. Sample points along rays (stratified sampling)
     t_vals = torch.linspace(near, far, n_samples, device=device)
-    # 학습 중 정규화를 위한 노이즈 추가
+    # Add noise for regularization during training
     noise = torch.rand(N, n_samples, device=device) * (far - near) / n_samples
     t_vals = t_vals.unsqueeze(0) + noise
 
-    # 레이를 따른 3D 위치
+    # 3D positions along rays
     points = rays_o.unsqueeze(1) + t_vals.unsqueeze(2) * rays_d.unsqueeze(1)
-    # points 형상: (N, n_samples, 3)
+    # points shape: (N, n_samples, 3)
 
-    # 2. 네트워크에 색상과 밀도 쿼리
+    # 2. Query network for color and density
     dirs = rays_d.unsqueeze(1).expand_as(points)
 
-    # 위치 인코딩
+    # Positional encoding
     encoded_points = positional_encoding(points.reshape(-1, 3), L=10)
     encoded_dirs = positional_encoding(dirs.reshape(-1, 3), L=4)
 
     raw = network(encoded_points, encoded_dirs)
     raw = raw.reshape(N, n_samples, 4)  # (rgb=3, sigma=1)
 
-    rgb_raw = torch.sigmoid(raw[..., :3])   # [0, 1] 범위의 색상
-    sigma = torch.relu(raw[..., 3])         # 밀도 >= 0
+    rgb_raw = torch.sigmoid(raw[..., :3])   # Color in [0, 1]
+    sigma = torch.relu(raw[..., 3])         # Density >= 0
 
-    # 3. 볼륨 렌더링
+    # 3. Volume rendering
     deltas = t_vals[:, 1:] - t_vals[:, :-1]
     deltas = torch.cat([deltas, torch.full((N, 1), 1e10, device=device)], dim=1)
 
-    alpha = 1 - torch.exp(-sigma * deltas)  # 불투명도
+    alpha = 1 - torch.exp(-sigma * deltas)  # Opacity
 
-    # 투과율: (1 - alpha)의 누적 곱
+    # Transmittance: cumulative product of (1 - alpha)
     transmittance = torch.cumprod(
         torch.cat([torch.ones(N, 1, device=device), 1 - alpha + 1e-10], dim=1),
         dim=1
@@ -252,10 +252,10 @@ def render_rays(network, rays_o, rays_d, near=2.0, far=6.0,
 
     weights = transmittance * alpha  # (N, n_samples)
 
-    # 색상의 가중 합
+    # Weighted sum of colors
     rgb = (weights.unsqueeze(-1) * rgb_raw).sum(dim=1)  # (N, 3)
 
-    # 깊이 추정
+    # Depth estimation
     depth = (weights * t_vals).sum(dim=1)  # (N,)
 
     return rgb, depth, weights
@@ -273,14 +273,14 @@ class NeRF(nn.Module):
 
     def __init__(self, pos_dim=63, dir_dim=27, hidden_dim=256, n_layers=8):
         super().__init__()
-        # pos_dim = 3 + 3*2*10 = 63 (위치 + L=10의 PE)
-        # dir_dim = 3 + 3*2*4 = 27 (방향 + L=4의 PE)
+        # pos_dim = 3 + 3*2*10 = 63 (position + PE with L=10)
+        # dir_dim = 3 + 3*2*4 = 27 (direction + PE with L=4)
 
-        # 위치 인코딩 레이어
+        # Position encoding layers
         layers = [nn.Linear(pos_dim, hidden_dim), nn.ReLU()]
         for i in range(1, n_layers):
             if i == 4:
-                # 레이어 4에서 스킵 연결
+                # Skip connection at layer 4
                 layers.append(nn.Linear(hidden_dim + pos_dim, hidden_dim))
             else:
                 layers.append(nn.Linear(hidden_dim, hidden_dim))
@@ -288,10 +288,10 @@ class NeRF(nn.Module):
 
         self.pos_layers = nn.ModuleList([l for l in layers if isinstance(l, nn.Linear)])
 
-        # 밀도 출력 (시점 독립적)
+        # Density output (view-independent)
         self.sigma_layer = nn.Linear(hidden_dim, 1)
 
-        # 색상 출력 (시점 의존적)
+        # Color output (view-dependent)
         self.feature_layer = nn.Linear(hidden_dim, hidden_dim)
         self.dir_layer = nn.Linear(hidden_dim + dir_dim, hidden_dim // 2)
         self.rgb_layer = nn.Linear(hidden_dim // 2, 3)
@@ -310,10 +310,10 @@ class NeRF(nn.Module):
                 x = torch.cat([x, pos_encoded], dim=-1)
             x = torch.relu(layer(x))
 
-        # 밀도 (방향 의존성 없음)
+        # Density (no direction dependency)
         sigma = self.sigma_layer(x)
 
-        # 색상 (시선 방향에 의존)
+        # Color (depends on viewing direction)
         features = self.feature_layer(x)
         x = torch.cat([features, dir_encoded], dim=-1)
         x = torch.relu(self.dir_layer(x))
@@ -386,7 +386,7 @@ L = Σ_pixels  ‖ C_rendered(r) - C_real(pixel) ‖²
 
 **왜 이것이 3D 기하를 학습하는가?** MLP가 **모든 뷰를 동시에 설명**해야 하기 때문. 단일 뷰는 많은 다른 밀도 분포로 설명될 수 있음 — 하지만 모든 뷰와 일관된 것은 올바른 3D 기하뿐. 다중 뷰 일관성이 밀도 필드가 실제 장면 기하와 일치하도록 강제하는 암묵적 감독.
 
-훈련은 알려진 **카메라 포즈**가 필요. 일반적으로 NeRF 훈련 전에 COLMAP(SFM, §22.F)으로 계산.
+훈련은 알려진 **카메라 포즈**가 필요. 일반적으로 NeRF 훈련 전에 COLMAP(SfM)으로 계산.
 
 ### 6.1 NeRF 학습
 
@@ -400,27 +400,29 @@ def train_nerf(model, images, poses, intrinsics, n_iterations=200000,
     H, W = images.shape[1:3]
     n_images = len(images)
 
+    np.random.seed(0)  # Reproducibility for sampling
+
     for iteration in range(n_iterations):
-        # 랜덤 이미지와 랜덤 픽셀 샘플링
+        # Sample random image and random pixels
         img_idx = np.random.randint(n_images)
         target_img = images[img_idx]
         pose = poses[img_idx]
 
-        # 랜덤 픽셀 좌표 샘플링
+        # Sample random pixel coordinates
         pixel_indices = np.random.choice(H * W, batch_size, replace=False)
         pixel_y = pixel_indices // W
         pixel_x = pixel_indices % W
 
-        # 선택된 픽셀에 대한 레이 생성
+        # Generate rays for selected pixels
         rays_o, rays_d = get_rays(H, W, intrinsics, pose, pixel_y, pixel_x)
 
-        # 목표 색상
+        # Target colors
         target_rgb = target_img[pixel_y, pixel_x]
 
-        # 렌더링
+        # Render
         pred_rgb, depth, weights = render_rays(model, rays_o, rays_d)
 
-        # MSE 손실
+        # MSE loss
         loss = ((pred_rgb - target_rgb) ** 2).mean()
 
         optimizer.zero_grad()
