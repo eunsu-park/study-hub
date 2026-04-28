@@ -38,15 +38,15 @@ Features are unique and repeatable points that can be detected in an image. Thes
 
 A useful keypoint must satisfy three properties — they are in tension, and every detector trades them off differently.
 
-#### A.1 Repeatability
+#### Repeatability
 
 The **same point** should be found in different views of the same scene. A corner of a window should be detected whether the photo is taken from straight on or from an angle, in bright light or dim, after the image has been compressed, or with a different camera. Without this, keypoints from two images of the same thing will not overlap, and matching becomes impossible.
 
-#### A.2 Distinctiveness
+#### Distinctiveness
 
 Each keypoint should look **different from most other points in the image**. If every keypoint has the same local appearance (e.g. all on a repeating texture), there is no way to tell which keypoint in image A corresponds to which in image B — matching becomes ambiguous.
 
-#### A.3 Locality
+#### Locality
 
 Keypoints should describe a **small region**, so that partial occlusion does not destroy them and so that descriptor computation is fast. Large-extent "features" make descriptors depend on content that may not be present in every image.
 
@@ -121,7 +121,7 @@ Types of Features:
 
 ### Theory: The Structure Tensor
 
-#### B.1 The central idea
+#### The central idea
 
 A corner is a point where intensity changes rapidly **in more than one direction**. Shifting a small window slightly in any direction should produce a large change in its contents. Formally, consider shifting a window by `(u, v)` around pixel `(x, y)` and measuring the sum-of-squared-differences:
 
@@ -146,7 +146,7 @@ E(u, v) ≈ Σ [ u · I_x + v · I_y ]²
 
 The 2×2 matrix `M` is the **structure tensor** (also called the second-moment matrix or autocorrelation matrix). It encodes how image intensity varies in the neighborhood and is the foundation of almost every corner detector.
 
-#### B.2 Reading the eigenvalues
+#### Reading the eigenvalues
 
 The eigenvalues `λ₁ ≥ λ₂` of `M` measure how fast `E` grows along the principal directions of the window:
 
@@ -158,7 +158,7 @@ The eigenvalues `λ₁ ≥ λ₂` of `M` measure how fast `E` grows along the pr
 
 So **corner detection reduces to finding pixels where both eigenvalues are large**. Different scalar combinations of `λ₁`, `λ₂` give different detectors.
 
-#### B.3 Computational detail
+#### Computational detail
 
 In practice `M` is computed with Sobel for `I_x`, `I_y`, with a Gaussian-weighted window for the sum. The Gaussian weighting (as opposed to uniform) gives smoother response and makes the detector less sensitive to the exact window size.
 
@@ -507,17 +507,17 @@ compare_fast_thresholds('building.jpg')
 
 Harris corners respond to corners **at the scale implied by the Sobel derivative window**. Zoom into the image and the "corner" might no longer look like a corner at the fixed window size — the same scene at different scales produces different detector outputs. This is a fatal problem if you want to match photos taken at different distances.
 
-#### D.1 The scale-space idea
+#### The scale-space idea
 
 Represent the image as a **continuous 3D stack** `L(x, y, σ)` — the original image convolved with Gaussian kernels of increasing `σ`. A keypoint is a location `(x, y, σ)` in this stack where some scale-characteristic response is maximized. The `σ` at the peak becomes the keypoint's **intrinsic scale** — how big the feature actually is in the image.
 
-#### D.2 Why Laplacian-of-Gaussian
+#### Why Laplacian-of-Gaussian
 
 Lindeberg showed that extrema of `σ²·∇²L(x, y, σ)` (the normalized LoG) correspond to the natural scales of blob-like structures. If you take a dark blob in a bright background and increase `σ`, the LoG response peaks exactly when `σ` matches the blob's size — giving you both location *and* scale.
 
-#### D.3 Why DoG in practice
+#### Why DoG in practice
 
-LoG is expensive to compute directly. As derived in §08.C.3, the **Difference-of-Gaussians** approximates scaled LoG:
+LoG is expensive to compute directly. As derived in Lesson 08 (Edge Detection), the **Difference-of-Gaussians** approximates scaled LoG:
 
 ```
 DoG(x, y; σ) = L(x, y; k·σ) - L(x, y; σ)  ≈  (k-1) · σ² · ∇²L(x, y, σ)
@@ -792,7 +792,7 @@ compare_sift_orb('object.jpg')
 
 Detecting a keypoint is half the problem — the other half is attaching a vector to it that makes it identifiable in another image. This is the **descriptor**. Two families dominate:
 
-#### E.1 Histogram-of-gradients descriptors (SIFT, SURF, HOG)
+#### Histogram-of-gradients descriptors (SIFT, SURF, HOG)
 
 Around each keypoint, compute gradient magnitude and orientation in a fixed-size patch (e.g. 16×16). Divide the patch into sub-cells (e.g. 4×4 grid of 4×4 pixel cells). In each sub-cell, build a histogram of gradient orientations weighted by magnitude, binned into e.g. 8 angular bins. Concatenate: `4×4×8 = 128` numbers. This is the SIFT descriptor.
 
@@ -802,7 +802,7 @@ Properties:
 - **Robust to small misalignments**: the histogram is insensitive to which exact pixel a gradient falls on, only which bin.
 - **Slow**: 128 `float32` values per keypoint, matched with Euclidean distance — expensive at scale.
 
-#### E.2 Binary descriptors (BRIEF, ORB, BRISK)
+#### Binary descriptors (BRIEF, ORB, BRISK)
 
 Around each keypoint, pre-select a set of pixel pairs (e.g. 256 pairs). For each pair `(p₁, p₂)`, the descriptor bit is `1 if I(p₁) < I(p₂) else 0`. Concatenate 256 bits into a 32-byte string.
 
