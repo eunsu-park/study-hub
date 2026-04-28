@@ -413,7 +413,7 @@ visualize_blob(blob)
 
 Object detection as done by YOLO and SSD is the neural generalization of §15's sliding window paradigm. Instead of a hand-crafted classifier at every position, **the entire image is fed through a CNN that outputs detections**.
 
-#### D.1 Anchors: learned candidate boxes
+#### Anchors: learned candidate boxes
 
 The detector doesn't regress arbitrary bounding boxes from pixels — that is too unconstrained. Instead, at each spatial location of a feature map, it checks against a **fixed set of anchor boxes** (typically 3-9, with predefined aspect ratios and sizes). For each anchor, the detector outputs:
 
@@ -423,18 +423,18 @@ The detector doesn't regress arbitrary bounding boxes from pixels — that is to
 
 YOLO divides the image into an `S × S` grid; SSD uses a feature pyramid with different anchor scales at different resolutions. Both output `(S × S × num_anchors × (5 + num_classes))` numbers — one row per anchor with the coordinates, objectness, and class probabilities.
 
-#### D.2 Post-processing
+#### Post-processing
 
 Raw output is redundant: the same object might be detected at multiple anchors with different scores. Standard post-processing:
 
 1. **Filter by objectness**: discard low-score predictions.
 2. **Multiply class probability by objectness** to get per-class confidence.
-3. **Apply NMS** (§15.E) per class to deduplicate.
+3. **Apply NMS** (see §15 NMS) per class to deduplicate.
 4. **Transform from feature-map coordinates back to image coordinates**.
 
 This is what `cv2.dnn.NMSBoxes` helps with, and why every neural detector tutorial looks similar — they all implement this pipeline.
 
-#### D.3 Anchor-free alternatives
+#### Anchor-free alternatives
 
 Recent detectors (FCOS, CenterNet, DETR) avoid anchors by regressing bounding boxes directly from each feature-map cell. They are simpler, slightly more accurate, and ONNX-exportable — you use them the same way in `cv2.dnn` as anchor-based models, just with different post-processing.
 
@@ -1112,7 +1112,7 @@ def compare_face_detectors(img):
 
 A model trained in PyTorch is stored as a PyTorch-specific graph. TensorFlow produces a different format. Caffe uses another. Running all of these inside OpenCV was originally implemented by having one parser per framework — a maintenance nightmare.
 
-**ONNX** (Open Neural Network Exchange) is a standardized graph format that all major training frameworks can export to. Export your PyTorch model to ONNX:
+**ONNX** (Open Neural Network Exchange) is a standardized graph format that most major training frameworks can export to. Export your PyTorch model to ONNX:
 
 ```python
 torch.onnx.export(model, dummy_input, 'model.onnx', opset_version=13)

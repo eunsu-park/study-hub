@@ -57,14 +57,14 @@ OpenCV가 "모델을 로드"할 때, 모델 파일(Caffe `.prototxt`+`.caffemode
 OpenCV DNN 모듈은 서로 다른 **백엔드**(어느 런타임 사용)와 **타겟**(어느 하드웨어)을 통해 계산을 라우팅할 수 있음:
 
 ```python
-net.setPreferableBackend(cv2.dnn.DNN_BACKEND_OPENCV)       # 기본
-net.setPreferableTarget(cv2.dnn.DNN_TARGET_CPU)            # 기본
+net.setPreferableBackend(cv2.dnn.DNN_BACKEND_OPENCV)       # default
+net.setPreferableTarget(cv2.dnn.DNN_TARGET_CPU)            # default
 
-# OpenVINO 가속 추론:
+# For OpenVINO-accelerated inference:
 net.setPreferableBackend(cv2.dnn.DNN_BACKEND_INFERENCE_ENGINE)
 net.setPreferableTarget(cv2.dnn.DNN_TARGET_MYRIAD)  # Intel Neural Compute Stick
 
-# CUDA GPU 추론:
+# For CUDA GPU inference:
 net.setPreferableBackend(cv2.dnn.DNN_BACKEND_CUDA)
 net.setPreferableTarget(cv2.dnn.DNN_TARGET_CUDA)
 ```
@@ -413,7 +413,7 @@ visualize_blob(blob)
 
 YOLO와 SSD가 하는 객체 검출은 §15 sliding window 패러다임의 신경망 일반화. 모든 위치에서 수작업 분류기 대신, **전체 이미지를 검출을 출력하는 CNN에 통과**시킵니다.
 
-#### D.1 Anchors: 학습된 후보 상자
+#### Anchors: 학습된 후보 상자
 
 검출기는 픽셀에서 임의의 경계 상자를 회귀하지 않음 — 너무 무제약. 대신 특징 맵의 각 공간 위치에서 **고정된 앵커 박스 집합**(보통 3-9, 미리 정의된 종횡비와 크기)에 대해 확인. 각 앵커에 대해 검출기 출력:
 
@@ -423,18 +423,18 @@ YOLO와 SSD가 하는 객체 검출은 §15 sliding window 패러다임의 신�
 
 YOLO는 이미지를 `S × S` 격자로 나눔; SSD는 서로 다른 해상도에서 서로 다른 앵커 스케일을 가진 feature pyramid 사용. 둘 다 `(S × S × num_anchors × (5 + num_classes))` 숫자를 출력 — 좌표, objectness, 클래스 확률을 가진 앵커당 한 행.
 
-#### D.2 후처리
+#### 후처리
 
 원시 출력은 중복적: 같은 객체가 서로 다른 점수의 여러 앵커에서 검출될 수 있음. 표준 후처리:
 
 1. **Objectness로 필터**: 낮은 점수 예측 버림.
 2. **클래스 확률에 objectness 곱하기**로 클래스별 신뢰도 획득.
-3. 중복 제거를 위해 클래스당 **NMS**(§15.E) 적용.
+3. 중복 제거를 위해 클래스당 **NMS**(§15 NMS 참고) 적용.
 4. **특징 맵 좌표를 이미지 좌표로 변환**.
 
 이것이 `cv2.dnn.NMSBoxes`가 돕는 것이며, 모든 신경 검출기 튜토리얼이 비슷하게 보이는 이유 — 모두 이 파이프라인을 구현.
 
-#### D.3 Anchor-free 대안
+#### Anchor-free 대안
 
 최근 검출기(FCOS, CenterNet, DETR)는 각 특징 맵 셀에서 경계 상자를 직접 회귀해 앵커를 피합니다. 더 단순, 약간 더 정확, ONNX 내보내기 가능 — `cv2.dnn`에서 anchor 기반 모델과 같은 방식으로 사용, 다만 후처리가 다름.
 
@@ -1112,7 +1112,7 @@ def compare_face_detectors(img):
 
 PyTorch에서 훈련된 모델은 PyTorch 특정 그래프로 저장됨. TensorFlow는 다른 포맷 생성. Caffe는 또 다른. OpenCV 내에서 이들 모두 실행은 원래 프레임워크당 파서 하나씩 구현했음 — 유지보수 악몽.
 
-**ONNX**(Open Neural Network Exchange)는 모든 주요 훈련 프레임워크가 내보낼 수 있는 표준화된 그래프 포맷. PyTorch 모델을 ONNX로 내보내기:
+**ONNX**(Open Neural Network Exchange)는 대부분의 주요 훈련 프레임워크가 내보낼 수 있는 표준화된 그래프 포맷. PyTorch 모델을 ONNX로 내보내기:
 
 ```python
 torch.onnx.export(model, dummy_input, 'model.onnx', opset_version=13)
