@@ -81,7 +81,7 @@ Mask R-CNN (He et al., 2017) extends Faster R-CNN (detection) by adding a **mask
 3. **Parallel heads**: classification, box regression, and **mask prediction** run in parallel on each RoI feature.
 4. Mask head outputs a `K × 28 × 28` binary mask (one per class); at test time, select the mask for the predicted class.
 
-#### B.1 RoIAlign: the key technical contribution
+#### RoIAlign: the key technical contribution
 
 The original RoI pooling in Faster R-CNN **discretizes** spatial coordinates — it rounds RoI boundaries and quantizes the pooled output. For classification this is fine (small misalignments don't hurt class prediction). For mask prediction it is catastrophic — pixel-level misalignment propagates into the mask shape.
 
@@ -89,7 +89,7 @@ The original RoI pooling in Faster R-CNN **discretizes** spatial coordinates —
 
 This single change (RoIAlign vs RoIPool) was worth ~5 points of mask AP — a huge improvement from what looks like a minor detail, showing how important sub-pixel alignment is for mask quality.
 
-#### B.2 Loss function
+#### Loss function
 
 Mask R-CNN trains with a multi-task loss:
 
@@ -225,7 +225,7 @@ RoIAlign solution:
 
 Two-stage methods like Mask R-CNN are accurate but slow. One-stage methods aim for real-time inference.
 
-#### C.1 YOLACT: Prototypes + Coefficients
+#### YOLACT: Prototypes + Coefficients
 
 YOLACT (Bolya et al., 2019) factorizes the instance segmentation problem:
 
@@ -235,7 +235,7 @@ YOLACT (Bolya et al., 2019) factorizes the instance segmentation problem:
 
 Because prototypes are image-wide and shared, the heavy computation is done once per image; per-instance work is just a linear combination. Real-time speed (~30 fps) with reasonable accuracy.
 
-#### C.2 SOLO: Per-Pixel Instance Prediction
+#### SOLO: Per-Pixel Instance Prediction
 
 SOLO (Wang et al., 2020) treats each spatial location on the feature map as a potential instance. At each grid cell, the network predicts:
 

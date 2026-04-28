@@ -1,4 +1,4 @@
-[이전: 시맨틱 세그멘테이션](./25_Semantic_Segmentation.md)
+[이전: 시맨틱 세그멘테이션](./25_Semantic_Segmentation.md) | [다음: 파놉틱 세그멘테이션](./27_Panoptic_Segmentation.md)
 
 ---
 
@@ -81,7 +81,7 @@ Mask R-CNN(He 등, 2017)은 Faster R-CNN(검출)을 **마스크 예측 분기** 
 3. **병렬 헤드**: 각 RoI 특징에 분류, 상자 회귀, **마스크 예측**이 병렬로 실행.
 4. 마스크 헤드가 `K × 28 × 28` 이진 마스크(클래스당 하나) 출력; 테스트 시 예측된 클래스의 마스크 선택.
 
-#### B.1 RoIAlign: 주요 기술적 기여
+#### RoIAlign: 주요 기술적 기여
 
 Faster R-CNN의 원래 RoI pooling은 공간 좌표를 **이산화** — RoI 경계를 반올림하고 풀링 출력을 양자화. 분류에는 괜찮음(작은 어긋남이 클래스 예측에 영향 안 줌). 마스크 예측에는 치명적 — 픽셀 수준 어긋남이 마스크 모양으로 전파.
 
@@ -89,7 +89,7 @@ Faster R-CNN의 원래 RoI pooling은 공간 좌표를 **이산화** — RoI 경
 
 이 단일 변경(RoIAlign vs RoIPool)이 ~5점 mask AP 향상의 가치 — 사소해 보이는 디테일에서 큰 개선, 마스크 품질에 서브픽셀 정렬이 얼마나 중요한지 보여줌.
 
-#### B.2 손실 함수
+#### 손실 함수
 
 Mask R-CNN은 다중 작업 손실로 훈련:
 
@@ -130,11 +130,11 @@ def get_mask_rcnn(n_classes, pretrained=True):
     """사용자 정의 클래스 수를 가진 Mask R-CNN 구축."""
     model = maskrcnn_resnet50_fpn_v2(pretrained=pretrained)
 
-    # Box predictor 교체
+    # Replace box predictor
     in_features = model.roi_heads.box_predictor.cls_score.in_features
     model.roi_heads.box_predictor = FastRCNNPredictor(in_features, n_classes)
 
-    # Mask predictor 교체
+    # Replace mask predictor
     in_features_mask = model.roi_heads.mask_predictor.conv5_mask.in_channels
     hidden_layer = 256
     model.roi_heads.mask_predictor = MaskRCNNPredictor(
@@ -152,12 +152,12 @@ def predict_masks(model, image, threshold=0.5, device='cuda'):
     with torch.no_grad():
         prediction = model([image.to(device)])[0]
 
-    # 신뢰도로 필터링
+    # Filter by confidence
     keep = prediction['scores'] > threshold
-    masks = prediction['masks'][keep]      # (N, 1, H, W) 이진 마스크
-    boxes = prediction['boxes'][keep]       # (N, 4) 바운딩 박스
-    labels = prediction['labels'][keep]     # (N,) 클래스 레이블
-    scores = prediction['scores'][keep]     # (N,) 신뢰도 점수
+    masks = prediction['masks'][keep]      # (N, 1, H, W) binary masks
+    boxes = prediction['boxes'][keep]       # (N, 4) bounding boxes
+    labels = prediction['labels'][keep]     # (N,) class labels
+    scores = prediction['scores'][keep]     # (N,) confidence scores
 
     return masks, boxes, labels, scores
 
@@ -176,19 +176,19 @@ def visualize_instances(image, masks, boxes, labels, scores, class_names):
     for i, (mask, box, label, score) in enumerate(
         zip(masks, boxes, labels, scores)
     ):
-        # 투명도를 적용한 마스크 오버레이
+        # Overlay mask with transparency
         m = mask[0].cpu().numpy() > 0.5
         color_mask = np.zeros_like(img)
         color_mask[m] = colors[i][:3]
         ax.imshow(color_mask, alpha=0.4)
 
-        # 바운딩 박스 그리기
+        # Draw bounding box
         x1, y1, x2, y2 = box.cpu().numpy()
         rect = plt.Rectangle((x1, y1), x2-x1, y2-y1,
                             fill=False, color=colors[i], linewidth=2)
         ax.add_patch(rect)
 
-        # 레이블
+        # Label
         name = class_names[label.item()] if class_names else str(label.item())
         ax.text(x1, y1-5, f'{name}: {score:.2f}',
                 color='white', fontsize=10,
@@ -225,7 +225,7 @@ RoIAlign 해결책:
 
 Mask R-CNN 같은 2단계 방법은 정확하지만 느림. 1단계 방법은 실시간 추론 목표.
 
-#### C.1 YOLACT: 프로토타입 + 계수
+#### YOLACT: 프로토타입 + 계수
 
 YOLACT(Bolya 등, 2019)는 인스턴스 세그멘테이션 문제를 분해:
 
@@ -235,7 +235,7 @@ YOLACT(Bolya 등, 2019)는 인스턴스 세그멘테이션 문제를 분해:
 
 프로토타입이 이미지 전역이고 공유되므로 무거운 계산은 이미지당 한 번; 인스턴스별 작업은 단지 선형 결합. 합리적 정확도로 실시간 속도(~30 fps).
 
-#### C.2 SOLO: 픽셀별 인스턴스 예측
+#### SOLO: 픽셀별 인스턴스 예측
 
 SOLO(Wang 등, 2020)은 특징 맵의 각 공간 위치를 잠재적 인스턴스로 취급. 각 그리드 셀에서 네트워크가 예측:
 
@@ -274,16 +274,16 @@ class YOLACTHead(torch.nn.Module):
         super().__init__()
         self.n_prototypes = n_prototypes
 
-        # 분류 헤드
+        # Classification head
         self.cls_head = torch.nn.Conv2d(in_channels, n_classes, 3, padding=1)
 
-        # 박스 회귀 헤드
+        # Box regression head
         self.box_head = torch.nn.Conv2d(in_channels, 4, 3, padding=1)
 
-        # 마스크 계수 헤드
+        # Mask coefficient head
         self.coeff_head = torch.nn.Sequential(
             torch.nn.Conv2d(in_channels, n_prototypes, 3, padding=1),
-            torch.nn.Tanh(),  # 계수 범위 [-1, 1]
+            torch.nn.Tanh(),  # Coefficients in [-1, 1]
         )
 
     def forward(self, features):
@@ -335,14 +335,14 @@ SOLOv2 개선:
 ### 5.1 COCO 형식 데이터셋
 
 ```python
-# 인스턴스 세그멘테이션을 위한 COCO 어노테이션 형식:
+# COCO annotation format for instance segmentation:
 # {
 #   "images": [{"id": 1, "file_name": "img.jpg", "width": 640, "height": 480}],
 #   "annotations": [{
 #     "id": 1,
 #     "image_id": 1,
 #     "category_id": 1,
-#     "segmentation": [[x1,y1,x2,y2,...,xn,yn]],  # 폴리곤 포인트
+#     "segmentation": [[x1,y1,x2,y2,...,xn,yn]],  # Polygon points
 #     "bbox": [x, y, w, h],
 #     "area": 1234.5,
 #     "iscrowd": 0
@@ -371,12 +371,12 @@ class COCOInstanceDataset(Dataset):
         img_id = self.ids[idx]
         img_info = self.coco.loadImgs(img_id)[0]
 
-        # 이미지 로드
+        # Load image
         img_path = f"{self.root}/{img_info['file_name']}"
         img = cv2.imread(img_path)
         img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
 
-        # 어노테이션 로드
+        # Load annotations
         ann_ids = self.coco.getAnnIds(imgIds=img_id, iscrowd=False)
         anns = self.coco.loadAnns(ann_ids)
 
@@ -385,11 +385,11 @@ class COCOInstanceDataset(Dataset):
         labels = []
 
         for ann in anns:
-            # 이진 마스크
+            # Binary mask
             mask = self.coco.annToMask(ann)
             masks.append(mask)
 
-            # 바운딩 박스 [x, y, w, h] → [x1, y1, x2, y2]
+            # Bounding box [x, y, w, h] → [x1, y1, x2, y2]
             x, y, w, h = ann['bbox']
             boxes.append([x, y, x + w, y + h])
 
@@ -460,11 +460,11 @@ def compute_ap(precisions, recalls):
     return ap / 101
 
 
-# COCO 평가 사용:
-# AP @ IoU=0.50:0.95 (10개 IoU 임계값에 대한 평균)
-# AP@50 (IoU 임계값 = 0.50, VOC처럼)
-# AP@75 (IoU 임계값 = 0.75, 더 엄격)
-# AP_small, AP_medium, AP_large (객체 크기별)
+# COCO evaluation uses:
+# AP @ IoU=0.50:0.95 (average over 10 IoU thresholds)
+# AP@50 (IoU threshold = 0.50, like VOC)
+# AP@75 (IoU threshold = 0.75, stricter)
+# AP_small, AP_medium, AP_large (by object size)
 ```
 
 ---
@@ -484,7 +484,7 @@ def count_and_measure_instances(model, image, class_names, device='cuda'):
         class_name = class_names[label_id.item()]
         n_instances = class_mask.sum().item()
 
-        # 각 인스턴스의 면적 측정
+        # Measure area of each instance
         areas = []
         for m in masks[class_mask]:
             area = (m > 0.5).sum().item()
