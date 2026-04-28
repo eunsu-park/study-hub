@@ -50,19 +50,19 @@ The solution is **iterative**: make an initial guess of camera motion (visual od
 
 ### Theory: Map Representations
 
-#### C.1 Sparse landmark map
+#### Sparse landmark map
 
 Store only the 3D positions of detected feature points (corners, edges). Each landmark has an associated appearance descriptor for re-recognition later. Compact — thousands of landmarks for a medium room. Used by ORB-SLAM and most visual SLAM systems.
 
-#### C.2 Dense occupancy grid
+#### Dense occupancy grid
 
 Voxelize 3D space and mark each voxel as occupied / free / unknown. Used by LiDAR SLAM and OctoMap. Better for path planning (robots care about free space) but much denser to store.
 
-#### C.3 Pose graph
+#### Pose graph
 
 Store only the camera poses, with edges representing relative pose constraints between poses. No explicit landmark map — the underlying 3D structure is implicit in the observations. Minimal memory, good for large-scale mapping.
 
-#### C.4 Factor graph (SLAM++ / iSAM / GTSAM)
+#### Factor graph (SLAM++ / iSAM / GTSAM)
 
 Generalizes the pose graph: nodes can be poses, landmarks, or other state variables; edges (factors) can encode any probabilistic constraint (odometry, feature observation, loop closure, IMU integration). Solved efficiently with nonlinear least-squares. This is the modern formulation underlying most SLAM systems.
 
@@ -202,10 +202,10 @@ The simplest form of SLAM uses only visual data. Visual odometry (VO) estimates 
 
 1. Detect features in frame `t` and frame `t+1` (§13).
 2. Match features across frames (§14).
-3. Compute the relative transform `[R_{t+1→t}, t_{t+1→t}]` from matched points using the essential matrix and RANSAC (§21.B).
+3. Compute the relative transform `[R_{t+1→t}, t_{t+1→t}]` from matched points using the essential matrix and RANSAC (see §21 epipolar geometry).
 4. Compose with the accumulated trajectory: `x_{t+1} = x_t · [R, t]`.
 
-#### B.1 Why it drifts
+#### Why it drifts
 
 Each frame-to-frame estimate has a small error. Over many frames these errors accumulate — a closed trajectory loop might start and end at different apparent positions even though in reality they were the same. This **drift** is the fundamental failure mode of pure visual odometry and is what loop closure is designed to correct.
 
@@ -902,9 +902,9 @@ def icp(source, target, max_iterations=50, tolerance=1e-6):
         target: Target point cloud (M x 3)
 
     Returns:
-        R: Rotation matrix (3 x 3)
-        t: Translation vector (3,)
-        transformed: Transformed source points
+        R_total: Accumulated rotation matrix (3 x 3)
+        t_total: Accumulated translation vector (3,)
+        src: Transformed source points after final iteration
     """
 
     src = source.copy()
@@ -1088,13 +1088,13 @@ class LiDARSLAM:
 
 When the camera returns to a previously-visited location, the accumulated drift must be detected and corrected. Loop closure has two stages:
 
-#### D.1 Detection
+#### Detection
 
 Recognize that the current frame looks like a much earlier frame. Classical approach: **bag-of-visual-words** (BoVW) — describe each image as a histogram of quantized feature descriptors, compare via cosine similarity or TF-IDF weighting. `DBoW2` is the standard implementation and what ORB-SLAM uses.
 
 Modern approach: **learned image embeddings** (NetVLAD, etc.) that explicitly train for place recognition. Better at handling appearance changes (different lighting, season) but heavier.
 
-#### D.2 Verification and correction
+#### Verification and correction
 
 After detection, verify geometrically (do the matched features produce a consistent transformation?) to rule out false positives, then add the loop closure constraint to the pose graph: "the current pose equals the earlier pose, up to a small correction". Run pose graph optimization to redistribute the accumulated drift across the whole trajectory.
 

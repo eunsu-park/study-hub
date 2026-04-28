@@ -50,19 +50,19 @@ SLAM (Simultaneous Localization and Mapping)은 로봇이나 자율주행 시스
 
 ### 이론: 지도 표현
 
-#### C.1 희소 랜드마크 지도
+#### 희소 랜드마크 지도
 
 검출된 특징점(코너, 에지)의 3D 위치만 저장. 각 랜드마크가 이후 재인식을 위한 연관 외관 디스크립터를 가짐. 컴팩트 — 중간 크기 방에 수천 개 랜드마크. ORB-SLAM과 대부분의 visual SLAM 시스템이 사용.
 
-#### C.2 밀집 점유 격자
+#### 밀집 점유 격자
 
 3D 공간을 voxel화해 각 voxel을 점유/비어있음/미지로 표시. LiDAR SLAM과 OctoMap이 사용. 경로 계획에 더 좋음(로봇이 비어있는 공간에 신경 씀) 하지만 저장에 훨씬 조밀.
 
-#### C.3 Pose graph
+#### Pose graph
 
 카메라 포즈만 저장, 포즈 간 상대 포즈 제약을 나타내는 에지. 명시적 랜드마크 지도 없음 — 기저 3D 구조는 관찰에 암묵적. 최소 메모리, 대규모 매핑에 좋음.
 
-#### C.4 Factor graph (SLAM++ / iSAM / GTSAM)
+#### Factor graph (SLAM++ / iSAM / GTSAM)
 
 Pose graph를 일반화: 노드가 포즈, 랜드마크, 또는 다른 상태 변수; 에지(factor)가 어떠한 확률적 제약(odometry, 특징 관찰, loop closure, IMU 통합)도 인코딩 가능. 비선형 최소제곱으로 효율적으로 풀이. 이것이 대부분 SLAM 시스템의 기저인 현대 공식화.
 
@@ -202,10 +202,10 @@ SLAM Method Classification:
 
 1. 프레임 `t`와 프레임 `t+1`에서 특징 검출(§13).
 2. 프레임 간 특징 매칭(§14).
-3. Essential matrix와 RANSAC을 써서 매칭된 점에서 상대 변환 `[R_{t+1→t}, t_{t+1→t}]` 계산(§21.B).
+3. Essential matrix와 RANSAC을 써서 매칭된 점에서 상대 변환 `[R_{t+1→t}, t_{t+1→t}]` 계산(§21 Epipolar 기하 참고).
 4. 누적 궤적과 결합: `x_{t+1} = x_t · [R, t]`.
 
-#### B.1 Drift하는 이유
+#### Drift하는 이유
 
 각 프레임 간 추정은 작은 오차를 가짐. 많은 프레임에 걸쳐 이 오차들이 누적 — 닫힌 궤적 루프가 실제로 같은 위치였음에도 다른 apparent 위치에서 시작하고 끝날 수 있음. 이 **drift**는 순수 visual odometry의 근본 실패 모드이며, loop closure가 보정하도록 설계된 것.
 
@@ -902,9 +902,9 @@ def icp(source, target, max_iterations=50, tolerance=1e-6):
         target: Target point cloud (M x 3)
 
     Returns:
-        R: Rotation matrix (3 x 3)
-        t: Translation vector (3,)
-        transformed: Transformed source points
+        R_total: Accumulated rotation matrix (3 x 3)
+        t_total: Accumulated translation vector (3,)
+        src: Transformed source points after final iteration
     """
 
     src = source.copy()
@@ -1088,13 +1088,13 @@ class LiDARSLAM:
 
 카메라가 이전에 방문한 위치로 돌아오면, 누적 drift를 검출하고 보정해야 함. Loop closure는 두 단계:
 
-#### D.1 검출
+#### 검출
 
 현재 프레임이 훨씬 이전 프레임과 비슷해 보이는 것을 인식. 고전적 접근: **bag-of-visual-words**(BoVW) — 각 이미지를 양자화된 특징 디스크립터의 히스토그램으로 기술, cosine 유사도 또는 TF-IDF 가중으로 비교. `DBoW2`가 표준 구현이며 ORB-SLAM이 쓰는 것.
 
 현대 접근: 장소 인식을 위해 명시적으로 훈련된 **학습된 이미지 임베딩**(NetVLAD 등). 외관 변화(다른 조명, 계절) 처리에 더 좋지만 더 무거움.
 
-#### D.2 검증과 보정
+#### 검증과 보정
 
 검출 후 기하학적으로 검증(매칭된 특징이 일관된 변환을 생성하는가?)해 거짓 양성을 배제, 그 다음 pose graph에 loop closure 제약 추가: "현재 포즈가 이전 포즈와 같음, 작은 보정까지". Pose graph 최적화를 돌려 전체 궤적에 누적 drift를 재분배.
 
