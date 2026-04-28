@@ -286,9 +286,9 @@ cv2.imshow('Detection', output)
 
 ### 이론: 얼굴 검출기
 
-#### B.1 Haar Cascade (2001)
+#### Haar Cascade (2001)
 
-Viola-Jones Haar cascade(§15.C). OpenCV의 사전 훈련된 `haarcascade_frontalface_default.xml`이 여전히 널리 쓰이는 이유:
+Viola-Jones Haar cascade(Lesson 15 §4 참고). OpenCV의 사전 훈련된 `haarcascade_frontalface_default.xml`이 여전히 널리 쓰이는 이유:
 
 - **빠름**: CPU에서 밀리초 규모 추론.
 - **외부 의존성 없음**: OpenCV에 포함.
@@ -296,15 +296,15 @@ Viola-Jones Haar cascade(§15.C). OpenCV의 사전 훈련된 `haarcascade_fronta
 
 한계: 측면 얼굴, 극한 조명 변화, 가림(안경, 마스크), 진한 화장, 비정면 포즈에서 실패. 정확도가 현대 검출기에 비해 오래됐습니다. 통제된 환경에만 사용.
 
-#### B.2 dlib HOG + SVM (2013)
+#### dlib HOG + SVM (2013)
 
-HOG 특징(§15.D) + linear SVM, 스케일 전반의 sliding window, NMS. Haar보다 정확, 특히 조명과 인종 전반에서, 여전히 실시간 CPU 사용에 충분히 빠름. Haar보다 나은 정확도가 필요하고 GPU를 감당할 수 없을 때 좋은 중간 선택.
+HOG 특징(Lesson 15 §6 참고) + linear SVM, 스케일 전반의 sliding window, NMS. Haar보다 정확, 특히 조명과 인종 전반에서, 여전히 실시간 CPU 사용에 충분히 빠름. Haar보다 나은 정확도가 필요하고 GPU를 감당할 수 없을 때 좋은 중간 선택.
 
-#### B.3 dlib MMOD CNN (2015)
+#### dlib MMOD CNN (2015)
 
 Max-Margin Object Detection with CNN. `dlib.cnn_face_detection_model_v1`. 측면 프로필과 가림을 HOG보다 훨씬 잘 처리, 실시간 성능에 GPU 필요. Sliding-window 스타일로 돌아가는 작은 파인튜닝된 CNN.
 
-#### B.4 MTCNN (2016)
+#### MTCNN (2016)
 
 Multi-Task Cascaded Convolutional Networks. 직렬의 세 CNN:
 
@@ -314,7 +314,7 @@ Multi-Task Cascaded Convolutional Networks. 직렬의 세 CNN:
 
 공동 검출 + 랜드마크 예측. 포즈 전반에서 강한 정확도, 중간 속도. 가장 널리 배포된 얼굴 검출기 중 하나.
 
-#### B.5 RetinaFace / SCRFD (2019–2021)
+#### RetinaFace / SCRFD (2019–2021)
 
 얼굴을 위한 현대 single-shot 검출기, feature pyramid network와 얼굴 특화 회귀 헤드를 결합. WIDER FACE 벤치마크에서 최고 정확도, 극단 포즈, 작은 얼굴, 가림 처리. 최고 정확도가 필요하고 계산을 감당할 수 있을 때의 주 선택.
 
@@ -427,7 +427,7 @@ dlib CNN Detector:
 
 랜드마크가 후단의 정렬과 속성 분석 단계를 가능하게 합니다. 또한 얼굴 메이크업(입술 랜드마크 내부 색 채움), 얼굴 교체(한 얼굴의 랜드마크를 다른 얼굴에 워프), 감정 인식(특정 랜드마크가 중립에서 얼마나 벗어나는지 측정) 같은 응용을 직접 지원합니다.
 
-#### C.1 dlib 검출기 뒤의 알고리즘
+#### dlib 검출기 뒤의 알고리즘
 
 dlib은 **Ensemble of Regression Trees**(Kazemi & Sullivan, 2014)를 사용. 평균 얼굴 모양으로 시작. 캐스케이드 회귀로 랜드마크 위치를 반복적으로 정제:
 
@@ -441,7 +441,7 @@ dlib은 **Ensemble of Regression Trees**(Kazemi & Sullivan, 2014)를 사용. 평
 
 검출이 경계 상자를, 랜드마크가 눈과 입 위치를 줍니다. 정렬은 **검출된 얼굴을 표준 포즈로 워프** — 두 눈이 고정 위치에 있고 얼굴이 세워져 있고 표준 스케일. 이것이 후단 인식을 스케일, 이동, 회전 불변으로 만드는 핵심 단계입니다.
 
-표준 절차: 검출된 눈 위치를 표준 눈 위치로 매핑하는 2D 유사 변환(회전 + 스케일 + 이동, 4 DoF, §04.A) 계산. 이 변환을 얼굴 크롭에 적용. 정렬된 출력의 속성:
+표준 절차: 검출된 눈 위치를 표준 눈 위치로 매핑하는 2D 유사 변환(회전 + 스케일 + 이동, 4 DoF; Lesson 04 기하학적 변환 참고) 계산. 이 변환을 얼굴 크롭에 적용. 정렬된 출력의 속성:
 
 - 두 눈이 같은 수평선상.
 - 눈 사이 거리가 표준 값(예: 80 픽셀)으로 고정.
@@ -622,12 +622,14 @@ class FaceLandmarkAnalyzer:
 
     def eye_aspect_ratio(self, eye_points):
         """Compute Eye Aspect Ratio (EAR) - used for drowsiness detection"""
-        # EAR = (vertical_height) / (horizontal_width) — a scale-invariant ratio.
-        # Dividing by the horizontal distance normalizes for face size, so the
-        # same threshold (~0.2) signals a closed eye whether the face is near or far.
+        # EAR = (A + B) / (2 * C), where A, B are two vertical eyelid distances
+        # and C is the horizontal eye width. Dividing by horizontal width makes
+        # the ratio scale-invariant, so the same threshold (~0.2) signals a
+        # closed eye regardless of how near or far the face is.
+        # A, B: two vertical distances (averaged to handle asymmetric eye shapes)
         A = dist.euclidean(eye_points[1], eye_points[5])
         B = dist.euclidean(eye_points[2], eye_points[4])
-        # Average two vertical measurements to handle asymmetric eye shapes
+        # C: horizontal distance (eye width)
         C = dist.euclidean(eye_points[0], eye_points[3])
 
         ear = (A + B) / (2.0 * C)
@@ -707,13 +709,13 @@ if analysis:
 
 목표: 두 얼굴 이미지가 주어지면 같은 사람인지 결정. 현대 접근은 이를 **metric learning** 문제로 변환 — 동일 신원 벡터는 가깝고 다른 신원 벡터는 멀도록 얼굴당 고정 크기 벡터를 계산.
 
-#### E.1 LBPH (Local Binary Patterns Histograms)
+#### LBPH (Local Binary Patterns Histograms)
 
 고전 접근. 각 픽셀에서 LBP 코드 계산: 8개 이웃 각각을 중심 값에 대해 임계처리해 8비트 이진수 생성. 얼굴의 겹치지 않는 셀 전체에 이 코드의 히스토그램 구축; 셀을 특징 벡터로 연결. 두 얼굴을 특징 히스토그램 간 χ² 거리로 비교.
 
 단순, 등록(사람당 몇 장 이미지)을 넘는 훈련 데이터 불필요, 작은 closed-set 식별에 OK 작동. 딥 임베딩만큼 조명이나 연령을 전반에 걸쳐 잘 일반화하지 못함.
 
-#### E.2 딥 얼굴 임베딩
+#### 딥 얼굴 임베딩
 
 현대 접근: metric-learning 손실(triplet loss, ArcFace, CosFace)로 훈련된 CNN이 고정 크기 임베딩(보통 128 또는 512차원)을 생성. 훈련 데이터: 신원 레이블이 붙은 수백만 얼굴; 손실은 동일 신원 임베딩이 가깝고(내적 ≥ 임계값) 다른 신원 임베딩이 멀도록(내적 ≤ 임계값) 유도.
 

@@ -286,9 +286,9 @@ cv2.imshow('Detection', output)
 
 ### Theory: Face Detectors
 
-#### B.1 Haar Cascade (2001)
+#### Haar Cascade (2001)
 
-Viola-Jones Haar cascade (§15.C). The pre-trained `haarcascade_frontalface_default.xml` in OpenCV is still widely used because:
+Viola-Jones Haar cascade (see Lesson 15 §4). The pre-trained `haarcascade_frontalface_default.xml` in OpenCV is still widely used because:
 
 - **Fast**: millisecond-scale inference on CPU.
 - **No external dependencies**: ships with OpenCV.
@@ -296,15 +296,15 @@ Viola-Jones Haar cascade (§15.C). The pre-trained `haarcascade_frontalface_defa
 
 Limitations: fails on side profiles, severe lighting changes, occlusion (glasses, masks), heavy makeup, non-frontal poses. Accuracy has aged poorly compared to modern detectors. Use only for controlled environments.
 
-#### B.2 dlib HOG + SVM (2013)
+#### dlib HOG + SVM (2013)
 
-HOG features (§15.D) + linear SVM, sliding window over scales, followed by NMS. More accurate than Haar, especially across lighting and ethnicity, still fast enough for real-time CPU use. Good middle-ground choice when you need better accuracy than Haar but cannot afford GPU.
+HOG features (see Lesson 15 §6) + linear SVM, sliding window over scales, followed by NMS. More accurate than Haar, especially across lighting and ethnicity, still fast enough for real-time CPU use. Good middle-ground choice when you need better accuracy than Haar but cannot afford GPU.
 
-#### B.3 dlib MMOD CNN (2015)
+#### dlib MMOD CNN (2015)
 
 Max-Margin Object Detection with a CNN. `dlib.cnn_face_detection_model_v1`. Handles side profiles and occlusion much better than HOG, needs GPU for real-time performance. A small fine-tuned CNN running sliding-window-style.
 
-#### B.4 MTCNN (2016)
+#### MTCNN (2016)
 
 Multi-Task Cascaded Convolutional Networks. Three CNNs in series:
 
@@ -314,7 +314,7 @@ Multi-Task Cascaded Convolutional Networks. Three CNNs in series:
 
 Joint detection + landmark prediction. Strong accuracy across poses, moderate speed. One of the most widely deployed face detectors.
 
-#### B.5 RetinaFace / SCRFD (2019–2021)
+#### RetinaFace / SCRFD (2019–2021)
 
 Modern single-shot detectors for faces, combining feature pyramid networks with face-specific regression heads. State-of-the-art accuracy on WIDER FACE benchmark, handles extreme poses, tiny faces, occlusion. Main choice when you need peak accuracy and can afford the compute.
 
@@ -427,7 +427,7 @@ A **landmark** is a semantically meaningful point on a face: corner of an eye, t
 
 Landmarks are what enable the alignment and attribute-analysis stages downstream. They also directly support applications like face makeup (color fill inside lip landmarks), face swap (warp one face's landmarks onto another's), and emotion recognition (measure how far certain landmarks deviate from neutral).
 
-#### C.1 The algorithm behind dlib's detector
+#### The algorithm behind dlib's detector
 
 dlib uses **Ensemble of Regression Trees** (Kazemi & Sullivan, 2014). Start with the mean face shape. Iteratively refine the landmark positions by cascaded regression:
 
@@ -441,7 +441,7 @@ Fast (tree lookup + offset, no neural network) and accurate on frontal faces. Le
 
 Detection gives a bounding box; landmarks give eye and mouth positions. Alignment **warps the detected face into a canonical pose** where the two eyes are at fixed positions and the face is upright and at a standard scale. This is the key step that makes downstream recognition scale-, translation-, and rotation-invariant.
 
-Standard procedure: compute a 2D similarity transform (rotation + scale + translation, 4 DoF, §04.A) that maps detected eye positions to canonical eye positions. Apply this transform to the face crop. The aligned output has properties:
+Standard procedure: compute a 2D similarity transform (rotation + scale + translation, 4 DoF; see Lesson 04 on geometric transformations) that maps detected eye positions to canonical eye positions. Apply this transform to the face crop. The aligned output has properties:
 
 - Both eyes on the same horizontal line.
 - Eye-to-eye distance fixed at a canonical value (e.g. 80 pixels).
@@ -622,12 +622,14 @@ class FaceLandmarkAnalyzer:
 
     def eye_aspect_ratio(self, eye_points):
         """Compute Eye Aspect Ratio (EAR) - used for drowsiness detection"""
-        # EAR = (vertical_height) / (horizontal_width) — a scale-invariant ratio.
-        # Dividing by the horizontal distance normalizes for face size, so the
-        # same threshold (~0.2) signals a closed eye whether the face is near or far.
+        # EAR = (A + B) / (2 * C), where A, B are two vertical eyelid distances
+        # and C is the horizontal eye width. Dividing by horizontal width makes
+        # the ratio scale-invariant, so the same threshold (~0.2) signals a
+        # closed eye regardless of how near or far the face is.
+        # A, B: two vertical distances (averaged to handle asymmetric eye shapes)
         A = dist.euclidean(eye_points[1], eye_points[5])
         B = dist.euclidean(eye_points[2], eye_points[4])
-        # Average two vertical measurements to handle asymmetric eye shapes
+        # C: horizontal distance (eye width)
         C = dist.euclidean(eye_points[0], eye_points[3])
 
         ear = (A + B) / (2.0 * C)
@@ -707,13 +709,13 @@ if analysis:
 
 The goal: given two face images, decide whether they depict the same person. The modern approach converts this into a **metric learning** problem — compute a fixed-size vector per face such that same-identity vectors are close and different-identity vectors are far.
 
-#### E.1 LBPH (Local Binary Patterns Histograms)
+#### LBPH (Local Binary Patterns Histograms)
 
 Classical approach. At each pixel, compute the LBP code: threshold each of the 8 neighbors against the center value, producing an 8-bit binary number. Build a histogram of these codes over non-overlapping cells of the face; concatenate cells into a feature vector. Compare two faces by χ² distance between their feature histograms.
 
 Simple, no training data needed beyond enrollment (a few images per person), works OK for small closed-set identification. Doesn't generalize across lighting or age as well as deep embeddings.
 
-#### E.2 Deep face embeddings
+#### Deep face embeddings
 
 Modern approach: a CNN trained with a metric-learning loss (triplet loss, ArcFace, CosFace) produces a fixed-size embedding (typically 128 or 512 dimensions). Training data: millions of faces with identity labels; the loss encourages same-identity embeddings to be close (inner-product ≥ threshold) and different-identity embeddings to be far apart (inner-product ≤ threshold).
 
