@@ -63,7 +63,7 @@ A learned depth model doesn't need these stated explicitly — training with eno
 
 ### Theory: Relative vs Metric Depth
 
-Because of the scale ambiguity (§A), monocular models fundamentally cannot output metric depth (distances in meters). What they can output:
+Because of the scale ambiguity (covered above under Ill-Posedness), monocular models fundamentally cannot output metric depth (distances in meters). What they can output:
 
 - **Relative depth**: consistent ordering ("A is closer than B") and approximate ratios, but not absolute scale.
 - **Inverse depth (disparity)**: `1/Z` in arbitrary units. Convenient because it compresses the range (far objects have inverse depth near zero).
@@ -510,7 +510,12 @@ class DPTDepthEstimator:
         return depth
 
     def get_metric_depth(self, depth, scale=10.0):
-        """Relative depth → Metric depth conversion (approximation)"""
+        """Relative depth → Metric depth conversion (approximation).
+
+        Calibrate `scale`: pick a reference pixel with known true distance
+        Z_ref (meters), read its predicted value d_ref, then set
+        scale = Z_ref * (d_ref + 1e-6).
+        """
 
         # MiDaS/DPT outputs *inverse* relative depth: high values = close objects.
         # The stereo formula Z = f*b/d shows depth is inversely proportional to

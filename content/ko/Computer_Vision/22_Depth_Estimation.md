@@ -63,7 +63,7 @@
 
 ### 이론: 상대 vs 절대 깊이
 
-스케일 모호성(§A) 때문에, 단안 모델은 근본적으로 절대 깊이(미터 단위 거리)를 출력할 수 없음. 출력 가능한 것:
+스케일 모호성(앞서 다룬 불량 설정성) 때문에, 단안 모델은 근본적으로 절대 깊이(미터 단위 거리)를 출력할 수 없음. 출력 가능한 것:
 
 - **상대 깊이**: 일관된 순서("A가 B보다 가까움")와 근사 비율, 하지만 절대 스케일은 아님.
 - **역 깊이(disparity)**: 임의 단위의 `1/Z`. 범위를 압축하므로 편리(먼 객체가 0에 가까운 역 깊이).
@@ -510,7 +510,12 @@ class DPTDepthEstimator:
         return depth
 
     def get_metric_depth(self, depth, scale=10.0):
-        """Relative depth → Metric depth conversion (approximation)"""
+        """Relative depth → Metric depth conversion (approximation).
+
+        Calibrate `scale`: pick a reference pixel with known true distance
+        Z_ref (meters), read its predicted value d_ref, then set
+        scale = Z_ref * (d_ref + 1e-6).
+        """
 
         # MiDaS/DPT outputs *inverse* relative depth: high values = close objects.
         # The stereo formula Z = f*b/d shows depth is inversely proportional to
