@@ -259,7 +259,7 @@ Choosing a threshold manually requires inspecting each image, which is impractic
 
 Otsu's method (1979) picks the threshold `T*` that best separates the two classes, *using only the histogram*. It is parameter-free and, under the bimodal-histogram assumption above, gives near-optimal results.
 
-#### B.1 The objective function
+#### The objective function
 
 For any candidate threshold `t`, partition the pixels into two classes `C₀ = { p : I(p) ≤ t }` and `C₁ = { p : I(p) > t }`. Let:
 
@@ -275,7 +275,7 @@ Otsu defines the **intra-class variance** (within-class spread):
 
 A good threshold makes each class tight — small variance within each group. Otsu picks `T* = argmin_t σ_W²(t)`.
 
-#### B.2 The inter-class variance shortcut
+#### The inter-class variance shortcut
 
 Computing `σ_W²` at every `t` is expensive because both variances must be recalculated. A key identity decomposes the total variance `σ²` (constant for the image) into:
 
@@ -285,7 +285,7 @@ Computing `σ_W²` at every `t` is expensive because both variances must be reca
 
 where `σ_B²(t) = ω₀(t) · ω₁(t) · (μ₁(t) - μ₀(t))²` is the **inter-class variance**. Since `σ²` is constant, **minimizing `σ_W²` is equivalent to maximizing `σ_B²`**. And `σ_B²` needs only the class fractions and means, which can be updated incrementally as `t` sweeps from 0 to 255 — one pass over the 256-bin histogram is enough.
 
-#### B.3 When Otsu fails
+#### When Otsu fails
 
 The derivation assumes the histogram is bimodal. If it is not — a purely foreground image with no background, a noisy gradient with no clear peaks, a three-modal scene — Otsu still returns *some* threshold, but it may be meaningless. Good practice: plot the histogram and visually verify bimodality before trusting the automatic choice.
 
@@ -422,17 +422,17 @@ B(x, y) = 1  if I(x, y) > T(x, y)
 
 The statistic `f` and the constant `C` control the behavior.
 
-#### D.1 Mean adaptive (`ADAPTIVE_THRESH_MEAN_C`)
+#### Mean adaptive (`ADAPTIVE_THRESH_MEAN_C`)
 
 `f` is the arithmetic mean of the window. Local threshold = local mean minus `C`. This is the computationally cheapest option — uses a box filter (§05) internally.
 
 Effect: the threshold tracks the local background brightness. A dark region has a low threshold; a bright region has a high threshold. Ink that is "darker than its surroundings" by at least `C` becomes foreground, regardless of absolute intensity. This works even when global illumination varies wildly.
 
-#### D.2 Gaussian adaptive (`ADAPTIVE_THRESH_GAUSSIAN_C`)
+#### Gaussian adaptive (`ADAPTIVE_THRESH_GAUSSIAN_C`)
 
 `f` is a Gaussian-weighted mean — nearby pixels count more than distant ones. Uses Gaussian blur internally. More accurate than the flat-mean version because the weighting reduces edge artifacts where the window overlaps both bright and dark regions, but slightly more expensive.
 
-#### D.3 Choosing window size and `C`
+#### Choosing window size and `C`
 
 - **Window size** should be larger than the foreground features you want to detect, but smaller than the scale of illumination variation. For text, a window a few times the character height works. Too small a window makes the threshold track the foreground itself (everything becomes gray); too large a window collapses back to global thresholding.
 - **`C`** is a bias that moves the threshold away from the local mean toward "a little bit darker". Larger `C` → only strongly darker-than-background pixels classify as foreground (cleaner but may lose faint features). Typical values: 2–15 for 8-bit images.
@@ -623,15 +623,15 @@ plt.show()
 
 ### Theory: Beyond Binary Global Thresholding
 
-#### E.1 Multi-level thresholding
+#### Multi-level thresholding
 
-Some scenes are naturally three-or-more classed (e.g. sky, foliage, building). Multi-Otsu generalizes §B to partition the histogram into `k` classes by maximizing the sum of pairwise inter-class variances. OpenCV doesn't include it directly; `skimage.filters.threshold_multiotsu` does.
+Some scenes are naturally three-or-more classed (e.g. sky, foliage, building). Multi-Otsu generalizes the inter-class variance formulation introduced above to partition the histogram into `k` classes by maximizing the sum of pairwise inter-class variances. OpenCV doesn't include it directly; `skimage.filters.threshold_multiotsu` does.
 
-#### E.2 Color thresholding with `inRange`
+#### Color thresholding with `inRange`
 
 When the discriminating feature isn't intensity but color, `cv2.inRange(img, lower, upper)` thresholds each channel independently and ANDs the results — keeping pixels whose values fall inside a box in color space. In HSV (§03), this box becomes a "hue slab at sufficient saturation and brightness", which is how color-based object segmentation typically works.
 
-#### E.3 Hysteresis thresholding
+#### Hysteresis thresholding
 
 A single threshold forces every pixel into a hard classification; pixels right at `T` are arbitrary. Hysteresis uses *two* thresholds `T_low < T_high`: a pixel above `T_high` is certainly foreground; a pixel below `T_low` is certainly background; pixels in between are foreground only if connected to a sure-foreground pixel. This is how Canny (§08) handles the final edge linking step, and it generalizes to thresholding in any domain where the decision at the middle values should depend on neighbors.
 
@@ -643,7 +643,12 @@ import numpy as np
 
 def multi_threshold(img, thresholds):
     """
-    Multi-level thresholding
+    Multi-level thresholding with manually chosen thresholds.
+
+    For an automatic data-driven choice (the Multi-Otsu generalization
+    discussed above), use `skimage.filters.threshold_multiotsu`, which
+    is the production-ready implementation. This function exists only to
+    illustrate the mapping from a list of thresholds to a labeled image.
 
     Parameters:
     - img: Grayscale image
