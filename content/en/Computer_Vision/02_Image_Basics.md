@@ -36,7 +36,7 @@ After completing this lesson, you will be able to:
 
 ### Theory: From a Scene to an Array: Sampling and Quantization
 
-#### A.1 The continuous image model
+#### The continuous image model
 
 Before a camera is involved, an image is a **continuous 2D function**
 
@@ -46,7 +46,7 @@ f : ℝ² → ℝᶜ          (grayscale: c = 1; color: c = 3)
 
 that assigns a light intensity (or a color triple) to every point in some region of the image plane. The real world is continuous in both position and intensity. Converting this to something a computer can store requires two discretization steps.
 
-#### A.2 Sampling — making position discrete
+#### Sampling — making position discrete
 
 A camera's sensor consists of a finite grid of photosites. Each photosite integrates the light arriving over a small rectangular footprint and reports a single number. Mathematically, this is **sampling** the continuous function `f(x, y)` at integer grid points:
 
@@ -58,7 +58,7 @@ where `Δ` is the pixel pitch and `w` is the sensor's point-spread function. The
 
 What gets lost in this step: **frequencies above the Nyquist rate** (`1 / 2Δ`). Any detail finer than two pixels cannot be represented faithfully by the samples. If the lens fails to remove these high frequencies before they hit the sensor, they **alias** into visible low-frequency moiré patterns. This is why proper downsampling needs a low-pass filter first (the `INTER_AREA` rule from lesson 04) — and why photographers care about Bayer demosaicing and anti-alias filters.
 
-#### A.3 Quantization — making intensity discrete
+#### Quantization — making intensity discrete
 
 The sensor output is still a (noisy) real number. Storing it requires choosing a finite set of levels. For an 8-bit unsigned image, the real-valued signal `s ∈ [0, 1]` is mapped to
 
@@ -75,7 +75,7 @@ Two strategies break the banding:
 
 ### Theory: Color Channels — and Why OpenCV Uses BGR
 
-#### D.1 A color image is three grayscale images
+#### A color image is three grayscale images
 
 A color image stores three values per pixel — typically one each for red, green, and blue channels. These three values form three parallel "grayscale" 2D arrays, stacked along a third axis:
 
@@ -89,7 +89,7 @@ img[:, :, 2]              # → the full red channel
 
 The idea generalizes: 4-channel images add an alpha channel for transparency (`shape == (H, W, 4)`), and multispectral / hyperspectral images can have dozens or hundreds of channels.
 
-#### D.2 Why BGR instead of RGB
+#### Why BGR instead of RGB
 
 OpenCV's `imread` and `imshow` use **BGR** (blue-green-red) channel order, while almost every other library (PIL, matplotlib, TensorFlow, PyTorch, web standards) uses RGB. The reason is historical: early 24-bit Windows bitmap files stored pixels in the `blue, green, red` byte order (little-endian representation of the 3-byte pixel), and OpenCV mirrored that layout to allow zero-copy loading of BMPs on Windows. Once code depended on it, the convention froze.
 
@@ -428,7 +428,7 @@ for q in qualities:
 
 ### Theory: Bit Depth and Dynamic Range
 
-#### C.1 The default: `uint8`
+#### The default: `uint8`
 
 OpenCV's default image dtype is `numpy.uint8` — 8 bits per channel, 256 levels per channel, range `[0, 255]`. It matches display hardware (most monitors only show 256 levels per channel) and is what every standard image format (JPEG, PNG-8, BMP) stores.
 
@@ -438,7 +438,7 @@ Consequences to remember:
 - **Subtraction saturates at 0 — or wraps, depending on the operator.** Same rule.
 - **Float operations must be converted back carefully.** Divide by 255 to get `[0, 1]` floats, do the math, then multiply by 255 and clip before casting back to `uint8`. Forgetting the clip produces inverted-looking outputs where pixels wrap past 255.
 
-#### C.2 When 8 bits is not enough
+#### When 8 bits is not enough
 
 - **Raw camera data** (12-14 bits) contains detail in shadows and highlights that gets clipped by 8-bit conversion.
 - **Medical images** (CT, MRI) are routinely 12-16 bits per channel — the diagnostic information is in the extra bits.
