@@ -6,7 +6,7 @@ OpenCV(Open Source Computer Vision Library)는 실시간 컴퓨터 비전을 위
 
 **난이도**: ⭐ (입문)
 
-## 학습 목표(Learning Objectives)
+## 학습 목표
 
 이 레슨을 완료하면 다음을 할 수 있습니다:
 
