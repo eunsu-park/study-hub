@@ -38,7 +38,7 @@ Camera calibration is the process of measuring a camera's internal parameters an
 
 ### Theory: The Pinhole Camera Model
 
-#### A.1 The ideal projection
+#### The ideal projection
 
 A pinhole camera projects a 3D point `X = (X, Y, Z)` in world coordinates onto a 2D image plane by drawing a straight line from the point through the pinhole (the optical center). Choosing the pinhole as the origin and aligning the optical axis with `Z`:
 
@@ -49,7 +49,7 @@ y = f · Y / Z           image-plane y in metric units
 
 where `f` is the **focal length** — the distance from the pinhole to the image plane. The geometry is just similar triangles; deeper points land closer to the optical axis by a factor of `Z`.
 
-#### A.2 From image plane to pixels
+#### From image plane to pixels
 
 The image plane is a continuous 2D space in metric units (millimeters). Pixels are discrete and indexed from the top-left corner, not from the optical axis. Converting:
 
@@ -62,9 +62,9 @@ Here `(c_x, c_y)` is the **principal point** — the image coordinate where the 
 
 `f_x` and `f_y` separate because pixel pitch may differ horizontally and vertically (rare in modern sensors, but the parametrization costs nothing and accommodates it).
 
-#### A.3 The intrinsic / extrinsic split
+#### The intrinsic / extrinsic split
 
-Combining §A.1 and §A.2, and writing things in homogeneous coordinates:
+Combining the ideal projection with the pixel mapping above, and writing things in homogeneous coordinates:
 
 ```
 s · [u, v, 1]ᵀ  =  K · [R | t] · [X, Y, Z, 1]ᵀ
@@ -205,7 +205,7 @@ s *  │ u │   =   │ fx   0   cx │ * │ R | t │ * │ X │
 
 Real lenses are not ideal pinholes. Even well-corrected optics produce:
 
-#### C.1 Radial distortion
+#### Radial distortion
 
 Light bends slightly differently at the edge of a lens than at the center, producing:
 
@@ -221,9 +221,9 @@ y_d = y_n · (1 + k₁·r² + k₂·r⁴ + k₃·r⁶)
 where r² = x_n² + y_n²
 ```
 
-Three coefficients `k₁`, `k₂`, `k₃` suffice for most lenses. Fisheye lenses need a different model (§E in OpenCV's `fisheye` namespace).
+Three coefficients `k₁`, `k₂`, `k₃` suffice for most lenses. Fisheye lenses need a different model (OpenCV's `fisheye` namespace).
 
-#### C.2 Tangential distortion
+#### Tangential distortion
 
 If the lens and sensor are not perfectly parallel, points get displaced in a way that isn't purely radial:
 
@@ -234,7 +234,7 @@ y_d = y_n + p₁·(r² + 2·y_n²) + 2·p₂·x_n·y_n
 
 Two coefficients `p₁`, `p₂`. Usually small; sometimes fixed to zero in the calibration model.
 
-#### C.3 The full distortion vector
+#### The full distortion vector
 
 OpenCV stores `dist = [k₁, k₂, p₁, p₂, k₃]` (5 parameters, in that order) by default, with optional extensions for thin-prism distortion and high-distortion wide-angle lenses.
 
@@ -513,27 +513,27 @@ obj_points, img_points, img_size = collect_calibration_points(
 
 ### Theory: Zhang's Method: Calibration from Planar Patterns
 
-#### D.1 The problem
+#### The problem
 
 We want to estimate `K`, `dist`, and the per-view `[R | t]` from images of a known object. Before Zhang's breakthrough, calibration required a precisely manufactured 3D rig (expensive, fragile). Zhang (1999) showed that **multiple images of a flat planar pattern** at different orientations are enough.
 
-#### D.2 The key observation
+#### The key observation
 
 A planar calibration pattern — a checkerboard — has all `Z = 0` in its own coordinate frame. Substituting into the projection equation with `Z = 0` reduces the `3×4` matrix `[R | t]` to a `3×3` matrix that maps `(X, Y)` planar coordinates to `(u, v)` image coordinates. That 3×3 matrix is a **homography** (same object as §04 perspective transforms).
 
 Each image of the checkerboard gives you a homography, recoverable from the detected corner correspondences. Zhang showed that multiple homographies from multiple orientations are enough to algebraically separate `K` (shared across all views) from `[R | t]` (different per view).
 
-#### D.3 The algorithm
+#### The algorithm
 
 1. **Detect corners** in each checkerboard image (`findChessboardCorners`).
 2. **Solve for the homography** `H_i` mapping pattern plane to image for each view `i`. Linear least-squares from ≥ 4 corner correspondences.
 3. **Extract `K`** by imposing that the columns of `K⁻¹ · H` must be orthonormal (rotation matrix columns) — this gives 2 constraints per view, enough to solve for the 5 intrinsic parameters with ≥ 3 views.
 4. **Extract `[R_i | t_i]`** for each view from `K⁻¹ · H_i`.
-5. **Bundle adjustment**: nonlinear refinement using the **reprojection error** as objective (§E). Distortion parameters are included in this step since they cannot be handled linearly.
+5. **Bundle adjustment**: nonlinear refinement using the **reprojection error** as objective (covered in §6). Distortion parameters are included in this step since they cannot be handled linearly.
 
 OpenCV's `cv2.calibrateCamera` runs all five steps and returns `K`, `dist`, and the per-view poses.
 
-#### D.4 Practical requirements
+#### Practical requirements
 
 - At least 3 views are mathematically required; ~10–20 views in practice for stable results.
 - **Vary orientation** — multiple images of the pattern tilted at different angles, not just translated. Translations do not add new algebraic constraints on `K`.
@@ -1377,6 +1377,10 @@ class CalibrationEvaluator:
         score -= min(30, outlier_ratio * 100)  # Outlier penalty
 
         return {'score': score, ...}
+
+# Usage
+evaluator = CalibrationEvaluator()
+report = evaluator.evaluate(result, obj_points, img_points)
 ```
 
 </details>
