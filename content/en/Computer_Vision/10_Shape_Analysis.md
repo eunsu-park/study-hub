@@ -57,11 +57,11 @@ The family continues for higher orders. All have straightforward statistical int
 
 ### Theory: Raw → Central → Normalized: Building Invariances
 
-#### B.1 Raw moments are not translation-invariant
+#### Raw moments are not translation-invariant
 
 If you translate the shape by `(Δx, Δy)`, all raw moments with `p + q > 0` change. For example, `M_{10}` → `M_{10} + Δx · M_{00}`. Useless for matching unless the shape is always at the same position.
 
-#### B.2 Central moments (translation-invariant)
+#### Central moments (translation-invariant)
 
 Shift to the centroid first. The centroid is:
 
@@ -85,7 +85,7 @@ Second-order central moments have physical interpretations too:
 
 The 2×2 matrix `[[μ_{20}, μ_{11}], [μ_{11}, μ_{02}]]` is the **shape's inertia tensor** — its eigenvalues give the lengths of the major and minor axes, and its eigenvectors give their directions. This is exactly the calculation `cv2.fitEllipse` and `minAreaRect` use internally.
 
-#### B.3 Normalized central moments (scale-invariant)
+#### Normalized central moments (scale-invariant)
 
 Scale the shape by factor `α` and `μ_{pq}` scales by `α^{p + q + 2}` (the `+2` comes from the change in area). Divide out the area scaling:
 
