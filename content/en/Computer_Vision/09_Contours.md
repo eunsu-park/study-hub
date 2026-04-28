@@ -471,7 +471,7 @@ cv2.waitKey(0)
 2. Find the contour point farthest from the straight line connecting them.
 3. If the farthest distance exceeds `epsilon`, add that point to the approximation and recurse on the two resulting sub-segments. Otherwise stop — the segment is "straight enough".
 
-The output is a polygon whose vertices are a strict subset of the original contour, with every dropped point lying within `epsilon` of the polygon. Typical use: set `epsilon = 0.02 · arcLength(contour, True)` (2% of perimeter) and check whether the result has exactly 4 vertices to detect a quadrilateral document (see lesson 04.5).
+The output is a polygon whose vertices are a strict subset of the original contour, with every dropped point lying within `epsilon` of the polygon. Typical use: set `epsilon = 0.02 · arcLength(contour, True)` (2% of perimeter) and check whether the result has exactly 4 vertices to detect a quadrilateral document (see `04_Geometric_Transforms.md` §5).
 
 Douglas-Peucker is the standard curve simplification algorithm — the same one used in GIS for map generalization and in GPS trace simplification.
 
