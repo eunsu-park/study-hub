@@ -39,7 +39,7 @@ Given a coordinate map, for every output pixel you end up asking: "what is the v
 
 Every interpolation method is just a different choice of reconstruction kernel.
 
-#### B.1 Nearest-neighbor — zero-order
+#### Nearest-neighbor — zero-order
 
 ```
 f̂(x, y) = f(round(x), round(y))
@@ -49,7 +49,7 @@ Take the closest integer pixel and copy it. One indexing operation, no arithmeti
 
 The key property is that **the output inherits the source palette exactly**. That matters for label maps, segmentation masks, and pixel art where the set of valid values must stay closed — averaging two label IDs would produce a meaningless intermediate value. Always pick `INTER_NEAREST` for these cases.
 
-#### B.2 Bilinear — first-order, 2×2 neighborhood
+#### Bilinear — first-order, 2×2 neighborhood
 
 Use the four nearest integer grid points `(x0, y0), (x1, y0), (x0, y1), (x1, y1)` with `x1 = x0 + 1`, `y1 = y0 + 1`. Let `dx = x - x0`, `dy = y - y0`. Then
 
@@ -60,7 +60,7 @@ f̂(x, y) = (1-dx)(1-dy) · f(x0, y0) + dx·(1-dy) · f(x1, y0)
 
 This is exactly "linearly interpolate along x at the top row, linearly interpolate along x at the bottom row, then linearly interpolate those two results along y". The operation is *separable*, which implementations exploit for speed. The reconstructed function is continuous (C⁰) but its first derivative has a kink at every grid cell edge. This is OpenCV's `INTER_LINEAR` default and the usual balanced choice for resizing photos.
 
-#### B.3 Bicubic — third-order, 4×4 neighborhood
+#### Bicubic — third-order, 4×4 neighborhood
 
 Define a cubic kernel `k(t)` (Keys' convolution kernel with `a = -0.5` is the OpenCV default):
 
@@ -78,7 +78,7 @@ f̂(x, y) = Σᵢ Σⱼ  k(x - xᵢ) · k(y - yⱼ) · f(xᵢ, yⱼ)
 
 The extra polynomial degree lets the reconstructed function match both the sample values *and* have a defined first derivative, so edges stay sharper when enlarging. The cost is 16 multiply-adds per output pixel instead of bilinear's 4.
 
-#### B.4 Lanczos — sinc reconstruction with a window
+#### Lanczos — sinc reconstruction with a window
 
 Sampling theory says that if an image is properly band-limited, the mathematically optimal reconstruction filter is the `sinc` function. But `sinc` has infinite support, so in practice it is truncated by a window. The Lanczos kernel is `sinc` multiplied by a wider `sinc` window (OpenCV uses `a = 4`):
 
@@ -89,7 +89,7 @@ L(t) = sinc(t) · sinc(t/a)    for |t| < a
 
 Applied over an 8×8 neighborhood. The frequency response is the flattest of the options listed here, so preserved detail is maximal — at the cost of 64 samples per output pixel. Recommended for high-quality upscaling when speed is not the bottleneck.
 
-#### B.5 Area — anti-aliased downsampling
+#### Area — anti-aliased downsampling
 
 Shrinking an image throws information away. If you just sample with `INTER_NEAREST` or `INTER_LINEAR`, high-frequency content that cannot be represented at the lower resolution gets **aliased** into low-frequency artifacts — moiré patterns, jagged edges, or frame-to-frame flicker in downscaled video. The sampling theorem says you must low-pass filter *before* resampling below the Nyquist rate.
 
@@ -434,16 +434,16 @@ The matrix has 9 entries, but multiplying `H` by any nonzero constant produces a
 
 The coordinate map is fixed; the interpolation method is chosen. One question remains: in which direction does the pixel loop run?
 
-#### C.1 Forward mapping — and why it fails
+#### Forward mapping — and why it fails
 
 The naïve approach: loop over each source pixel `(x, y)`, apply `T` to get `(x', y') = T(x, y)`, and write the source value at the output position. Two things go wrong:
 
 1. **Holes.** If `T` enlarges the image, some output integer coordinates never get hit — no source pixel maps onto them exactly. Visible as scattered missing pixels.
 2. **Collisions.** If `T` shrinks, many source pixels map to the same output pixel and overwrite each other. The final value depends on loop order; anti-aliasing becomes impossible to do correctly.
 
-#### C.2 Inverse mapping — what OpenCV actually does
+#### Inverse mapping — what OpenCV actually does
 
-Loop over each *output* pixel `(x', y')`, apply the inverse `T⁻¹` to get the corresponding source coordinate `(x, y)`, and interpolate the source at that (generally fractional) coordinate using one of the kernels in §B. Two things go right:
+Loop over each *output* pixel `(x', y')`, apply the inverse `T⁻¹` to get the corresponding source coordinate `(x, y)`, and interpolate the source at that (generally fractional) coordinate using one of the kernels described above. Two things go right:
 
 1. **Every output pixel is written exactly once.** No holes, no collisions.
 2. **Interpolation becomes a clean subproblem.** For each output pixel, you reconstruct `f̂` locally and read it at one point.
