@@ -113,7 +113,7 @@ v = fy * (Y/Z) + cy
 
 Given two calibrated cameras viewing the same scene, the relative position and orientation of the cameras induces a constraint on corresponding image points. This constraint is captured by the **fundamental matrix** `F` or its calibrated counterpart, the **essential matrix** `E`.
 
-#### B.1 The epipolar constraint
+#### The epipolar constraint
 
 For any 3D point observed in both images at pixels `x₁` and `x₂` (in homogeneous coordinates):
 
@@ -123,7 +123,7 @@ x₂ᵀ · F · x₁ = 0
 
 This says: given a point `x₁` in image 1, the corresponding point in image 2 must lie on a specific line, called the **epipolar line** `F · x₁`. The epipolar constraint reduces the search for correspondences from a 2D search over the whole image to a 1D search along a line — a massive computational win.
 
-#### B.2 The essential matrix and camera pose
+#### The essential matrix and camera pose
 
 When the intrinsic matrices are known, normalize pixel coordinates (`x̂ = K⁻¹ · x`) and use the **essential matrix** instead:
 
@@ -133,7 +133,7 @@ x̂₂ᵀ · E · x̂₁ = 0
 
 `E = [t]× · R` factors into the **relative rotation** `R` and the **skew-symmetric matrix of translation** `[t]×`. Decomposing `E` recovers both (up to sign ambiguity, typically resolved by cheirality — both points should have positive depth in both cameras). This is how structure-from-motion recovers camera poses without priors.
 
-#### B.3 Rectification
+#### Rectification
 
 If you make the two image planes coplanar and align their horizontal axes, epipolar lines become **horizontal** — the corresponding point in image 2 lies on the same scanline as in image 1. This is **stereo rectification**, and it turns stereo matching into 1D row-wise search instead of search along arbitrary epipolar lines.
 
@@ -163,7 +163,7 @@ Key Matrices:
 │ Matrix            │ Description                             │
 ├───────────────────┼─────────────────────────────────────────┤
 │ Essential Matrix  │ Geometric relationship in normalized    │
-│ (E)               │ coordinates. E = [t]x * R               │
+│ (E)               │ coordinates. E = [t]× * R               │
 ├───────────────────┼─────────────────────────────────────────┤
 │ Fundamental Matrix│ Geometric relationship in pixel         │
 │ (F)               │ coordinates. F = K'^(-T) * E * K^(-1)   │
@@ -508,7 +508,7 @@ def compute_disparity_with_wls(left, right, num_disparities=64):
 
 ### Theory: Point Clouds and Meshes
 
-#### E.1 Point clouds
+#### Point clouds
 
 A **point cloud** is a discrete set of 3D points: `{(X_i, Y_i, Z_i)}`, optionally with colors, normals, or other per-point attributes. The natural output of stereo, depth sensors, and SFM. Compact (one tuple per sample), easy to visualize, easy to downsample. But no connectivity — adjacent points aren't explicitly linked.
 
@@ -519,7 +519,7 @@ Common operations:
 - **Normal estimation**: fit a plane to each point's local neighborhood.
 - **Registration**: align two point clouds using ICP (Iterative Closest Point).
 
-#### E.2 Meshes
+#### Meshes
 
 A **mesh** adds connectivity: vertices + triangles. It is the standard representation for rendering and physical simulation. Converting point clouds to meshes:
 
@@ -529,7 +529,7 @@ A **mesh** adds connectivity: vertices + triangles. It is the standard represent
 
 Meshes are denser, less noisy, and easier to render than raw points — but they introduce topology choices and can hide localization error.
 
-#### E.3 From depth map to point cloud
+#### From depth map to point cloud
 
 If you have a depth map `D(u, v)` and camera intrinsics `K`, each pixel converts to a 3D point:
 
@@ -852,8 +852,8 @@ are two equations in four unknowns (`X` in homogeneous coordinates, up to scale)
 The practical workflow:
 
 1. Detect and match features in both images (§13, §14).
-2. Compute fundamental matrix with RANSAC (§14.D).
-3. Extract relative pose (`R`, `t`) from the essential matrix (§B.2).
+2. Compute fundamental matrix with RANSAC (see §14 RANSAC).
+3. Extract relative pose (`R`, `t`) from the essential matrix (covered above).
 4. Triangulate each matched point pair to get a sparse point cloud.
 5. (Optional) Bundle adjustment: jointly refine all camera poses and 3D points by minimizing reprojection error over the whole set.
 

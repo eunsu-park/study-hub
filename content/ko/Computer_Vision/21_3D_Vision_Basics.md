@@ -113,7 +113,7 @@ v = fy * (Y/Z) + cy
 
 같은 장면을 보는 두 캘리브레이션된 카메라가 주어지면, 카메라의 상대 위치와 방향이 대응 이미지 점들에 제약을 유도합니다. 이 제약은 **fundamental matrix** `F` 또는 그 캘리브레이션 대응물인 **essential matrix** `E`로 포착됩니다.
 
-#### B.1 Epipolar 제약
+#### Epipolar 제약
 
 두 이미지에서 픽셀 `x₁`과 `x₂`로 관찰되는 어떤 3D 점에 대해(동차 좌표로):
 
@@ -123,7 +123,7 @@ x₂ᵀ · F · x₁ = 0
 
 이것은 말합니다: 이미지 1의 점 `x₁`이 주어지면, 이미지 2의 대응 점은 특정 선, **epipolar line** `F · x₁` 위에 있어야 함. Epipolar 제약은 대응 탐색을 이미지 전체의 2D 탐색에서 선을 따른 1D 탐색으로 축소 — 엄청난 계산 이득.
 
-#### B.2 Essential matrix와 카메라 포즈
+#### Essential matrix와 카메라 포즈
 
 내부 행렬이 알려지면, 픽셀 좌표를 정규화(`x̂ = K⁻¹ · x`)하고 대신 **essential matrix**를 사용:
 
@@ -133,7 +133,7 @@ x̂₂ᵀ · E · x̂₁ = 0
 
 `E = [t]× · R`이 **상대 회전** `R`과 **이동의 반대칭 행렬** `[t]×`로 분해. `E`를 분해하면 둘 다 복원(부호 모호성 있음, 보통 cheirality로 해결 — 두 점이 모두 두 카메라에서 양의 깊이여야). 이것이 Structure-from-Motion이 사전 정보 없이 카메라 포즈를 복원하는 방법.
 
-#### B.3 Rectification
+#### Rectification
 
 두 이미지 평면을 공면으로 만들고 수평축을 정렬하면, epipolar 선이 **수평**이 됩니다 — 이미지 2의 대응 점이 이미지 1과 같은 스캔라인에 있음. 이것이 **스테레오 rectification**이며, 스테레오 매칭을 임의 epipolar 선을 따른 탐색 대신 1D 행 단위 탐색으로 바꿉니다.
 
@@ -163,7 +163,7 @@ Key Matrices:
 │ Matrix            │ Description                             │
 ├───────────────────┼─────────────────────────────────────────┤
 │ Essential Matrix  │ Geometric relationship in normalized    │
-│ (E)               │ coordinates. E = [t]x * R               │
+│ (E)               │ coordinates. E = [t]× * R               │
 ├───────────────────┼─────────────────────────────────────────┤
 │ Fundamental Matrix│ Geometric relationship in pixel         │
 │ (F)               │ coordinates. F = K'^(-T) * E * K^(-1)   │
@@ -508,7 +508,7 @@ def compute_disparity_with_wls(left, right, num_disparities=64):
 
 ### 이론: 포인트 클라우드와 메시
 
-#### E.1 포인트 클라우드
+#### 포인트 클라우드
 
 **포인트 클라우드**는 3D 점의 이산 집합: `{(X_i, Y_i, Z_i)}`, 선택적으로 색상, 법선, 또는 다른 점별 속성 포함. 스테레오, 깊이 센서, SFM의 자연 출력. 컴팩트(샘플당 튜플 하나), 시각화 쉬움, 다운샘플링 쉬움. 하지만 연결성 없음 — 인접 점들이 명시적으로 연결되지 않음.
 
@@ -519,7 +519,7 @@ def compute_disparity_with_wls(left, right, num_disparities=64):
 - **법선 추정**: 각 점의 국소 이웃에 평면 맞추기.
 - **Registration**: ICP(Iterative Closest Point)로 두 포인트 클라우드 정렬.
 
-#### E.2 메시
+#### 메시
 
 **메시**는 연결성 추가: 정점 + 삼각형. 렌더링과 물리 시뮬레이션의 표준 표현. 포인트 클라우드를 메시로 변환:
 
@@ -529,7 +529,7 @@ def compute_disparity_with_wls(left, right, num_disparities=64):
 
 메시는 원시 점보다 더 조밀하고, 덜 잡음이 있고, 렌더링하기 쉬움 — 하지만 토폴로지 선택을 도입하고 국소화 오차를 숨길 수 있음.
 
-#### E.3 깊이 맵에서 포인트 클라우드로
+#### 깊이 맵에서 포인트 클라우드로
 
 깊이 맵 `D(u, v)`와 카메라 내부 파라미터 `K`가 있으면, 각 픽셀이 3D 점으로 변환:
 
@@ -852,8 +852,8 @@ x₂ = P₂ · X       (이미지 2로 투영)
 실용 워크플로우:
 
 1. 두 이미지에서 특징 검출 및 매칭(§13, §14).
-2. RANSAC으로 fundamental matrix 계산(§14.D).
-3. Essential matrix에서 상대 포즈(`R`, `t`) 추출(§B.2).
+2. RANSAC으로 fundamental matrix 계산(§14 RANSAC 참고).
+3. Essential matrix에서 상대 포즈(`R`, `t`) 추출(앞서 다룬 essential matrix 분해).
 4. 매칭된 각 점 쌍을 삼각측량해 희소 포인트 클라우드 획득.
 5. (선택) Bundle adjustment: 전체 집합에 걸쳐 재투영 오차를 최소화해 모든 카메라 포즈와 3D 점을 공동 정제.
 
