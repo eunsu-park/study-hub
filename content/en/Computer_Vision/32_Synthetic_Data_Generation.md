@@ -159,10 +159,11 @@ class DomainRandomizer:
         """Simulate different lighting conditions."""
         brightness = np.random.uniform(0.5, 1.5)
         contrast = np.random.uniform(0.7, 1.3)
-        image = np.clip(image * brightness, 0, 255).astype(np.uint8)
-        mean = image.mean()
-        image = np.clip((image - mean) * contrast + mean, 0, 255).astype(np.uint8)
-        return image
+        # Cast to float32 first to avoid uint8 overflow when contrast > 1
+        image_f = image.astype(np.float32) * brightness
+        mean = image_f.mean()
+        image_f = (image_f - mean) * contrast + mean
+        return np.clip(image_f, 0, 255).astype(np.uint8)
 
     def random_blur(self, image):
         """Random Gaussian blur."""
@@ -261,24 +262,29 @@ class SyntheticSceneGenerator:
             x = np.random.randint(0, max(1, W - obj_w))
             y = np.random.randint(0, max(1, H - obj_h))
 
-            # Paste object onto scene
-            if obj.shape[2] == 4:
-                alpha = obj[:, :, 3:] / 255.0
-                rgb = obj[:, :, :3]
+            # Paste object onto scene. Inputs MUST have an alpha channel
+            # (RGBA); _load_images_with_masks already filters to shape[2] == 4.
+            if obj.shape[2] != 4:
+                raise ValueError(
+                    f"Object image must be RGBA (4 channels); got shape {obj.shape}"
+                )
 
-                y_end = min(y + obj_h, H)
-                x_end = min(x + obj_w, W)
-                obj_h_clip = y_end - y
-                obj_w_clip = x_end - x
+            alpha = obj[:, :, 3:] / 255.0
+            rgb = obj[:, :, :3]
 
-                scene[y:y_end, x:x_end] = (
-                    scene[y:y_end, x:x_end] * (1 - alpha[:obj_h_clip, :obj_w_clip]) +
-                    rgb[:obj_h_clip, :obj_w_clip] * alpha[:obj_h_clip, :obj_w_clip]
-                ).astype(np.uint8)
+            y_end = min(y + obj_h, H)
+            x_end = min(x + obj_w, W)
+            obj_h_clip = y_end - y
+            obj_w_clip = x_end - x
 
-                # Instance mask
-                mask_region = (alpha[:obj_h_clip, :obj_w_clip, 0] > 0.5)
-                instance_mask[y:y_end, x:x_end][mask_region] = i + 1
+            scene[y:y_end, x:x_end] = (
+                scene[y:y_end, x:x_end] * (1 - alpha[:obj_h_clip, :obj_w_clip]) +
+                rgb[:obj_h_clip, :obj_w_clip] * alpha[:obj_h_clip, :obj_w_clip]
+            ).astype(np.uint8)
+
+            # Instance mask
+            mask_region = (alpha[:obj_h_clip, :obj_w_clip, 0] > 0.5)
+            instance_mask[y:y_end, x:x_end][mask_region] = i + 1
 
             # Bounding box annotation
             annotations.append({
@@ -294,6 +300,7 @@ class SyntheticSceneGenerator:
         import os
         import json
 
+        np.random.seed(0)  # Reproducibility across the dataset run
         os.makedirs(f"{output_dir}/images", exist_ok=True)
         all_annotations = []
 
@@ -417,7 +424,7 @@ def render_and_save(output_path, resolution=(640, 480)):
 
 Recent shift: instead of building 3D scenes and rendering, **use generative models** to produce synthetic images directly:
 
-#### E.1 Diffusion-based augmentation
+#### Diffusion-based augmentation
 
 Stable Diffusion, ControlNet, and similar models can:
 
@@ -427,7 +434,7 @@ Stable Diffusion, ControlNet, and similar models can:
 
 The advantage: photorealistic synthesis without 3D models or rendering pipelines. The disadvantage: less precise ground truth (a generated mask may be slightly wrong) and less diverse variation than 3D-based randomization.
 
-#### E.2 GAN-based augmentation
+#### GAN-based augmentation
 
 Earlier era: GANs (StyleGAN, BigGAN) generate realistic images from noise. Used for face / scene augmentation. Largely superseded by diffusion models for general use, but still used in specific domains (medical imaging where GANs are well-tuned).
 

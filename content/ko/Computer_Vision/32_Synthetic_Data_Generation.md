@@ -159,10 +159,11 @@ class DomainRandomizer:
         """다양한 조명 조건 시뮬레이션."""
         brightness = np.random.uniform(0.5, 1.5)
         contrast = np.random.uniform(0.7, 1.3)
-        image = np.clip(image * brightness, 0, 255).astype(np.uint8)
-        mean = image.mean()
-        image = np.clip((image - mean) * contrast + mean, 0, 255).astype(np.uint8)
-        return image
+        # Cast to float32 first to avoid uint8 overflow when contrast > 1
+        image_f = image.astype(np.float32) * brightness
+        mean = image_f.mean()
+        image_f = (image_f - mean) * contrast + mean
+        return np.clip(image_f, 0, 255).astype(np.uint8)
 
     def random_blur(self, image):
         """랜덤 가우시안 블러."""
@@ -187,7 +188,7 @@ class DomainRandomizer:
     def random_texture_overlay(self, image):
         """배경 변화를 위한 랜덤 텍스처 오버레이."""
         H, W = image.shape[:2]
-        # 랜덤 패턴 생성
+        # Generate random pattern
         pattern = np.random.randint(0, 50, (H, W, 3), dtype=np.uint8)
         alpha = np.random.uniform(0.0, 0.15)
         return cv2.addWeighted(image, 1 - alpha, pattern, alpha, 0)
@@ -226,13 +227,13 @@ class SyntheticSceneGenerator:
         return [cv2.imread(p) for p in paths]
 
     def _load_images_with_masks(self, directory):
-        # 알파 채널이 있는 객체 이미지 로드
+        # Load object images with alpha channel
         import glob
         paths = glob.glob(f"{directory}/*.png")
         objects = []
         for p in paths:
             img = cv2.imread(p, cv2.IMREAD_UNCHANGED)
-            if img.shape[2] == 4:  # 알파 있음
+            if img.shape[2] == 4:  # Has alpha
                 objects.append(img)
         return objects
 
@@ -240,7 +241,7 @@ class SyntheticSceneGenerator:
         """어노테이션이 포함된 하나의 합성 장면 생성."""
         W, H = self.image_size
 
-        # 랜덤 배경
+        # Random background
         bg_idx = np.random.randint(len(self.backgrounds))
         scene = cv2.resize(self.backgrounds[bg_idx], (W, H))
 
@@ -248,39 +249,44 @@ class SyntheticSceneGenerator:
         instance_mask = np.zeros((H, W), dtype=np.int32)
 
         for i in range(n_objects):
-            # 랜덤 객체
+            # Random object
             obj_idx = np.random.randint(len(self.objects))
             obj = self.objects[obj_idx].copy()
 
-            # 랜덤 스케일
+            # Random scale
             scale = np.random.uniform(0.3, 1.5)
             obj_h, obj_w = int(obj.shape[0] * scale), int(obj.shape[1] * scale)
             obj = cv2.resize(obj, (obj_w, obj_h))
 
-            # 랜덤 위치
+            # Random position
             x = np.random.randint(0, max(1, W - obj_w))
             y = np.random.randint(0, max(1, H - obj_h))
 
-            # 장면에 객체 붙여넣기
-            if obj.shape[2] == 4:
-                alpha = obj[:, :, 3:] / 255.0
-                rgb = obj[:, :, :3]
+            # Paste object onto scene. Inputs MUST have an alpha channel
+            # (RGBA); _load_images_with_masks already filters to shape[2] == 4.
+            if obj.shape[2] != 4:
+                raise ValueError(
+                    f"Object image must be RGBA (4 channels); got shape {obj.shape}"
+                )
 
-                y_end = min(y + obj_h, H)
-                x_end = min(x + obj_w, W)
-                obj_h_clip = y_end - y
-                obj_w_clip = x_end - x
+            alpha = obj[:, :, 3:] / 255.0
+            rgb = obj[:, :, :3]
 
-                scene[y:y_end, x:x_end] = (
-                    scene[y:y_end, x:x_end] * (1 - alpha[:obj_h_clip, :obj_w_clip]) +
-                    rgb[:obj_h_clip, :obj_w_clip] * alpha[:obj_h_clip, :obj_w_clip]
-                ).astype(np.uint8)
+            y_end = min(y + obj_h, H)
+            x_end = min(x + obj_w, W)
+            obj_h_clip = y_end - y
+            obj_w_clip = x_end - x
 
-                # 인스턴스 마스크
-                mask_region = (alpha[:obj_h_clip, :obj_w_clip, 0] > 0.5)
-                instance_mask[y:y_end, x:x_end][mask_region] = i + 1
+            scene[y:y_end, x:x_end] = (
+                scene[y:y_end, x:x_end] * (1 - alpha[:obj_h_clip, :obj_w_clip]) +
+                rgb[:obj_h_clip, :obj_w_clip] * alpha[:obj_h_clip, :obj_w_clip]
+            ).astype(np.uint8)
 
-            # 바운딩 박스 어노테이션
+            # Instance mask
+            mask_region = (alpha[:obj_h_clip, :obj_w_clip, 0] > 0.5)
+            instance_mask[y:y_end, x:x_end][mask_region] = i + 1
+
+            # Bounding box annotation
             annotations.append({
                 'class_id': obj_idx,
                 'bbox': [x, y, x_end, y_end],
@@ -294,6 +300,7 @@ class SyntheticSceneGenerator:
         import os
         import json
 
+        np.random.seed(0)  # Reproducibility across the dataset run
         os.makedirs(f"{output_dir}/images", exist_ok=True)
         all_annotations = []
 
@@ -301,11 +308,11 @@ class SyntheticSceneGenerator:
             n_objects = np.random.randint(1, 8)
             scene, annotations, mask = self.generate_scene(n_objects)
 
-            # 도메인 랜덤화 적용
+            # Apply domain randomization
             randomizer = DomainRandomizer()
             scene = randomizer.apply(scene)
 
-            # 저장
+            # Save
             img_path = f"{output_dir}/images/{img_id:06d}.jpg"
             cv2.imwrite(img_path, scene)
 
@@ -319,7 +326,7 @@ class SyntheticSceneGenerator:
             if (img_id + 1) % 100 == 0:
                 print(f"{img_id + 1}/{n_images}개 이미지 생성 완료")
 
-        # 어노테이션 저장
+        # Save annotations
         with open(f"{output_dir}/annotations.json", 'w') as f:
             json.dump(all_annotations, f)
 
@@ -333,8 +340,8 @@ class SyntheticSceneGenerator:
 ### 4.1 합성 데이터를 위한 Blender
 
 ```python
-# 합성 데이터 생성을 위한 Blender Python API
-# Blender 내에서 실행: blender --background --python generate.py
+# Blender Python API for synthetic data generation
+# Run inside Blender: blender --background --python generate.py
 
 """
 import bpy
@@ -417,7 +424,7 @@ def render_and_save(output_path, resolution=(640, 480)):
 
 최근 변화: 3D 장면을 만들고 렌더링하는 대신, **생성 모델**을 사용해 합성 이미지를 직접 생성:
 
-#### E.1 Diffusion 기반 증강
+#### Diffusion 기반 증강
 
 Stable Diffusion, ControlNet, 유사 모델이 가능:
 
@@ -427,7 +434,7 @@ Stable Diffusion, ControlNet, 유사 모델이 가능:
 
 장점: 3D 모델이나 렌더링 파이프라인 없이 photorealistic 합성. 단점: 덜 정확한 ground truth(생성된 마스크가 약간 틀릴 수 있음)과 3D 기반 랜덤화보다 덜 다양한 변화.
 
-#### E.2 GAN 기반 증강
+#### GAN 기반 증강
 
 이전 시대: GAN(StyleGAN, BigGAN)이 잡음에서 사실적 이미지 생성. 얼굴/장면 증강에 사용. 일반 사용에는 대부분 diffusion 모델로 대체됐지만, 특정 도메인(GAN이 잘 튜닝된 의료 영상)에는 여전히 사용.
 
@@ -457,8 +464,8 @@ Stable Diffusion, ControlNet, 유사 모델이 가능:
 ### 5.2 합성 데이터를 위한 ControlNet
 
 ```python
-# 데이터 증강을 위한 확산 모델 사용의 개념적 예제
-# 필요: pip install diffusers transformers
+# Conceptual example using diffusion for data augmentation
+# Requires: pip install diffusers transformers
 
 def generate_with_controlnet(segmentation_map, prompt, n_images=5):
     """
@@ -473,7 +480,7 @@ def generate_with_controlnet(segmentation_map, prompt, n_images=5):
 
     images = []
     for i in range(n_images):
-        # 동일 레이아웃, 다른 외형
+        # Same layout, different appearance
         # image = pipe(
         #     prompt=prompt,
         #     image=segmentation_map,
@@ -484,14 +491,14 @@ def generate_with_controlnet(segmentation_map, prompt, n_images=5):
 
     return images
 
-# 예시:
+# Example:
 # seg_map = load_segmentation("city_layout.png")
 # images = generate_with_controlnet(
 #     seg_map,
 #     "urban street scene, sunny day, high resolution photo",
 #     n_images=10
 # )
-# 각 이미지는 동일한 레이아웃이지만 다른 시각적 외형
+# Each image has the SAME layout but different visual appearance
 ```
 
 ---
@@ -549,31 +556,31 @@ def synthetic_data_pipeline(real_data_path, output_dir, n_synthetic=10000):
     4. 실제 데이터와 혼합
     5. 학습 및 평가
     """
-    # 1단계: 실제 데이터 분석
+    # Step 1: Analyze real data
     real_stats = analyze_dataset(real_data_path)
     print(f"실제 데이터: {real_stats['n_images']}개 이미지, "
           f"{real_stats['n_classes']}개 클래스")
 
-    # 2단계: 합성 데이터 생성
+    # Step 2: Generate synthetic data
     generator = SyntheticSceneGenerator(
         background_dir=f"{real_data_path}/backgrounds",
         object_dir=f"{real_data_path}/objects",
     )
     generator.generate_dataset(n_images=n_synthetic, output_dir=output_dir)
 
-    # 3단계: 도메인 랜덤화 (생성기에 이미 적용됨)
+    # Step 3: Domain randomization (already applied in generator)
 
-    # 4단계: 데이터셋 혼합
+    # Step 4: Mix datasets
     mixed_dataset = create_mixed_dataset(
         real_path=real_data_path,
         synthetic_path=output_dir,
-        synthetic_ratio=0.5,  # 50% 합성
+        synthetic_ratio=0.5,  # 50% synthetic
     )
 
-    # 5단계: 학습
+    # Step 5: Train
     model = train_model(mixed_dataset)
 
-    # 6단계: 실제 데이터만으로 평가
+    # Step 6: Evaluate on real-only test set
     results = evaluate_model(model, f"{real_data_path}/test")
     print(f"실제 테스트 세트에서 mAP: {results['mAP']:.4f}")
 
