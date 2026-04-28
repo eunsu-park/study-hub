@@ -456,6 +456,11 @@ processor.process_video(0, output_path='recorded.mp4')
 import cv2
 import time
 
+def heavy_processing(frame):
+    """Stub for an expensive per-frame operation (e.g., heavy blur, NN inference)."""
+    return cv2.GaussianBlur(frame, (15, 15), 0)
+
+
 def skip_frames_processing(video_path, skip=5):
     """Frame skipping (speed improvement)"""
 
@@ -682,7 +687,7 @@ cap.release()
 
 Over time the background can change slowly (shadows moving, lighting drifts), so the model must update. This is the core algorithm that `cv2.createBackgroundSubtractorMOG2` implements:
 
-#### C.1 MOG2: Mixture of Gaussians
+#### MOG2: Mixture of Gaussians
 
 For each pixel, maintain a **Gaussian mixture model** with several (typically 3–5) components. Each component has a mean color, covariance, and a weight indicating how often that color has been observed at this pixel.
 
@@ -693,11 +698,11 @@ For each pixel, maintain a **Gaussian mixture model** with several (typically 3�
 
 MOG2 also supports **shadow detection**: a pixel that is a darker version of a background component (lower brightness, same chromaticity) is marked as shadow (gray in the mask, `127`) rather than foreground (`255`).
 
-#### C.2 KNN Background Subtractor
+#### KNN Background Subtractor
 
 K-nearest-neighbor-based alternative. For each pixel, maintain a history of recent observations. A new pixel is foreground if fewer than `K` of the last `N` observations are close to it. Conceptually simpler than MOG2, empirically often comparable, slightly more memory.
 
-#### C.3 Limitations
+#### Limitations
 
 Both algorithms assume a stationary camera. If the camera moves (handheld, panning), every pixel looks like foreground and the method fails. For moving cameras, use optical flow (§31), feature tracking, or stabilization first.
 
@@ -906,7 +911,8 @@ p0 = cv2.goodFeaturesToTrack(old_gray, mask=None, **feature_params)
 # For trajectory visualization
 mask = np.zeros_like(old_frame)
 
-# Colors
+# Colors (fixed seed for reproducible track colors across runs)
+np.random.seed(0)
 colors = np.random.randint(0, 255, (100, 3))
 
 while True:
@@ -1050,13 +1056,13 @@ cv2.destroyAllWindows()
 
 **Tracking** is the task of maintaining the identity of an object over time: given its location at frame `t`, find it at frame `t+1`. This differs from detection (which finds objects independently per frame) in that tracking enforces **temporal identity**: detection might find the same object in two frames but doesn't tell you they are the same object.
 
-#### D.1 The tracking-by-detection paradigm
+#### The tracking-by-detection paradigm
 
 Modern practice: **run a detector on every frame, then associate detections across frames**. Association uses motion predictions (the detected position should be near where we predicted) and appearance features (the detected object's descriptor should match the tracked object's descriptor).
 
 SORT (Simple Online and Realtime Tracking) and DeepSORT are the canonical implementations: Kalman-filter motion prediction plus Hungarian algorithm for detection-to-track association, with DeepSORT adding appearance embeddings to help when objects briefly disappear.
 
-#### D.2 Online trackers (single object)
+#### Online trackers (single object)
 
 For the simpler case of tracking one pre-specified object: **correlation-filter trackers** (KCF, CSRT, MOSSE) learn a filter that produces a peak response at the object's location, then scan the next frame for that peak.
 
@@ -1068,7 +1074,7 @@ For the simpler case of tracking one pre-specified object: **correlation-filter 
 
 None of these detect the object initially — you specify a bounding box in the first frame, and the tracker follows it.
 
-#### D.3 Why tracking is fundamentally hard
+#### Why tracking is fundamentally hard
 
 Tracking must handle:
 

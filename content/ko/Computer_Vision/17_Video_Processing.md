@@ -456,6 +456,11 @@ processor.process_video(0, output_path='recorded.mp4')
 import cv2
 import time
 
+def heavy_processing(frame):
+    """Stub for an expensive per-frame operation (e.g., heavy blur, NN inference)."""
+    return cv2.GaussianBlur(frame, (15, 15), 0)
+
+
 def skip_frames_processing(video_path, skip=5):
     """Frame skipping (speed improvement)"""
 
@@ -682,7 +687,7 @@ cap.release()
 
 시간이 지남에 따라 배경은 천천히 바뀔 수 있음(움직이는 그림자, 조명 변화), 따라서 모델은 업데이트해야 함. 이것이 `cv2.createBackgroundSubtractorMOG2`가 구현하는 핵심 알고리즘:
 
-#### C.1 MOG2: 가우시안 혼합
+#### MOG2: 가우시안 혼합
 
 각 픽셀에 대해 여러(보통 3-5개) 구성 요소를 가진 **가우시안 혼합 모델** 유지. 각 구성 요소는 평균 색상, 공분산, 그리고 이 픽셀에서 그 색상이 얼마나 자주 관찰됐는지를 나타내는 가중치를 가집니다.
 
@@ -693,11 +698,11 @@ cap.release()
 
 MOG2는 **그림자 검출**도 지원: 배경 구성 요소의 더 어두운 버전(낮은 밝기, 같은 chromaticity)인 픽셀은 전경(`255`) 대신 그림자(마스크에서 회색, `127`)로 표시.
 
-#### C.2 KNN 배경 차분기
+#### KNN 배경 차분기
 
 K-최근접-이웃 기반 대안. 각 픽셀에 대해 최근 관찰의 이력 유지. 최근 `N` 관찰 중 `K`개 미만이 새 픽셀에 가까우면 전경. 개념적으로 MOG2보다 단순, 경험적으로 종종 비슷, 약간 더 많은 메모리.
 
-#### C.3 한계
+#### 한계
 
 두 알고리즘 모두 고정 카메라를 가정. 카메라가 움직이면(손에 들고, 팬) 모든 픽셀이 전경처럼 보이고 방법이 실패. 움직이는 카메라의 경우, 먼저 optical flow(§31), 특징 추적, 또는 안정화 사용.
 
@@ -906,7 +911,8 @@ p0 = cv2.goodFeaturesToTrack(old_gray, mask=None, **feature_params)
 # For trajectory visualization
 mask = np.zeros_like(old_frame)
 
-# Colors
+# Colors (fixed seed for reproducible track colors across runs)
+np.random.seed(0)
 colors = np.random.randint(0, 255, (100, 3))
 
 while True:
@@ -1050,13 +1056,13 @@ cv2.destroyAllWindows()
 
 **추적**은 시간에 걸쳐 객체의 신원을 유지하는 작업: 프레임 `t`의 위치가 주어지면 프레임 `t+1`에서 찾기. 검출(프레임별 독립적으로 객체 찾기)과의 차이는 추적이 **시간적 신원**을 강제한다는 것: 검출이 두 프레임에서 같은 객체를 찾을 수도 있지만 같은 객체라고 말하지는 않음.
 
-#### D.1 Tracking-by-detection 패러다임
+#### Tracking-by-detection 패러다임
 
 현대 실천: **모든 프레임에 검출기를 실행하고 프레임 전반에 걸쳐 검출을 연관**. 연관은 동작 예측(검출 위치가 예측한 곳 근처여야 함)과 외관 특징(검출된 객체의 디스크립터가 추적 객체의 디스크립터와 매치해야 함)을 사용.
 
 SORT(Simple Online and Realtime Tracking)와 DeepSORT가 정식 구현: Kalman 필터 동작 예측 + 검출-트랙 연관을 위한 Hungarian 알고리즘, DeepSORT는 객체가 잠시 사라질 때 도움이 되도록 외관 임베딩 추가.
 
-#### D.2 온라인 추적기(단일 객체)
+#### 온라인 추적기 (단일 객체)
 
 미리 지정된 한 객체 추적의 단순한 경우: **correlation-filter 추적기**(KCF, CSRT, MOSSE)는 객체 위치에서 피크 응답을 생성하는 필터를 학습하고, 다음 프레임에서 그 피크를 스캔.
 
@@ -1068,7 +1074,7 @@ SORT(Simple Online and Realtime Tracking)와 DeepSORT가 정식 구현: Kalman �
 
 이들 중 어느 것도 객체를 초기에 검출하지 않음 — 첫 프레임에서 경계 상자를 지정하고 추적기가 따라감.
 
-#### D.3 추적이 근본적으로 어려운 이유
+#### 추적이 근본적으로 어려운 이유
 
 추적은 다음을 처리해야 함:
 
