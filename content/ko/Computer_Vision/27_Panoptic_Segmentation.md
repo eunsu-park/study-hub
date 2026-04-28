@@ -73,7 +73,7 @@ Things/stuff 구분은 임의가 아님; 인간이 장면 요소를 개념화하
 - **Things**는 경계가 있는 **셀 수 있는** 객체: 자동차, 사람, 의자, 개. "의자 3개"가 말이 됨. 각각 뚜렷한 모양을 가지고 개별적으로 세거나 추적할 수 있음.
 - **Stuff**는 **비정형**: 하늘, 도로, 잔디, 물. "하늘 3개"는 말이 안 됨. Stuff는 셀 수 있는 인스턴스를 가지지 않음; 범위와 커버리지를 가짐.
 
-이 구분이 유용한 이유는 두 종류 내용이 **다른 평가**를 요구하기 때문: things에 대해서는 인스턴스 분리에 신경 씀(각 객체가 찾아졌나?); stuff에 대해서는 단지 공간 커버리지에 신경 씀(도로의 얼마나 많은 부분이 도로로 레이블됐나?). PQ 메트릭(§E)이 두 경우 모두 균일하게 처리.
+이 구분이 유용한 이유는 두 종류 내용이 **다른 평가**를 요구하기 때문: things에 대해서는 인스턴스 분리에 신경 씀(각 객체가 찾아졌나?); stuff에 대해서는 단지 공간 커버리지에 신경 씀(도로의 얼마나 많은 부분이 도로로 레이블됐나?). PQ 메트릭(§5에서 다룸)이 두 경우 모두 균일하게 처리.
 
 존재론은 데이터셋에 고정됨 — COCO Panoptic은 80 thing 클래스와 53 stuff 클래스, Cityscapes는 8 things와 11 stuff, ADE20K는 100 things와 50 stuff.
 
@@ -156,7 +156,7 @@ class PanopticFPNSemanticHead(nn.Module):
         super().__init__()
         n_classes = n_stuff_classes + n_thing_classes
 
-        # 각 FPN 레벨을 1/4 해상도로 업샘플링하고 병합
+        # Upsample each FPN level to 1/4 resolution and merge
         self.scale_heads = nn.ModuleList()
         for _ in range(4):  # P2, P3, P4, P5
             self.scale_heads.append(nn.Sequential(
@@ -242,10 +242,10 @@ class Mask2FormerDecoder(nn.Module):
         super().__init__()
         self.n_queries = n_queries
 
-        # 학습 가능한 객체 쿼리
+        # Learnable object queries
         self.query_embed = nn.Embedding(n_queries, d_model)
 
-        # 마스크 어텐션을 사용하는 Transformer 디코더 레이어
+        # Transformer decoder layers with masked attention
         decoder_layer = nn.TransformerDecoderLayer(
             d_model=d_model, nhead=n_heads,
             dim_feedforward=2048, dropout=0.1,
@@ -253,8 +253,8 @@ class Mask2FormerDecoder(nn.Module):
         )
         self.decoder = nn.TransformerDecoder(decoder_layer, n_layers)
 
-        # 예측 헤드
-        self.class_head = nn.Linear(d_model, n_classes + 1)  # +1은 "객체 없음"
+        # Prediction heads
+        self.class_head = nn.Linear(d_model, n_classes + 1)  # +1 for "no object"
         self.mask_head = nn.Sequential(
             nn.Linear(d_model, d_model),
             nn.ReLU(),
@@ -271,16 +271,16 @@ class Mask2FormerDecoder(nn.Module):
         """
         B = pixel_features.shape[0]
 
-        # 쿼리 초기화
+        # Initialize queries
         queries = self.query_embed.weight.unsqueeze(0).expand(B, -1, -1)
 
-        # Transformer 디코더
+        # Transformer decoder
         output = self.decoder(queries, pixel_features)
 
-        # 클래스 예측
+        # Class predictions
         class_logits = self.class_head(output)  # (B, N, C+1)
 
-        # 픽셀 특징과의 내적을 통한 마스크 예측
+        # Mask predictions via dot product with pixel features
         mask_embed = self.mask_head(output)  # (B, N, d_model)
         mask_logits = torch.bmm(mask_embed, pixel_features.transpose(1, 2))
 
@@ -305,7 +305,7 @@ PQ_c = (Σ IoU over TP_c) / (|TP_c| + 0.5·|FP_c| + 0.5·|FN_c|)
 
 그 다음 `PQ = mean(PQ_c over all classes)`.
 
-#### E.1 SQ × RQ 분해
+#### SQ × RQ 분해
 
 PQ는 분해 가능:
 
@@ -323,7 +323,7 @@ RQ = |TP| / (|TP| + 0.5·FP + 0.5·FN)  Recognition Quality: 객체의 어느 �
 
 Things의 경우, RQ는 인스턴스 매칭에 대한 F1 같은 점수; stuff의 경우, 각 클래스가 단일 TP/FN(전체 클래스 마스크)을 기여하므로, RQ_for_stuff는 인스턴스가 얼마나 많은지보다 stuff 클래스가 예측에 존재하는지에 관한 것.
 
-#### E.2 PQ가 단지 "시맨틱 mIoU + 인스턴스 AP"보다 나은 이유
+#### PQ가 단지 "시맨틱 mIoU + 인스턴스 AP"보다 나은 이유
 
 순진한 파놉틱 메트릭은 `0.5·mIoU + 0.5·AP`. 하지만 불만족: mIoU는 "모든 곳 도로"를 예측하는 모델을 보상하는 반면, AP는 마스크가 헐거워도 많은 검출을 찾는 것을 보상. PQ는 대신 모든 것에 같은 임계값(IoU > 0.5)을 부과, 따라서 예측이 올바로 국소화되고 올바로 분류되어야 카운트. 직관적으로 동작하는 단일 일관된 숫자 생성.
 
@@ -355,7 +355,7 @@ def panoptic_quality(pred_segments, gt_segments, pred_labels, gt_labels,
 
     for pred_id in np.unique(pred_segments):
         if pred_id == 0:
-            continue  # void 건너뛰기
+            continue  # Skip void
 
         pred_mask = pred_segments == pred_id
         pred_label = pred_labels.get(pred_id, -1)
@@ -388,12 +388,12 @@ def panoptic_quality(pred_segments, gt_segments, pred_labels, gt_labels,
         else:
             fp += 1
 
-    # 매칭되지 않은 정답을 FN으로 카운트
+    # Count unmatched ground truth as FN
     for gt_id in np.unique(gt_segments):
         if gt_id != 0 and gt_id not in gt_matched:
             fn += 1
 
-    # PQ 계산
+    # Compute PQ
     sq = np.mean(matched_iou) if matched_iou else 0.0
     rq = tp / (tp + 0.5 * fp + 0.5 * fn + 1e-6)
     pq = sq * rq
@@ -427,8 +427,8 @@ def panoptic_fusion(semantic_pred, instance_masks, instance_labels,
     segment_info = []
     next_id = 1
 
-    # 1. 인스턴스 마스크 (things) 배치 - 최우선 순위
-    # 신뢰도 점수 기준 정렬 (높은 것 먼저)
+    # 1. Place instance masks (things) - highest priority
+    # Sort by confidence score (highest first)
     sorted_idx = np.argsort(-instance_scores.numpy())
 
     occupied = np.zeros((H, W), dtype=bool)
@@ -444,7 +444,7 @@ def panoptic_fusion(semantic_pred, instance_masks, instance_labels,
         if label not in thing_classes:
             continue
 
-        # 이미 배치된 인스턴스와의 겹침 확인
+        # Check overlap with already placed instances
         overlap = (mask & occupied).sum() / (mask.sum() + 1e-6)
         if overlap > overlap_threshold:
             continue
@@ -459,7 +459,7 @@ def panoptic_fusion(semantic_pred, instance_masks, instance_labels,
         })
         next_id += 1
 
-    # 2. 나머지 픽셀을 stuff 클래스로 채우기
+    # 2. Fill remaining pixels with stuff classes
     for stuff_class in stuff_classes:
         stuff_mask = (semantic_pred == stuff_class) & (~occupied)
         if stuff_mask.sum() > 0:

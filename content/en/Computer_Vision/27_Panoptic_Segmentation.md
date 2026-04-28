@@ -73,7 +73,7 @@ The things/stuff distinction is not arbitrary; it reflects how humans conceptual
 - **Things** are **countable** objects with boundaries: cars, people, chairs, dogs. "Three chairs" makes sense. Each has a distinct shape and can be individually counted or tracked.
 - **Stuff** is **amorphous**: sky, road, grass, water. "Three skies" doesn't make sense. Stuff doesn't have countable instances; it has extent and coverage.
 
-This distinction is useful because the two kinds of content require **different evaluation**: for things, we care about instance separation (was each object found?); for stuff, we just care about spatial coverage (what fraction of the road was labeled road?). The PQ metric (§E) handles both cases uniformly.
+This distinction is useful because the two kinds of content require **different evaluation**: for things, we care about instance separation (was each object found?); for stuff, we just care about spatial coverage (what fraction of the road was labeled road?). The PQ metric (covered in §5) handles both cases uniformly.
 
 The ontology is fixed in the dataset — COCO Panoptic has 80 thing classes and 53 stuff classes, Cityscapes has 8 things and 11 stuff, ADE20K has 100 things and 50 stuff.
 
@@ -305,7 +305,7 @@ PQ_c = (Σ IoU over TP_c) / (|TP_c| + 0.5·|FP_c| + 0.5·|FN_c|)
 
 Then `PQ = mean(PQ_c over all classes)`.
 
-#### E.1 The SQ × RQ decomposition
+#### The SQ × RQ decomposition
 
 PQ can be factored:
 
@@ -323,7 +323,7 @@ This decomposition is useful for diagnosis:
 
 For things, RQ is an F1-like score over instance matching; for stuff, each class contributes a single TP/FN (the whole-class mask), so RQ_for_stuff is more about whether the stuff class exists in the prediction than about how many instances there are.
 
-#### E.2 Why PQ is better than just "semantic mIoU + instance AP"
+#### Why PQ is better than just "semantic mIoU + instance AP"
 
 A naïve panoptic metric would be `0.5·mIoU + 0.5·AP`. But that is unsatisfying: mIoU rewards a model that predicts "road everywhere", while AP rewards finding many detections even if masks are loose. PQ instead imposes the same threshold (IoU > 0.5) on everything, so a prediction only counts if it is both correctly localized and correctly classified. This produces a single coherent number that behaves intuitively.
 
