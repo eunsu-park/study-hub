@@ -48,11 +48,11 @@ An image has no "object regions" written on it — you have to find them. The un
 3. For each position, apply a scoring function to the image patch inside the box — "how much does this patch look like the target?"
 4. Threshold and collect positions where the score is high enough.
 5. Repeat at multiple scales (larger/smaller box) to detect objects of different sizes.
-6. Apply §E deduplication to clean up overlapping detections.
+6. Apply NMS (non-maximum suppression) to clean up overlapping detections (covered in §6).
 
 This is **exhaustive search over a discrete approximation of the space of bounding boxes**. The different classical detectors differ only in the scoring function. Even modern "anchor-based" neural detectors like YOLO and Faster R-CNN are really this same paradigm with a CNN-based score and a learned set of candidate boxes.
 
-The cost is computation: `(image width × image height × number of scales × score function cost)`. Classical detectors optimize via integral images (§C), separable computation, and cascades (early rejection).
+The cost is computation: `(image width × image height × number of scales × score function cost)`. Classical detectors optimize via integral images (§4), separable computation, and cascades (early rejection).
 
 ### Basic Concept
 
@@ -134,7 +134,7 @@ The simplest scoring function: **how similar is this patch to a stored reference
 
 Three standard metrics, each with its own trade-offs:
 
-#### B.1 Sum of squared differences (`TM_SQDIFF`)
+#### Sum of squared differences (`TM_SQDIFF`)
 
 ```
 R(x, y) = Σ_{x', y'}  [T(x', y') - I(x + x', y + y')]²
@@ -142,7 +142,7 @@ R(x, y) = Σ_{x', y'}  [T(x', y') - I(x + x', y + y')]²
 
 Zero at a perfect match, grows with difference. Sensitive to brightness offsets (a uniformly brightened patch produces a large R even if the shape matches). Usually the wrong choice unless brightness is controlled.
 
-#### B.2 Cross-correlation (`TM_CCORR`)
+#### Cross-correlation (`TM_CCORR`)
 
 ```
 R(x, y) = Σ_{x', y'}  T(x', y') · I(x + x', y + y')
@@ -150,7 +150,7 @@ R(x, y) = Σ_{x', y'}  T(x', y') · I(x + x', y + y')
 
 Large at match, small elsewhere. But pathologically large at very bright patches regardless of content — a white wall scores higher than an actual match.
 
-#### B.3 Normalized cross-correlation (`TM_CCOEFF_NORMED`)
+#### Normalized cross-correlation (`TM_CCOEFF_NORMED`)
 
 Subtract means, divide by standard deviations:
 
@@ -455,7 +455,7 @@ if result['location']:
 
 Viola and Jones (2001) built the first real-time face detector. The key innovations:
 
-#### C.1 Haar-like features
+#### Haar-like features
 
 A Haar feature is the difference between sums of pixel intensities in adjacent rectangular regions. Example patterns:
 
@@ -468,7 +468,7 @@ feature_value = sum(pixels in white) - sum(pixels in black)
 
 Each pattern is crude on its own — a single edge or bar — but there are thousands of possible patterns (different positions, sizes, types), and combining enough of them produces a discriminative classifier.
 
-#### C.2 Integral images for O(1) feature evaluation
+#### Integral images for O(1) feature evaluation
 
 The naïve cost of a Haar feature at one location is `O(area)` — sum up every pixel in the white and black regions. Viola-Jones introduced the **integral image**: precompute `ii(x, y) = Σ_{x' ≤ x, y' ≤ y} I(x', y')`. Then the sum over any rectangle is a fixed 4-term expression:
 
@@ -478,11 +478,11 @@ sum_rect(x1, y1, x2, y2) = ii(x2, y2) - ii(x1, y2) - ii(x2, y1) + ii(x1, y1)
 
 Any Haar feature at any position and size evaluates in constant time regardless of feature area. This is what makes scanning thousands of features over thousands of positions affordable.
 
-#### C.3 AdaBoost feature selection
+#### AdaBoost feature selection
 
 There are tens of thousands of possible Haar features in a detection window — far too many to use all of them. AdaBoost builds a strong classifier by **iteratively picking the single best feature** at each round, weighted by how hard the currently-misclassified examples are. After `T` rounds you have a weighted sum of `T` features which, as a whole, classifies faces vs non-faces well.
 
-#### C.4 Cascaded rejection
+#### Cascaded rejection
 
 Even evaluating the selected features at every position is expensive. Viola-Jones arranged the classifiers in a **cascade**:
 
@@ -810,17 +810,17 @@ cv2.imshow('Face Features', output)
 
 Dalal and Triggs (2005) built the first effective pedestrian detector. The descriptor, **Histogram of Oriented Gradients (HOG)**, has two key ideas.
 
-#### D.1 Gradient histograms as detection features
+#### Gradient histograms as detection features
 
 In a local cell (e.g. 8×8 pixels), compute the gradient at each pixel, bin the orientations (e.g. 9 bins over 0°–180°) weighted by gradient magnitude. The result: a 9-number summary of "what orientations are dominant in this cell". Concatenating cells across a detection window (e.g. 64×128 for pedestrians) gives a feature vector of ~3780 dimensions.
 
 Why this is better than raw pixels: gradient orientation is robust to illumination (absolute brightness doesn't matter, only brightness differences), and the histogram is robust to small spatial shifts within a cell.
 
-#### D.2 Block normalization
+#### Block normalization
 
 Before classification, HOG features are normalized at the block level (e.g. 2×2 cells grouped, each cell appearing in multiple overlapping blocks). Normalization makes the descriptor robust to illumination and contrast changes. Two normalization schemes are common: L2-norm and L2-Hys (L2 with a clip to suppress dominant peaks).
 
-#### D.3 Linear SVM
+#### Linear SVM
 
 On top of HOG, Dalal-Triggs trained a **linear SVM** to separate pedestrian from non-pedestrian windows. SVM with a linear kernel is fast to evaluate (dot product with weights, plus a threshold), so scanning HOG+SVM across all positions and scales is practical. OpenCV's `HOGDescriptor` ships with a pre-trained linear SVM for pedestrians that you can apply directly.
 
@@ -830,7 +830,7 @@ The HOG descriptor itself remains relevant — it is a good hand-crafted feature
 
 A sliding-window detector typically fires multiple times around each true object — a few positions and scales with overlapping bounding boxes. Before presenting the final detections, these duplicates must be merged. This is NMS, and every detector — classical or neural — does it.
 
-#### E.1 Intersection-over-Union (IoU)
+#### Intersection-over-Union (IoU)
 
 Given two bounding boxes `A` and `B`:
 
@@ -840,7 +840,7 @@ IoU(A, B) = area(A ∩ B) / area(A ∪ B)
 
 IoU is 0 when boxes don't overlap, 1 when identical, and around 0.5 when boxes overlap about half. The standard threshold for "same object" is IoU ≥ 0.5 (this is also what "mAP@0.5" means in detection benchmarks).
 
-#### E.2 Greedy NMS
+#### Greedy NMS
 
 Standard algorithm:
 
@@ -1079,7 +1079,12 @@ from sklearn import svm
 from sklearn.model_selection import train_test_split
 
 def train_hog_svm_classifier(positive_samples, negative_samples):
-    """HOG + SVM classifier training (conceptual example)"""
+    """HOG + SVM classifier training (conceptual example).
+
+    Note: HOG+SVM is a classical baseline; modern production detectors
+    (YOLO, Faster R-CNN) typically outperform it on accuracy and handle
+    occlusion/pose variation better, at the cost of GPU compute and training data.
+    """
 
     # HOG descriptor setup
     win_size = (64, 128)    # 1:2 aspect ratio matches the typical standing-person bounding box;

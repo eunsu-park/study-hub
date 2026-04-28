@@ -48,11 +48,11 @@
 3. 각 위치에서 상자 안 이미지 패치에 점수 함수 적용 — "이 패치가 목표와 얼마나 닮았는가?"
 4. 점수가 충분히 높은 위치를 임계처리해 수집.
 5. 여러 스케일(상자를 크게/작게)에서 반복해 서로 다른 크기의 객체 검출.
-6. §E 중복 제거로 겹친 검출 정리.
+6. NMS(non-maximum suppression)로 겹친 검출을 정리(§6에서 다룸).
 
 이것은 **경계 상자 공간의 이산 근사에 대한 완전 탐색**입니다. 서로 다른 고전 검출기는 점수 함수에서만 다릅니다. YOLO와 Faster R-CNN 같은 현대 "앵커 기반" 신경 검출기조차 사실 같은 패러다임에 CNN 기반 점수와 학습된 후보 상자 집합을 더한 것.
 
-비용은 계산: `(이미지 너비 × 이미지 높이 × 스케일 수 × 점수 함수 비용)`. 고전 검출기는 integral image(§C), 분리 계산, cascade(조기 거부)로 최적화.
+비용은 계산: `(이미지 너비 × 이미지 높이 × 스케일 수 × 점수 함수 비용)`. 고전 검출기는 integral image(§4), 분리 계산, cascade(조기 거부)로 최적화.
 
 ### 기본 개념
 
@@ -134,7 +134,7 @@ Each pixel in result image = matching score at that location
 
 세 표준 메트릭, 각각의 트레이드오프:
 
-#### B.1 제곱차 합 (`TM_SQDIFF`)
+#### 제곱차 합 (`TM_SQDIFF`)
 
 ```
 R(x, y) = Σ_{x', y'}  [T(x', y') - I(x + x', y + y')]²
@@ -142,7 +142,7 @@ R(x, y) = Σ_{x', y'}  [T(x', y') - I(x + x', y + y')]²
 
 완벽한 매치에서 0, 차이와 함께 증가. 밝기 오프셋에 민감(균일하게 밝아진 패치가 모양이 맞아도 큰 R을 생성). 밝기가 제어되지 않으면 보통 잘못된 선택.
 
-#### B.2 교차 상관 (`TM_CCORR`)
+#### 교차 상관 (`TM_CCORR`)
 
 ```
 R(x, y) = Σ_{x', y'}  T(x', y') · I(x + x', y + y')
@@ -150,7 +150,7 @@ R(x, y) = Σ_{x', y'}  T(x', y') · I(x + x', y + y')
 
 매치에서 크고 다른 곳에서 작음. 하지만 내용과 무관하게 매우 밝은 패치에서 병적으로 큼 — 흰 벽이 실제 매치보다 높은 점수.
 
-#### B.3 정규화 교차 상관 (`TM_CCOEFF_NORMED`)
+#### 정규화 교차 상관 (`TM_CCOEFF_NORMED`)
 
 평균을 빼고 표준편차로 나눔:
 
@@ -455,7 +455,7 @@ if result['location']:
 
 Viola와 Jones(2001)는 최초의 실시간 얼굴 검출기를 만들었습니다. 핵심 혁신:
 
-#### C.1 Haar 유사 특징
+#### Haar 유사 특징
 
 Haar 특징은 인접한 직사각형 영역의 픽셀 밝기 합의 차이. 예시 패턴:
 
@@ -468,7 +468,7 @@ feature_value = sum(흰색 영역 픽셀) - sum(검은색 영역 픽셀)
 
 각 패턴은 단독으로는 조잡 — 단일 에지나 막대 — 하지만 가능한 패턴이 수천 개(서로 다른 위치, 크기, 유형)이고, 충분히 결합하면 변별력 있는 분류기를 생성.
 
-#### C.2 O(1) 특징 평가를 위한 Integral Image
+#### O(1) 특징 평가를 위한 Integral Image
 
 한 위치의 Haar 특징의 순진한 비용은 `O(area)` — 흰색과 검은색 영역의 모든 픽셀을 합산. Viola-Jones는 **integral image**를 도입: `ii(x, y) = Σ_{x' ≤ x, y' ≤ y} I(x', y')`를 미리 계산. 그러면 어떠한 직사각형의 합도 고정 4항 식:
 
@@ -478,11 +478,11 @@ sum_rect(x1, y1, x2, y2) = ii(x2, y2) - ii(x1, y2) - ii(x2, y1) + ii(x1, y1)
 
 어떤 위치와 크기의 어떤 Haar 특징도 특징 면적과 무관하게 상수 시간에 평가. 이것이 수천 위치에서 수천 특징을 스캔하는 것을 가능하게 만듭니다.
 
-#### C.3 AdaBoost 특징 선택
+#### AdaBoost 특징 선택
 
 검출 창에는 수만 개의 가능한 Haar 특징이 있음 — 모두 쓰기에는 너무 많음. AdaBoost는 각 라운드에서 **단일 최선의 특징을 반복적으로 뽑아** 강한 분류기를 만듭니다. 현재 오분류된 예제가 얼마나 어려운지로 가중. `T` 라운드 후 `T`개 특징의 가중 합을 얻고, 이 전체가 얼굴 vs 비얼굴을 잘 분류합니다.
 
-#### C.4 Cascade 거부
+#### Cascade 거부
 
 선택된 특징을 모든 위치에서 평가하는 것조차 비쌉니다. Viola-Jones는 분류기를 **cascade**로 배치:
 
@@ -810,17 +810,17 @@ cv2.imshow('Face Features', output)
 
 Dalal과 Triggs(2005)는 최초의 효과적인 보행자 검출기를 만들었습니다. 디스크립터 **Histogram of Oriented Gradients (HOG)**는 두 핵심 아이디어:
 
-#### D.1 검출 특징으로서의 기울기 히스토그램
+#### 검출 특징으로서의 기울기 히스토그램
 
 국소 셀(예: 8×8 픽셀)에서 각 픽셀의 기울기를 계산, 방향을 기울기 크기로 가중해 빈(예: 0°-180°의 9 빈)에 비닝. 결과: "이 셀에서 어떤 방향이 지배적인가"의 9개 숫자 요약. 검출 창 전체에 걸쳐 셀을 연결(예: 보행자를 위한 64×128)하면 ~3780 차원의 특징 벡터.
 
 원시 픽셀보다 나은 이유: 기울기 방향은 조명에 강건(절대 밝기가 아닌 밝기 차이만 중요), 히스토그램은 셀 내 작은 공간 이동에 강건.
 
-#### D.2 블록 정규화
+#### 블록 정규화
 
 분류 전에 HOG 특징은 블록 수준에서 정규화(예: 2×2 셀 그룹, 각 셀이 여러 겹치는 블록에 나타남). 정규화는 조명과 대비 변화에 대해 디스크립터를 강건하게 만듭니다. 두 정규화 방식이 흔함: L2-norm과 L2-Hys(지배적 피크를 억제하기 위해 clip한 L2).
 
-#### D.3 Linear SVM
+#### Linear SVM
 
 HOG 위에 Dalal-Triggs는 보행자를 비보행자 창과 분리하기 위해 **linear SVM**을 훈련. Linear 커널 SVM은 평가가 빠름(가중치와의 내적 + 임계값), 그래서 HOG+SVM을 모든 위치와 스케일에서 스캔하는 것이 실용적. OpenCV의 `HOGDescriptor`는 직접 적용할 수 있는 보행자용 사전 훈련된 linear SVM을 포함.
 
@@ -830,7 +830,7 @@ HOG 디스크립터 자체는 여전히 유효 — 좋은 수작업 특징이며
 
 Sliding-window 검출기는 보통 각 진짜 객체 주변에서 여러 번 발화 — 몇 위치와 스케일에서 겹친 경계 상자. 최종 검출을 제시하기 전에 이 중복들을 병합해야 합니다. 이것이 NMS이며, 모든 검출기(고전이든 신경이든) 다 합니다.
 
-#### E.1 Intersection-over-Union (IoU)
+#### Intersection-over-Union (IoU)
 
 두 경계 상자 `A`와 `B`에 대해:
 
@@ -840,7 +840,7 @@ IoU(A, B) = area(A ∩ B) / area(A ∪ B)
 
 상자가 겹치지 않으면 IoU는 0, 동일하면 1, 대략 절반 겹치면 0.5 근처. "같은 객체"의 표준 임계값은 IoU ≥ 0.5 (검출 벤치마크의 "mAP@0.5"가 의미하는 것도 이것).
 
-#### E.2 Greedy NMS
+#### Greedy NMS
 
 표준 알고리즘:
 
@@ -1079,7 +1079,12 @@ from sklearn import svm
 from sklearn.model_selection import train_test_split
 
 def train_hog_svm_classifier(positive_samples, negative_samples):
-    """HOG + SVM classifier training (conceptual example)"""
+    """HOG + SVM classifier training (conceptual example).
+
+    Note: HOG+SVM is a classical baseline; modern production detectors
+    (YOLO, Faster R-CNN) typically outperform it on accuracy and handle
+    occlusion/pose variation better, at the cost of GPU compute and training data.
+    """
 
     # HOG descriptor setup
     win_size = (64, 128)    # 1:2 aspect ratio matches the typical standing-person bounding box;
