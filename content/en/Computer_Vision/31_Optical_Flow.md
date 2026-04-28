@@ -121,13 +121,13 @@ This is an overdetermined linear system. The least-squares solution is `(u, v) =
 ⎣ v ⎦  =  ⎣ Σ I_x·I_y  Σ I_y²   ⎦    ⎣ -Σ I_y·I_t ⎦
 ```
 
-The matrix on the left is **exactly the structure tensor** from §13.B. Lucas-Kanade's local system is well-conditioned (invertible) exactly when the structure tensor has two large eigenvalues — i.e. at **corners**. At edges one eigenvalue is small and the solution becomes unstable along the edge direction (the aperture problem persists locally). In flat regions both eigenvalues are small and no flow can be recovered.
+The matrix on the left is **exactly the structure tensor** (see §13: Feature Detection (Structure Tensor)). Lucas-Kanade's local system is well-conditioned (invertible) exactly when the structure tensor has two large eigenvalues — i.e. at **corners**. At edges one eigenvalue is small and the solution becomes unstable along the edge direction (the aperture problem persists locally). In flat regions both eigenvalues are small and no flow can be recovered.
 
 This explains why Lucas-Kanade is typically applied only to sparse **keypoints** (corners detected by Harris/Shi-Tomasi): it is numerically well-conditioned there, and it would fail elsewhere anyway.
 
 ### Theory: Coarse-to-Fine Pyramids: Handling Large Motion
 
-The Taylor expansion in §A assumes `(dx, dy)` is small — on the order of one pixel. For motions larger than that, the first-order approximation is invalid, and both Lucas-Kanade and Horn-Schunck fail.
+The Taylor expansion of brightness constancy assumes `(dx, dy)` is small — on the order of one pixel. For motions larger than that, the first-order approximation is invalid, and both Lucas-Kanade and Horn-Schunck fail.
 
 **Fix**: build a Gaussian pyramid of both frames, solve optical flow at the coarsest (most-reduced) level where motion is small, then **propagate** the result to the next finer level (scaling the flow by 2, warping the second frame by this estimate so residual motion becomes small again), and refine. Repeat down to full resolution.
 
@@ -209,7 +209,7 @@ E(u, v) = ∫∫ [ (I_x u + I_y v + I_t)² + α²·( |∇u|² + |∇v|² ) ] dx 
           └───────── data term ─────────┘  └── smoothness ──┘
 ```
 
-The first term penalizes violations of brightness constancy (from §A); the second penalizes non-smooth flow fields. The weight `α` is a hyperparameter: large `α` forces very smooth flow (good for gentle motions); small `α` allows sharper changes (better at motion boundaries but more noise).
+The first term penalizes violations of brightness constancy (from §1's brightness constancy constraint); the second penalizes non-smooth flow fields. The weight `α` is a hyperparameter: large `α` forces very smooth flow (good for gentle motions); small `α` allows sharper changes (better at motion boundaries but more noise).
 
 Minimizing `E` gives a coupled system of PDEs; the standard solver is Gauss-Seidel iteration over the discretized image, each iteration updating `(u, v)` at every pixel based on its neighbors. The result is a **dense flow field** — every pixel gets a flow estimate, unlike Lucas-Kanade's sparse corners.
 

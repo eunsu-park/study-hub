@@ -121,13 +121,13 @@ Optical Flow: 연속 두 프레임 간 각 픽셀의 겉보기 동작을
 ⎣ v ⎦  =  ⎣ Σ I_x·I_y  Σ I_y²   ⎦    ⎣ -Σ I_y·I_t ⎦
 ```
 
-좌측 행렬은 **정확히 §13.B의 구조 텐서**. Lucas-Kanade의 국소 시스템은 구조 텐서가 두 개의 큰 고유값을 가질 때 정확히 잘 조건화(invertible)됩니다 — 즉 **코너**에서. 에지에서는 한 고유값이 작고 에지 방향으로 해가 불안정해집니다(aperture 문제가 국소적으로 지속). 평탄 영역에서는 두 고유값 모두 작아 흐름을 복원할 수 없습니다.
+좌측 행렬은 **정확히 §13(Feature Detection)의 구조 텐서(Structure Tensor)**. Lucas-Kanade의 국소 시스템은 구조 텐서가 두 개의 큰 고유값을 가질 때 정확히 잘 조건화(invertible)됩니다 — 즉 **코너**에서. 에지에서는 한 고유값이 작고 에지 방향으로 해가 불안정해집니다(aperture 문제가 국소적으로 지속). 평탄 영역에서는 두 고유값 모두 작아 흐름을 복원할 수 없습니다.
 
 이것이 Lucas-Kanade가 보통 희소 **키포인트**(Harris/Shi-Tomasi가 검출한 코너)에만 적용되는 이유입니다: 거기서 수치적으로 잘 조건화되고, 다른 곳에서는 어차피 실패하기 때문.
 
 ### 이론: Coarse-to-Fine 피라미드: 큰 움직임 다루기
 
-§A의 Taylor 전개는 `(dx, dy)`가 작다고 — 1 픽셀 정도 — 가정합니다. 그보다 큰 움직임에서는 1차 근사가 무효가 되고 Lucas-Kanade와 Horn-Schunck 모두 실패합니다.
+밝기 불변성의 Taylor 전개는 `(dx, dy)`가 작다고 — 1 픽셀 정도 — 가정합니다. 그보다 큰 움직임에서는 1차 근사가 무효가 되고 Lucas-Kanade와 Horn-Schunck 모두 실패합니다.
 
 **해결**: 두 프레임의 가우시안 피라미드를 만들고, 움직임이 작은 가장 거친(가장 축소된) 레벨에서 optical flow를 풀고, 그 결과를 다음 더 정밀한 레벨로 **전파**(흐름을 2배로 스케일링, 이 추정으로 두 번째 프레임을 워핑해 잔여 움직임이 다시 작아지도록), 정제. 풀 해상도까지 반복.
 
@@ -146,12 +146,12 @@ def lucas_kanade_demo(video_path):
     ret, old_frame = cap.read()
     old_gray = cv2.cvtColor(old_frame, cv2.COLOR_BGR2GRAY)
 
-    # 추적할 좋은 특징 탐지
+    # Detect good features to track
     feature_params = dict(maxCorners=100, qualityLevel=0.3,
                          minDistance=7, blockSize=7)
     p0 = cv2.goodFeaturesToTrack(old_gray, **feature_params)
 
-    # LK 매개변수
+    # LK parameters
     lk_params = dict(winSize=(15, 15), maxLevel=2,
                      criteria=(cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT,
                               10, 0.03))
@@ -166,17 +166,17 @@ def lucas_kanade_demo(video_path):
 
         frame_gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 
-        # Optical Flow 계산
+        # Calculate optical flow
         p1, status, error = cv2.calcOpticalFlowPyrLK(
             old_gray, frame_gray, p0, None, **lk_params
         )
 
-        # 좋은 점 선택
+        # Select good points
         if p1 is not None:
             good_new = p1[status == 1]
             good_old = p0[status == 1]
 
-        # 궤적 그리기
+        # Draw tracks
         for i, (new, old) in enumerate(zip(good_new, good_old)):
             a, b = new.ravel().astype(int)
             c, d = old.ravel().astype(int)
@@ -209,7 +209,7 @@ E(u, v) = ∫∫ [ (I_x u + I_y v + I_t)² + α²·( |∇u|² + |∇v|² ) ] dx 
           └───── 데이터 항 ─────┘    └── 매끄러움 ──┘
 ```
 
-첫 항이 밝기 불변성 위반에 페널티(§A에서)를 주고, 둘째 항이 매끄럽지 않은 흐름장에 페널티를 줍니다. 가중치 `α`는 하이퍼파라미터: 큰 `α`는 매우 매끄러운 흐름을 강제(완만한 움직임에 좋음), 작은 `α`는 급격한 변화를 허용(움직임 경계에 더 잘 맞지만 잡음이 많음).
+첫 항이 밝기 불변성 위반에 페널티(§1의 밝기 불변성 제약식에서)를 주고, 둘째 항이 매끄럽지 않은 흐름장에 페널티를 줍니다. 가중치 `α`는 하이퍼파라미터: 큰 `α`는 매우 매끄러운 흐름을 강제(완만한 움직임에 좋음), 작은 `α`는 급격한 변화를 허용(움직임 경계에 더 잘 맞지만 잡음이 많음).
 
 `E` 최소화는 결합된 PDE 시스템을 줍니다. 표준 해법은 이산화된 이미지 위의 Gauss-Seidel 반복 — 각 반복이 모든 픽셀에서 이웃에 기반해 `(u, v)`를 갱신. 결과는 **밀집 흐름장** — 모든 픽셀이 흐름 추정을 얻음, Lucas-Kanade의 희소 코너와 달리.
 
@@ -231,21 +231,21 @@ def farneback_dense_flow(video_path):
 
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 
-        # 밀집 Optical Flow 계산
+        # Compute dense optical flow
         flow = cv2.calcOpticalFlowFarneback(
             old_gray, gray, None,
             pyr_scale=0.5, levels=3, winsize=15,
             iterations=3, poly_n=5, poly_sigma=1.2, flags=0
         )
 
-        # HSV 색상 코딩을 사용한 시각화
+        # Visualize using HSV color coding
         magnitude, angle = cv2.cartToPolar(flow[..., 0], flow[..., 1])
 
         hsv = np.zeros_like(old_frame)
-        hsv[..., 0] = angle * 180 / np.pi / 2  # 색상 = 방향
-        hsv[..., 1] = 255                        # 채도 = 최대
+        hsv[..., 0] = angle * 180 / np.pi / 2  # Hue = direction
+        hsv[..., 1] = 255                        # Saturation = max
         hsv[..., 2] = cv2.normalize(magnitude, None, 0, 255,
-                                     cv2.NORM_MINMAX)  # 명도 = 크기
+                                     cv2.NORM_MINMAX)  # Value = magnitude
 
         flow_rgb = cv2.cvtColor(hsv, cv2.COLOR_HSV2BGR)
         cv2.imshow('Dense Optical Flow', flow_rgb)
@@ -308,7 +308,7 @@ class FlowNetS(nn.Module):
 
     def __init__(self):
         super().__init__()
-        # 인코더
+        # Encoder
         self.encoder = nn.Sequential(
             nn.Conv2d(6, 64, 7, stride=2, padding=3), nn.LeakyReLU(0.1),
             nn.Conv2d(64, 128, 5, stride=2, padding=2), nn.LeakyReLU(0.1),
@@ -317,13 +317,13 @@ class FlowNetS(nn.Module):
             nn.Conv2d(512, 512, 3, stride=2, padding=1), nn.LeakyReLU(0.1),
         )
 
-        # 스킵 연결이 있는 디코더
+        # Decoder with skip connections
         self.decoder = nn.Sequential(
             nn.ConvTranspose2d(512, 256, 4, stride=2, padding=1), nn.LeakyReLU(0.1),
             nn.ConvTranspose2d(256, 128, 4, stride=2, padding=1), nn.LeakyReLU(0.1),
             nn.ConvTranspose2d(128, 64, 4, stride=2, padding=1), nn.LeakyReLU(0.1),
             nn.ConvTranspose2d(64, 32, 4, stride=2, padding=1), nn.LeakyReLU(0.1),
-            nn.ConvTranspose2d(32, 2, 4, stride=2, padding=1),  # 2 채널: (u, v)
+            nn.ConvTranspose2d(32, 2, 4, stride=2, padding=1),  # 2 channels: (u, v)
         )
 
     def forward(self, img1, img2):
@@ -364,7 +364,7 @@ RAFT (Recurrent All-Pairs Field Transforms, 2020):
 ### 5.2 RAFT 사용
 
 ```python
-# torchvision의 사전 학습된 RAFT 사용
+# Using pretrained RAFT from torchvision
 import torch
 from torchvision.models.optical_flow import raft_large, Raft_Large_Weights
 
@@ -374,14 +374,14 @@ def compute_raft_flow(img1, img2):
     model = raft_large(weights=weights)
     model.eval()
 
-    # 전처리
+    # Preprocess
     transforms = weights.transforms()
     img1_t, img2_t = transforms(img1, img2)
 
     with torch.no_grad():
         flow_predictions = model(img1_t.unsqueeze(0), img2_t.unsqueeze(0))
 
-    # 마지막 예측이 최종 흐름
+    # Last prediction is the final flow
     flow = flow_predictions[-1][0]  # (2, H, W)
     return flow
 ```
@@ -404,10 +404,10 @@ def flow_to_color(flow, max_flow=None):
     magnitude = np.sqrt(u**2 + v**2)
     angle = np.arctan2(-v, -u) / np.pi  # [-1, 1]
 
-    # HSV로 매핑
+    # Map to HSV
     hsv = np.zeros((*flow.shape[:2], 3), dtype=np.uint8)
-    hsv[..., 0] = ((angle + 1) / 2 * 179).astype(np.uint8)  # 색상
-    hsv[..., 1] = 255  # 채도
+    hsv[..., 0] = ((angle + 1) / 2 * 179).astype(np.uint8)  # Hue
+    hsv[..., 1] = 255  # Saturation
     hsv[..., 2] = np.minimum(magnitude / max_flow * 255, 255).astype(np.uint8)
 
     return cv2.cvtColor(hsv, cv2.COLOR_HSV2BGR)
@@ -434,14 +434,14 @@ def stabilize_video(frames, flows):
     stabilized = [frames[0]]
 
     for i in range(1, len(frames)):
-        # 평균 흐름이 전역 동작을 제공
+        # Average flow gives global motion
         dx = flows[i-1][..., 0].mean()
         dy = flows[i-1][..., 1].mean()
 
         cumulative_dx += dx
         cumulative_dy += dy
 
-        # 역변환 생성
+        # Create inverse transformation
         M = np.float32([[1, 0, -cumulative_dx],
                         [0, 1, -cumulative_dy]])
 
