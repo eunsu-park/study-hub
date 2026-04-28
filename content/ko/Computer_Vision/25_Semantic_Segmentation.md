@@ -127,7 +127,7 @@ class FCN8s(nn.Module):
 
     def __init__(self, n_classes=21):
         super().__init__()
-        # 인코더 (VGG-16 백본)
+        # Encoder (VGG-16 backbone)
         self.conv1 = self._make_block(3, 64, 2)
         self.pool1 = nn.MaxPool2d(2, 2)
 
@@ -135,24 +135,24 @@ class FCN8s(nn.Module):
         self.pool2 = nn.MaxPool2d(2, 2)
 
         self.conv3 = self._make_block(128, 256, 3)
-        self.pool3 = nn.MaxPool2d(2, 2)    # 1/8 해상도
+        self.pool3 = nn.MaxPool2d(2, 2)    # 1/8 resolution
 
         self.conv4 = self._make_block(256, 512, 3)
-        self.pool4 = nn.MaxPool2d(2, 2)    # 1/16 해상도
+        self.pool4 = nn.MaxPool2d(2, 2)    # 1/16 resolution
 
         self.conv5 = self._make_block(512, 512, 3)
-        self.pool5 = nn.MaxPool2d(2, 2)    # 1/32 해상도
+        self.pool5 = nn.MaxPool2d(2, 2)    # 1/32 resolution
 
-        # FCN 헤드 (FC를 1x1 conv로 대체)
+        # FCN head (replace FC with 1x1 conv)
         self.fc6 = nn.Conv2d(512, 4096, 1)
         self.fc7 = nn.Conv2d(4096, 4096, 1)
         self.score = nn.Conv2d(4096, n_classes, 1)
 
-        # 스킵 연결
+        # Skip connections
         self.score_pool4 = nn.Conv2d(512, n_classes, 1)
         self.score_pool3 = nn.Conv2d(256, n_classes, 1)
 
-        # 업샘플링 레이어
+        # Upsampling layers
         self.upscore2 = nn.ConvTranspose2d(n_classes, n_classes, 4, stride=2, padding=1)
         self.upscore4 = nn.ConvTranspose2d(n_classes, n_classes, 4, stride=2, padding=1)
         self.upscore8 = nn.ConvTranspose2d(n_classes, n_classes, 16, stride=8, padding=4)
@@ -165,7 +165,7 @@ class FCN8s(nn.Module):
         return nn.Sequential(*layers)
 
     def forward(self, x):
-        # 인코더
+        # Encoder
         x = self.pool1(self.conv1(x))
         x = self.pool2(self.conv2(x))
         x = self.pool3(self.conv3(x))
@@ -176,19 +176,19 @@ class FCN8s(nn.Module):
 
         x = self.pool5(self.conv5(x))          # 1/32
 
-        # FCN 헤드
+        # FCN head
         x = F.relu(self.fc6(x))
         x = F.relu(self.fc7(x))
-        x = self.score(x)                      # 1/32, n_classes 채널
+        x = self.score(x)                      # 1/32, n_classes channels
 
-        # FCN-8s: pool3, pool4, fc7 융합
+        # FCN-8s: fuse pool3, pool4, and fc7
         x = self.upscore2(x)                   # 1/16
-        x = x + self.score_pool4(pool4_out)    # 스킵 연결
+        x = x + self.score_pool4(pool4_out)    # Skip connection
 
         x = self.upscore4(x)                   # 1/8
-        x = x + self.score_pool3(pool3_out)    # 스킵 연결
+        x = x + self.score_pool3(pool3_out)    # Skip connection
 
-        x = self.upscore8(x)                   # 1/1 (원본 해상도)
+        x = self.upscore8(x)                   # 1/1 (original resolution)
 
         return x
 ```
@@ -272,32 +272,36 @@ class UNet(nn.Module):
 
     def __init__(self, in_channels=3, n_classes=21, features=[64, 128, 256, 512]):
         super().__init__()
+        # The classic U-Net topology has 4 down/up levels; this implementation
+        # mirrors that depth. The forward pass iterates dynamically over
+        # self.decoder, so the assertion is the only place depth is enforced.
+        assert len(features) == 4, "U-Net here assumes 4 encoder/decoder levels"
         self.encoder = nn.ModuleList()
         self.decoder = nn.ModuleList()
         self.pool = nn.MaxPool2d(2, 2)
 
-        # 인코더 (다운샘플링 경로)
+        # Encoder (downsampling path)
         for feat in features:
             self.encoder.append(DoubleConv(in_channels, feat))
             in_channels = feat
 
-        # 병목 레이어
+        # Bottleneck
         self.bottleneck = DoubleConv(features[-1], features[-1] * 2)
 
-        # 디코더 (업샘플링 경로)
+        # Decoder (upsampling path)
         for feat in reversed(features):
             self.decoder.append(
                 nn.ConvTranspose2d(feat * 2, feat, 2, stride=2)
             )
             self.decoder.append(DoubleConv(feat * 2, feat))
 
-        # 출력
+        # Output
         self.final = nn.Conv2d(features[0], n_classes, 1)
 
     def forward(self, x):
         skip_connections = []
 
-        # 인코더
+        # Encoder
         for enc in self.encoder:
             x = enc(x)
             skip_connections.append(x)
@@ -306,16 +310,16 @@ class UNet(nn.Module):
         x = self.bottleneck(x)
         skip_connections = skip_connections[::-1]
 
-        # 디코더
+        # Decoder
         for i in range(0, len(self.decoder), 2):
-            x = self.decoder[i](x)      # 업샘플링
+            x = self.decoder[i](x)      # Upsample
             skip = skip_connections[i // 2]
 
-            # 크기 불일치 처리
+            # Handle size mismatch
             if x.shape != skip.shape:
                 x = F.interpolate(x, size=skip.shape[2:])
 
-            x = torch.cat([skip, x], dim=1)  # 연결
+            x = torch.cat([skip, x], dim=1)  # Concatenate
             x = self.decoder[i + 1](x)       # Double conv
 
         return self.final(x)
@@ -365,14 +369,14 @@ class ASPP(nn.Module):
         super().__init__()
         modules = []
 
-        # 1×1 합성곱
+        # 1×1 convolution
         modules.append(nn.Sequential(
             nn.Conv2d(in_channels, out_channels, 1, bias=False),
             nn.BatchNorm2d(out_channels),
             nn.ReLU(inplace=True),
         ))
 
-        # 다양한 비율의 Atrous 합성곱
+        # Atrous convolutions at different rates
         for rate in rates:
             modules.append(nn.Sequential(
                 nn.Conv2d(in_channels, out_channels, 3,
@@ -381,7 +385,7 @@ class ASPP(nn.Module):
                 nn.ReLU(inplace=True),
             ))
 
-        # 전역 평균 풀링 분기
+        # Global average pooling branch
         modules.append(nn.Sequential(
             nn.AdaptiveAvgPool2d(1),
             nn.Conv2d(in_channels, out_channels, 1, bias=False),
@@ -391,7 +395,7 @@ class ASPP(nn.Module):
 
         self.branches = nn.ModuleList(modules)
 
-        # 연결된 특징 투영
+        # Project concatenated features
         self.project = nn.Sequential(
             nn.Conv2d(out_channels * (len(rates) + 2), out_channels, 1, bias=False),
             nn.BatchNorm2d(out_channels),
@@ -404,7 +408,7 @@ class ASPP(nn.Module):
         for branch in self.branches[:-1]:
             outputs.append(branch(x))
 
-        # 전역 풀링 분기: 입력 크기로 업샘플링
+        # Global pooling branch: upsample to input size
         gap = self.branches[-1](x)
         gap = F.interpolate(gap, size=x.shape[2:], mode='bilinear', align_corners=False)
         outputs.append(gap)
@@ -419,11 +423,11 @@ class ASPP(nn.Module):
 
 ### 이론: 손실 함수
 
-#### E.1 Cross-entropy
+#### Cross-entropy
 
 기본: 픽셀별 범주형 cross-entropy. 분류와 같음, 단지 모든 픽셀에 적용. 문제: **클래스 불균형**. 주행 장면에서 60% 픽셀이 도로이고 0.5%가 교통 표지일 수 있음. Cross-entropy는 모든 픽셀을 동등하게 취급, 네트워크가 도로에는 매우 능숙해지지만 표지는 거의 학습하지 않음.
 
-#### E.2 Dice / IoU 손실
+#### Dice / IoU 손실
 
 Dice loss는 예측과 ground-truth 마스크 간 겹침을 직접 최적화:
 
@@ -434,7 +438,7 @@ Loss = 1 - Dice
 
 이진 마스크: `Dice = 2 · Σ(p · g) / (Σp + Σg)` (`p`, `g`는 예측 및 ground-truth 확률). 클래스 불균형에 둔감 — 배경이 아니라 전경 겹침만 신경 쓰기 때문. 관심 클래스(종양)가 배경에 비해 작은 의료 영상에 인기.
 
-#### E.3 Focal loss
+#### Focal loss
 
 Cross-entropy에 **잘 분류된 쉬운 픽셀을 다운가중**하는 추가 `(1 - p)^γ` 인자, 어려운 픽셀에 훈련 집중. 클래스 불균형과 싸우는 또 다른 방법, RetinaNet이 도입, 세그멘테이션에도 인기.
 
@@ -479,6 +483,7 @@ class CombinedLoss(nn.Module):
     """최상의 결과를 위해 CE + Dice를 결합."""
 
     def __init__(self, ce_weight=1.0, dice_weight=1.0):
+        # Equal weights commonly used as a baseline; tune empirically per dataset.
         super().__init__()
         self.ce_weight = ce_weight
         self.dice_weight = dice_weight
@@ -537,7 +542,7 @@ def compute_iou(pred, target, n_classes):
         union = (pred_c | target_c).sum().item()
 
         if union == 0:
-            ious.append(float('nan'))  # 클래스가 존재하지 않음
+            ious.append(float('nan'))  # Class not present
         else:
             ious.append(intersection / union)
 
@@ -588,7 +593,7 @@ def evaluate_segmentation(model, dataloader, n_classes, device='cpu'):
             total_correct += (preds == targets).sum().item()
             total_pixels += targets.numel()
 
-    # mIoU 계산
+    # Compute mean IoU
     class_ious = []
     for c in range(n_classes):
         if total_count[c] > 0:
@@ -612,6 +617,8 @@ def evaluate_segmentation(model, dataloader, n_classes, device='cpu'):
 def train_segmentation(model, train_loader, val_loader, n_classes,
                         epochs=50, lr=1e-3, device='cuda'):
     """세그멘테이션을 위한 완전한 학습 파이프라인."""
+    # Seed for reproducibility of dropout, weight init, and shuffle order.
+    torch.manual_seed(0)
     criterion = CombinedLoss(ce_weight=1.0, dice_weight=0.5)
     optimizer = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=1e-4)
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=epochs)
@@ -620,7 +627,7 @@ def train_segmentation(model, train_loader, val_loader, n_classes,
     best_miou = 0
 
     for epoch in range(epochs):
-        # 학습
+        # Training
         model.train()
         total_loss = 0
         for images, targets in train_loader:
@@ -639,7 +646,7 @@ def train_segmentation(model, train_loader, val_loader, n_classes,
         scheduler.step()
         avg_loss = total_loss / len(train_loader)
 
-        # 검증
+        # Validation
         miou, pixel_acc = evaluate_segmentation(
             model, val_loader, n_classes, device
         )

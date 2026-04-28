@@ -272,6 +272,10 @@ class UNet(nn.Module):
 
     def __init__(self, in_channels=3, n_classes=21, features=[64, 128, 256, 512]):
         super().__init__()
+        # The classic U-Net topology has 4 down/up levels; this implementation
+        # mirrors that depth. The forward pass iterates dynamically over
+        # self.decoder, so the assertion is the only place depth is enforced.
+        assert len(features) == 4, "U-Net here assumes 4 encoder/decoder levels"
         self.encoder = nn.ModuleList()
         self.decoder = nn.ModuleList()
         self.pool = nn.MaxPool2d(2, 2)
@@ -419,11 +423,11 @@ class ASPP(nn.Module):
 
 ### Theory: Loss Functions
 
-#### E.1 Cross-entropy
+#### Cross-entropy
 
 The default: per-pixel categorical cross-entropy. Same as classification, just applied at every pixel. Problem: **class imbalance**. In a driving scene, 60% of pixels might be road and 0.5% might be traffic signs. Cross-entropy treats every pixel equally, so the network becomes very good at road and barely learns signs.
 
-#### E.2 Dice / IoU loss
+#### Dice / IoU loss
 
 Dice loss directly optimizes the overlap between predicted and ground-truth masks:
 
@@ -434,7 +438,7 @@ Loss = 1 - Dice
 
 For binary masks: `Dice = 2 · Σ(p · g) / (Σp + Σg)` where `p`, `g` are predicted and ground-truth probabilities. Insensitive to class imbalance because it only cares about the foreground overlap, not the background. Popular in medical imaging where the class of interest (tumor) is small relative to the background.
 
-#### E.3 Focal loss
+#### Focal loss
 
 Cross-entropy with an extra `(1 - p)^γ` factor that **downweights well-classified easy pixels**, focusing training on hard pixels. Another way to combat class imbalance, introduced by RetinaNet and popular in segmentation too.
 
@@ -479,6 +483,7 @@ class CombinedLoss(nn.Module):
     """Combine CE + Dice for best results."""
 
     def __init__(self, ce_weight=1.0, dice_weight=1.0):
+        # Equal weights commonly used as a baseline; tune empirically per dataset.
         super().__init__()
         self.ce_weight = ce_weight
         self.dice_weight = dice_weight
@@ -612,6 +617,8 @@ def evaluate_segmentation(model, dataloader, n_classes, device='cpu'):
 def train_segmentation(model, train_loader, val_loader, n_classes,
                         epochs=50, lr=1e-3, device='cuda'):
     """Complete training pipeline for segmentation."""
+    # Seed for reproducibility of dropout, weight init, and shuffle order.
+    torch.manual_seed(0)
     criterion = CombinedLoss(ce_weight=1.0, dice_weight=0.5)
     optimizer = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=1e-4)
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=epochs)
