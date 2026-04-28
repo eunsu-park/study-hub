@@ -34,7 +34,7 @@ After completing this lesson, you will be able to:
 
 ## 1. Kernels and Convolution
 
-Image filtering is, at its mathematical core, **convolution applied to a 2D signal**. Every linear filter in this lesson — average, Gaussian, Sobel, Laplacian, sharpening, emboss — is one specific choice of kernel plugged into the same operation. Two filters in this lesson (median in §4, bilateral in §5) sit *outside* this convolution framework, which is exactly what gives them their special edge-preserving behavior.
+Image filtering is, at its mathematical core, **convolution applied to a 2D signal**. Every linear filter in this lesson — average, Gaussian, Sobel, Laplacian, sharpening, emboss — is one specific choice of kernel plugged into the same operation. Two filters in this lesson (median and bilateral) sit *outside* this convolution framework, which is exactly what gives them their special edge-preserving behavior.
 
 ### Theory: What Convolution Actually Is
 
@@ -69,7 +69,7 @@ Convolution with a fixed kernel is **Linear Shift-Invariant**:
 - **Linear**: filtering `I1 + I2` equals filtering each separately and adding. Doubling the input doubles the output.
 - **Shift-invariant**: translating the input by `(a, b)` translates the output by exactly `(a, b)`. The same filter is applied everywhere.
 
-Every filter built from `cv2.filter2D` (Gaussian, Sobel, Laplacian, sharpening, emboss, custom) is LSI. The **median filter** (§4) and **bilateral filter** (§5) are *not* linear, which is exactly what lets them do things linear filters cannot.
+Every filter built from `cv2.filter2D` (Gaussian, Sobel, Laplacian, sharpening, emboss, custom) is LSI — that is, all of the linear filters covered in §1–3. The **median filter** (covered in the median-blur section) and **bilateral filter** (covered in the bilateral-filter section) are *not* linear, which is exactly what lets them do things linear filters cannot.
 
 #### Separable kernels
 
@@ -219,7 +219,7 @@ A kernel's effect is completely described by its Fourier transform `F(K)`. Frequ
 - **High-pass**: `F(K)` near zero at zero frequency, larger at high. Blocks smooth content, emphasizes edges. (Laplacian.)
 - **Band-pass**: passes a ring of frequencies. (Difference-of-Gaussians, used in §08 Edge Detection.)
 
-**Why blurring removes noise — and also blurs edges**: sensor noise and salt-and-pepper noise appear as rapid pixel-to-pixel variation, which is high-frequency content almost by definition. Real scene features vary more slowly and concentrate in low frequencies. A low-pass kernel suppresses the high-frequency band where noise lives while preserving the low-frequency band where signal lives. The catch: **sharp edges are also high-frequency content**, so a linear low-pass filter has no way to distinguish "high frequency because noise" from "high frequency because edge" — it attenuates both. That is why every linear blur blurs edges, and why genuine edge-preserving smoothing requires going non-linear (§5).
+**Why blurring removes noise — and also blurs edges**: sensor noise and salt-and-pepper noise appear as rapid pixel-to-pixel variation, which is high-frequency content almost by definition. Real scene features vary more slowly and concentrate in low frequencies. A low-pass kernel suppresses the high-frequency band where noise lives while preserving the low-frequency band where signal lives. The catch: **sharp edges are also high-frequency content**, so a linear low-pass filter has no way to distinguish "high frequency because noise" from "high frequency because edge" — it attenuates both. That is why every linear blur blurs edges, and why genuine edge-preserving smoothing requires going non-linear (covered in the bilateral-filter section).
 
 ---
 
@@ -521,6 +521,7 @@ img = cv2.imread('image.jpg')
 
 # Add salt-and-pepper noise (for testing)
 def add_salt_pepper_noise(img, amount=0.05):
+    np.random.seed(0)  # Deterministic noise so the figure is reproducible
     noisy = img.copy()
     h, w = img.shape[:2]
     num_pixels = int(amount * h * w)
