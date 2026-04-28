@@ -59,7 +59,7 @@ The model comes straight from display hardware: an LCD or OLED pixel consists of
 
 Reasons RGB is a poor analysis space:
 
-1. **Not perceptually uniform**. A fixed Euclidean distance `Δ = ‖(R₁,G₁,B₁) - (R₂,G₂,B₂)‖` does not correspond to a fixed perceived color difference. In green regions the eye is hypersensitive; in blue it is insensitive. §D shows how LAB fixes this.
+1. **Not perceptually uniform**. A fixed Euclidean distance `Δ = ‖(R₁,G₁,B₁) - (R₂,G₂,B₂)‖` does not correspond to a fixed perceived color difference. In green regions the eye is hypersensitive; in blue it is insensitive. §4 (LAB Color Space) shows how LAB fixes this.
 2. **Channels are highly correlated.** Most natural images have `R`, `G`, `B` values that vary together — brighten the scene and all three channels go up. Operations that want to isolate "color" from "brightness" cannot do so cleanly in RGB.
 3. **Brightness is entangled.** "Is this pixel red?" needs a lighting-invariant answer, but a shadowed red ball has smaller `R, G, B` than a bright red ball. No RGB threshold reliably separates red from non-red across lighting conditions.
 
@@ -266,7 +266,7 @@ HSV (Hue, Saturation, Value) reparametrizes the RGB cube into a cylinder that mi
 - **Saturation S** (fraction 0–1) — how pure vs washed-out. 0 = gray, 1 = fully vivid.
 - **Value V** (fraction 0–1) — how bright. 0 = black, 1 = full brightness for that hue.
 
-#### C.1 The conversion
+#### The HSV conversion formula
 
 Let `R, G, B ∈ [0, 1]` and `M = max(R, G, B)`, `m = min(R, G, B)`, `Δ = M - m`. Then
 
@@ -286,7 +286,7 @@ H = ⎨
 
 The `max - min` quantity `Δ` measures how "off-diagonal" the RGB point is — zero if `R = G = B` (a gray, with hue undefined), larger as the color becomes more saturated. The hue formula picks the sector based on which channel is dominant and interpolates between the two flanking primaries.
 
-#### C.2 Why this matters for computer vision
+#### Why this matters for computer vision
 
 In HSV, brightness is isolated in `V`. A red object photographed in shadow and in sunlight has similar `H` (red is still red) and similar `S` (the object is still saturated), but very different `V`. A filter that selects pixels by `H` and `S` only — ignoring `V` — becomes robust to lighting variation, which is the textbook recipe for color-based segmentation:
 
@@ -295,7 +295,7 @@ hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
 mask = cv2.inRange(hsv, (100, 150, 50), (130, 255, 255))   # blue-ish, any brightness
 ```
 
-#### C.3 The OpenCV `uint8` scaling
+#### The OpenCV `uint8` scaling
 
 OpenCV stores HSV in `uint8`, which has only 256 levels. Hue in degrees would need ≥ 360 levels, so OpenCV halves it: **H ∈ [0, 180], not [0, 360]**. Saturation and Value are scaled to `[0, 255]`. A common bug: copying HSV ranges from a tutorial that used `[0, 360]` for hue and getting results shifted by a factor of two. When reasoning about the range, double every angle in OpenCV.
 
