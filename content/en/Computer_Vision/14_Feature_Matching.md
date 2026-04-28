@@ -38,7 +38,7 @@ Feature matching is the process of finding and connecting identical feature poin
 
 Each detected keypoint has a descriptor: a fixed-size vector representing its local appearance. Matching two keypoints means asking whether their descriptors are "close" in the descriptor space. Different descriptor families use different spaces:
 
-#### A.1 Float descriptors and L2 distance
+#### Float descriptors and L2 distance
 
 SIFT, SURF, and other histogram-of-gradients descriptors produce 128- or 64-dimensional `float32` vectors. The canonical distance is **Euclidean (L2)**:
 
@@ -50,7 +50,7 @@ Also commonly used: squared-L2 (skip the sqrt for speed; same ordering), L1 (Man
 
 Why L2? SIFT descriptors are approximately Gaussian-distributed around the true location in descriptor space, and L2 is the maximum-likelihood distance under Gaussian noise. Empirically L2 works well even when assumptions are only loosely met.
 
-#### A.2 Binary descriptors and Hamming distance
+#### Binary descriptors and Hamming distance
 
 ORB, BRIEF, BRISK, AKAZE produce binary strings (typically 256 or 512 bits). Each bit compares a pair of pixels and stores which was brighter. The canonical distance is **Hamming distance**:
 
@@ -125,13 +125,13 @@ import cv2
 
 ### Theory: Nearest-Neighbor Search: Brute-Force vs FLANN
 
-#### B.1 Brute-force (`BFMatcher`)
+#### Brute-force (`BFMatcher`)
 
 For each descriptor in set A, compute distance to every descriptor in set B, return the one with minimum distance. `O(n_A · n_B · d)` where `d` is descriptor length. Exact, simple, and the baseline.
 
 Fine for hundreds of keypoints per image. Becomes expensive when each image has 5000+ keypoints and you're matching many image pairs.
 
-#### B.2 FLANN: Fast Library for Approximate Nearest Neighbors
+#### FLANN: Fast Library for Approximate Nearest Neighbors
 
 FLANN trades a small amount of accuracy for a large speedup using spatial indexes:
 
@@ -239,8 +239,10 @@ def bf_crosscheck_comparison(img1_path, img2_path):
 
     print(f"crossCheck=False: {len(matches_no_cross)} matches")
     print(f"crossCheck=True:  {len(matches_cross)} matches")
-    # crossCheck=True is always the safer default for bf.match(); use False
-    # only when you plan to apply a separate ratio test via knnMatch
+    # crossCheck=True trades recall for precision (roughly halves the match
+    # count). It is a reasonable default for bf.match() when feature counts
+    # are similar on both sides; use crossCheck=False with a ratio test via
+    # knnMatch when you need more candidates or asymmetric image sizes.
 
 bf_crosscheck_comparison('query.jpg', 'train.jpg')
 ```
@@ -489,7 +491,7 @@ def get_matcher(descriptor_type):
 
 Even with a perfect descriptor and exact nearest-neighbor search, not every returned match is correct. Two common filters dramatically reduce false matches:
 
-#### C.1 Cross-check
+#### Cross-check
 
 A match `(i, j(i))` is accepted only if:
 
@@ -498,7 +500,7 @@ A match `(i, j(i))` is accepted only if:
 
 Implemented via `BFMatcher(..., crossCheck=True)`. Roughly halves the number of matches but with much higher precision. Incompatible with `knnMatch` (which returns k-nearest-neighbors — cross-check only works for single nearest match).
 
-#### C.2 Lowe's Ratio Test
+#### Lowe's Ratio Test
 
 For each descriptor in A, find the **two** nearest neighbors in B: the best at distance `d₁` and second-best at `d₂`. Accept the match only if `d₁ / d₂ < τ` (typically `τ = 0.7–0.8`).
 
@@ -552,8 +554,9 @@ def lowe_ratio_test(img1_path, img2_path, ratio_thresh=0.75):
     # a false match has many similar candidates (ratio close to 1.0)
     good_matches = []
     for m, n in matches:
-        ratio = m.distance / n.distance
-        if ratio < ratio_thresh:
+        # Equivalent to ratio = m.distance / n.distance < ratio_thresh,
+        # written as a multiplication to avoid divide-by-zero on identical descriptors
+        if m.distance < ratio_thresh * n.distance:
             good_matches.append(m)
 
     print(f"Total matches: {len(matches)}")
@@ -645,7 +648,7 @@ After descriptor-based filtering you still have typically 20–50% outliers — 
 
 A **geometric model** says: "all correct matches must be consistent with this transformation". For two images of a planar scene, the transformation is a **homography**; for two views of a rigid 3D scene, it is described by the **fundamental matrix**. Either way, an inlier is a match consistent with the model; an outlier is not.
 
-#### D.1 The RANSAC algorithm
+#### The RANSAC algorithm
 
 Fitting a model by least squares fails when 30% of the data is wrong — outliers drag the estimate away from truth. RANSAC (Random Sample Consensus, Fischler & Bolles, 1981) solves this by **assuming inliers form a majority consensus**:
 
@@ -657,7 +660,7 @@ Fitting a model by least squares fails when 30% of the data is wrong — outlier
 
 The key insight: even with 50% outliers, randomly drawing 4 correct inliers has probability `(0.5)⁴ = 6.25%` per sample. Do 500 samples and you will almost certainly pick some clean sample, which will get a much larger inlier count than any outlier-contaminated sample.
 
-#### D.2 Why it works as an outlier filter
+#### Why it works as an outlier filter
 
 After RANSAC you don't just get a model — you also get a set of **inlier matches** (those consistent with the chosen model). Discarding outliers this way is typically more effective than any descriptor-based filter, because it uses the whole image's geometric structure rather than local descriptor similarity.
 

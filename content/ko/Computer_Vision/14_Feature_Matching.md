@@ -38,7 +38,7 @@
 
 검출된 각 키포인트는 디스크립터를 가집니다: 국소 외관을 나타내는 고정 크기 벡터. 두 키포인트를 매칭한다는 것은 그 디스크립터들이 디스크립터 공간에서 "가까운지" 묻는 것입니다. 디스크립터 가족마다 서로 다른 공간:
 
-#### A.1 Float 디스크립터와 L2 거리
+#### Float 디스크립터와 L2 거리
 
 SIFT, SURF, 다른 기울기 히스토그램 디스크립터는 128- 또는 64차원 `float32` 벡터를 생성. 정식 거리는 **유클리드(L2)**:
 
@@ -50,7 +50,7 @@ d(a, b) = √ Σ_i (a_i - b_i)²
 
 왜 L2? SIFT 디스크립터는 디스크립터 공간에서 참 위치 주변에 근사적으로 가우시안 분포를 가지며, L2가 가우시안 잡음 아래 최대우도 거리. 가정이 느슨하게만 충족돼도 실전에서 L2는 잘 작동.
 
-#### A.2 이진 디스크립터와 Hamming 거리
+#### 이진 디스크립터와 Hamming 거리
 
 ORB, BRIEF, BRISK, AKAZE는 이진 문자열(보통 256 또는 512 비트)을 생성. 각 비트가 픽셀 쌍을 비교해 어느 쪽이 더 밝은지를 저장. 정식 거리는 **Hamming 거리**:
 
@@ -125,13 +125,13 @@ import cv2
 
 ### 이론: 최근접 이웃 탐색: Brute-Force 대 FLANN
 
-#### B.1 Brute-force (`BFMatcher`)
+#### Brute-force (`BFMatcher`)
 
 A 집합의 각 디스크립터에 대해 B 집합의 모든 디스크립터와 거리를 계산, 최소 거리 하나를 반환. `O(n_A · n_B · d)` (`d`는 디스크립터 길이). 정확, 단순, 베이스라인.
 
 이미지당 수백 키포인트에는 괜찮음. 각 이미지가 5000개 이상 키포인트를 가지고 많은 이미지 쌍을 매칭할 때 비싸짐.
 
-#### B.2 FLANN: Fast Library for Approximate Nearest Neighbors
+#### FLANN: Fast Library for Approximate Nearest Neighbors
 
 FLANN은 공간 인덱스로 작은 정확도 손실을 큰 속도 향상과 교환:
 
@@ -239,8 +239,10 @@ def bf_crosscheck_comparison(img1_path, img2_path):
 
     print(f"crossCheck=False: {len(matches_no_cross)} matches")
     print(f"crossCheck=True:  {len(matches_cross)} matches")
-    # crossCheck=True is always the safer default for bf.match(); use False
-    # only when you plan to apply a separate ratio test via knnMatch
+    # crossCheck=True trades recall for precision (roughly halves the match
+    # count). It is a reasonable default for bf.match() when feature counts
+    # are similar on both sides; use crossCheck=False with a ratio test via
+    # knnMatch when you need more candidates or asymmetric image sizes.
 
 bf_crosscheck_comparison('query.jpg', 'train.jpg')
 ```
@@ -489,7 +491,7 @@ def get_matcher(descriptor_type):
 
 완벽한 디스크립터와 정확한 최근접 이웃 탐색으로도 반환된 모든 매치가 올바르지는 않습니다. 두 흔한 필터가 거짓 매치를 극적으로 줄입니다:
 
-#### C.1 Cross-check
+#### Cross-check
 
 매치 `(i, j(i))`는 다음일 때만 수용:
 
@@ -498,7 +500,7 @@ def get_matcher(descriptor_type):
 
 `BFMatcher(..., crossCheck=True)`로 구현. 매치 수를 대략 반감시키지만 훨씬 높은 정밀도. `knnMatch`(k-최근접 이웃을 반환)와 호환 안 됨 — cross-check는 단일 최근접 매치에만 작동.
 
-#### C.2 Lowe's Ratio Test
+#### Lowe's Ratio Test
 
 A의 각 디스크립터에 대해 B에서 **두** 최근접 이웃을 찾음: 거리 `d₁`의 베스트와 `d₂`의 두 번째. `d₁ / d₂ < τ`(보통 `τ = 0.7–0.8`)일 때만 매치 수용.
 
@@ -552,8 +554,9 @@ def lowe_ratio_test(img1_path, img2_path, ratio_thresh=0.75):
     # a false match has many similar candidates (ratio close to 1.0)
     good_matches = []
     for m, n in matches:
-        ratio = m.distance / n.distance
-        if ratio < ratio_thresh:
+        # Equivalent to ratio = m.distance / n.distance < ratio_thresh,
+        # written as a multiplication to avoid divide-by-zero on identical descriptors
+        if m.distance < ratio_thresh * n.distance:
             good_matches.append(m)
 
     print(f"Total matches: {len(matches)}")
@@ -645,7 +648,7 @@ def symmetric_matching(des1, des2, norm_type=cv2.NORM_L2):
 
 **기하학적 모델**은 "모든 올바른 매치는 이 변환과 일치해야 한다"고 말합니다. 평면 장면의 두 이미지에 대해 변환은 **호모그래피**; 강체 3D 장면의 두 뷰에 대해서는 **fundamental matrix**로 기술. 어느 쪽이든 inlier는 모델과 일치하는 매치, outlier는 그렇지 않은 것.
 
-#### D.1 RANSAC 알고리즘
+#### RANSAC 알고리즘
 
 최소제곱으로 모델을 맞추는 것은 데이터의 30%가 틀리면 실패 — 이상치가 추정을 진실로부터 끌고 감. RANSAC(Random Sample Consensus, Fischler & Bolles, 1981)은 **inlier가 다수 합의를 형성한다고 가정**함으로써 이를 해결:
 
@@ -657,7 +660,7 @@ def symmetric_matching(des1, des2, norm_type=cv2.NORM_L2):
 
 핵심 통찰: 50% 이상치에서도 무작위로 4개의 올바른 inlier를 뽑을 확률은 샘플당 `(0.5)⁴ = 6.25%`. 500 샘플을 돌리면 깨끗한 샘플을 거의 확실히 뽑을 것이고, 이는 이상치 오염된 샘플보다 훨씬 큰 inlier 수를 얻을 것입니다.
 
-#### D.2 왜 이상치 필터로 작동하는가
+#### 왜 이상치 필터로 작동하는가
 
 RANSAC 후에는 단지 모델만이 아니라 **inlier 매치** 집합(선택한 모델과 일치하는 것들)도 얻습니다. 이렇게 이상치를 버리는 것이 일반적으로 어떤 디스크립터 기반 필터보다 효과적 — 국소 디스크립터 유사도 대신 이미지 전체의 기하 구조를 이용하기 때문.
 
