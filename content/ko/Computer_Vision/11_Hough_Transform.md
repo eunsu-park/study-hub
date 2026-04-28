@@ -59,15 +59,15 @@
 
 모든 투표 후 어큐뮬레이터 빈의 값은, 그 `(ρ, θ)`가 정의하는 정확한 직선 위에 놓일 에지 픽셀의 수와 같습니다 — 데이터가 그 직선을 얼마나 강하게 지지하는지의 직접 측정.
 
-#### C.1 누락/잡음 데이터에도 작동하는 이유
+#### 누락/잡음 데이터에도 작동하는 이유
 
 투표는 각 에지 점이 독립적으로 기여하므로 **가림과 잡음에 강합니다**. 직선의 픽셀 절반이 누락되어도 파라미터 공간의 피크는 작아지지만 여전히 존재합니다. 한 점이 진짜 직선이 아니라 잡음이면 *어떤* 빈에 기여하지만 피크에는 기여하지 않습니다. 구조 없는 잡음이 많은 점은 낮고 평평한 배경에 기여할 뿐 — 진짜 직선만이 집중된 피크를 만듭니다.
 
 ### 이론: 일반화
 
-#### E.1 확률적 허프 변환 (`HoughLinesP`)
+#### 확률적 허프 변환 (`HoughLinesP`)
 
-표준 허프는 이미지당 `O(#에지_픽셀 × #θ_빈)`이며 `(ρ, θ)`만 반환합니다 — 직선이지만 끝점은 없습니다. 확률적 허프 변환은 둘 다 해결합니다:
+표준 허프는 이미지당 `O(#에지_픽셀 × #θ_빈)`이며 `(ρ, θ)`만 반환합니다 — 직선이지만 끝점은 없습니다. 확률적 허프 변환은 정확도를 약간 양보하는 대신 속도를 얻고, 끝점도 함께 반환합니다:
 
 - 에지 픽셀의 **무작위 부분집합**만 처리(훨씬 빠름).
 - 한 직선이 충분한 지지를 얻으면 더 이상 투표하지 않음.
@@ -75,7 +75,7 @@
 
 OpenCV의 `HoughLinesP`는 `(x1, y1, x2, y2)` 세그먼트를 반환하는데, 실전에서 대개 원하는 것은 이것입니다.
 
-#### E.2 일반 허프 변환
+#### 일반 허프 변환
 
 같은 투표 아이디어는 직선과 원뿐 아니라 **임의** 매개변수 형태에도 작동합니다. 일반 형태의 경우, 각 경계점에서 형태의 참조점으로의 오프셋을 인코딩하는 **R-table**을 만듭니다. 검출 시 각 에지 점이 가능한 참조점 위치에 투표합니다. 임의 형태 템플릿을 다룰 수 있지만 메모리 비용이 훨씬 높아 오늘날 거의 쓰이지 않습니다 — 딥러닝 검출기가 이를 대부분 대체했습니다.
 
@@ -139,16 +139,16 @@ y = mx + b  (기울기, y절편) → 수직선 표현 불가
 import cv2
 import numpy as np
 
-# 허프 변환 시각화
+# Visualize the Hough Transform
 def visualize_hough_space(image_path):
     """허프 공간 시각화"""
     img = cv2.imread(image_path, cv2.IMREAD_GRAYSCALE)
     edges = cv2.Canny(img, 50, 150)
 
-    # 허프 직선 변환 (누적 배열 반환)
+    # Standard Hough line transform (returns accumulator peaks)
     lines = cv2.HoughLines(edges, 1, np.pi/180, 100)
 
-    # 시각화
+    # Visualization
     result = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
 
     if lines is not None:
@@ -159,7 +159,7 @@ def visualize_hough_space(image_path):
             x0 = a * rho
             y0 = b * rho
 
-            # 직선 그리기 (양 방향으로 길게)
+            # Draw line (extended in both directions)
             x1 = int(x0 + 1000 * (-b))
             y1 = int(y0 + 1000 * (a))
             x2 = int(x0 - 1000 * (-b))
@@ -239,14 +239,14 @@ def hough_lines_example(image_path):
     img = cv2.imread(image_path)
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
 
-    # 엣지 검출
+    # Edge detection
     edges = cv2.Canny(gray, 50, 150, apertureSize=3)
 
-    # 허프 직선 변환
+    # Hough line transform
     lines = cv2.HoughLines(
         edges,
-        rho=1,              # ρ 해상도: 1 픽셀
-        theta=np.pi/180,    # θ 해상도: 1도
+        rho=1,              # ρ resolution: 1 pixel
+        theta=np.pi/180,    # θ resolution: 1 degree
         threshold=100       # minimum number of votes — this is the key quality gate:
                             #   too low → many spurious lines from noise; too high → real lines missed.
                             #   Each edge pixel that lies on a candidate line casts one vote, so threshold
@@ -261,13 +261,13 @@ def hough_lines_example(image_path):
         for line in lines:
             rho, theta = line[0]
 
-            # 극좌표 → 직교좌표 변환
+            # Polar -> Cartesian
             a = np.cos(theta)
             b = np.sin(theta)
             x0 = a * rho
             y0 = b * rho
 
-            # 직선 그리기 (무한 직선)
+            # Draw infinite line
             x1 = int(x0 + 1000 * (-b))
             y1 = int(y0 + 1000 * (a))
             x2 = int(x0 - 1000 * (-b))
@@ -305,19 +305,19 @@ def detect_horizontal_vertical_lines(image_path):
         for line in lines:
             rho, theta = line[0]
 
-            # 각도로 분류 (허용 오차 5도)
+            # Classify by angle (5° tolerance)
             angle_deg = np.degrees(theta)
 
-            if 85 < angle_deg < 95:  # 수직선 (θ ≈ 90°)
+            if 85 < angle_deg < 95:  # vertical (θ ≈ 90°)
                 vertical.append((rho, theta))
-                color = (255, 0, 0)  # 파랑
-            elif angle_deg < 5 or angle_deg > 175:  # 수평선 (θ ≈ 0° 또는 180°)
+                color = (255, 0, 0)  # blue
+            elif angle_deg < 5 or angle_deg > 175:  # horizontal (θ ≈ 0° or 180°)
                 horizontal.append((rho, theta))
-                color = (0, 255, 0)  # 녹색
+                color = (0, 255, 0)  # green
             else:
                 continue
 
-            # 직선 그리기
+            # Draw the line
             a = np.cos(theta)
             b = np.sin(theta)
             x0, y0 = a * rho, b * rho
@@ -340,19 +340,19 @@ detect_horizontal_vertical_lines('grid.jpg')
 
 ### 이론: 원 허프 변환
 
-원은 **세 파라미터**가 필요합니다: 중심과 반지름 `(x_c, y_c, r)`. §A–C의 모든 것이 일반화됩니다:
+원은 **세 파라미터**가 필요합니다: 중심과 반지름 `(x_c, y_c, r)`. 직선 변환의 모든 내용이 일반화됩니다:
 
 - 각 에지 점 `(x, y)`는 파라미터 공간의 **3D 표면**과 일치합니다: `(x - x_c)² + (y - y_c)² = r²`을 만족하는 모든 `(x_c, y_c, r)`. 그 표면은 `(x_c, y_c, r)` 공간에서 꼭짓점이 `(x, y, 0)`인 원뿔.
 - 어큐뮬레이터는 이제 3D, 보통 크기 `W × H × R_max`.
 - 각 에지 점마다 원뿔 표면을 투표하는 것은 비쌉니다.
 
-#### D.1 기울기 방향 최적화
+#### 기울기 방향 최적화
 
 핵심 가속: 원의 에지 픽셀에서 **기울기 방향은 반지름을 따라** 중심 쪽 또는 반대쪽을 가리킵니다. 따라서 `(x, y)`에서 기울기 방향(Sobel로부터)을 안다면, 중심 `(x_c, y_c)`는 그 기울기선 위에 있어야 합니다. 모든 가능한 반지름에서 모든 가능한 중심에 투표하는 대신, 기울기 방향으로 `(x, y)`를 통과하는 선 위의 중심에만 투표합니다.
 
 이렇게 하면 에지 픽셀당 투표가 2D 표면에서 1D 집합으로(거리, 즉 반지름으로 매개변수화된 기울기선) 줄어듭니다. OpenCV의 `HoughCircles` 구현이 이 트릭을 사용합니다 — 그래서 방법으로 `HOUGH_GRADIENT`를 전달해야 합니다.
 
-#### D.2 2단계 어큐뮬레이터
+#### 2단계 어큐뮬레이터
 
 OpenCV의 구현은 더 최적화되어 있습니다: 먼저 2D `(x_c, y_c)`에서 누적해 중심을 찾고, 그다음 검출된 각 중심에서 1D `r`로 반지름을 찾습니다. 3D 어큐뮬레이터 탐색을 2D + 1D 탐색으로 바꿔 훨씬 작은 문제로 만듭니다.
 
@@ -398,7 +398,7 @@ def hough_lines_p_example(image_path):
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
     edges = cv2.Canny(gray, 50, 150)
 
-    # 확률적 허프 변환
+    # Probabilistic Hough transform
     lines = cv2.HoughLinesP(
         edges,
         rho=1,
@@ -420,7 +420,7 @@ def hough_lines_p_example(image_path):
             x1, y1, x2, y2 = line[0]
             cv2.line(result, (x1, y1), (x2, y2), (0, 255, 0), 2)
 
-            # 선분 끝점 표시
+            # Mark segment endpoints
             cv2.circle(result, (x1, y1), 5, (255, 0, 0), -1)
             cv2.circle(result, (x2, y2), 5, (0, 0, 255), -1)
 
@@ -452,22 +452,22 @@ def filter_lines(image_path, angle_threshold=30):
     for line in lines:
         x1, y1, x2, y2 = line[0]
 
-        # 선분 길이 계산
+        # Segment length
         length = np.sqrt((x2 - x1)**2 + (y2 - y1)**2)
 
-        # 각도 계산 (수평 기준)
+        # Angle relative to horizontal
         if x2 - x1 != 0:
             angle = np.degrees(np.arctan(abs(y2 - y1) / abs(x2 - x1)))
         else:
             angle = 90
 
-        # 필터링: 특정 각도 이하만
+        # Filter: keep only near-horizontal or near-vertical
         if angle < angle_threshold:
-            color = (0, 255, 0)  # 거의 수평
+            color = (0, 255, 0)  # near horizontal
         elif angle > 90 - angle_threshold:
-            color = (255, 0, 0)  # 거의 수직
+            color = (255, 0, 0)  # near vertical
         else:
-            continue  # 대각선은 무시
+            continue  # ignore diagonals
 
         cv2.line(result, (x1, y1), (x2, y2), color, 2)
 
@@ -491,16 +491,16 @@ def merge_lines(lines, angle_threshold=10, distance_threshold=20):
     if lines is None or len(lines) == 0:
         return []
 
-    # 선분을 각도별로 그룹화
+    # Group segments by angle
     groups = defaultdict(list)
 
     for line in lines:
         x1, y1, x2, y2 = line[0]
 
-        # 각도 계산
+        # Compute angle
         angle = np.degrees(np.arctan2(y2 - y1, x2 - x1)) % 180
 
-        # 각도 그룹 (angle_threshold 단위로 양자화)
+        # Quantize angle into bins of angle_threshold width
         angle_group = round(angle / angle_threshold) * angle_threshold
         groups[angle_group].append(line[0])
 
@@ -511,20 +511,20 @@ def merge_lines(lines, angle_threshold=10, distance_threshold=20):
             merged.append(group_lines[0])
             continue
 
-        # 같은 그룹 내에서 가까운 선분들 병합
-        # 간단히: 전체 점들의 최소/최대 좌표로 하나의 선분 생성
+        # Within the group, merge nearby segments
+        # Simple strategy: take min/max along the dominant axis
         all_points = []
         for x1, y1, x2, y2 in group_lines:
             all_points.extend([(x1, y1), (x2, y2)])
 
         all_points = np.array(all_points)
 
-        # 주 방향으로 정렬하여 양 끝점 선택
+        # Sort along the dominant axis to pick the two extreme endpoints
         if abs(np.cos(np.radians(angle))) > 0.5:
-            # 수평에 가까움: x로 정렬
+            # Mostly horizontal: sort by x
             sorted_pts = sorted(all_points, key=lambda p: p[0])
         else:
-            # 수직에 가까움: y로 정렬
+            # Mostly vertical: sort by y
             sorted_pts = sorted(all_points, key=lambda p: p[1])
 
         start = sorted_pts[0]
@@ -583,10 +583,10 @@ def hough_circles_example(image_path):
     img = cv2.imread(image_path)
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
 
-    # 노이즈 제거 (원 검출에 중요)
+    # Noise reduction (important for circle detection)
     blurred = cv2.GaussianBlur(gray, (9, 9), 2)
 
-    # 허프 원 변환
+    # Hough circle transform
     circles = cv2.HoughCircles(
         blurred,
         cv2.HOUGH_GRADIENT,
@@ -599,8 +599,8 @@ def hough_circles_example(image_path):
                            #   knob. Lower values detect more circles (including false positives from noise);
                            #   higher values require a stronger consensus of edge points around the center,
                            #   yielding fewer but more confident detections.
-        minRadius=10,      # 최소 반지름
-        maxRadius=100      # 최대 반지름
+        minRadius=10,      # minimum radius
+        maxRadius=100      # maximum radius
     )
 
     result = img.copy()
@@ -611,10 +611,10 @@ def hough_circles_example(image_path):
         for circle in circles[0, :]:
             cx, cy, r = circle
 
-            # 원 그리기
+            # Draw circle
             cv2.circle(result, (cx, cy), r, (0, 255, 0), 2)
 
-            # 중심점
+            # Center point
             cv2.circle(result, (cx, cy), 3, (0, 0, 255), -1)
 
             print(f"원: 중심({cx}, {cy}), 반지름={r}")
@@ -639,7 +639,7 @@ def detect_coins(image_path):
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
     blurred = cv2.GaussianBlur(gray, (11, 11), 0)
 
-    # 허프 원 변환
+    # Hough circle transform
     circles = cv2.HoughCircles(
         blurred,
         cv2.HOUGH_GRADIENT,
@@ -662,20 +662,20 @@ def detect_coins(image_path):
             cx, cy, r = circle
             coin_count += 1
 
-            # 크기로 동전 종류 추정 (예시)
+            # Estimate denomination from radius (illustrative)
             if r < 40:
                 value = 10
-                color = (255, 0, 0)    # 파랑
+                color = (255, 0, 0)    # blue
             elif r < 55:
                 value = 50
-                color = (0, 255, 0)    # 녹색
+                color = (0, 255, 0)    # green
             else:
                 value = 100
-                color = (0, 0, 255)    # 빨강
+                color = (0, 0, 255)    # red
 
             total_value += value
 
-            # 그리기
+            # Draw
             cv2.circle(result, (cx, cy), r, color, 2)
             cv2.circle(result, (cx, cy), 3, (0, 0, 0), -1)
             cv2.putText(result, f'{value}', (cx - 15, cy + 5),
@@ -704,14 +704,14 @@ def hough_circles_alt(image_path):
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
     blurred = cv2.GaussianBlur(gray, (9, 9), 2)
 
-    # HOUGH_GRADIENT_ALT: 더 정확하지만 느림
+    # HOUGH_GRADIENT_ALT: more accurate but slower
     circles = cv2.HoughCircles(
         blurred,
-        cv2.HOUGH_GRADIENT_ALT,  # 대체 알고리즘
+        cv2.HOUGH_GRADIENT_ALT,  # alternative algorithm
         dp=1.5,
         minDist=50,
-        param1=300,    # 엣지 그래디언트 임계값
-        param2=0.9,    # 원형도 임계값 (0-1, 높을수록 엄격)
+        param1=300,    # edge gradient threshold
+        param2=0.9,    # circularity threshold (0-1, higher = stricter)
         minRadius=20,
         maxRadius=100
     )
@@ -828,7 +828,7 @@ def tune_hough_circles(image_path):
         minRadius = cv2.getTrackbarPos('minRadius', 'Circles')
         maxRadius = cv2.getTrackbarPos('maxRadius', 'Circles')
 
-        # 유효성 검사
+        # Validation
         if minDist < 1:
             minDist = 1
         if param2 < 1:
@@ -853,7 +853,7 @@ def tune_hough_circles(image_path):
                 cv2.circle(result, (cx, cy), r, (0, 255, 0), 2)
                 cv2.circle(result, (cx, cy), 3, (0, 0, 255), -1)
 
-            # 검출된 원 수 표시
+            # Display number of detected circles
             cv2.putText(result, f'Circles: {len(circles[0])}', (10, 30),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 0, 0), 2)
 
@@ -908,16 +908,16 @@ def detect_lane_lines(image):
     """기본 차선 검출"""
     height, width = image.shape[:2]
 
-    # 그레이스케일
+    # Grayscale
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
 
-    # 가우시안 블러
+    # Gaussian blur
     blurred = cv2.GaussianBlur(gray, (5, 5), 0)
 
-    # Canny 엣지
+    # Canny edges
     edges = cv2.Canny(blurred, 50, 150)
 
-    # 관심 영역 (사다리꼴)
+    # Region of interest (trapezoid)
     mask = np.zeros_like(edges)
     vertices = np.array([[
         (0, height),
@@ -928,7 +928,7 @@ def detect_lane_lines(image):
     cv2.fillPoly(mask, vertices, 255)
     masked_edges = cv2.bitwise_and(edges, mask)
 
-    # 허프 직선 변환
+    # Hough line transform
     lines = cv2.HoughLinesP(
         masked_edges,
         rho=1,
@@ -938,7 +938,7 @@ def detect_lane_lines(image):
         maxLineGap=150
     )
 
-    # 결과 이미지
+    # Result image
     line_image = np.zeros_like(image)
 
     if lines is not None:
@@ -946,12 +946,12 @@ def detect_lane_lines(image):
             x1, y1, x2, y2 = line[0]
             cv2.line(line_image, (x1, y1), (x2, y2), (0, 255, 0), 3)
 
-    # 원본과 합성
+    # Compose with original
     result = cv2.addWeighted(image, 0.8, line_image, 1, 0)
 
     return result
 
-# 사용 예
+# Example
 img = cv2.imread('road.jpg')
 result = detect_lane_lines(img)
 cv2.imshow('Lane Detection', result)
@@ -972,7 +972,7 @@ def separate_lanes(image):
     blurred = cv2.GaussianBlur(gray, (5, 5), 0)
     edges = cv2.Canny(blurred, 50, 150)
 
-    # ROI 마스크
+    # ROI mask
     mask = np.zeros_like(edges)
     vertices = np.array([[
         (50, height),
@@ -993,15 +993,15 @@ def separate_lanes(image):
         for line in lines:
             x1, y1, x2, y2 = line[0]
 
-            # 기울기 계산
+            # Slope
             if x2 - x1 == 0:
                 continue
             slope = (y2 - y1) / (x2 - x1)
 
-            # 기울기로 좌/우 분류
-            # 이미지 좌표계: y축이 아래로 증가
-            # 왼쪽 차선: 음의 기울기 (/)
-            # 오른쪽 차선: 양의 기울기 (\)
+            # Classify into left/right by slope
+            # Image coordinates: y axis points downward
+            # Left lane:  negative slope (/)
+            # Right lane: positive slope (\)
             if slope < -0.5:
                 left_lines.append(line[0])
             elif slope > 0.5:
@@ -1009,16 +1009,16 @@ def separate_lanes(image):
 
     result = image.copy()
 
-    # 좌/우 차선 그리기
+    # Draw left/right lanes
     for x1, y1, x2, y2 in left_lines:
-        cv2.line(result, (x1, y1), (x2, y2), (255, 0, 0), 3)  # 파랑
+        cv2.line(result, (x1, y1), (x2, y2), (255, 0, 0), 3)  # blue
 
     for x1, y1, x2, y2 in right_lines:
-        cv2.line(result, (x1, y1), (x2, y2), (0, 0, 255), 3)  # 빨강
+        cv2.line(result, (x1, y1), (x2, y2), (0, 0, 255), 3)  # red
 
     return result, left_lines, right_lines
 
-# 사용 예
+# Example
 img = cv2.imread('road.jpg')
 result, left, right = separate_lanes(img)
 print(f"왼쪽 차선: {len(left)}개")
@@ -1038,7 +1038,7 @@ def average_lane_lines(lines, height):
     if len(lines) == 0:
         return None
 
-    # 모든 점 수집
+    # Collect all points
     x_coords = []
     y_coords = []
 
@@ -1046,10 +1046,10 @@ def average_lane_lines(lines, height):
         x_coords.extend([x1, x2])
         y_coords.extend([y1, y2])
 
-    # 1차 다항식 피팅 (직선)
+    # First-degree polynomial fit (line)
     poly = np.polyfit(y_coords, x_coords, 1)
 
-    # 직선의 시작점과 끝점 계산
+    # Compute the start and end of the averaged line
     y1 = height
     y2 = int(height * 0.6)
     x1 = int(np.polyval(poly, y1))
@@ -1096,7 +1096,7 @@ def detect_lanes_averaged(image):
 
     result = image.copy()
 
-    # 평균화된 차선 그리기
+    # Draw averaged lanes
     left_avg = average_lane_lines(left_lines, height)
     right_avg = average_lane_lines(right_lines, height)
 
@@ -1108,7 +1108,7 @@ def detect_lanes_averaged(image):
         cv2.line(result, (right_avg[0], right_avg[1]),
                  (right_avg[2], right_avg[3]), (0, 0, 255), 5)
 
-    # 차선 영역 채우기
+    # Fill the lane region
     if left_avg is not None and right_avg is not None:
         pts = np.array([
             [left_avg[0], left_avg[1]],
@@ -1123,7 +1123,7 @@ def detect_lanes_averaged(image):
 
     return result
 
-# 사용 예
+# Example
 img = cv2.imread('road.jpg')
 result = detect_lanes_averaged(img)
 cv2.imshow('Averaged Lanes', result)
@@ -1147,17 +1147,17 @@ class ParkingDetector:
         img = cv2.imread(image_path)
         gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
 
-        # 이진화
+        # Binarization
         _, binary = cv2.threshold(gray, 200, 255, cv2.THRESH_BINARY)
 
-        # 엣지 검출
+        # Edge detection
         edges = cv2.Canny(binary, 50, 150)
 
-        # 직선 검출
+        # Line detection
         lines = cv2.HoughLinesP(edges, 1, np.pi/180, 100,
                                minLineLength=50, maxLineGap=10)
 
-        # 직선 그리기
+        # Draw lines
         result = img.copy()
         if lines is not None:
             for line in lines:
@@ -1171,7 +1171,7 @@ class ParkingDetector:
         if lines is None:
             return []
 
-        # 평행선 분류
+        # Group parallel lines
         vertical_lines = []
         horizontal_lines = []
 
@@ -1179,12 +1179,12 @@ class ParkingDetector:
             x1, y1, x2, y2 = line[0]
             angle = np.arctan2(y2 - y1, x2 - x1) * 180 / np.pi
 
-            if abs(angle) < 45:  # 수평
+            if abs(angle) < 45:  # horizontal
                 horizontal_lines.append(line[0])
-            else:  # 수직
+            else:  # vertical
                 vertical_lines.append(line[0])
 
-        # 직사각형 주차 공간 찾기
+        # Find rectangular parking spaces
         spaces = []
         for v_line in vertical_lines:
             for h_line in horizontal_lines:
@@ -1198,7 +1198,7 @@ class ParkingDetector:
         """주차 공간 계산 (단순화된 구현)"""
         return None
 
-# 사용 예
+# Example
 detector = ParkingDetector()
 result, lines = detector.detect_parking_lines('parking.jpg')
 cv2.imshow('Parking Line Detection', result)
@@ -1216,18 +1216,18 @@ def detect_document_edges(image_path):
     img = cv2.imread(image_path)
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
 
-    # 전처리
+    # Preprocessing
     blur = cv2.GaussianBlur(gray, (5, 5), 0)
     edges = cv2.Canny(blur, 50, 150)
 
-    # 직선 검출
+    # Line detection
     lines = cv2.HoughLinesP(edges, 1, np.pi/180, 100,
                            minLineLength=100, maxLineGap=10)
 
-    # 직선 그리기
+    # Draw lines
     result = img.copy()
     if lines is not None:
-        # 각도별 분류
+        # Group by angle
         horizontal = []
         vertical = []
 
@@ -1248,7 +1248,7 @@ def detect_document_edges(image_path):
 
     return result
 
-# 사용 예
+# Example
 result = detect_document_edges('document.jpg')
 ```
 
@@ -1287,17 +1287,17 @@ def detect_chessboard_lines(image_path):
             a = np.cos(theta)
             b = np.sin(theta)
 
-            # 수평선/수직선 분류
-            if 80 < angle < 100:  # 수직
+            # Classify into horizontal / vertical
+            if 80 < angle < 100:  # vertical
                 vertical.append((rho, theta))
-            elif angle < 10 or angle > 170:  # 수평
+            elif angle < 10 or angle > 170:  # horizontal
                 horizontal.append((rho, theta))
 
-    # 교차점 계산
+    # Compute intersections
     intersections = []
     for h_rho, h_theta in horizontal:
         for v_rho, v_theta in vertical:
-            # 두 직선의 교차점
+            # Intersection of two lines
             A = np.array([
                 [np.cos(h_theta), np.sin(h_theta)],
                 [np.cos(v_theta), np.sin(v_theta)]
@@ -1311,7 +1311,7 @@ def detect_chessboard_lines(image_path):
             except:
                 pass
 
-    # 그리기
+    # Draw
     for x, y in intersections:
         cv2.circle(result, (x, y), 5, (0, 0, 255), -1)
 
@@ -1340,11 +1340,11 @@ def detect_iris(image_path):
     img = cv2.imread(image_path)
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
 
-    # 밝기 균일화
+    # Equalize brightness
     gray = cv2.equalizeHist(gray)
     blurred = cv2.GaussianBlur(gray, (7, 7), 0)
 
-    # 홍채 검출 (어두운 원)
+    # Iris detection (a dark circle)
     circles = cv2.HoughCircles(
         blurred,
         cv2.HOUGH_GRADIENT,
@@ -1361,9 +1361,9 @@ def detect_iris(image_path):
     if circles is not None:
         circles = np.uint16(np.around(circles))
 
-        # 가장 큰 원 선택 (홍채)
+        # Pick the largest circle (the iris)
         for cx, cy, r in sorted(circles[0], key=lambda x: -x[2])[:1]:
-            # 홍채
+            # Iris
             cv2.circle(result, (cx, cy), r, (0, 255, 0), 2)
             cv2.circle(result, (cx, cy), 2, (0, 0, 255), 3)
 
@@ -1391,7 +1391,7 @@ def detect_red_signs(image_path):
     img = cv2.imread(image_path)
     hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
 
-    # 빨간색 마스크 (HSV에서 빨강은 0도와 180도 부근)
+    # Red mask (red wraps around at 0° and 180° in HSV)
     lower_red1 = np.array([0, 100, 100])
     upper_red1 = np.array([10, 255, 255])
     lower_red2 = np.array([160, 100, 100])
@@ -1401,12 +1401,12 @@ def detect_red_signs(image_path):
     mask2 = cv2.inRange(hsv, lower_red2, upper_red2)
     red_mask = cv2.bitwise_or(mask1, mask2)
 
-    # 모폴로지 연산
+    # Morphological operations
     kernel = np.ones((5, 5), np.uint8)
     red_mask = cv2.morphologyEx(red_mask, cv2.MORPH_CLOSE, kernel)
     red_mask = cv2.morphologyEx(red_mask, cv2.MORPH_OPEN, kernel)
 
-    # 원 검출
+    # Circle detection
     circles = cv2.HoughCircles(
         red_mask,
         cv2.HOUGH_GRADIENT,
